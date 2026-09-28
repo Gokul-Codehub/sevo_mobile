@@ -1,0 +1,47 @@
+{
+  "id": 490,
+  "category": 15,
+  "category_slug": "ac_appliance",
+  "name": "2-in-1 Combo AC Power Jet Service",
+  "slug": "ac-combo-2-units",
+  "description": "Complete power jet foam wash for 2 Split AC units at special bundled discount.",
+  "price": "899.00",
+  "duration": "1.5 hrs",
+  "image": "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=500&q=80&fit=crop",
+  "popular": true,
+  "tag": "Value Pack",
+  "includes": [
+    "Power jet foam cleaning for 2 indoor units",
+    "Outdoor condenser power jet wash for 2 units",
+    "Drain tray clearing and drain pipe chemical flush",
+    "Full electrical amperage & airflow testing on both units"
+  ],
+  "excludes": [],
+  "payment_policy": "BOTH",
+  "faqs": [
+    {
+      "a": "Yes! The technician will gladly service 1 Split and 1 Window AC under this combo pack.",
+      "q": "Can I combine 1 Split and 1 Window AC in this pack?"
+    }
+  ],
+  "sort_order": 0,
+  "tools": [
+    "High pressure power jet cleaner with splash-proof servicing jacket",
+    "Specialized non-corrosive chemical foam cleaning agents",
+    "Digital manifold pressure gauge & electronic leak detector",
+    "Anemometer airflow & digital laser temperature thermometer",
+    "Two-stage deep vacuum pump & R32/R410A charging manifold"
+  ],
+  "ready": [
+    "Continuous water tap and 16A power point access",
+    "Area below indoor unit cleared of electronics & valuables",
+    "Outdoor unit accessible via balcony, terrace, or window"
+  ],
+  "service_id": 62,
+  "service_name": "AC Service & Cleaning",
+  "service_slug": "ac-service-cleaning",
+  "service_description": "High-pressure jet cleaning, foam wash, and comprehensive indoor/outdoor coil maintenance.",
+  "service_customization": {},
+  "service_sort_order": 1,
+  "service_image": ""
+}

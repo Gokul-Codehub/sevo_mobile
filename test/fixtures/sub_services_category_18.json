@@ -1,0 +1,944 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": 29,
+      "category_name": "Home Services & Pest Control",
+      "name": "Ants & Bed Bugs Control",
+      "slug": "ants-bed-bugs-control",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:29.649508+05:30",
+      "updated_at": "2026-08-11T16:42:13.134839+05:30",
+      "category": 16
+    },
+    {
+      "id": 25,
+      "category_name": "Home Services & Pest Control",
+      "name": "Bathroom Cleaning",
+      "slug": "bathroom-cleaning",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:25.496937+05:30",
+      "updated_at": "2026-08-11T16:42:10.710218+05:30",
+      "category": 16
+    },
+    {
+      "id": 35,
+      "category_name": "Mason",
+      "name": "Brick & Block Work",
+      "slug": "brick-block-work",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:36.000301+05:30",
+      "updated_at": "2026-08-11T16:42:20.883393+05:30",
+      "category": 11
+    },
+    {
+      "id": 27,
+      "category_name": "Home Services & Pest Control",
+      "name": "Cockroach Control",
+      "slug": "cockroach-control",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:27.694127+05:30",
+      "updated_at": "2026-08-11T16:42:12.165118+05:30",
+      "category": 16
+    },
+    {
+      "id": 92,
+      "category_name": "Paintings",
+      "name": "Exterior Painting",
+      "slug": "exterior-painting",
+      "description": "Exterior Painting services and package rates.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {
+        "faqs": [
+          {
+            "a": "Yes, standard scaffolding is included for up to three floors. Higher floors may incur additional safety setup fees.",
+            "q": "Is scaffolding included in the package?",
+            "checked": true
+          },
+          {
+            "a": "We fill exterior cracks with high-grade weather defense sealant and apply anti-fungal primer before painting.",
+            "q": "How do you handle cracks on the outer walls?",
+            "checked": true
+          },
+          {
+            "a": "Our premium exterior weather coat packages come with a 3-year durability warranty.",
+            "q": "How long does exterior painting last?",
+            "checked": true
+          }
+        ],
+        "steps": [
+          {
+            "desc": "Tell us preferred time to book",
+            "icon": "calendar",
+            "title": "Book Home Inspection",
+            "checked": true
+          },
+          {
+            "desc": "Get accurate quotes with laser measurements",
+            "icon": "calculator",
+            "title": "Measure & Estimate",
+            "checked": true
+          },
+          {
+            "desc": "Guaranteed on time project initiation and completion",
+            "icon": "paint-roller",
+            "title": "Project Initiation",
+            "checked": true
+          },
+          {
+            "desc": "Post paint cleanup and quality check",
+            "icon": "check-circle",
+            "title": "Cleaning & Quality Check",
+            "checked": true
+          }
+        ],
+        "points": [
+          {
+            "text": "Pressure washing & crack filling",
+            "checked": false
+          },
+          {
+            "text": "Anti-fungal primer coat",
+            "checked": true
+          },
+          {
+            "text": "Double coat weather-defense paint",
+            "checked": true
+          },
+          {
+            "text": "Dust and dirt resistant finish",
+            "checked": true
+          }
+        ],
+        "rating": "4.7",
+        "reviews": "15K",
+        "benefits": [
+          {
+            "icon": "shield",
+            "title": "Weatherproof Shield",
+            "checked": true
+          },
+          {
+            "icon": "award",
+            "title": "Scaffolding Safety",
+            "checked": true
+          },
+          {
+            "icon": "tool",
+            "title": "Crack Treatment",
+            "checked": true
+          },
+          {
+            "icon": "check-circle",
+            "title": "3-Year Warranty",
+            "checked": true
+          }
+        ],
+        "excludes": [
+          {
+            "text": "Is scaffolding included in the package?",
+            "checked": true
+          },
+          {
+            "text": "How do you handle cracks on the outer walls?",
+            "checked": true
+          },
+          {
+            "text": "How long does exterior painting last?",
+            "checked": true
+          }
+        ],
+        "includes": [
+          {
+            "text": "High Pressure Washing",
+            "checked": true
+          },
+          {
+            "text": "Sanding & Crack Filling",
+            "checked": true
+          },
+          {
+            "text": "Anti-Algae Exterior Primer",
+            "checked": true
+          },
+          {
+            "text": "2 Coats Weatherproof Paint",
+            "checked": true
+          },
+          {
+            "text": "Grill & Pipe Protective Coating",
+            "checked": true
+          },
+          {
+            "text": "Post-Service Cleaning",
+            "checked": true
+          }
+        ],
+        "price_list": [
+          {
+            "type": "Economy Exterior",
+            "price": "\u20b915/sq.ft",
+            "checked": true
+          },
+          {
+            "type": "Weather Protection",
+            "price": "\u20b920/sq.ft",
+            "checked": true
+          },
+          {
+            "type": "Premium Exterior",
+            "price": "\u20b928/sq.ft",
+            "checked": true
+          },
+          {
+            "type": "Advanced Weatherproof",
+            "price": "\u20b935/sq.ft",
+            "checked": true
+          }
+        ],
+        "button_text": "View Details",
+        "paint_types": [
+          {
+            "id": "economy-exterior",
+            "name": "Economy Exterior",
+            "type": "Economy",
+            "image": "/tractor-uno.png",
+            "price": 15,
+            "checked": true
+          },
+          {
+            "id": "weather-protection",
+            "name": "Weather Protection",
+            "type": "Standard",
+            "image": "/tractor-emulsion.png",
+            "price": 20,
+            "checked": true
+          },
+          {
+            "id": "premium-exterior",
+            "name": "Premium Exterior",
+            "type": "Premium",
+            "image": "/premium-emulsion.png",
+            "price": 28,
+            "checked": true
+          },
+          {
+            "id": "advanced-weatherproof",
+            "name": "Advanced Weatherproof",
+            "type": "Luxury",
+            "image": "/royal-luxury-emulsion.png",
+            "price": 35,
+            "checked": true
+          }
+        ],
+        "estimate_cta": "Get Estimate",
+        "faqs_heading": "Frequently Asked Questions",
+        "reviews_list": [
+          {
+            "name": "Vikram M.",
+            "rating": 4.9,
+            "comment": "Superb exterior painting. They did excellent crack filling and high pressure washing before applying the weathercoat. Very satisfied!",
+            "enabled": true
+          },
+          {
+            "name": "Sneha R.",
+            "rating": 4.7,
+            "comment": "Very professional scaffolding work and paint job. The dust-resistant paint looks wonderful on our building.",
+            "enabled": true
+          }
+        ],
+        "starting_fare": "",
+        "steps_heading": "HOW EXTERIOR PAINTING WORKS",
+        "reviews_heading": "",
+        "excludes_enabled": true,
+        "excludes_heading": "WHAT'S NOT INCLUDED",
+        "includes_heading": "WHAT'S INCLUDED",
+        "suboptions_heading": "Weather-proof exterior choices",
+        "inspection_highlights": [
+          {
+            "text": "Outer Wall Crack Scan",
+            "checked": true
+          },
+          {
+            "text": "Height & Scaffolding Check",
+            "checked": true
+          },
+          {
+            "text": "Dampness Assessment",
+            "checked": true
+          }
+        ],
+        "free_inspection_enabled": true,
+        "free_inspection_heading": "FREE SITE INSPECTION INCLUDED"
+      },
+      "created_at": "2026-08-17T16:34:04.018605+05:30",
+      "updated_at": "2026-08-19T18:07:13.710551+05:30",
+      "category": 17
+    },
+    {
+      "id": 89,
+      "category_name": "Deep Cleaning",
+      "name": "Full Home Deep Cleaning",
+      "slug": "full-home-deep-clean",
+      "description": "Complete sanitization and deep cleaning",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-17T14:35:25.608892+05:30",
+      "updated_at": "2026-08-17T14:35:25.608892+05:30",
+      "category": 19
+    },
+    {
+      "id": 26,
+      "category_name": "Home Services & Pest Control",
+      "name": "Full House Cleaning",
+      "slug": "full-house-cleaning",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:26.471972+05:30",
+      "updated_at": "2026-08-11T16:42:10.224177+05:30",
+      "category": 16
+    },
+    {
+      "id": 91,
+      "category_name": "Paintings",
+      "name": "Interior Painting",
+      "slug": "interior-painting",
+      "description": "Interior Painting services and package rates.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {
+        "faqs": [
+          {
+            "a": "Yes, complete masking and covering of furniture, electronics, and floors with plastic sheets is included.",
+            "q": "Will the painters cover and protect the furniture?",
+            "checked": true
+          },
+          {
+            "a": "No, our team handles all post-painting cleanup, including paint splatters and vacuuming.",
+            "q": "Do I need to clean the house after the painting is done?",
+            "checked": true
+          },
+          {
+            "a": "We use premium quality paints from Asian Paints, Berger, and Nerolac based on your selection.",
+            "q": "What paint brands do you use?",
+            "checked": true
+          }
+        ],
+        "steps": [
+          {
+            "desc": "Tell us preferred time to book",
+            "icon": "calendar",
+            "title": "Book Home Inspection",
+            "checked": true
+          },
+          {
+            "desc": "Get accurate quotes with laser measurements",
+            "icon": "calculator",
+            "title": "Measure & Estimate",
+            "checked": true
+          },
+          {
+            "desc": "Guaranteed on time project initiation and completion",
+            "icon": "paint-roller",
+            "title": "Project Initiation",
+            "checked": true
+          },
+          {
+            "desc": "Post paint cleanup and quality check",
+            "icon": "check-circle",
+            "title": "Cleaning & Quality Check",
+            "checked": true
+          }
+        ],
+        "points": [
+          {
+            "text": "Complete wall prep & putty application",
+            "checked": true
+          },
+          {
+            "text": "Double coat premium emulsion paint",
+            "checked": true
+          },
+          {
+            "text": "Detailed masking & post-cleanup protection",
+            "checked": true
+          },
+          {
+            "text": "1-Year Service Warranty",
+            "checked": false
+          }
+        ],
+        "rating": "4.8",
+        "reviews": "18K",
+        "benefits": [
+          {
+            "icon": "award",
+            "title": "Premium Quality",
+            "checked": true
+          },
+          {
+            "icon": "shield",
+            "title": "Verified Painters",
+            "checked": true
+          },
+          {
+            "icon": "sparkles",
+            "title": "Clean Post-Service",
+            "checked": true
+          },
+          {
+            "icon": "check-circle",
+            "title": "1-Year Warranty",
+            "checked": false
+          }
+        ],
+        "excludes": [
+          {
+            "text": "Major plastering work",
+            "checked": true
+          },
+          {
+            "text": "Dampness treatment (available separately)",
+            "checked": true
+          },
+          {
+            "text": "Electrical/re-wiring work",
+            "checked": true
+          }
+        ],
+        "includes": [
+          {
+            "text": "Wall Putty",
+            "checked": true
+          },
+          {
+            "text": "Primer Application",
+            "checked": true
+          },
+          {
+            "text": "2 Coats Premium Emulsion Paint",
+            "checked": true
+          },
+          {
+            "text": "Masking & Protection",
+            "checked": true
+          },
+          {
+            "text": "Post-Service Cleaning",
+            "checked": true
+          },
+          {
+            "text": "1-Year Warranty",
+            "checked": true
+          }
+        ],
+        "price_list": [
+          {
+            "type": "Tractor UNO",
+            "price": "\u20b97/sq.ft",
+            "checked": true
+          },
+          {
+            "type": "Tractor Emulsion",
+            "price": "\u20b99/sq.ft",
+            "checked": true
+          },
+          {
+            "type": "Premium Emulsion",
+            "price": "\u20b915/sq.ft",
+            "checked": true
+          },
+          {
+            "type": "Royal Luxury Emulsion",
+            "price": "\u20b927/sq.ft",
+            "checked": true
+          }
+        ],
+        "button_text": "View details",
+        "paint_types": [
+          {
+            "id": "tractor-uno",
+            "name": "Tractor UNO",
+            "type": "Economy",
+            "image": "/tractor-uno.png",
+            "price": 7,
+            "checked": true
+          },
+          {
+            "id": "tractor-emulsion",
+            "name": "Tractor Emulsion",
+            "type": "Standard",
+            "image": "/tractor-emulsion.png",
+            "price": 9,
+            "checked": true
+          },
+          {
+            "id": "premium-emulsion",
+            "name": "Premium Emulsion",
+            "type": "Premium",
+            "image": "/premium-emulsion.png",
+            "price": 15,
+            "checked": true
+          },
+          {
+            "id": "royal-luxury",
+            "name": "Royal Luxury Emulsion",
+            "type": "Luxury",
+            "image": "/royal-luxury-emulsion.png",
+            "price": 27,
+            "checked": true
+          }
+        ],
+        "estimate_cta": "Get Estimate",
+        "faqs_heading": "Frequently Asked Questions",
+        "reviews_list": [
+          {
+            "name": "Aranya S.",
+            "rating": 5,
+            "comment": "The painters were highly professional. They completed the work on time with superb masking and protection for my furniture. Clean cleanup afterwards!",
+            "enabled": true
+          },
+          {
+            "name": "Rahul K.",
+            "rating": 4.8,
+            "comment": "Good service for home interior wall painting. The team was quick and standard finish paint quality was excellent.",
+            "enabled": true
+          }
+        ],
+        "starting_fare": "",
+        "steps_heading": "HOW PAINTING WORKS",
+        "reviews_heading": "",
+        "excludes_enabled": true,
+        "excludes_heading": "WHAT'S NOT INCLUDED",
+        "includes_heading": "WHAT'S INCLUDED",
+        "suboptions_heading": "Painting choices for your home",
+        "inspection_highlights": [
+          {
+            "text": "Digital Wall Measurement",
+            "checked": true
+          },
+          {
+            "text": "Moisture Meter Inspection",
+            "checked": true
+          },
+          {
+            "text": "Wall Putty/Paint Damage Assessment",
+            "checked": true
+          }
+        ],
+        "free_inspection_enabled": true,
+        "free_inspection_heading": "FREE SITE INSPECTION INCLUDED"
+      },
+      "created_at": "2026-08-17T16:34:03.812093+05:30",
+      "updated_at": "2026-08-20T15:40:30.069257+05:30",
+      "category": 17
+    },
+    {
+      "id": 23,
+      "category_name": "Home Services & Pest Control",
+      "name": "Kitchen Cleaning",
+      "slug": "kitchen-cleaning",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:23.525045+05:30",
+      "updated_at": "2026-08-11T16:42:11.194283+05:30",
+      "category": 16
+    },
+    {
+      "id": 36,
+      "category_name": "Mason",
+      "name": "Plastering & Wall Repair",
+      "slug": "plastering-wall-repair",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:36.975940+05:30",
+      "updated_at": "2026-08-11T16:42:21.366635+05:30",
+      "category": 11
+    },
+    {
+      "id": 21,
+      "category_name": "Electrician, Plumbing & Carpentry",
+      "name": "Plumbing",
+      "slug": "plumbing",
+      "description": "Expert leak repair, tap & mixer fitting, toilet commode fix, drainage unclogging & water motors.",
+      "icon": "",
+      "image": "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:13:24.725905+05:30",
+      "updated_at": "2026-08-14T14:38:13.333264+05:30",
+      "category": 14
+    },
+    {
+      "id": 40,
+      "category_name": "AC & Appliance",
+      "name": "Refrigerator",
+      "slug": "refrigerator",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:41.369561+05:30",
+      "updated_at": "2026-08-14T15:04:36.514184+05:30",
+      "category": 15
+    },
+    {
+      "id": 24,
+      "category_name": "Home Services & Pest Control",
+      "name": "Sofa Cleaning",
+      "slug": "sofa-cleaning",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:24.519717+05:30",
+      "updated_at": "2026-08-11T16:42:11.681784+05:30",
+      "category": 16
+    },
+    {
+      "id": 28,
+      "category_name": "Home Services & Pest Control",
+      "name": "Termite Control",
+      "slug": "termite-control",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:28.672567+05:30",
+      "updated_at": "2026-08-11T16:42:12.649236+05:30",
+      "category": 16
+    },
+    {
+      "id": 95,
+      "category_name": "Paintings",
+      "name": "Texture Decor",
+      "slug": "texture-decor",
+      "description": "Texture Decor services and package rates.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-17T16:34:04.584812+05:30",
+      "updated_at": "2026-08-17T16:34:04.584812+05:30",
+      "category": 17
+    },
+    {
+      "id": 42,
+      "category_name": "AC & Appliance",
+      "name": "TV & Display",
+      "slug": "tv-display",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:43.323020+05:30",
+      "updated_at": "2026-08-14T15:04:02.138675+05:30",
+      "category": 15
+    },
+    {
+      "id": 37,
+      "category_name": "Mason",
+      "name": "Wall & Partition Construction",
+      "slug": "wall-partition-construction",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:37.953789+05:30",
+      "updated_at": "2026-08-11T16:42:21.850299+05:30",
+      "category": 11
+    },
+    {
+      "id": 38,
+      "category_name": "Mason",
+      "name": "Wall Breaking & Demolition",
+      "slug": "wall-breaking-demolition",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:38.929428+05:30",
+      "updated_at": "2026-08-11T16:42:22.336816+05:30",
+      "category": 11
+    },
+    {
+      "id": 41,
+      "category_name": "AC & Appliance",
+      "name": "Washing Machine",
+      "slug": "washing-machine",
+      "description": "",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:42.346892+05:30",
+      "updated_at": "2026-08-14T15:10:33.035150+05:30",
+      "category": 15
+    },
+    {
+      "id": 93,
+      "category_name": "Paintings",
+      "name": "Waterproofing",
+      "slug": "waterproofing",
+      "description": "Waterproofing services and package rates.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-17T16:34:04.180729+05:30",
+      "updated_at": "2026-08-17T16:34:04.180729+05:30",
+      "category": 17
+    },
+    {
+      "id": 94,
+      "category_name": "Paintings",
+      "name": "Wood & Metal",
+      "slug": "wood-metal",
+      "description": "Wood & Metal services and package rates.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 0,
+      "customization": {},
+      "created_at": "2026-08-17T16:34:04.373787+05:30",
+      "updated_at": "2026-08-17T16:34:04.373787+05:30",
+      "category": 17
+    },
+    {
+      "id": 62,
+      "category_name": "AC & Appliance",
+      "name": "AC Service & Cleaning",
+      "slug": "ac-service-cleaning",
+      "description": "High-pressure jet cleaning, foam wash, and comprehensive indoor/outdoor coil maintenance.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 1,
+      "customization": {},
+      "created_at": "2026-08-14T12:23:42.844907+05:30",
+      "updated_at": "2026-08-14T14:52:35.384092+05:30",
+      "category": 15
+    },
+    {
+      "id": 44,
+      "category_name": "Electrician, Plumbing & Carpentry",
+      "name": "Electrician",
+      "slug": "electrician",
+      "description": "Certified residential electrical repair, switchboards, MCB, inverter wiring, fans & lights.",
+      "icon": "Zap",
+      "image": "/mockups/service_electrician.png",
+      "is_active": true,
+      "sort_order": 1,
+      "customization": {},
+      "created_at": "2026-08-11T15:46:45.521440+05:30",
+      "updated_at": "2026-08-14T14:38:10.500345+05:30",
+      "category": 14
+    },
+    {
+      "id": 50,
+      "category_name": "Farm-Fresh Vegetables & Groceries",
+      "name": "Farm-Fresh Vegetable",
+      "slug": "vegetables",
+      "description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "icon": "Carrot",
+      "image": "/mockups/vegetables_realistic.png",
+      "is_active": true,
+      "sort_order": 1,
+      "customization": {},
+      "created_at": "2026-08-11T16:27:55.578372+05:30",
+      "updated_at": "2026-08-13T16:20:52.991176+05:30",
+      "category": 18
+    },
+    {
+      "id": 47,
+      "category_name": "Goods & Transport",
+      "name": "Truck",
+      "slug": "truck",
+      "description": "Instant mini truck booking (Tata Ace, Pickup 8ft, Tata 407) for goods transport",
+      "icon": "Truck",
+      "image": "/mockups/service_truck.png",
+      "is_active": true,
+      "sort_order": 1,
+      "customization": {},
+      "created_at": "2026-08-11T16:27:01.662125+05:30",
+      "updated_at": "2026-08-11T16:41:58.125075+05:30",
+      "category": 12
+    },
+    {
+      "id": 63,
+      "category_name": "AC & Appliance",
+      "name": "AC Repair & Diagnostics",
+      "slug": "ac-repair",
+      "description": "Troubleshooting not cooling, abnormal noise, water leakage, and compressor tripping.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 2,
+      "customization": {},
+      "created_at": "2026-08-14T12:28:43.103610+05:30",
+      "updated_at": "2026-08-14T14:52:36.028167+05:30",
+      "category": 15
+    },
+    {
+      "id": 51,
+      "category_name": "Farm-Fresh Vegetables & Groceries",
+      "name": "Groceries",
+      "slug": "groceries",
+      "description": "Atta, rice, dals, oils, spices and daily grocery staples",
+      "icon": "ShoppingBag",
+      "image": "/mockups/groceries_realistic.png",
+      "is_active": true,
+      "sort_order": 2,
+      "customization": {},
+      "created_at": "2026-08-11T16:28:02.106758+05:30",
+      "updated_at": "2026-08-11T16:42:25.233180+05:30",
+      "category": 18
+    },
+    {
+      "id": 48,
+      "category_name": "Goods & Transport",
+      "name": "Two Wheeler",
+      "slug": "two-wheeler",
+      "description": "Fast doorstep package, document & parcel delivery via bike couriers",
+      "icon": "Bike",
+      "image": "/mockups/service_two_wheeler.png",
+      "is_active": true,
+      "sort_order": 2,
+      "customization": {},
+      "created_at": "2026-08-11T16:27:42.488644+05:30",
+      "updated_at": "2026-08-11T16:41:58.612595+05:30",
+      "category": 12
+    },
+    {
+      "id": 64,
+      "category_name": "AC & Appliance",
+      "name": "AC Gas & Refrigerant",
+      "slug": "ac-gas-refill",
+      "description": "Leak detection, vacuuming, and complete gas charging (R32, R410A, R22).",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 3,
+      "customization": {},
+      "created_at": "2026-08-14T12:28:43.385258+05:30",
+      "updated_at": "2026-08-14T14:52:36.714925+05:30",
+      "category": 15
+    },
+    {
+      "id": 67,
+      "category_name": "Electrician, Plumbing & Carpentry",
+      "name": "Carpentry Services",
+      "slug": "carpentry",
+      "description": "Master carpenter services for door locks, custom furniture assembly, wall drilling, modular kitchen & repairs.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 3,
+      "customization": {},
+      "created_at": "2026-08-14T12:28:45.269272+05:30",
+      "updated_at": "2026-08-14T14:38:15.813425+05:30",
+      "category": 14
+    },
+    {
+      "id": 49,
+      "category_name": "Goods & Transport",
+      "name": "Packer & Mover",
+      "slug": "packers-movers",
+      "description": "Full household & corporate office shifting with verified crew, bubble packing & on-time transport",
+      "icon": "Boxes",
+      "image": "/mockups/service_packers_movers.png",
+      "is_active": true,
+      "sort_order": 3,
+      "customization": {},
+      "created_at": "2026-08-11T16:27:47.405602+05:30",
+      "updated_at": "2026-08-13T13:56:30.785440+05:30",
+      "category": 12
+    },
+    {
+      "id": 65,
+      "category_name": "AC & Appliance",
+      "name": "AC Installation & Uninstallation",
+      "slug": "ac-installation",
+      "description": "Safe dismounting, precision bracket installation, copper piping & core drilling.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 4,
+      "customization": {},
+      "created_at": "2026-08-14T12:28:43.663367+05:30",
+      "updated_at": "2026-08-14T14:52:37.152790+05:30",
+      "category": 15
+    },
+    {
+      "id": 66,
+      "category_name": "AC & Appliance",
+      "name": "Microwave Oven Repair",
+      "slug": "microwave",
+      "description": "Solo, grill, and convection microwave spark fixes, heating issues, turntable & keypad repairs.",
+      "icon": "",
+      "image": "",
+      "is_active": true,
+      "sort_order": 8,
+      "customization": {},
+      "created_at": "2026-08-14T12:28:44.468178+05:30",
+      "updated_at": "2026-08-14T15:10:37.009196+05:30",
+      "category": 15
+    }
+  ]
+}

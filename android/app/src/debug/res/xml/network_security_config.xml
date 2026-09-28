@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Added 2026-09-21 — root cause of "video not playing":
+  androidx.media3 (ExoPlayer, which video_player uses under the hood)
+  threw `HttpDataSource$CleartextNotPermittedException: Cleartext HTTP
+  traffic to 192.168.1.77 not permitted`. That's Android correctly
+  enforcing this app's own AndroidManifest.xml setting
+  (`android:usesCleartextTraffic="false"`, a deliberate production
+  hardening choice) — the banner's video URL happened to be a plain
+  http:// address (a local dev Django server on the LAN, not the real
+  https://customer.caldimservices.online production host), and Android
+  9+ blocks all non-HTTPS network traffic by default unless explicitly
+  allowed.
+
+  This override applies ONLY to debug builds (it lives under
+  src/debug/, merged only into debug AndroidManifest.xml — see the
+  matching src/debug/AndroidManifest.xml) so a release/production build
+  keeps the strict HTTPS-only policy untouched. It exists purely so a
+  local dev backend (any http:// LAN address, e.g. while testing the
+  Mobile App Banners feature against a locally-run Django server before
+  Supabase Storage / production media hosting is configured) can be
+  reached from a debug build without every developer having to edit
+  Android config by hand. It is never shipped in a release APK.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

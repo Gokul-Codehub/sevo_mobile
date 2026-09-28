@@ -1,0 +1,1899 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": 244,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Amlaa (Nellikaai)",
+      "slug": "veg-amla",
+      "description": "Standard Amla (Nellikai) package with verified quality assurance",
+      "price": "64.00",
+      "duration": "8 MINS",
+      "image": "/media/catalog/catalog_458e0083382547608b7f87b613d388d9.webp",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Amlaa (Nellikaai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 228,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Beetroot",
+      "slug": "veg-beetroot",
+      "description": "Standard Beetroot package with verified quality assurance",
+      "price": "37.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Beetroot",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 224,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Bitter Gourd (Pavakkai)",
+      "slug": "veg-bitter-gourd",
+      "description": "Standard Bitter Gourd (Pavakkai) package with verified quality assurance",
+      "price": "17.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "Trending",
+      "includes": [
+        "Complete inspection & diagnostics for Bitter Gourd (Pavakkai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 225,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Bottle Gourd (Suraikkai)",
+      "slug": "veg-bottle-gourd",
+      "description": "Standard Bottle Gourd (Suraikkai) package with verified quality assurance",
+      "price": "21.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Bottle Gourd (Suraikkai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 232,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Brinjal (Kathirikai)",
+      "slug": "veg-brinjal",
+      "description": "Standard Brinjal (Kathirikai) package with verified quality assurance",
+      "price": "25.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Brinjal (Kathirikai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 240,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Broccoli",
+      "slug": "veg-broccoli",
+      "description": "Standard Broccoli package with verified quality assurance",
+      "price": "133.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "Best Seller",
+      "includes": [
+        "Complete inspection & diagnostics for Broccoli",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 241,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Button Mushroom (Kaalan)",
+      "slug": "veg-mushroom",
+      "description": "Standard Button Mushroom (Kaalan) package with verified quality assurance",
+      "price": "49.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Button Mushroom (Kaalan)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 239,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Cabbage (Muttakose)",
+      "slug": "veg-cabbage",
+      "description": "Standard Cabbage (Muttakose) package with verified quality assurance",
+      "price": "40.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Cabbage (Muttakose)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 238,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Cauliflower (Kooliflower)",
+      "slug": "veg-cauliflower",
+      "description": "Standard Cauliflower (Kooliflower) package with verified quality assurance",
+      "price": "38.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Cauliflower (Kooliflower)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 230,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Colocasia (Seppankizhangu)",
+      "slug": "veg-colocasia",
+      "description": "Standard Colocasia (Seppankizhangu) package with verified quality assurance",
+      "price": "19.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Colocasia (Seppankizhangu)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 207,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Coriander Leaves (Kothamalli)",
+      "slug": "veg-coriander-leaves",
+      "description": "Standard Coriander Leaves (Kothamalli) package with verified quality assurance",
+      "price": "25.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Coriander Leaves (Kothamalli)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 213,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Cucumber (Vellarikkai)",
+      "slug": "veg-cucumber",
+      "description": "Standard Cucumber (Vellarikkai) package with verified quality assurance",
+      "price": "52.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Cucumber (Vellarikkai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 214,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Curry Leaves (Karuveppilai)",
+      "slug": "veg-curry-leaves",
+      "description": "Standard Curry Leaves (Karuveppilai) package with verified quality assurance",
+      "price": "15.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Curry Leaves (Karuveppilai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 219,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Drumstick (Murungakkai)",
+      "slug": "veg-drumstick",
+      "description": "Standard Drumstick (Murungakkai) package with verified quality assurance",
+      "price": "35.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Drumstick (Murungakkai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 119,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Essential Dals & Grains Combo",
+      "slug": "essential-dals-grains",
+      "description": "Standard Essential Dals & Grains Combo package with verified quality assurance",
+      "price": "499.00",
+      "duration": "Coming Soon",
+      "image": "",
+      "popular": true,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Essential Dals & Grains Combo",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 51,
+      "service_name": "Groceries",
+      "service_slug": "groceries",
+      "service_description": "Atta, rice, dals, oils, spices and daily grocery staples",
+      "service_customization": {},
+      "service_sort_order": 2,
+      "service_image": "/mockups/groceries_realistic.png"
+    },
+    {
+      "id": 237,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "French Beans",
+      "slug": "veg-french-beans",
+      "description": "Standard French Beans package with verified quality assurance",
+      "price": "31.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for French Beans",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 218,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Fresh Rosemary and Herbs",
+      "slug": "veg-rosemary-herbs",
+      "description": "Standard Fresh Rosemary and Herbs package with verified quality assurance",
+      "price": "20.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Fresh Rosemary and Herbs",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 221,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Garlic (Poondu)",
+      "slug": "veg-garlic",
+      "description": "Standard Garlic (Poondu) package with verified quality assurance",
+      "price": "68.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Garlic (Poondu)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 220,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Ginger (Inji)",
+      "slug": "veg-ginger",
+      "description": "Standard Ginger (Inji) package with verified quality assurance",
+      "price": "75.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Ginger (Inji)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 234,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Green Capsicum (Kuda Milagai)",
+      "slug": "veg-capsicum",
+      "description": "Standard Green Capsicum (Kuda Milagai) package with verified quality assurance",
+      "price": "28.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Green Capsicum (Kuda Milagai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 233,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Green Chilli (Pachai Milagai)",
+      "slug": "veg-green-chilli",
+      "description": "Standard Green Chilli (Pachai Milagai) package with verified quality assurance",
+      "price": "18.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Green Chilli (Pachai Milagai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 217,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Green Lettuce (Salad Keerai)",
+      "slug": "veg-green-lettuce",
+      "description": "Standard Green Lettuce (Salad Keerai) package with verified quality assurance",
+      "price": "56.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Green Lettuce (Salad Keerai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 243,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Green Peas (Pattani)",
+      "slug": "veg-green-peas",
+      "description": "Standard Green Peas (Pattani) package with verified quality assurance",
+      "price": "67.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Green Peas (Pattani)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 231,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Green Zucchini",
+      "slug": "veg-zucchini",
+      "description": "Standard Green Zucchini package with verified quality assurance",
+      "price": "30.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Green Zucchini",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 251,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "guava",
+      "slug": "guava",
+      "description": "",
+      "price": "25.00",
+      "duration": "30-45 mins",
+      "image": "/media/catalog/catalog_30a1335e56c04cc2b515f46a335e5d92.jpg",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for guava",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 211,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Lady Finger (Vendakkai)",
+      "slug": "veg-lady-finger",
+      "description": "Standard Lady Finger (Vendakkai) package with verified quality assurance",
+      "price": "54.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Lady Finger (Vendakkai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 212,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Lemon (Elumichai)",
+      "slug": "veg-lemon",
+      "description": "Standard Lemon (Elumichai) package with verified quality assurance",
+      "price": "41.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Lemon (Elumichai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 215,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Mint Leaves (Pudhina)",
+      "slug": "veg-mint-leaves",
+      "description": "Standard Mint Leaves (Pudhina) package with verified quality assurance",
+      "price": "26.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Mint Leaves (Pudhina)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 118,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Monthly Kitchen Staples Pack",
+      "slug": "monthly-kitchen-staples",
+      "description": "Standard Monthly Kitchen Staples Pack package with verified quality assurance",
+      "price": "999.00",
+      "duration": "Coming Soon",
+      "image": "",
+      "popular": true,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Monthly Kitchen Staples Pack",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 51,
+      "service_name": "Groceries",
+      "service_slug": "groceries",
+      "service_description": "Atta, rice, dals, oils, spices and daily grocery staples",
+      "service_customization": {},
+      "service_sort_order": 2,
+      "service_image": "/mockups/groceries_realistic.png"
+    },
+    {
+      "id": 208,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Onion (Vengayam)",
+      "slug": "veg-onion",
+      "description": "Standard Onion (Vengayam) package with verified quality assurance",
+      "price": "41.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Onion (Vengayam)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 222,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Peeled Garlic (Uricha Poondu)",
+      "slug": "veg-peeled-garlic",
+      "description": "Standard Peeled Garlic (Uricha Poondu) package with verified quality assurance",
+      "price": "54.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Peeled Garlic (Uricha Poondu)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 210,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Potato (Urulaikilangu)",
+      "slug": "veg-potato",
+      "description": "Standard Potato (Urulaikilangu) package with verified quality assurance",
+      "price": "22.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Potato (Urulaikilangu)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 242,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Pumpkin (Parangikkai)",
+      "slug": "veg-pumpkin",
+      "description": "Standard Pumpkin (Parangikkai) package with verified quality assurance",
+      "price": "46.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Pumpkin (Parangikkai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 227,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Radish (Mullangi)",
+      "slug": "veg-radish",
+      "description": "Standard Radish (Mullangi) package with verified quality assurance",
+      "price": "52.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Radish (Mullangi)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 245,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Raw Papaya (Pappalikkai)",
+      "slug": "veg-raw-papaya",
+      "description": "Standard Raw Papaya (Pappalikkai) package with verified quality assurance",
+      "price": "39.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Raw Papaya (Pappalikkai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 223,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Raw Turmeric (Manjal Kizhangu)",
+      "slug": "veg-raw-turmeric",
+      "description": "Standard Raw Turmeric (Manjal Kizhangu) package with verified quality assurance",
+      "price": "38.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Raw Turmeric (Manjal Kizhangu)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 235,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Red Bell Pepper",
+      "slug": "veg-red-bell-pepper",
+      "description": "Standard Red Bell Pepper package with verified quality assurance",
+      "price": "45.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Red Bell Pepper",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 226,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Ridge Gourd (Peerkangai)",
+      "slug": "veg-ridge-gourd",
+      "description": "Standard Ridge Gourd (Peerkangai) package with verified quality assurance",
+      "price": "38.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Ridge Gourd (Peerkangai)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 216,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Spring Onion (Vengaya Thaal)",
+      "slug": "veg-spring-onion",
+      "description": "Standard Spring Onion (Vengaya Thaal) package with verified quality assurance",
+      "price": "36.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Spring Onion (Vengaya Thaal)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 246,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Sweet Corn (Solam)",
+      "slug": "veg-sweet-corn",
+      "description": "Standard Sweet Corn (Solam) package with verified quality assurance",
+      "price": "24.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": true,
+      "tag": "Popular",
+      "includes": [
+        "Complete inspection & diagnostics for Sweet Corn (Solam)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 229,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Sweet Potato (Sakkaraivalli)",
+      "slug": "veg-sweet-potato",
+      "description": "Standard Sweet Potato (Sakkaraivalli) package with verified quality assurance",
+      "price": "69.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Sweet Potato (Sakkaraivalli)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 209,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Tomato (Thakkali)",
+      "slug": "veg-tomato",
+      "description": "Standard Tomato (Thakkali) package with verified quality assurance",
+      "price": "58.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Tomato (Thakkali)",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    },
+    {
+      "id": 236,
+      "category": 18,
+      "category_slug": "vegetables_groceries",
+      "name": "Yellow Bell Pepper",
+      "slug": "veg-yellow-bell-pepper",
+      "description": "Standard Yellow Bell Pepper package with verified quality assurance",
+      "price": "61.00",
+      "duration": "8 MINS",
+      "image": "",
+      "popular": false,
+      "tag": "",
+      "includes": [
+        "Complete inspection & diagnostics for Yellow Bell Pepper",
+        "Standard servicing using professional tools",
+        "Post-service functionality and safety check"
+      ],
+      "excludes": [],
+      "payment_policy": "BOTH",
+      "faqs": [
+        {
+          "a": "Yes, standard 30-day service warranty covers all workmanship.",
+          "q": "Is warranty included for this service?"
+        }
+      ],
+      "sort_order": 0,
+      "tools": [
+        "Professional grade safety & service kit",
+        "Digital testing equipment",
+        "Protective work covers"
+      ],
+      "ready": [
+        "Continuous power supply",
+        "Working water connection",
+        "Service area accessible and cleared"
+      ],
+      "service_id": 50,
+      "service_name": "Farm-Fresh Vegetable",
+      "service_slug": "vegetables",
+      "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+      "service_customization": {},
+      "service_sort_order": 1,
+      "service_image": "/mockups/vegetables_realistic.png"
+    }
+  ],
+  "currency": "INR",
+  "currency_symbol": "\u20b9"
+}

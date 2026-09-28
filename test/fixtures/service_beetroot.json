@@ -1,0 +1,44 @@
+{
+  "id": 228,
+  "category": 18,
+  "category_slug": "vegetables_groceries",
+  "name": "Beetroot",
+  "slug": "veg-beetroot",
+  "description": "Standard Beetroot package with verified quality assurance",
+  "price": "37.00",
+  "duration": "8 MINS",
+  "image": "",
+  "popular": false,
+  "tag": "",
+  "includes": [
+    "Complete inspection & diagnostics for Beetroot",
+    "Standard servicing using professional tools",
+    "Post-service functionality and safety check"
+  ],
+  "excludes": [],
+  "payment_policy": "BOTH",
+  "faqs": [
+    {
+      "a": "Yes, standard 30-day service warranty covers all workmanship.",
+      "q": "Is warranty included for this service?"
+    }
+  ],
+  "sort_order": 0,
+  "tools": [
+    "Professional grade safety & service kit",
+    "Digital testing equipment",
+    "Protective work covers"
+  ],
+  "ready": [
+    "Continuous power supply",
+    "Working water connection",
+    "Service area accessible and cleared"
+  ],
+  "service_id": 50,
+  "service_name": "Farm-Fresh Vegetable",
+  "service_slug": "vegetables",
+  "service_description": "100% farm-fresh, organic local vegetables harvested daily and delivered in 8-15 minutes",
+  "service_customization": {},
+  "service_sort_order": 1,
+  "service_image": "/mockups/vegetables_realistic.png"
+}

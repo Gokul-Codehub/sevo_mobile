@@ -1,0 +1,36 @@
+{
+  "success": true,
+  "data": {
+    "id": 104,
+    "request_id": "CAL-20260823-104",
+    "status": "new_request",
+    "total_amount": "59.00",
+    "advance_amount": "59.00",
+    "balance_amount": "0.00",
+    "payment_status": "pending",
+    "available_actions": [
+      "cancel",
+      "track"
+    ],
+    "scheduled_date": "2026-08-23",
+    "scheduled_time_slot": "15-20 Mins Express",
+    "items": [
+      {
+        "id": 228,
+        "name": "Beetroot",
+        "slug": "veg-beetroot",
+        "price": "37.00",
+        "quantity": 1,
+        "category_id": 18
+      }
+    ],
+    "address": {
+      "id": 107,
+      "label": "Home",
+      "address_line1": "Thozhi Hostel, Viswanath Puram, Thillai Nagar",
+      "city": "Hosur",
+      "state": "Tamil Nadu",
+      "pincode": "635109"
+    }
+  }
+}

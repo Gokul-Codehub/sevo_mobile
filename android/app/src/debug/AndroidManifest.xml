@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay — Android/Gradle merges this into the main
+  AndroidManifest.xml (android/app/src/main/AndroidManifest.xml) for debug
+  builds only, adding android:networkSecurityConfig without touching the
+  release build at all. See src/debug/res/xml/network_security_config.xml
+  for why this exists (cleartext HTTP to a local dev backend was being
+  blocked, which is exactly what production's strict HTTPS-only policy is
+  supposed to do — this override is scoped to debug builds specifically so
+  that policy stays fully in effect for anything users actually install).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

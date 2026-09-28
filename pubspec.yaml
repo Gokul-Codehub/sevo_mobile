@@ -1,0 +1,104 @@
+name: calservices_customer
+description: "CalServices Customer - Professional home services booking app"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- State Management ---
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # --- Networking ---
+  dio: ^5.7.0
+
+  # --- Routing ---
+  go_router: ^14.6.2
+
+  # --- Secure Storage ---
+  flutter_secure_storage: ^9.2.4
+
+  # --- UI / Typography ---
+  google_fonts: ^6.2.1
+  shimmer: ^3.0.0
+  cached_network_image: ^3.4.1
+
+  # --- Maps ---
+  google_maps_flutter: ^2.9.0
+
+  # --- Geolocation (device GPS + reverse geocoding for "Use current
+  # location") — added 2026-08-27 to back the address screen's location
+  # detection with a real device fix instead of hardcoded coordinates.
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
+
+  # --- Payment ---
+  razorpay_flutter: ^1.3.8
+
+  # --- Decimal Math (money) ---
+  decimal: ^3.2.1
+
+  # --- PDF Viewing ---
+  flutter_pdfview: ^1.3.2
+
+  # --- File / Image Picker ---
+  image_picker: ^1.1.2
+  file_picker: ^8.1.4
+
+  # --- Video Playback ---
+  # Added 2026-09-21 per explicit request ("the banners and advertisement
+  # could allow admin to upload video and images... and that should be
+  # reflected in mobile application") — the Home screen's promo banner
+  # carousel and advertisement card can now be a short looping video
+  # instead of only a still image; see shared/widgets/banner_media.dart.
+  video_player: ^2.9.5
+
+  # --- WebSocket ---
+  web_socket_channel: ^3.0.1
+
+  # --- Local (in-app-triggered) notifications to the device's system
+  # notification center — see core/services/notification_service.dart for
+  # what this can and can't do without a real push server. ---
+  flutter_local_notifications: ^18.0.1
+
+  # --- Connectivity ---
+  connectivity_plus: ^6.1.1
+
+  # --- Google Sign-In (UI ready; requires backend change BCR-002) ---
+  google_sign_in: ^6.2.2
+
+  # --- Utilities ---
+  intl: ^0.20.2
+  equatable: ^2.0.7
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  url_launcher: ^6.3.1
+  share_plus: ^10.1.4
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  riverpod_generator: ^2.6.1
+  build_runner: ^2.4.13
+  json_serializable: ^6.8.0
+  freezed: ^2.5.7
+  mocktail: ^1.0.4
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/

@@ -1,0 +1,270 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../features/booking/domain/cart_notifier.dart';
+import '../../routing/app_router.dart';
+import '../theme/app_colors.dart';
+
+/// Main app shell with bottom navigation bar.
+/// Wraps all primary tab destinations including dynamic Cart counter.
+class AppShell extends ConsumerStatefulWidget {
+  const AppShell({super.key, required this.child});
+
+  final Widget child;
+
+  static const _tabs = [
+    _TabItem(
+      label: 'Home',
+      icon: Icons.home_outlined,
+      activeIcon: Icons.home_rounded,
+      route: AppRoutes.home,
+    ),
+    _TabItem(
+      label: 'Bookings',
+      icon: Icons.calendar_today_outlined,
+      activeIcon: Icons.calendar_today_rounded,
+      route: AppRoutes.myBookings,
+    ),
+    _TabItem(
+      label: 'Cart',
+      icon: Icons.shopping_cart_outlined,
+      activeIcon: Icons.shopping_cart_rounded,
+      route: AppRoutes.cart,
+      isCartTab: true,
+    ),
+    _TabItem(
+      label: 'Support',
+      icon: Icons.headset_mic_outlined,
+      activeIcon: Icons.headset_mic_rounded,
+      route: AppRoutes.support,
+    ),
+    _TabItem(
+      label: 'Profile',
+      icon: Icons.person_outline_rounded,
+      activeIcon: Icons.person_rounded,
+      route: AppRoutes.profile,
+    ),
+  ];
+
+  @override
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  // Fixed 2026-09-17 per explicit request ("The app should be closed using
+  // back button/gesture from home page with double click back or double
+  // back swipe... like Flipkart"): tracks the timestamp of the last back
+  // press while on the Home tab so a second press within the window below
+  // actually exits, instead of either exiting on the very first press
+  // (jarring — a single accidental back-swipe would kill the app) or doing
+  // nothing at all (the previous behavior, since Home is this shell's root
+  // route with nothing to pop).
+  DateTime? _lastHomeBackPressAt;
+  static const _exitPromptWindow = Duration(seconds: 2);
+
+  int _currentIndex(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
+    for (int i = 0; i < AppShell._tabs.length; i++) {
+      if (location == AppShell._tabs[i].route ||
+          (i > 0 && location.startsWith(AppShell._tabs[i].route))) {
+        return i;
+      }
+    }
+    return 0;
+  }
+
+  /// Returns true once the second back press lands inside the window,
+  /// showing a "press back again to exit" prompt on the first press.
+  bool _handleHomeBackPress() {
+    final now = DateTime.now();
+    final last = _lastHomeBackPressAt;
+    if (last != null && now.difference(last) <= _exitPromptWindow) {
+      return true;
+    }
+    _lastHomeBackPressAt = now;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(const SnackBar(
+        content: Text('Press back again to exit'),
+        duration: _exitPromptWindow,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(bottom: 72, left: 16, right: 16),
+      ));
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentIndex = _currentIndex(context);
+    final isHomeTab = currentIndex == 0;
+    final cartItems = ref.watch(cartProvider);
+    final totalCartCount =
+        cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
+
+    return PopScope(
+      // Only Home is this shell's root with nowhere left to pop to, so
+      // only Home needs the double-back-to-exit interception; every other
+      // tab keeps its normal back behavior (e.g. popping a pushed detail
+      // screen) untouched.
+      canPop: !isHomeTab,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !isHomeTab) return;
+        if (_handleHomeBackPress()) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        // Explicitly disable the FAB geometry animation on this persistent
+        // shell Scaffold. With go_router's ShellRoute nesting nearly every
+        // screen inside this single Scaffold, rapid route pushes/pops (or a
+        // rebuild from cartProvider changing the nav-bar badge) can land in
+        // the same frame as the framework's own FAB transition animation,
+        // which then tries to hit-test/lay out a RenderObject that has
+        // already been disposed — surfacing as "RenderBox was not laid out"
+        // / "Cannot hit test a render box that has never been laid out"
+        // under _FloatingActionButtonTransition. This app never uses a FAB
+        // here, so removing the animation removes the race entirely.
+        floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
+        body: widget.child,
+        bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0
+            ? const SizedBox.shrink()
+            : SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(36),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 18,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: List.generate(AppShell._tabs.length, (index) {
+                        final tab = AppShell._tabs[index];
+                        final isSelected = currentIndex == index;
+
+                        Widget iconWidget = Icon(
+                          isSelected ? tab.activeIcon : tab.icon,
+                          size: 24,
+                          color: isSelected
+                              ? AppColors.primary
+                              : const Color(0xFF334155),
+                        );
+
+                        if (tab.isCartTab && totalCartCount > 0) {
+                          iconWidget = Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              iconWidget,
+                              Positioned(
+                                top: -4,
+                                right: -8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 16,
+                                    minHeight: 16,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.error,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '$totalCartCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.0,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            context.go(tab.route);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isSelected ? 16 : 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primaryLight
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                iconWidget,
+                                const SizedBox(height: 3),
+                                Text(
+                                  tab.label,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _TabItem {
+  const _TabItem({
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+    required this.route,
+    this.isCartTab = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final IconData activeIcon;
+  final String route;
+  final bool isCartTab;
+}
+

@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "message": "OTP verified successfully.",
+  "tokens": {
+    "access": "mock_access_token_sample",
+    "refresh": "mock_refresh_token_sample"
+  },
+  "user": {
+    "id": 7988,
+    "phone": "9876543210",
+    "name": "Gokul M",
+    "email": "cust_gokul.m@example.com",
+    "is_active": true,
+    "date_joined": "2026-08-20T10:00:00Z"
+  }
+}
