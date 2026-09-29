@@ -143,6 +143,18 @@ class AuthNotifier extends Notifier<AuthState> {
     await _repo.logout();
     state = const AuthUnauthenticated();
   }
+
+  // ── Delete Account ────────────────────────────────────────────────────────
+  /// Requests backend account deletion and resets auth state to unauthenticated.
+  /// Returns error string if deletion request fails, or null on success.
+  Future<String?> deleteAccount() async {
+    final result = await _repo.deleteAccount();
+    state = const AuthUnauthenticated();
+    return switch (result) {
+      Success() => null,
+      Failure(:final error) => error.message,
+    };
+  }
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────

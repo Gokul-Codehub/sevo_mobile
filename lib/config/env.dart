@@ -85,6 +85,10 @@ class Env {
   // ── Payment Gateway ──
   static const String defaultRazorpayKeyId = 'rzp_live_caldimservices';
 
+  // ── Official Legal & Policy URLs ──
+  static const String privacyPolicyUrl = 'https://sevo.co.in/privacy/sevo/';
+  static const String accountDeletionUrl = 'https://sevo.co.in/account-deletion/';
+
   // ── Token storage keys ──
   static const String keyAccessToken = 'cal_access_token';
   static const String keyRefreshToken = 'cal_refresh_token';
