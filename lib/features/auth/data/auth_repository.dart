@@ -195,6 +195,27 @@ class AuthRepository {
     }
   }
 
+  // ── Delete Account ───────────────────────────────────────────────────────
+  /// Deletes the authenticated customer's account and purges all local storage.
+  /// First attempts DELETE /auth/customer/account/delete/, with fallback to POST.
+  Future<Result<bool>> deleteAccount() async {
+    try {
+      final response = await api.delete('/auth/customer/account/delete/');
+      return ResponseNormalizer.extract(response, (_) => true);
+    } on Exception catch (e) {
+      try {
+        final altResponse = await api.post('/auth/customer/account/delete/');
+        return ResponseNormalizer.extract(altResponse, (_) => true);
+      } catch (_) {
+        return Failure(_toError(e));
+      }
+    } finally {
+      await storage.clearAll();
+      await storage.clearCartStorage();
+      await storage.clearSelectedAddress();
+    }
+  }
+
   // ── Restore session ──────────────────────────────────────────────────────
   /// Restores session from local storage. Returns null if no token found.
   /// NOTE: Call [validateSession] or [fetchProfile] to verify/sync the token with the server.

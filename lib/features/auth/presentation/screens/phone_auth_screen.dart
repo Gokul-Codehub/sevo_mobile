@@ -1,8 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../config/env.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/auth_models.dart';
@@ -526,28 +529,36 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                 Center(
                   child: RichText(
                     textAlign: TextAlign.center,
-                    text: const TextSpan(
-                      style: TextStyle(
+                    text: TextSpan(
+                      style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
                         height: 1.5,
                       ),
                       children: [
-                        TextSpan(text: 'By continuing, you agree to our\n'),
-                        TextSpan(
+                        const TextSpan(text: 'By continuing, you agree to our\n'),
+                        const TextSpan(
                           text: 'Terms & Conditions',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary,
                           ),
                         ),
-                        TextSpan(text: ' and '),
+                        const TextSpan(text: ' and '),
                         TextSpan(
                           text: 'Privacy Policy',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary,
+                            decoration: TextDecoration.underline,
                           ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              launchUrl(
+                                Uri.parse(Env.privacyPolicyUrl),
+                                mode: LaunchMode.externalApplication,
+                              );
+                            },
                         ),
                       ],
                     ),

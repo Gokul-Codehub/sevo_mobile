@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/env.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -407,6 +408,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     title: 'Privacy Policy',
                     onTap: () => _showPrivacyDialog(context),
                   ),
+                  if (user != null) ...[
+                    const Divider(
+                        height: 1, indent: 56, color: AppColors.border),
+                    _MenuTile(
+                      icon: Icons.person_remove_rounded,
+                      title: 'Delete Account',
+                      subtitle: 'Permanently remove account & personal data',
+                      onTap: () => _showDeleteAccountDialog(context, ref),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -672,11 +683,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         content: const SingleChildScrollView(
           child: Text(
-            'SEVO is committed to protecting your personal data.\n\n1. Data Collection: We collect your phone number, name, email, and service addresses solely for booking fulfillment and technician dispatch.\n\n2. Encryption: All communications are encrypted using TLS 1.3. Sensitive tokens are stored securely in Android Keystore / EncryptedSharedPreferences.\n\n3. Payment Security: Payment details are handled exclusively by RBI-authorized payment aggregator Razorpay and never stored on our servers.',
+            'SEVO is committed to protecting your personal data.\n\n1. Data Collection: We collect your phone number, name, email, and service addresses solely for booking fulfillment and technician dispatch.\n\n2. Encryption: All communications are encrypted using TLS 1.3. Sensitive tokens are stored securely in Android Keystore / EncryptedSharedPreferences.\n\n3. Payment Security: Payment details are handled exclusively by RBI-authorized payment aggregator Razorpay and never stored on our servers.\n\n4. Your Rights: You have the right to access, rectify, or request permanent deletion of your account and personal data at any time.',
             style: TextStyle(fontSize: 12, height: 1.4),
           ),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              launchUrl(
+                Uri.parse(Env.privacyPolicyUrl),
+                mode: LaunchMode.externalApplication,
+              );
+            },
+            icon: const Icon(Icons.open_in_new_rounded, size: 14),
+            label: const Text('Open Online (Web)'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
@@ -686,6 +708,113 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.error),
+            SizedBox(width: 8),
+            Text(
+              'Delete Account',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Are you sure you want to delete your SEVO account?\n\n'
+                '• This action is permanent and cannot be undone.\n'
+                '• Your profile, saved addresses, active bookings, and order history will be permanently deleted from our servers.\n'
+                '• Any active loyalty points or coupon discounts will be forfeited.\n',
+                style: TextStyle(fontSize: 12.5, height: 1.4),
+              ),
+              InkWell(
+                onTap: () => launchUrl(
+                  Uri.parse(Env.accountDeletionUrl),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.open_in_new_rounded,
+                          size: 14, color: AppColors.primary),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Web Deletion Request Portal',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Keep Account'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final error =
+                  await ref.read(authProvider.notifier).deleteAccount();
+              if (!context.mounted) return;
+
+              if (error != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Account deletion notice: $error'),
+                    backgroundColor: AppColors.warning,
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Your account and data have been permanently deleted.',
+                    ),
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              }
+              context.go('/');
+            },
+            child: const Text('Delete Permanently'),
           ),
         ],
       ),

@@ -1,4 +1,4 @@
-package com.caldim.calservices.calservices_customer
+package com.caldim.sevo_customer
 
 import io.flutter.embedding.android.FlutterActivity
 
