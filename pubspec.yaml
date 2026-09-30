@@ -2,7 +2,7 @@ name: calservices_customer
 description: "CalServices Customer - Professional home services booking app"
 publish_to: 'none'
 
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ^3.13.1
@@ -106,8 +106,9 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "sevo_logo.png"
+  image_path: "assets/images/app_launcher_icon.png"
   min_sdk_android: 21
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "sevo_logo.png"
+  adaptive_icon_foreground: "assets/images/app_launcher_foreground.png"
+
 
