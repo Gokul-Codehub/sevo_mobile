@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
-import '../../../config/env.dart';
 import '../../../core/errors/api_error.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../../booking/domain/booking_models.dart';
@@ -34,6 +33,18 @@ class PaymentController extends Notifier<PaymentState> {
   PaymentRepository get _repo => ref.read(paymentRepositoryProvider);
 
   // ── Launch Payment ────────────────────────────────────────────────────────
+  // Fixed 2026-10-01 (production resolution — Payment scope, critical
+  // rule): this used to fall back, on ANY order-creation failure, to a
+  // client-fabricated order id ('order_sim_...') and still call
+  // `_razorpay.open()` with a hardcoded live key — meaning a real charge
+  // could be taken through the live gateway with no server-created order
+  // behind it. PaymentVerifyView (service_requests/payment_views.py) binds
+  // every verification to a Payment row that only PaymentInitiateView can
+  // create, so that charge could never be reconciled: the customer pays,
+  // the booking never shows as paid, and support has no record to work
+  // from. There is now no fallback at all — if the backend does not hand
+  // back a real order, this stops and reports a failure instead of
+  // proceeding to a real payment gateway.
   Future<void> startPayment({
     required Booking booking,
     required Decimal amount,
@@ -42,7 +53,8 @@ class PaymentController extends Notifier<PaymentState> {
     _activeBookingId = booking.id;
     state = const PaymentProcessing(statusMessage: 'Preparing secure checkout...');
 
-    // 1. Create or fetch Razorpay order from backend
+    // 1. Create a real payment order on the backend. No fallback — see
+    //    the critical rule in this method's doc comment above.
     final orderResult = await _repo.createPaymentOrder(
       bookingId: booking.id,
       amount: amount,
@@ -53,30 +65,44 @@ class PaymentController extends Notifier<PaymentState> {
     switch (orderResult) {
       case Success(:final data):
         order = data;
-        _activeOrderId = order.orderId;
       case Failure(:final error):
-        // Fallback: if order creation fails in staging, synthesize order for test
-        final fallbackOrderId = booking.paymentOrderId ?? 'order_sim_${booking.id}_${DateTime.now().millisecondsSinceEpoch}';
-        order = PaymentOrder(
-          orderId: fallbackOrderId,
-          amount: amount,
-          bookingId: booking.id,
-          keyId: Env.defaultRazorpayKeyId,
+        state = PaymentFailed(
+          errorMessage: 'Could not start payment: ${error.message}',
         );
-        _activeOrderId = fallbackOrderId;
-        debugPrint('[Payment] Using synthesized/booking order ID: $fallbackOrderId (${error.message})');
+        return;
+    }
+
+    if (order.orderId.isEmpty) {
+      state = const PaymentFailed(
+        errorMessage:
+            'Payment could not be started — no order was returned by the server. Please try again.',
+      );
+      return;
+    }
+    _activeOrderId = order.orderId;
+
+    // PaymentInitiateView returns an empty key_id specifically when this
+    // backend environment has no live Razorpay gateway configured (see
+    // PaymentOrder.fromJson's doc comment) — fail honestly instead of
+    // guessing a key and opening a checkout that cannot actually complete.
+    if (order.keyId == null || order.keyId!.isEmpty) {
+      state = const PaymentFailed(
+        errorMessage:
+            'Online payment is not available right now. Please choose cash on service or contact support.',
+      );
+      return;
     }
 
     final currentUser = ref.read(currentUserProvider);
 
-    // 2. Configure Razorpay checkout options
+    // 2. Configure Razorpay checkout options — always with the real,
+    //    backend-issued order_id; Razorpay is never opened without one.
     final options = {
-      'key': order.keyId ?? Env.defaultRazorpayKeyId,
+      'key': order.keyId,
       'amount': order.amountInPaise,
       'name': 'CalServices',
       'description': 'Booking #${booking.requestId}',
-      if (order.orderId.isNotEmpty && !order.orderId.startsWith('order_sim_'))
-        'order_id': order.orderId,
+      'order_id': order.orderId,
       'prefill': {
         if (currentUser != null && currentUser.phone.isNotEmpty)
           'contact': currentUser.phone,

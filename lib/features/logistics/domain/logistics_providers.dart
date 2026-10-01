@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:location/location.dart' as loc;
 
 import '../../../core/errors/api_error.dart';
 import '../data/logistics_repository.dart';
@@ -364,15 +365,56 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
   // coordinates) if location is unavailable/denied.
   Future<void> detectAndSetCurrentLocation() async {
     try {
+      // Fixed 2026-09-29 per explicit report ("if user clicks the user my
+      // current location the android does not open the accessibility to
+      // turn on"): this used to just `return` here, doing nothing at all
+      // when the phone's location service (GPS) itself is switched off at
+      // the OS level — a common state, especially on first launch.
+      //
+      // Fixed again 2026-10-01 per explicit report ("whenever i open the
+      // app it open the mobile settings to turn on th location... if user
+      // click in back [it] should turn on the location without redirect to
+      // the settings"): this used to unconditionally call
+      // Geolocator.openLocationSettings(), kicking the customer straight
+      // out to Android's system Settings app on every app open where GPS
+      // was off — this is the exact screen (LocationAccessScreen, shown
+      // right on first/every app launch) the report was about. `location`'s
+      // requestService() shows Google Play Services' own native in-app
+      // "Turn on location" resolution dialog instead (same pattern already
+      // applied in core/utils/location_gate.dart for the checkout flow), so
+      // the customer can enable GPS without ever leaving CalServices.
+      // Falls back to the old Settings deep-link only if the in-app prompt
+      // fails or isn't available (iOS, or Play Services missing/outdated).
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        var enabledNow = false;
+        try {
+          enabledNow = await loc.Location().requestService();
+        } catch (_) {
+          enabledNow = false;
+        }
+        if (!enabledNow) {
+          final stillDisabled = !(await Geolocator.isLocationServiceEnabled());
+          if (stillDisabled) {
+            await Geolocator.openLocationSettings();
+            return;
+          }
+        }
+      }
 
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.deniedForever) {
+        // Permanently denied ("Don't ask again") — Android will never show
+        // the in-app permission dialog again from here on, so the only way
+        // forward is the app's own permission settings page. openAppSettings()
+        // jumps straight there, same fix pattern as the GPS-off case above.
+        await Geolocator.openAppSettings();
+        return;
+      }
+      if (permission == LocationPermission.denied) {
         return;
       }
 

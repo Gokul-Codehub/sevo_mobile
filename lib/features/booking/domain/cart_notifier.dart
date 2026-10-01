@@ -7,6 +7,7 @@ import '../../../core/utils/app_logger.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../../catalog/domain/catalog_models.dart';
+import '../../pricing/domain/pricing_providers.dart';
 import 'booking_models.dart';
 
 /// State notifier for customer shopping cart with persistent local storage.
@@ -210,6 +211,15 @@ class CartSummary {
 final cartSummaryProvider = Provider<CartSummary>((ref) {
   final items = ref.watch(cartProvider);
   final tipAmount = ref.watch(deliveryTipProvider);
+  // Fixed 2026-10-01 per explicit request ("The Tax fixing Platform fee
+  // and free delivery cost should be fix by the admin not the hard
+  // coded... make it dynamic"): every fee below used to be a literal
+  // Decimal.parse(...) constant. Now read from the admin-configurable
+  // PricingConfig (see features/pricing/), which starts with these exact
+  // same values as a fallback and silently swaps in the real admin-set
+  // ones once fetched — so this never regresses existing behavior, it
+  // just stops requiring an app release to change a price.
+  final pricing = ref.watch(pricingConfigProvider);
 
   int count = 0;
   Decimal subtotal = Decimal.zero;
@@ -247,20 +257,18 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
   }
 
   if (isGrocery) {
-    // ── Quick Commerce Grocery Fee Rules (matching calservices_web) ──────────
-    // Delivery fee: ₹15 (FREE if subtotal >= ₹200)
-    final freeDeliveryThreshold = Decimal.parse('200.00');
-    final deliveryFee = subtotal >= freeDeliveryThreshold
+    // ── Quick Commerce Grocery Fee Rules (admin-configurable, Settings > Pricing) ──
+    // Delivery fee: FREE if subtotal >= pricing.freeDeliveryThreshold
+    final deliveryFee = subtotal >= pricing.freeDeliveryThreshold
         ? Decimal.zero
-        : Decimal.parse('15.00');
+        : pricing.deliveryFee;
 
-    // Handling and packaging: ₹2
-    final handlingFee = Decimal.parse('2.00');
+    // Handling and packaging fee
+    final handlingFee = pricing.handlingFee;
 
-    // Small cart fee: ₹5 if subtotal < ₹100
-    final smallCartThreshold = Decimal.parse('100.00');
+    // Small cart fee, charged below pricing.smallCartThreshold
     final smallCartFee =
-        subtotal < smallCartThreshold ? Decimal.parse('5.00') : Decimal.zero;
+        subtotal < pricing.smallCartThreshold ? pricing.smallCartFee : Decimal.zero;
 
     final total = subtotal + deliveryFee + handlingFee + smallCartFee + tipAmount;
 
@@ -283,14 +291,17 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
     );
   }
 
-  // ── Home Service & Technician Booking Fee Rules ───────────────────────────
-  final serviceFee = Decimal.parse('49.00'); // Standard safety & assurance fee
-  final taxes = subtotal * Decimal.parse('0.05'); // 5% GST on home services
+  // ── Home Service & Technician Booking Fee Rules (admin-configurable) ─────
+  final serviceFee = pricing.platformFee; // Platform/safety & assurance fee
+  final taxes =
+      ((subtotal * pricing.gstPercent) / Decimal.fromInt(100)).toDecimal();
   final total = subtotal + serviceFee + taxes;
 
-  // Advance deposit: 20% of total or minimum ₹149
-  final rawAdvance = total * Decimal.parse('0.20');
-  final minAdvance = Decimal.parse('149.00');
+  // Advance deposit: pricing.minAdvancePercent of total, or the configured
+  // minimum, whichever is higher
+  final rawAdvance =
+      ((total * pricing.minAdvancePercent) / Decimal.fromInt(100)).toDecimal();
+  final minAdvance = pricing.minAdvanceAmount;
   final advancePayable = total < minAdvance
       ? total
       : (rawAdvance < minAdvance ? minAdvance : rawAdvance);

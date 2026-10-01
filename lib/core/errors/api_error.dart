@@ -31,15 +31,28 @@ final class NotFoundError extends ApiError {
   const NotFoundError([super.message = 'The requested resource was not found.']);
 }
 
-/// HTTP 422 / 400 — validation errors from DRF.
+/// HTTP 422 / 400 / 429 — validation and rate-limit errors from DRF.
 /// [fieldErrors] maps field names to their error messages.
+/// [extra] carries any additional top-level fields the backend's error
+/// envelope included alongside `code`/`message` — e.g. `resend_after_seconds`
+/// on an OTP rate-limit response or `attempts_remaining` on an invalid-OTP
+/// response (see accounts/services.py's RateLimitError/InvalidOTPError
+/// `extra={...}`). Previously this data was silently discarded by
+/// [ErrorInterceptor], which only ever read `message`.
 final class ValidationError extends ApiError {
-  const ValidationError(super.message, {this.fieldErrors = const {}});
+  const ValidationError(
+    super.message, {
+    this.fieldErrors = const {},
+    this.code,
+    this.extra = const {},
+  });
 
   final Map<String, List<String>> fieldErrors;
+  final String? code;
+  final Map<String, dynamic> extra;
 
   @override
-  List<Object?> get props => [message, fieldErrors];
+  List<Object?> get props => [message, fieldErrors, code, extra];
 }
 
 /// HTTP 5xx — server-side error.

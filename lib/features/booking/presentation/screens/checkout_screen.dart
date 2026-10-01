@@ -18,6 +18,7 @@ import '../../../logistics/presentation/widgets/slot_picker_widget.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
+import '../../../pricing/domain/pricing_providers.dart';
 import '../widgets/coupon_bottom_sheet.dart';
 
 /// Screen 14: Booking Summary / Checkout Screen
@@ -211,8 +212,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     } else {
       placeOrderSubtotal = ref.read(cartSummaryProvider).subtotal;
     }
-    final Decimal placeOrderServiceFee = Decimal.fromInt(49);
-    final Decimal placeOrderTaxes = ((placeOrderSubtotal * Decimal.fromInt(5)) /
+    // Fixed 2026-10-01: these used to be hardcoded Decimal.fromInt(49) /
+    // "5%" constants — now read from the admin-configurable PricingConfig
+    // (Settings > Pricing in the admin panel), same as cart_notifier.dart's
+    // cartSummaryProvider.
+    final pricingForOrder = ref.read(pricingConfigProvider);
+    final Decimal placeOrderServiceFee = pricingForOrder.platformFee;
+    final Decimal placeOrderTaxes = ((placeOrderSubtotal * pricingForOrder.gstPercent) /
             Decimal.fromInt(100))
         .toDecimal();
     final Decimal placeOrderDiscount = Decimal.fromInt(_couponDiscountAmount);
@@ -269,9 +275,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       totalItemCount = fallbackSummary.itemCount;
     }
 
-    final Decimal serviceFee = Decimal.fromInt(49);
+    // Fixed 2026-10-01: admin-configurable (Settings > Pricing), see note above.
+    final pricingForDisplay = ref.watch(pricingConfigProvider);
+    final Decimal serviceFee = pricingForDisplay.platformFee;
     final Decimal taxes =
-        ((subtotal * Decimal.fromInt(5)) / Decimal.fromInt(100)).toDecimal();
+        ((subtotal * pricingForDisplay.gstPercent) / Decimal.fromInt(100)).toDecimal();
     final Decimal discount = Decimal.fromInt(_couponDiscountAmount);
     final Decimal rawGrandTotal = subtotal + serviceFee + taxes - discount;
     final Decimal grandTotal =
@@ -737,7 +745,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                         const SizedBox(height: 8),
                         _BillRow(
-                          label: 'Taxes (GST 5%)',
+                          label: 'Taxes (GST ${pricingForDisplay.gstPercent}%)',
                           amount: '₹$taxes',
                         ),
                         if (_couponDiscountAmount > 0) ...[

@@ -116,33 +116,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     loading: () => const ShimmerCard(height: 80),
                     error: (error, stackTrace) => const SizedBox.shrink(),
                   ),
-                  const SizedBox(height: 32),
-                  Text(
-                    'Trending Searches',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      'AC Deep Cleaning',
-                      'Fan Installation',
-                      'Bathroom Cleaning',
-                      'Switchboard Repair',
-                      'Kitchen Sink Leakage',
-                    ].map((term) {
-                      return ActionChip(
-                        label: Text(term),
-                        onPressed: () {
-                          _searchController.text = term;
-                          ref.read(searchQueryProvider.notifier).state = term;
-                        },
-                      );
-                    }).toList(),
-                  ),
                 ],
               ),
             )

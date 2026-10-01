@@ -364,8 +364,17 @@ void main() {
         handler: (path, {data, queryParameters}) async {
           expect(path, equals('/payment/verify/'));
           expect(data['booking_id'], equals(8841));
-          expect(data['razorpay_order_id'], equals('order_mock_123'));
-          expect(data['razorpay_payment_id'], equals('pay_xyz_456'));
+          // Fixed 2026-10-01: this asserted the `razorpay_`-prefixed field
+          // names the mobile app used to send, which the real backend
+          // (PaymentVerifyView) never actually read — see the matching
+          // note in payment_test.dart. Asserting the old names made this
+          // fake handler's own `expect()` throw on every real call once
+          // PaymentVerificationPayload.toJson() was corrected, which the
+          // repository's catch-all turned the thrown exception into a
+          // silent Failure result instead of the Success this test
+          // expects. Now asserts the corrected, backend-verified names.
+          expect(data['order_id'], equals('order_mock_123'));
+          expect(data['payment_id'], equals('pay_xyz_456'));
           return Response(
             requestOptions: RequestOptions(path: path),
             statusCode: 200,

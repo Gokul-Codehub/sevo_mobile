@@ -137,6 +137,72 @@ class AuthRepository {
     }
   }
 
+  // ── Update Profile (name/email) ──────────────────────────────────────────
+  /// PATCH /auth/customer/profile/update/
+  ///
+  /// Fixed 2026-10-01: the Edit Profile screen (and the one-time
+  /// post-signup "Complete Profile" screen) called [completeProfile] above,
+  /// which hits `/auth/customer/profile/complete/`. That endpoint's backend
+  /// implementation (accounts/services.py::complete_customer_profile)
+  /// unconditionally raises "Mobile number is required to complete customer
+  /// profile." whenever the account has no phone on file and the request
+  /// doesn't supply one — which is every customer who signed up with email
+  /// only, since neither Flutter screen has a phone field. The save
+  /// silently 400s every time, so the name never actually changes and the
+  /// profile keeps showing the auto-generated `cust_<email-local-part>`
+  /// username fallback from [UserProfile.fromJson] instead.
+  ///
+  /// This method calls the separate, already-existing
+  /// `/auth/customer/profile/update/` endpoint instead (the same one
+  /// [updateAvatar] below uses for photos) — it is IsAuthenticated-gated
+  /// (no `customer_id` needed, unlike `/profile/complete/`'s AllowAny +
+  /// manual id lookup), has no phone requirement, and accepts
+  /// `first_name`/`last_name` directly. The entered full name is split the
+  /// same way the backend's own `complete_customer_profile` already does
+  /// it (first word = first_name, remainder = last_name) so both endpoints
+  /// stay consistent.
+  ///
+  /// Note: unlike `/profile/complete/`, this endpoint does not set the
+  /// backend's `profile_complete` flag — that flag isn't read anywhere in
+  /// this app (see [UserProfile.isProfileComplete], computed purely from
+  /// whether a name is present) or in any other traced backend endpoint,
+  /// so it's safe to leave unset here; it only matters if something in the
+  /// admin/CRM side filters customers by that flag.
+  Future<Result<UserProfile>> updateProfile({
+    required String name,
+    String? email,
+  }) async {
+    try {
+      final parts = name.trim().split(RegExp(r'\s+'));
+      final firstName = parts.isNotEmpty ? parts.first : '';
+      final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+      final response = await api.patch(
+        '/auth/customer/profile/update/',
+        data: {
+          'first_name': firstName,
+          'last_name': lastName,
+          if (email != null && email.isNotEmpty) 'email': email,
+        },
+      );
+      final result = ResponseNormalizer.extract(
+        response,
+        (json) => UserProfile.fromJson(
+          json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{},
+        ),
+      );
+      // Same persistence rule as completeProfile/updateAvatar — without
+      // this, a restart before the next /auth/me/ resync would show the
+      // pre-edit name again.
+      if (result is Success<UserProfile>) {
+        await storage.setUserJson(jsonEncode(result.data.toJson()));
+      }
+      return result;
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
   // ── Update Avatar ─────────────────────────────────────────────────────────
   /// PATCH /api/auth/customer/profile/update/ (multipart) — Added 2026-09-16,
   /// corrected 2026-09-19 after reviewing the real backend source

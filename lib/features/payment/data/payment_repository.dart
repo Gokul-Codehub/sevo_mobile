@@ -14,25 +14,31 @@ class PaymentRepository {
   final ApiClient api;
 
   // ── Create payment order ──────────────────────────────────────────────────
+  // Fixed 2026-10-01 (production resolution — Payment scope): this was
+  // posting to `/v1/payment/order/`, which normalizes (ApiClient._
+  // normalizePath) to `/api/v1/payment/order/` — a path that does not exist
+  // anywhere in the backend's urls.py. The real, already-implemented
+  // endpoint is `PaymentInitiateView` at `/api/payment/initiate/`
+  // (service_requests/urls.py / payment_views.py), which independently
+  // computes the amount due server-side (advance/balance-aware) and
+  // persists a real Payment row — the client's `amount`/`payment_type`
+  // are not read by that view at all, so they're no longer sent; the
+  // server decides what's owed, never the client.
+  //
+  // This 404 was the direct trigger for PaymentController's removed
+  // "synthesize a fake order and open Razorpay anyway" fallback: every
+  // real order-creation attempt failed before it ever reached the actual
+  // backend logic below, which works correctly once called at the right
+  // path.
   Future<Result<PaymentOrder>> createPaymentOrder({
     required int bookingId,
     Decimal? amount,
     String? paymentType, // 'advance' | 'balance' | 'full'
   }) async {
     try {
-      final payload = <String, dynamic>{
-        'booking_id': bookingId,
-      };
-      if (amount != null) {
-        payload['amount'] = amount.toString();
-      }
-      if (paymentType != null) {
-        payload['payment_type'] = paymentType;
-      }
-
       final response = await api.post(
-        '/v1/payment/order/',
-        data: payload,
+        '/payment/initiate/',
+        data: {'booking_id': bookingId},
       );
       return ResponseNormalizer.extract(
         response,

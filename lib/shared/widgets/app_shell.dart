@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/ai_assistant/presentation/widgets/ai_chat_sheet.dart';
 import '../../features/booking/domain/cart_notifier.dart';
 import '../../routing/app_router.dart';
+import '../providers/bottom_nav_visibility_provider.dart';
 import '../theme/app_colors.dart';
 
 /// Main app shell with bottom navigation bar.
@@ -34,11 +36,18 @@ class AppShell extends ConsumerStatefulWidget {
       route: AppRoutes.cart,
       isCartTab: true,
     ),
+    // Changed 2026-09-30 per explicit request ("remove Support in there
+    // replace AI module"): this tab no longer navigates anywhere — see
+    // isAiTab handling below, which opens the AI chat sheet instead of
+    // `context.go`. `route` is kept pointing at the old Support screen
+    // only so `_currentIndex` never mis-highlights this tab as active for
+    // an unrelated path; it is otherwise unused for this tab.
     _TabItem(
-      label: 'Support',
-      icon: Icons.headset_mic_outlined,
-      activeIcon: Icons.headset_mic_rounded,
+      label: 'AI Mitra',
+      icon: Icons.auto_awesome_outlined,
+      activeIcon: Icons.auto_awesome_rounded,
       route: AppRoutes.support,
+      isAiTab: true,
     ),
     _TabItem(
       label: 'Profile',
@@ -66,9 +75,26 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
+
+    // Fixed 2026-10-01: the AI Mitra tab's `route` is a leftover dummy value
+    // (AppRoutes.support — see its doc comment above) since it no longer
+    // navigates anywhere; it was never meant to be matched below. But
+    // Profile's "Help & Customer Care" tile still does
+    // `context.go('/support')` for the real Help & Support screen, and that
+    // path happens to equal this dummy route exactly — so the loop below
+    // used to match AI Mitra's entry first and highlight that tab instead,
+    // even though tapping it does something completely different (opens the
+    // chat sheet). Help & Support is only ever reached from Profile and
+    // isn't a tab destination in its own right, so treat it as part of the
+    // Profile tab for highlighting purposes.
+    if (location == AppRoutes.support) {
+      return AppShell._tabs.indexWhere((t) => t.route == AppRoutes.profile);
+    }
+
     for (int i = 0; i < AppShell._tabs.length; i++) {
-      if (location == AppShell._tabs[i].route ||
-          (i > 0 && location.startsWith(AppShell._tabs[i].route))) {
+      final tab = AppShell._tabs[i];
+      if (tab.isAiTab) continue;
+      if (location == tab.route || (i > 0 && location.startsWith(tab.route))) {
         return i;
       }
     }
@@ -102,6 +128,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     final cartItems = ref.watch(cartProvider);
     final totalCartCount =
         cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
+    // Added 2026-09-30 per explicit request ("In the Home page of both
+    // Groceries and Services only the footer should show otherwise
+    // hidden... make it smooth animation"): Home toggles this on its own
+    // scroll direction (see home_screen.dart); every other tab ignores it
+    // and always shows the nav bar, exactly as before.
+    final navVisible = !isHomeTab || ref.watch(bottomNavVisibleProvider);
 
     return PopScope(
       // Only Home is this shell's root with nowhere left to pop to, so
@@ -130,11 +162,20 @@ class _AppShellState extends ConsumerState<AppShell> {
         body: widget.child,
         bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0
             ? const SizedBox.shrink()
-            : SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                  child: Container(
+            : AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeInOut,
+                alignment: Alignment.bottomCenter,
+                child: !navVisible
+                    ? const SizedBox(width: double.infinity, height: 0)
+                    : AnimatedOpacity(
+                        duration: const Duration(milliseconds: 200),
+                        opacity: navVisible ? 1 : 0,
+                        child: SafeArea(
+                          top: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                            child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 4,
                       vertical: 6,
@@ -206,6 +247,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
                             HapticFeedback.selectionClick();
+                            if (tab.isAiTab) {
+                              showAiChatSheet(context);
+                              return;
+                            }
                             context.go(tab.route);
                           },
                           child: AnimatedContainer(
@@ -246,6 +291,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                     ),
                   ),
                 ),
+                        ),
+                      ),
               ),
       ),
     );
@@ -259,6 +306,7 @@ class _TabItem {
     required this.activeIcon,
     required this.route,
     this.isCartTab = false,
+    this.isAiTab = false,
   });
 
   final String label;
@@ -266,5 +314,8 @@ class _TabItem {
   final IconData activeIcon;
   final String route;
   final bool isCartTab;
+
+  /// True for the "AI Assistant" tab — see its `_tabs` doc comment above.
+  final bool isAiTab;
 }
 

@@ -7,6 +7,7 @@ import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../shared/widgets/slow_load_gate.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
@@ -65,7 +66,17 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
     }
 
     return serviceAsync.when(
-      loading: () => const _ServiceDetailSkeleton(),
+      // Fixed 2026-09-30 per explicit request ("For entire page redirection
+      // during the loading of data show a splash screen like uploaded
+      // image... only for more delay/large loading otherwise use skeleton
+      // loading"): the skeleton below still shows immediately and for
+      // every ordinary load — SlowLoadGate only escalates to the branded
+      // full-screen loader if this fetch is still running past its
+      // threshold, which a normal service-detail request never hits.
+      loading: () => const SlowLoadGate(
+        skeleton: _ServiceDetailSkeleton(),
+        tagline: 'Fetching this service\'s details...',
+      ),
       error: (err, stackTrace) => Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(backgroundColor: Colors.white, elevation: 0),

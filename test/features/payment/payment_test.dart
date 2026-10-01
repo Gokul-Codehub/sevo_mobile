@@ -27,9 +27,18 @@ void main() {
       );
 
       final json = payload.toJson();
-      expect(json['razorpay_payment_id'], 'pay_987654');
-      expect(json['razorpay_order_id'], 'order_123456');
-      expect(json['razorpay_signature'], 'sig_abcdef123456');
+      // Fixed 2026-10-01: this test asserted the `razorpay_`-prefixed field
+      // names the mobile app used to send. The real backend
+      // (service_requests/payment_views.py::PaymentVerifyView) never read
+      // those — it reads plain `order_id`/`payment_id`/`signature` — so
+      // verification payloads silently carried none of the fields the
+      // server actually checked. PaymentVerificationPayload.toJson() was
+      // corrected to match the real contract; this test now asserts that
+      // corrected (and backend-verified) shape instead of the old, broken
+      // one.
+      expect(json['payment_id'], 'pay_987654');
+      expect(json['order_id'], 'order_123456');
+      expect(json['signature'], 'sig_abcdef123456');
       expect(json['booking_id'], 42);
     });
 

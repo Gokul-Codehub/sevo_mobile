@@ -135,25 +135,31 @@ class AuthInterceptor extends Interceptor {
     } on DioException catch (dioErr) {
       final refreshStatus = dioErr.response?.statusCode;
       debugPrint('[AUTH] Token refresh request failed with status: $refreshStatus, type: ${dioErr.type}');
-      // Fixed 2026-08-27: this used to wipe stored tokens and force the user
-      // back to the login screen on ANY explicit 401/403/400 from
-      // /auth/refresh/ — which sounds correct in isolation ("the refresh
-      // token was genuinely rejected"), but this backend's refresh endpoint
-      // currently reads the refresh token ONLY from a cookie, not the
-      // request body (confirmed backend limitation — the body-accepting
-      // variant hasn't shipped yet). This client sends the refresh token in
-      // the body (see the POST call above), so the backend has structurally
-      // no way to read it and will reject essentially every refresh attempt
-      // with a 401/400 regardless of whether the user's actual session is
-      // still perfectly valid. Treating that as "log the user out" is what
-      // was making every access-token expiry — including simply reopening
-      // the app after it sat idle — force a fresh OTP login. Until the
-      // cookie-only limitation is lifted server-side, a failed refresh here
-      // can't be trusted to mean "session invalid", so it no longer clears
-      // storage or force-logs-out — the one failed request just fails, and
-      // the user's stored session is left alone exactly like a network
-      // error already was.
-      debugPrint('[AUTH] Refresh failed ($refreshStatus) — session preserved (see B01 in calservices-mobile skill: cookie-only refresh).');
+      // Fixed 2026-10-01 (production resolution — Authentication scope,
+      // resolves B01): the backend's /auth/refresh/ now accepts the
+      // refresh token from the request body as well as the cookie, and
+      // returns the new access token in the JSON response body (see
+      // RefreshView in accounts/views.py) — so a genuine HTTP response
+      // from this endpoint now actually reflects whether the stored
+      // refresh token is valid, which it structurally could not before
+      // (every refresh used to fail regardless of session validity — see
+      // the 2026-08-27 comment this replaces).
+      //
+      // A real response from the server (dioErr.response != null) — the
+      // request reached /auth/refresh/ and it explicitly rejected the
+      // token — is now trustworthy and means the session really is over,
+      // so it's treated as one: tokens are cleared and the app is routed
+      // back to login via onAuthFailure. A DioException with NO response
+      // at all (connectionError/timeout — the request never reached the
+      // server) is a connectivity problem, not a session problem, and must
+      // not log the user out just because they were briefly offline.
+      if (dioErr.response != null) {
+        debugPrint('[AUTH] Refresh explicitly rejected by server ($refreshStatus) — session is genuinely over.');
+        await storage.clearAll();
+        onAuthFailure?.call();
+      } else {
+        debugPrint('[AUTH] Refresh request could not reach the server (network error) — session preserved.');
+      }
       _refreshCompleter?.complete(null);
       _refreshCompleter = null;
       handler.next(err);

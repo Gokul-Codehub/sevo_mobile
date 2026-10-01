@@ -448,65 +448,16 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
 
                 const SizedBox(height: 28),
 
-                // ── OR Divider ──
-                Row(
-                  children: [
-                    const Expanded(child: Divider(color: AppColors.divider)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: Text(
-                        'or',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textHint,
-                        ),
-                      ),
-                    ),
-                    const Expanded(child: Divider(color: AppColors.divider)),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // ── Social Buttons (Google / Apple style) ──
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Please use phone number OTP to sign in to CalServices.'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    icon: const Text('G',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFEA4335))),
-                    label: const Text(
-                      'Continue with Google',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      side:
-                          const BorderSide(color: AppColors.border, width: 1.2),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
+                // Fixed 2026-10-01 per explicit request ("Remove the Google
+                // sign in or up"): this used to show an "or" divider and a
+                // "Continue with Google" button here, but it was never a
+                // real Google sign-in — tapping it just showed a SnackBar
+                // telling the customer to use phone OTP instead. CalServices
+                // only ever authenticates via phone/email OTP (see the
+                // channel switcher above), so a non-functional Google
+                // button only added confusion. Removed outright rather than
+                // wired up to real Google Sign-In, since this project's
+                // OTP flow is the single supported auth path.
 
                 // Guest option
                 Center(
