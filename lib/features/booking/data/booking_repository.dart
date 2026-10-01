@@ -79,9 +79,30 @@ class BookingRepository {
     List<Map<String, dynamic>>? cartDataOverride,
   }) async {
     try {
-      assert(items.isNotEmpty, 'Cannot create booking with empty items');
+      // Fixed 2026-10-01: these two checks used to be `assert()`s. An
+      // `assert` is stripped entirely in release builds (so it protects
+      // nothing in production), and even in debug/profile builds it throws
+      // an `AssertionError` — which is NOT an `Exception`, so the
+      // `on Exception catch (e)` below this block never caught it. That let
+      // an uncaught `AssertionError` escape this method, skip
+      // `BookingActionController.createBooking`'s (equally unguarded) call
+      // site, and land directly inside `checkout_screen.dart`'s
+      // `_handlePlaceOrder()` — crashing past the line that resets
+      // `_isLoading = false` and shows the result. A booking attempt that
+      // hits this (e.g. a catalog item whose `service.id` never resolved to
+      // a real positive ID) would silently die mid-request in debug/profile
+      // builds instead of showing any error at all. Real, always-on checks
+      // that return a normal [Failure] instead — same as every other
+      // validation failure in this method — fix both problems.
+      if (items.isEmpty) {
+        return const Failure(ValidationError('Please select a service first.'));
+      }
       for (final item in items) {
-        assert(item.service.id > 0, 'Service ID must be valid and positive');
+        if (item.service.id <= 0) {
+          return const Failure(ValidationError(
+            'This service could not be identified. Please go back and select it again.',
+          ));
+        }
         debugPrint(
             '[BookingRepository] Preparing booking item -> ID: ${item.service.id}, title: "${item.service.title}", slug: "${item.service.slug}", qty: ${item.quantity}, price: ${item.unitPrice}');
       }
@@ -112,6 +133,16 @@ class BookingRepository {
         'preferred_date': scheduledDate,
         'scheduled_time_slot': scheduledTimeSlot,
         'preferred_time_slot': scheduledTimeSlot,
+        // Fixed 2026-10-01: the backend's ServiceRequestPublicCreateSerializer
+        // and BookingCreateView.post() only ever read the key `preferred_time`
+        // (service_requests/serializers.py, service_requests/views.py ->
+        // validate_slot_availability_for_booking(preferred_time=...)). This
+        // app never sent that exact key, so the backend always resolved it to
+        // None, parse_slot_time(None) returned None, and every single booking
+        // failed with "Invalid or unparseable time slot." regardless of the
+        // slot actually picked. Sending the real key fixes that for all
+        // home-service bookings.
+        'preferred_time': scheduledTimeSlot,
         'service_id': firstItem.service.id,
         'issue_title': firstItem.service.title,
         'service_category': (serviceCategoryOverride != null && serviceCategoryOverride.isNotEmpty)

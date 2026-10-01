@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:location/location.dart' as loc;
 
 import '../../shared/theme/app_colors.dart';
 
@@ -50,12 +51,38 @@ Future<void> ensureLocationEnabled(BuildContext context) async {
           child: const Text('Not Now'),
         ),
         ElevatedButton(
-          onPressed: () {
+          onPressed: () async {
             Navigator.of(dialogContext).pop();
-            // Opens Android's own system location-settings screen — this
-            // app cannot flip the device toggle itself, only deep-link to
-            // where the customer can.
-            Geolocator.openLocationSettings();
+            // Fixed 2026-10-01 per explicit request ("use that model to
+            // turn on without navigate to user mobile [settings]"): this
+            // used to unconditionally call Geolocator.openLocationSettings(),
+            // kicking the customer out to Android's system Settings app
+            // just to flip the GPS toggle, then trusting them to come back.
+            // `location`'s requestService() shows Google Play Services' own
+            // native in-app resolution dialog instead — the same one apps
+            // like Uber/Ola use — so on Android the customer can turn GPS
+            // on without ever leaving CalServices.
+            //
+            // On iOS, Apple's guidelines don't allow any app to flip the
+            // system location switch itself, in-app or otherwise;
+            // requestService() there only shows an alert and always
+            // returns false — that's a platform restriction, not a bug —
+            // so this still falls back to the old Settings deep-link there
+            // (and on Android too, if Play Services is missing/outdated or
+            // the in-app prompt fails for any other reason), rather than
+            // leaving the customer with no way to proceed at all.
+            var enabled = false;
+            try {
+              enabled = await loc.Location().requestService();
+            } catch (_) {
+              enabled = false;
+            }
+            if (!enabled) {
+              final stillDisabled = !(await Geolocator.isLocationServiceEnabled());
+              if (stillDisabled) {
+                await Geolocator.openLocationSettings();
+              }
+            }
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,

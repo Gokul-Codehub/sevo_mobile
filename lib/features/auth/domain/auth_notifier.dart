@@ -71,7 +71,18 @@ class AuthNotifier extends Notifier<AuthState> {
           error: null,
           resendAfterSeconds: (data['resend_after_seconds'] as num?)?.toInt() ?? 60,
         ),
-      Failure(:final error) => (error: error.message, resendAfterSeconds: 60),
+      Failure(:final error) => (
+          error: error.message,
+          // Fixed 2026-10-01: a too-soon resend hits the backend's rate
+          // limit (RateLimitError, HTTP 429) and the real wait time comes
+          // back as `resend_after_seconds` in the error body (see
+          // ErrorInterceptor's `extra` map) — e.g. "wait 42s" rather than
+          // always showing a flat 60s countdown no matter how long is
+          // actually left.
+          resendAfterSeconds: error is ValidationError
+              ? (error.extra['resend_after_seconds'] as num?)?.toInt() ?? 60
+              : 60,
+        ),
     };
   }
 
@@ -97,18 +108,20 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
-  // ── Profile Complete ──────────────────────────────────────────────────────
+  // ── Profile Complete / Edit ───────────────────────────────────────────────
+  /// Used by both the post-signup "Complete Profile" screen and the
+  /// Profile tab's "Edit Profile" sheet.
+  ///
+  /// Fixed 2026-10-01: this used to call AuthRepository.completeProfile(),
+  /// which 400s for any customer with no phone on file (every email-only
+  /// signup) — see the detailed note on AuthRepository.updateProfile. Now
+  /// routes through that phone-agnostic endpoint instead, so entering a
+  /// name here actually sticks instead of silently failing and leaving the
+  /// screen showing the auto-generated `cust_...` username.
   Future<String?> completeProfile({required String name, String? email}) async {
-    // The backend requires customer_id alongside full_name (confirmed live
-    // 2026-08-27 — see the note in AuthRepository.completeProfile) — pull it
-    // from the current session's own user id rather than asking every call
-    // site to know or pass it.
-    final currentState = state;
-    final customerId = currentState is AuthAuthenticated ? currentState.user.id : null;
-    final result = await _repo.completeProfile(
+    final result = await _repo.updateProfile(
       name: name,
       email: email,
-      customerId: customerId,
     );
     switch (result) {
       case Success(:final data):

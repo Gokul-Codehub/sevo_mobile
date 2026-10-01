@@ -53,13 +53,18 @@ class ProductCard extends ConsumerWidget {
     final card = Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border, width: 0.8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: const Color(0x0C0F172A),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: const Color(0x04000000),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -69,7 +74,7 @@ class ProductCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
-            aspectRatio: 1.15,
+            aspectRatio: 1.2,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -88,12 +93,77 @@ class ProductCard extends ConsumerWidget {
                     fit: BoxFit.cover,
                   ),
                 ),
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            size: 12, color: AppColors.star),
+                        const SizedBox(width: 2.5),
+                        Text(
+                          service.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (service.hasDiscount)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'OFFER',
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (!service.inStock)
                   Container(
                     color: Colors.black.withValues(alpha: 0.45),
                     alignment: Alignment.center,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(6),
@@ -113,7 +183,7 @@ class ProductCard extends ConsumerWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,52 +193,75 @@ class ProductCard extends ConsumerWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: AppColors.navy,
-                    height: 1.15,
+                    height: 1.2,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Icon(Icons.star_rounded,
-                        size: 12, color: AppColors.star),
-                    const SizedBox(width: 2),
-                    Text(
-                      service.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.navy,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (service.hasDiscount) ...[
+                            Text(
+                              '₹${service.price}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textHint,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                          ],
+                          Text(
+                            '₹${service.effectivePrice}',
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      '₹${service.effectivePrice}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    if (service.hasDiscount) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        '₹${service.price}',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: AppColors.textHint,
-                          decoration: TextDecoration.lineThrough,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.25),
+                          width: 0.8,
                         ),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Book',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: accent,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 8,
+                            color: accent,
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -190,7 +283,6 @@ class ProductCard extends ConsumerWidget {
     int quantityInCart,
     Color accent,
   ) {
-    final recipeCount = (service.title.hashCode.abs() % 25) + 6;
     // Fixed 2026-09-28 per explicit request ("for every products in
     // groceries, vegetables and fruits if user clicks open the product
     // page... as like amazon and flipkart") and then corrected the same day
@@ -207,26 +299,30 @@ class ProductCard extends ConsumerWidget {
     // interfere with them.
     return GestureDetector(
       onTap: onTap ?? () => context.push('/products/$_safeSlug', extra: service),
-      child: _groceryCardBody(quantityInCart, accent, recipeCount, context, ref),
+      child: _groceryCardBody(quantityInCart, accent, context, ref),
     );
   }
 
   Widget _groceryCardBody(
     int quantityInCart,
     Color accent,
-    int recipeCount,
     BuildContext context,
     WidgetRef ref,
   ) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.0),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
+            color: const Color(0x0C0F172A),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: const Color(0x04000000),
+            blurRadius: 2,
             offset: const Offset(0, 1),
           ),
         ],
@@ -383,34 +479,10 @@ class ProductCard extends ConsumerWidget {
                     ],
                   ],
                 ),
-                const SizedBox(height: 3),
-                // Recipe badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F5E9),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$recipeCount recipes',
-                        style: const TextStyle(
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF15803D),
-                        ),
-                      ),
-                      const SizedBox(width: 1),
-                      const Icon(
-                        Icons.arrow_right_rounded,
-                        size: 13,
-                        color: Color(0xFF15803D),
-                      ),
-                    ],
-                  ),
-                ),
+                // Recipe badge removed 2026-09-30 per explicit request: the
+                // Recipe feature isn't implemented yet (planned for phase 2,
+                // after launch) — this card no longer advertises a
+                // recipe count that doesn't lead anywhere.
               ],
             ),
           ),

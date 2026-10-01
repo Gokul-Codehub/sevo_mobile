@@ -302,6 +302,55 @@ class MobileBestsellerItem {
   }
 }
 
+/// One admin-curated product carousel on the Grocery Home screen
+/// (config['mobile']['grocerySections']) — replaces the old "Essential
+/// Picks" strip.
+///
+/// Added 2026-09-30 per explicit request ("give the privilege to the
+/// customer admin to set up the products in UI... user able to enter
+/// name... choose how the data should show and which category should
+/// show... user can select multiple sub-category"): [categoryIds] are
+/// Seller Hub Marketplace category ids (any mix of root/sub-category/leaf
+/// — see [MarketplaceHomeSection] in marketplace_catalog_repository.dart),
+/// picked read-only from the admin's own category picker; this never
+/// writes to that tree, only curates which of its existing nodes feed this
+/// section and how. [layout] is deliberately just two values — a single
+/// horizontally-scrolling row, or a 3-across grid wrapping vertically — per
+/// explicit clarification ("one is strict single like horizontal listing
+/// other one is grid concept may show 3 in horizontal other in vertical").
+class MobileGrocerySection {
+  const MobileGrocerySection({
+    required this.id,
+    required this.title,
+    this.layout = 'horizontal',
+    this.categoryIds = const [],
+    this.enabled = true,
+  });
+
+  final String id;
+  final String title;
+  final String layout;
+  final List<int> categoryIds;
+  final bool enabled;
+
+  bool get isGrid => layout == 'grid';
+
+  factory MobileGrocerySection.fromJson(Map<String, dynamic> json) {
+    final rawIds = json['category_ids'];
+    final categoryIds = rawIds is List
+        ? rawIds.map((v) => int.tryParse(v.toString())).whereType<int>().toList()
+        : const <int>[];
+    final rawLayout = (json['layout'] ?? '').toString().trim().toLowerCase();
+    return MobileGrocerySection(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      layout: rawLayout == 'grid' ? 'grid' : 'horizontal',
+      categoryIds: categoryIds,
+      enabled: json['enabled'] != false,
+    );
+  }
+}
+
 /// The subset of the homepage CMS config this app actually consumes.
 class HomepageConfig {
   const HomepageConfig({
@@ -310,6 +359,7 @@ class HomepageConfig {
     this.mobileAds = const [],
     this.topCards = const [],
     this.bestsellers = const [],
+    this.grocerySections = const [],
   });
 
   final List<HomeOffer> offers;
@@ -336,6 +386,13 @@ class HomepageConfig {
   /// auto-grouped Vendor Grocery Hub tiles (`groceryHubCategoriesProvider`)
   /// whenever non-empty — see home_screen.dart's Bestsellers section.
   final List<MobileBestsellerItem> bestsellers;
+
+  /// The Grocery Home screen's admin-curated product-carousel sections —
+  /// see [MobileGrocerySection] doc comment. Preferred over
+  /// `marketplaceHomeSectionsProvider`'s auto-generated "one section per
+  /// real sub-category" fallback whenever at least one entry here is
+  /// enabled — see home_screen.dart's `_MarketplaceHomeSections`.
+  final List<MobileGrocerySection> grocerySections;
 }
 
 class HomepageRepository {
@@ -434,12 +491,24 @@ class HomepageRepository {
                 .toList()
             : <MobileBestsellerItem>[];
 
+        // Added 2026-09-30: the admin-curated "Grocery Home Sections" —
+        // see [MobileGrocerySection] doc comment.
+        final rawGrocerySections = mobileSection['grocerySections'];
+        final grocerySections = rawGrocerySections is List
+            ? rawGrocerySections
+                .whereType<Map>()
+                .map((m) => MobileGrocerySection.fromJson(Map<String, dynamic>.from(m)))
+                .where((s) => s.enabled && s.title.isNotEmpty && s.categoryIds.isNotEmpty)
+                .toList()
+            : <MobileGrocerySection>[];
+
         return HomepageConfig(
           offers: items,
           mobileBanners: mobileBanners,
           mobileAds: mobileAds,
           topCards: topCards,
           bestsellers: bestsellers,
+          grocerySections: grocerySections,
         );
       });
     } on Exception catch (e) {

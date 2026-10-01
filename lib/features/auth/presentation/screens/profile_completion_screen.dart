@@ -23,6 +23,28 @@ class _ProfileCompletionScreenState
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
+  // Fixed 2026-10-01 per explicit request ("it must not ask another email
+  // while already verified"): a customer who signed up via the Email
+  // channel has just typed AND OTP-verified their email one screen ago —
+  // by the time they land here the backend has already saved that exact
+  // address to the account, and UserProfile.fromJson reads it straight off
+  // the verify response into currentUserProvider. Asking for it again here
+  // as a blank field, as if nothing had happened, was pure, confusing
+  // friction. Phone-channel signups never had this problem (there's no
+  // phone field on this screen to begin with) — this fix is specifically
+  // for the email side.
+  String? _verifiedEmail;
+
+  @override
+  void initState() {
+    super.initState();
+    final currentEmail = ref.read(currentUserProvider)?.email?.trim();
+    if (currentEmail != null && currentEmail.isNotEmpty) {
+      _verifiedEmail = currentEmail;
+      _emailController.text = currentEmail;
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -128,25 +150,65 @@ class _ProfileCompletionScreenState
                 ),
                 const SizedBox(height: 16),
 
-                // Email field (Optional)
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email Address (Optional)',
-                    hintText: 'For booking invoices and receipts',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                  validator: (val) {
-                    if (val != null && val.trim().isNotEmpty) {
-                      if (!RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$')
-                          .hasMatch(val.trim())) {
-                        return 'Enter a valid email address or leave blank';
+                // Email: already verified via OTP on the previous screen —
+                // show it as a read-only confirmation instead of asking for
+                // it again. Only shown when it's actually known.
+                if (_verifiedEmail != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border, width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.verified_outlined,
+                            color: AppColors.success, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _verifiedEmail!,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                        ),
+                        const Text(
+                          'Verified',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  // Email field (Optional) — only shown when the customer
+                  // signed up via phone and hasn't given an email yet.
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address (Optional)',
+                      hintText: 'For booking invoices and receipts',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                    validator: (val) {
+                      if (val != null && val.trim().isNotEmpty) {
+                        if (!RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$')
+                            .hasMatch(val.trim())) {
+                          return 'Enter a valid email address or leave blank';
+                        }
                       }
-                    }
-                    return null;
-                  },
-                ),
+                      return null;
+                    },
+                  ),
 
                 const SizedBox(height: 36),
 

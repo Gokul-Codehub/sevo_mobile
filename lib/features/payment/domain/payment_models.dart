@@ -39,12 +39,21 @@ class PaymentOrder extends Equatable {
         ? (Decimal.fromInt(directPaise) / Decimal.fromInt(100)).toDecimal()
         : parseMoney(rawAmount);
 
+    // Fixed 2026-10-01: PaymentInitiateView returns `"key_id": ""` (an
+    // empty string, not absent/null) whenever no live Razorpay gateway is
+    // configured on this backend — `json['key_id']?.toString() ?? ...`
+    // treated that empty string as a present value and never fell through
+    // to the other candidates, so a misconfigured/sandbox backend handed
+    // the mobile app an empty key_id instead of a usable fallback.
+    final rawKeyId = (json['key_id'] ?? json['key'] ?? json['razorpay_key_id'])?.toString();
+    final keyId = (rawKeyId != null && rawKeyId.isNotEmpty) ? rawKeyId : null;
+
     return PaymentOrder(
       orderId: (json['order_id'] ?? json['id'] ?? json['razorpay_order_id'] ?? '').toString(),
       amount: amountInRupees,
       amountInPaiseDirect: directPaise,
       currency: (json['currency'] ?? 'INR').toString(),
-      keyId: json['key_id']?.toString() ?? json['key']?.toString() ?? json['razorpay_key_id']?.toString(),
+      keyId: keyId,
       bookingId: parseIntOrNull(json['booking_id']),
       receipt: json['receipt']?.toString(),
     );
@@ -77,10 +86,19 @@ class PaymentVerificationPayload extends Equatable {
   final String signature;
   final int bookingId;
 
+  // Fixed 2026-10-01 (production resolution — Payment scope): PaymentVerifyView
+  // (service_requests/payment_views.py) reads `booking_id`, `order_id`,
+  // `payment_id`, and `signature` (with `razorpay_signature` accepted as a
+  // fallback alias for that last one only) — it never reads
+  // `razorpay_order_id` or `razorpay_payment_id` at all. Sent under the old
+  // key names, `order_id`/`payment_id` always arrived as missing server-side,
+  // so verification failed with "booking_id and order_id are required" on
+  // every single real attempt, regardless of whether the payment itself
+  // succeeded.
   Map<String, dynamic> toJson() => {
-        'razorpay_payment_id': paymentId,
-        'razorpay_order_id': orderId,
-        'razorpay_signature': signature,
+        'order_id': orderId,
+        'payment_id': paymentId,
+        'signature': signature,
         'booking_id': bookingId,
       };
 

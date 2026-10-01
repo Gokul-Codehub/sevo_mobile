@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,11 +17,13 @@ import '../../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProv
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/booking_providers.dart';
 import '../../../catalog/data/grocery_hub_repository.dart';
+import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../../../catalog/domain/catalog_models.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../catalog/presentation/widgets/product_card.dart';
 import '../../../catalog/presentation/screens/grocery_hub_category_screen.dart';
 import '../../../logistics/domain/logistics_providers.dart';
+import '../../../../shared/providers/bottom_nav_visibility_provider.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/home_flow_mode.dart';
 import '../widgets/home_flow_theme.dart';
@@ -132,6 +135,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(customerLocationProvider.notifier).detectAndSetCurrentLocation();
+      // Added 2026-09-30, fixed 2026-10-01 per crash report ("At least one
+      // listener of the StateNotifier instance of 'StateController<bool>'
+      // threw... Tried to modify a provider while the widget tree was
+      // building"): this write used to run directly in initState(), which
+      // Riverpod explicitly forbids — initState is one of the widget
+      // life-cycle methods a provider may not be modified from (see the
+      // error's own list: build/initState/dispose/didUpdateWidget/
+      // didChangeDependencies), because the tree being built in that same
+      // frame could inconsistently include or miss the rebuild this
+      // triggers. Moved into the same post-frame callback already used
+      // for the GPS read just above, for the same reason: by the next
+      // frame the tree has finished building, so the write is safe.
+      ref.read(bottomNavVisibleProvider.notifier).state = true;
     });
   }
 
@@ -285,6 +301,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
+                  // Reverted 2026-09-30 per explicit follow-up request
+                  // ("rework on our last work about home screen background
+                  // color... restore to our old look"): back to the
+                  // original plain 2-stop fade. The "hold solid through the
+                  // middle" version (stops: [0.0, 0.6, 1.0], repeating
+                  // gradientTop) is no longer wanted here.
                   colors: [
                     flowTheme.gradientTop,
                     AppColors.background,
@@ -294,7 +316,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           SafeArea(
-            child: RefreshIndicator(
+            child: NotificationListener<UserScrollNotification>(
+              // Added 2026-09-30 per explicit request ("only the footer
+              // should show otherwise hidden... smooth animation"): hides
+              // AppShell's bottom nav while scrolling down through Home's
+              // content (more room to browse), shows it again while
+              // scrolling back up — same pattern Zepto/Blinkit use on
+              // their own home feeds. AppShell owns the actual animation;
+              // this only flips the shared visibility flag it reads.
+              onNotification: (notification) {
+                // Fixed 2026-09-30: this notification fires WHILE the
+                // CustomScrollView below is still mid-layout (scroll
+                // notifications bubble up during the scroll/layout phase,
+                // not after it). Flipping the provider synchronously here
+                // made AppShell rebuild/relayout its bottom nav re-entrantly
+                // inside that same layout pass, tripping Flutter's
+                // '!_debugDoingThisLayout' assertion on every scroll
+                // ("Failed assertion: line 2857 pos 12"). Deferring the
+                // actual state write to the end of the current frame (same
+                // fix Flutter's own docs recommend for provider/setState
+                // calls triggered from scroll notifications) lets this
+                // frame's layout finish first.
+                final desiredVisible = notification.direction == ScrollDirection.reverse
+                    ? false
+                    : notification.direction == ScrollDirection.forward
+                        ? true
+                        : null;
+                if (desiredVisible != null) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    final notifier = ref.read(bottomNavVisibleProvider.notifier);
+                    if (notifier.state != desiredVisible) {
+                      notifier.state = desiredVisible;
+                    }
+                  });
+                }
+                return false;
+              },
+              child: RefreshIndicator(
               color: flowTheme.accent,
               // Added 2026-09-19, REDONE same day per explicit feedback
               // ("it supposed to be the reloading stating showing in
@@ -417,17 +476,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: GestureDetector(
                   onTap: () => context.push('/search'),
                   child: Container(
-                    height: 48,
+                    height: 50,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border, width: 0.8),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
+                          color: const Color(0x080F172A),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                        BoxShadow(
+                          color: const Color(0x04000000),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
                         ),
                       ],
                     ),
@@ -452,7 +516,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: flowTheme.accent.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
                             Icons.tune_rounded,
@@ -590,7 +654,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ? _buildGroceriesContentSlivers(
                     context: context,
                     groceryCategory: groceryCategoryForShopByCategory,
-                    groceryEssentialsAsync: groceryEssentialsAsync,
                     groceryHubCategories: groceryHubCategories,
                     adminBestsellers: homepageConfigForTopCards?.bestsellers ?? const [],
                     myBookingsAsync: myBookingsAsync,
@@ -607,6 +670,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ),
+              ),
         ],
       ),
     );
@@ -781,22 +845,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (var i = 0; i < recentItems.length; i++) ...[
-                          _BookAgainTile(
-                            service: recentItems[i],
-                            width: cardWidth,
-                          ),
-                          if (i != recentItems.length - 1)
-                            const SizedBox(width: 10),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFFF1F6FB),
+                          Color(0xFFEAF1F8),
+                          Color(0xFFF1F6FB),
                         ],
-                      ],
+                      ),
+                      border: Border(
+                        top: BorderSide(
+                          color: Color(0xFFD6E3F0),
+                          width: 1.0,
+                        ),
+                        bottom: BorderSide(
+                          color: Color(0xFFD6E3F0),
+                          width: 1.0,
+                        ),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < recentItems.length; i++) ...[
+                            _BookAgainTile(
+                              service: recentItems[i],
+                              width: cardWidth,
+                            ),
+                            if (i != recentItems.length - 1)
+                              const SizedBox(width: 10),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -820,22 +909,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Recommended Services',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navy,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 3.5,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: theme.accent,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Recommended Services',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
               ),
               GestureDetector(
                 onTap: () => context.push('/categories'),
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: theme.accent,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                  decoration: BoxDecoration(
+                    color: theme.accent.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'See all',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: theme.accent,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Icon(Icons.arrow_forward_ios_rounded,
+                          size: 10, color: theme.accent),
+                    ],
                   ),
                 ),
               ),
@@ -849,8 +968,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       popularServicesAsync.when(
         loading: () => const SliverToBoxAdapter(
           child: SizedBox(
-            height: 228,
-            child: _HorizontalShimmerRow(height: 228),
+            height: 236,
+            child: _HorizontalShimmerRow(height: 236),
           ),
         ),
         error: (err, stack) => const SliverToBoxAdapter(child: SizedBox.shrink()),
@@ -859,14 +978,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           return SliverToBoxAdapter(
             child: SizedBox(
-              height: 228,
+              height: 236,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
                 itemCount: services.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, i) => SizedBox(
-                  width: 165,
+                  width: 168,
                   child: RepaintBoundary(
                     child: ProductCard(service: services[i]),
                   ),
@@ -875,6 +994,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           );
         },
+      ),
+
+      const SliverToBoxAdapter(child: SizedBox(height: 14)),
+
+      // ── Cross-sell: Goods & Transport / Fresh Vegetables & Fruits / Groceries ──
+      // Added 2026-09-30 per explicit request ("place these with linkage
+      // below the Recommended services") — each tile routes into its real
+      // flow using the exact same destinations the rest of Home already
+      // uses: Goods & Transport into its live logistics category, Fresh
+      // Vegetables & Fruits into the Vegetable Inventory tree, and
+      // Groceries into the Seller Hub.
+      SliverToBoxAdapter(
+        child: _CrossSellPromoSection(liveCategories: liveCategories),
       ),
 
       const SliverToBoxAdapter(child: SizedBox(height: 14)),
@@ -893,12 +1025,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Groceries-mode content: "Shop by Category" (the grocery category's own
   /// real subcategories — Vegetables, Fruits, Dairy, etc., never a
   /// hardcoded list), a grocery-flavored promo carousel, Book Again
-  /// (groceries only), "Essential Picks", and a groceries-themed
-  /// trust-badge row.
+  /// (groceries only), the admin-curated Seller Hub department carousels
+  /// ([_MarketplaceHomeSections], replacing the old "Essential Picks"),
+  /// and a groceries-themed trust-badge row.
   List<Widget> _buildGroceriesContentSlivers({
     required BuildContext context,
     required Category? groceryCategory,
-    required AsyncValue<List<ServiceItem>> groceryEssentialsAsync,
     required List<GroceryHubCategoryGroup> groceryHubCategories,
     required List<MobileBestsellerItem> adminBestsellers,
     required AsyncValue<List<Booking>> myBookingsAsync,
@@ -953,22 +1085,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (var i = 0; i < recentItems.length; i++) ...[
-                          _BookAgainTile(
-                            service: recentItems[i],
-                            width: cardWidth,
-                          ),
-                          if (i != recentItems.length - 1)
-                            const SizedBox(width: 10),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFFF1F6FB),
+                          Color(0xFFEAF1F8),
+                          Color(0xFFF1F6FB),
                         ],
-                      ],
+                      ),
+                      border: Border(
+                        top: BorderSide(
+                          color: Color(0xFFD6E3F0),
+                          width: 1.0,
+                        ),
+                        bottom: BorderSide(
+                          color: Color(0xFFD6E3F0),
+                          width: 1.0,
+                        ),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < recentItems.length; i++) ...[
+                            _BookAgainTile(
+                              service: recentItems[i],
+                              width: cardWidth,
+                            ),
+                            if (i != recentItems.length - 1)
+                              const SizedBox(width: 10),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1087,7 +1244,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 onTap: () => _handleAdminLinkTap(
                   context,
                   adminBestsellers[i].link,
-                  fallbackPath: '/categories/vegetables_groceries',
+                  // Updated 2026-09-30 — see AppRoutes.sellerHubVegetables's
+                  // doc comment: Bestsellers with no admin link configured
+                  // fall back to the Seller Hub Marketplace tree now, same
+                  // as Groceries, instead of the old Vegetable Inventory
+                  // module.
+                  fallbackPath: '/vegetables/seller-hub',
                 ),
               ),
             ),
@@ -1142,72 +1304,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: _MobileAdCard(mode: HomeFlowMode.groceries),
       ),
 
-      // ── Essential Picks ──
-      // Blinkit-style "Essentials" strip — real Farm-Fresh produce from the
-      // live catalog, not a category grid.
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Essential Picks',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navy,
-                ),
-              ),
-              GestureDetector(
-                onTap: () =>
-                    context.push('/categories/vegetables_groceries'),
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: theme.accent,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-
-      const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-      groceryEssentialsAsync.when(
-        loading: () => const SliverToBoxAdapter(
-          child: SizedBox(
-            height: 308,
-            child: _HorizontalShimmerRow(height: 308),
-          ),
-        ),
-        error: (err, stack) => const SliverToBoxAdapter(child: SizedBox.shrink()),
-        data: (produce) {
-          if (produce.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-
-          return SliverToBoxAdapter(
-            child: SizedBox(
-              height: 308,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: produce.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, i) => SizedBox(
-                  width: 165,
-                  child: RepaintBoundary(
-                    child: ProductCard(service: produce[i]),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+      // ── Admin-curated department sections (replaces "Essential Picks") ──
+      // Removed 2026-09-30 per explicit request: the old "Essential Picks"
+      // strip (real Farm-Fresh produce, but from the separate catalog
+      // fetch [groceryProduceProvider], not this Seller Hub tree) is gone.
+      // In its place: one titled, horizontally-scrolling product carousel
+      // per real Seller Hub department — see
+      // [MarketplaceHomeSection]/[marketplaceHomeSectionsProvider]'s doc
+      // comment for why this already gives the admin full control (they
+      // manage this exact tree today via "Superadmin Console → Seller Hub
+      // → Categories") without a new curation screen.
+      const _MarketplaceHomeSections(),
 
       const SliverToBoxAdapter(child: SizedBox(height: 14)),
 
@@ -1227,34 +1334,96 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              theme.trustSectionTitle,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.navy,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE9EEF4), width: 1.0),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0x0A0F172A),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
               ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                for (var i = 0; i < theme.trustBadges.length; i++) ...[
-                  Expanded(
-                    child: _WhyChooseItem(
-                      icon: theme.trustBadges[i].$1,
-                      label: theme.trustBadges[i].$2,
-                      color: theme.accent,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 3.5,
+                        height: 15,
+                        decoration: BoxDecoration(
+                          color: theme.accent,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        theme.trustSectionTitle,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.navy,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F8F0),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: const Color(0xFFA7F3D0), width: 0.8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified_rounded,
+                            size: 11, color: Color(0xFF05A357)),
+                        SizedBox(width: 3),
+                        Text(
+                          '100% ASSURED',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF05A357),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (i != theme.trustBadges.length - 1)
-                    const SizedBox(width: 8),
                 ],
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  for (var i = 0; i < theme.trustBadges.length; i++) ...[
+                    Expanded(
+                      child: _WhyChooseItem(
+                        icon: theme.trustBadges[i].$1,
+                        label: theme.trustBadges[i].$2,
+                        index: i,
+                        color: theme.accent,
+                      ),
+                    ),
+                    if (i != theme.trustBadges.length - 1)
+                      const SizedBox(width: 6),
+                  ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1414,6 +1583,236 @@ class _HorizontalShimmerRow extends StatelessWidget {
       itemBuilder: (context, i) => SizedBox(
         width: 165,
         child: ProductCardSkeleton(height: height, width: 165, borderRadius: 14),
+      ),
+    );
+  }
+}
+
+/// One [SliverToBoxAdapter] rendering every admin-curated Seller Hub
+/// department as its own titled, horizontally-scrolling product carousel —
+/// see [marketplaceHomeSectionsProvider]'s doc comment for why this
+/// replaces "Essential Picks" and how the admin controls it (no separate
+/// curation screen: they already manage this tree via "Superadmin Console
+/// → Seller Hub → Categories"). Renders nothing while the tree is loading
+/// or empty — same "fail open, never blank the whole Home screen"
+/// convention as every other optional Home section — so a slow or
+/// unreachable vendor never blocks the rest of the page.
+class _MarketplaceHomeSections extends ConsumerWidget {
+  const _MarketplaceHomeSections();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Added 2026-09-30: the admin's own named, curated sections
+    // (config['mobile']['grocerySections'] — see [MobileGrocerySection]
+    // doc comment) win whenever at least one is configured, in the exact
+    // order the admin set — same "admin data wins, auto-generated is only
+    // a fallback" convention already used for Bestsellers above. Only
+    // falls back to the auto-generated "one section per real
+    // sub-category" list when the admin hasn't curated any yet, so this
+    // never blanks out on a fresh install.
+    final curatedSections = ref.watch(homepageConfigProvider).valueOrNull?.grocerySections ?? const [];
+    if (curatedSections.isNotEmpty) {
+      return SliverToBoxAdapter(
+        child: Column(
+          children: [
+            for (final section in curatedSections) ...[
+              _CuratedGrocerySectionCarousel(section: section),
+              const SizedBox(height: 14),
+            ],
+          ],
+        ),
+      );
+    }
+
+    final autoSections = ref.watch(marketplaceHomeSectionsProvider);
+    if (autoSections.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+    return SliverToBoxAdapter(
+      child: Column(
+        children: [
+          for (final section in autoSections) ...[
+            _MarketplaceDepartmentCarousel(section: section),
+            const SizedBox(height: 14),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One admin-curated section — merges products across every category id
+/// the admin picked for it (see [marketplaceMergedProductsProvider]'s doc
+/// comment for the merge/dedupe rule) and renders them per
+/// [MobileGrocerySection.layout]: a single horizontally-scrolling row, or a
+/// 3-across grid wrapping vertically. No "See all" here — the admin
+/// already deliberately chose exactly what this section shows, unlike the
+/// auto-generated per-sub-category sections below, which mirror a real
+/// browsable department.
+class _CuratedGrocerySectionCarousel extends ConsumerWidget {
+  const _CuratedGrocerySectionCarousel({required this.section});
+
+  final MobileGrocerySection section;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Sorted copy (never mutate section.categoryIds itself) so the cache
+    // key is stable regardless of the order the admin picked categories in.
+    final idsKey = ([...section.categoryIds]..sort()).join(',');
+    final productsAsync = ref.watch(marketplaceMergedProductsProvider(idsKey));
+
+    return productsAsync.when(
+      loading: () => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTitle(),
+          const SizedBox(height: 12),
+          const SizedBox(height: 308, child: _HorizontalShimmerRow(height: 308)),
+        ],
+      ),
+      error: (err, st) => const SizedBox.shrink(),
+      data: (products) {
+        if (products.isEmpty) return const SizedBox.shrink();
+        final items = products.map((p) => p.toServiceItem()).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTitle(),
+            const SizedBox(height: 12),
+            if (section.isGrid)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: items.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 14,
+                    childAspectRatio: 0.62,
+                  ),
+                  itemBuilder: (context, i) => RepaintBoundary(child: ProductCard(service: items[i])),
+                ),
+              )
+            else
+              SizedBox(
+                height: 308,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, i) => SizedBox(
+                    width: 165,
+                    child: RepaintBoundary(child: ProductCard(service: items[i])),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTitle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Text(
+        section.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: AppColors.navy,
+        ),
+      ),
+    );
+  }
+}
+
+/// One department's title row ("See all" deep-links into
+/// [SellerHubGroceriesScreen]/[SellerHubVegetablesScreen], whichever root
+/// [MarketplaceHomeSection.isVegetableRoot] says this department belongs
+/// to) plus its horizontally-scrolling, real-price/real-stock product
+/// strip — same [ProductCard] compact layout "Essential Picks" used.
+class _MarketplaceDepartmentCarousel extends ConsumerWidget {
+  const _MarketplaceDepartmentCarousel({required this.section});
+
+  final MarketplaceHomeSection section;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pageAsync = ref.watch(marketplaceProductsByCategoryProvider(section.category.id));
+
+    return pageAsync.when(
+      loading: () => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(context),
+          const SizedBox(height: 12),
+          const SizedBox(height: 308, child: _HorizontalShimmerRow(height: 308)),
+        ],
+      ),
+      error: (err, st) => const SizedBox.shrink(),
+      data: (page) {
+        if (page.products.isEmpty) return const SizedBox.shrink();
+        final items = page.products.map((p) => p.toServiceItem()).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 308,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, i) => SizedBox(
+                  width: 165,
+                  child: RepaintBoundary(child: ProductCard(service: items[i])),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final route = section.isVegetableRoot ? '/vegetables/seller-hub' : '/groceries/seller-hub';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              section.category.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.navy,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => context.push('$route?category=${section.category.slug}'),
+            child: Text(
+              'See all',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: HomeFlowTheme.groceries.accent,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2056,8 +2455,15 @@ class _BookAgainTile extends ConsumerWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border, width: 0.8),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0x080F172A),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: AppRemoteImage(
@@ -2109,48 +2515,66 @@ class _WhyChooseItem extends StatelessWidget {
   const _WhyChooseItem({
     required this.icon,
     required this.label,
+    this.index = 0,
     required this.color,
   });
 
   final IconData icon;
   final String label;
-
-  /// Added 2026-09-19: used to hardcode AppColors.primary/primaryLight
-  /// (the app's general brand green) regardless of which mode's trust
-  /// section this badge was in — now themed per mode ([HomeFlowTheme]'s
-  /// accent) so Groceries mode's trust row and Services mode's trust row
-  /// are visually distinct too, not just their content.
+  final int index;
   final Color color;
+
+  static const List<List<Color>> _badgeGradients = [
+    [Color(0xFF3B82F6), Color(0xFF1D4ED8)], // Royal Blue
+    [Color(0xFF10B981), Color(0xFF059669)], // Emerald Green
+    [Color(0xFFF59E0B), Color(0xFFD97706)], // Amber Orange
+    [Color(0xFF8B5CF6), Color(0xFF6D28D9)], // Violet Purple
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final gradientColors = _badgeGradients[index % _badgeGradients.length];
+    final glowColor = gradientColors.first;
+
     return Column(
       children: [
         Container(
-          width: 48,
-          height: 48,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
-            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradientColors,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: glowColor.withValues(alpha: 0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          child: Icon(icon, color: color, size: 22),
+          child: Icon(icon, color: Colors.white, size: 22),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           label,
           textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
             color: AppColors.navy,
-            height: 1.15,
+            height: 1.2,
           ),
         ),
       ],
     );
   }
 }
-
 /// Home screen's "Offers & Coupons" card — shows the real top active
 /// coupon from GET /customer/coupons/ (the same live coupon list the
 /// checkout coupon sheet uses), and renders nothing at all when the admin
@@ -2171,19 +2595,32 @@ class _LiveCouponBanner extends ConsumerWidget {
         onTap: () => context.push('/categories'),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF0FDF4),
+                Color(0xFFFAFDFA),
+                Color(0xFFE8F8F0),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.3),
-              width: 1,
+              color: const Color(0xFFA7F3D0),
+              width: 1.2,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
+                color: const Color(0x1810B981),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+              BoxShadow(
+                color: const Color(0x06000000),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
               ),
             ],
           ),
@@ -2193,54 +2630,123 @@ class _LiveCouponBanner extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.chipGreenBg,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        coupon.code,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.chipGreenText,
-                          letterSpacing: 0.5,
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: const Color(0xFF86EFAC),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.local_offer_rounded,
+                                size: 11,
+                                color: Color(0xFF15803D),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                coupon.code,
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF15803D),
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'TAP TO APPLY',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primaryDark,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text(
                       coupon.title,
                       style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
                         color: AppColors.navy,
+                        letterSpacing: -0.4,
                       ),
                     ),
-                    Text(
-                      coupon.subtitle,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 13,
+                          color: Color(0xFF05A357),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          coupon.subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
+              // 3D-styled reward badge with glowing gradient ring
               Container(
-                width: 56,
-                height: 56,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryLight,
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF10B981), Color(0xFF059669)],
+                  ),
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0x4010B981),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 2.5,
+                  ),
                 ),
                 child: const Icon(
                   Icons.card_giftcard_rounded,
-                  color: AppColors.primary,
-                  size: 30,
+                  color: Colors.white,
+                  size: 28,
                 ),
               ),
             ],
@@ -2250,7 +2756,6 @@ class _LiveCouponBanner extends ConsumerWidget {
     );
   }
 }
-
 /// Content for one advertisement banner slide. Falls back to this static
 /// marketing copy whenever the live homepage CMS (settings_hub's
 /// offers.items — see homepage_repository.dart) has nothing published yet,
@@ -2635,6 +3140,563 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
 
 /// A single extra promotional/ad card, admin-managed from "Mobile App ▸
 /// Advertisement" — added 2026-09-17 per explicit request ("add a side
+/// Cross-sell promo section shown on the Services-mode home page, just
+/// below "Recommended Services" — three tiles that route into Goods &
+/// Transport (the live logistics category), Fresh Vegetables & Fruits
+/// (the Vegetable Inventory tree) and Groceries (the Seller Hub), so a
+/// services customer can jump straight into the other two flows without
+/// first switching the top Groceries/Services mode switch.
+///
+/// Added 2026-09-30 per explicit request ("place these with linkage below
+/// the Recommended services"), with copy and layout matching the
+/// reference screenshot the user shared.
+class _CrossSellPromoSection extends StatelessWidget {
+  const _CrossSellPromoSection({required this.liveCategories});
+
+  final List<Category> liveCategories;
+
+  @override
+  Widget build(BuildContext context) {
+    final gtCategory = liveCategories
+        .where((c) => c.flowType == CatalogFlowType.logistics && c.isActive)
+        .firstOrNull;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFEBF2F9),
+              Color(0xFFF3F7FA),
+              Color(0xFFE9F1F8),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: const Color(0xFFD6E3F0),
+            width: 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0x0A0F172A),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _GoodsTransportCard(
+              onTap: () => gtCategory != null
+                  ? context.push('/categories/${gtCategory.slug}', extra: gtCategory)
+                  : context.push('/categories'),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _FreshProduceCard(
+                    // Updated 2026-09-30: Vegetables & Fruits now sources
+                    // from the same Seller Hub Marketplace category tree
+                    // Groceries uses (main category → sub-category → leaf),
+                    // not the old Vegetable Inventory module — see
+                    // AppRoutes.sellerHubVegetables's doc comment.
+                    onTap: () => context.push('/vegetables/seller-hub'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _GroceriesCard(
+                    onTap: () => context.push('/groceries/seller-hub'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-width Goods & Transport banner card using the uploaded delivery truck artwork
+class _GoodsTransportCard extends StatelessWidget {
+  const _GoodsTransportCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 148,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.9),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0x100F172A),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              'assets/images/cross_sell_goods_transport.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.centerRight,
+              errorBuilder: (_, _, _) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFF1F6FB), Color(0xFFE2EDF8)],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.92),
+                      Colors.white.withValues(alpha: 0.60),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.54, 0.88],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0).withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bolt_rounded,
+                                size: 12, color: Color(0xFF1E293B)),
+                            SizedBox(width: 3),
+                            Text(
+                              'FAST MOVERS',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1E293B),
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Goods & Transport',
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'For all your moving needs',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 7.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D1B2A),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0x350D1B2A),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Book now',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_rounded,
+                            size: 13, color: Colors.white),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Half-width Fresh Vegetables & Fruits card using the farm produce artwork
+class _FreshProduceCard extends StatelessWidget {
+  const _FreshProduceCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 166,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.9),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0x100F172A),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              'assets/images/cross_sell_vegetables.jpg',
+              fit: BoxFit.cover,
+              alignment: Alignment.centerRight,
+              errorBuilder: (_, _, _) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFF0FDF4), Color(0xFFDCFCE7)],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.88),
+                      Colors.white.withValues(alpha: 0.45),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.58, 0.92],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFFDCFCE7).withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: const Color(0xFF86EFAC), width: 0.8),
+                        ),
+                        child: const Text(
+                          'FARM FRESH',
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF15803D),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Fresh Vegetables\n& Fruits',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                          height: 1.15,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Farm fresh everyday',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF15803D),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 13, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF15803D),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0x3515803D),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Shop now',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 3),
+                        Icon(Icons.arrow_forward_rounded,
+                            size: 12, color: Colors.white),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Half-width Groceries card using the uploaded groceries basket artwork
+class _GroceriesCard extends StatelessWidget {
+  const _GroceriesCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 166,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.9),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0x100F172A),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              'assets/images/cross_sell_groceries.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.centerRight,
+              errorBuilder: (_, _, _) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.88),
+                      Colors.white.withValues(alpha: 0.45),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.58, 0.92],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFFDBEAFE).withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: const Color(0xFF93C5FD), width: 0.8),
+                        ),
+                        child: const Text(
+                          'DAILY DEALS',
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1D4ED8),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Groceries',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Daily essentials at\nyour doorstep',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF2563EB),
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 13, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0x352563EB),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Shop now',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 3),
+                        Icon(Icons.arrow_forward_rounded,
+                            size: 12, color: Colors.white),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+/// Displays the admin-configured advertisement banner for the current
+/// mode ("Home page rendering banner content" — the "Mobile App"
 /// section 'Mobile' ... give the access to upload the banners,
 /// advertisement, top cards"). Renders nothing when the admin hasn't
 /// configured (or has disabled) an ad, rather than showing a placeholder.

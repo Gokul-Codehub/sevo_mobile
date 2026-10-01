@@ -8,6 +8,7 @@ import 'core/utils/app_logger.dart';
 import 'core/utils/restart_widget.dart';
 import 'routing/app_router.dart';
 import 'shared/theme/app_theme.dart';
+import 'shared/widgets/connectivity_gate.dart';
 
 /// P0 DIAGNOSTIC INSTRUMENTATION — see docs/CalServices_Cart_Catalog_RootCause_Audit.md
 ///
@@ -103,9 +104,16 @@ class CalServicesApp extends ConsumerWidget {
       // Mounted once, above every routed screen, so it keeps watching
       // booking status changes and posting real device notifications
       // (see BookingNotificationWatcher's doc comment) no matter which
-      // screen the customer is currently on.
-      builder: (context, child) =>
-          BookingNotificationWatcher(child: child ?? const SizedBox.shrink()),
+      // screen the customer is currently on. ConnectivityGate wraps that in
+      // turn so a dropped network connection overlays the branded "No
+      // Internet" screen app-wide (see ConnectivityGate's doc comment)
+      // instead of customers only discovering they're offline when an
+      // individual screen's API call happens to fail.
+      builder: (context, child) => ConnectivityGate(
+        child: BookingNotificationWatcher(
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 }

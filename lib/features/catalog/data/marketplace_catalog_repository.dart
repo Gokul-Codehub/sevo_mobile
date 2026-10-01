@@ -359,6 +359,54 @@ final marketplaceLeafDepartmentsProvider = Provider.autoDispose<List<Marketplace
   return leaves;
 });
 
+/// One Home-page product carousel section — a real Seller Hub department
+/// (with its own admin-uploaded name/image and approved, in-stock
+/// products) plus which root it lives under, so the Home screen can send
+/// "See all" to the right browse screen ([isVegetableRoot] picks
+/// `/vegetables/seller-hub` vs `/groceries/seller-hub` — see
+/// AppRoutes.sellerHubVegetables's doc comment).
+class MarketplaceHomeSection {
+  const MarketplaceHomeSection({required this.category, required this.isVegetableRoot});
+
+  final MarketplaceCategory category;
+  final bool isVegetableRoot;
+}
+
+/// Added 2026-09-30 per explicit request ("remove Essential Picks... place
+/// the section as like the uploaded image [a Blinkit-style Home page: many
+/// titled, horizontally-scrolling product carousels, one per department] —
+/// give the privilege to the customer admin to set up the products in
+/// UI"): rather than a new, separate admin-curation system, this reuses
+/// the SAME Seller Hub Marketplace tree [SellerHubGroceriesScreen] /
+/// [SellerHubVegetablesScreen] already browse — the admin already has full
+/// control of exactly this data via "Superadmin Console → Seller Hub →
+/// Categories" (add a sub-category, file approved products under it, it
+/// appears here; remove/rename it there, this list follows). One Home
+/// section per direct child of every root that has products (mirrors each
+/// screen's own "rail" — a root with no further nesting is its own sole
+/// section), flattened across ALL roots so Groceries' and Vegetables &
+/// Fruits' departments interleave in one continuous list, same as the
+/// reference screenshot mixes "Fruit and vegetables" among general grocery
+/// categories.
+final marketplaceHomeSectionsProvider = Provider.autoDispose<List<MarketplaceHomeSection>>((ref) {
+  final tree = ref.watch(marketplaceCategoryTreeProvider).valueOrNull ?? const [];
+  final sections = <MarketplaceHomeSection>[];
+  for (final root in tree) {
+    if (!root.hasAnyProducts) continue;
+    final rootKeyLower = '${root.name} ${root.slug}'.toLowerCase();
+    final isVegetableRoot = rootKeyLower.contains('vegetable') || rootKeyLower.contains('fruit');
+    final children = root.children.where((c) => c.hasAnyProducts).toList();
+    if (children.isNotEmpty) {
+      for (final child in children) {
+        sections.add(MarketplaceHomeSection(category: child, isVegetableRoot: isVegetableRoot));
+      }
+    } else {
+      sections.add(MarketplaceHomeSection(category: root, isVegetableRoot: isVegetableRoot));
+    }
+  }
+  return sections;
+});
+
 /// Products for one department, keyed by category id — `.family` so the
 /// browse screen can hold each visited department's product grid without
 /// refetching every tap.
@@ -372,4 +420,37 @@ final marketplaceProductsByCategoryProvider =
     case Failure():
       return MarketplaceProductPage.empty;
   }
+});
+
+/// Merged, deduped products across every category id an admin-curated
+/// [MobileGrocerySection] (home_screen.dart) picked — keyed by a
+/// comma-joined, sorted string of ids rather than `List<int>` directly,
+/// since Dart lists compare by identity, not value, and would defeat this
+/// `.family` provider's caching on every rebuild. Each id is fetched in
+/// parallel; a failed id is silently dropped (same "fail open" convention
+/// as everywhere else optional in this app) rather than failing the whole
+/// section, and a product appearing under more than one picked id (e.g. the
+/// admin picked both a parent and one of its own children) is kept only
+/// once, in first-seen order.
+final marketplaceMergedProductsProvider =
+    FutureProvider.autoDispose.family<List<MarketplaceProduct>, String>((ref, idsKey) async {
+  final ids = idsKey.split(',').where((s) => s.isNotEmpty).map(int.parse).toList();
+  if (ids.isEmpty) return const [];
+
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final results = await Future.wait(ids.map((id) => repo.getProducts(categoryId: id, pageSize: 60)));
+
+  final seenIds = <int>{};
+  final merged = <MarketplaceProduct>[];
+  for (final result in results) {
+    switch (result) {
+      case Success(:final data):
+        for (final product in data.products) {
+          if (seenIds.add(product.id)) merged.add(product);
+        }
+      case Failure():
+        break;
+    }
+  }
+  return merged;
 });

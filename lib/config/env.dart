@@ -30,7 +30,7 @@ class Env {
   // real vendor.sevo.co.in deploy is current.
   static const String mediaBaseUrl =
       'https://sevo.co.in';
-    //   'http://192.168.102.116:8000';
+    //   'http://192.168.1.77:8000';
       // 'https://127.0.0.1:8000';
 
 
@@ -61,7 +61,7 @@ class Env {
   // '/api/...' (see the doc comment above).
   static const String groceryHubBaseUrl =
       'https://vendor.sevo.co.in';
-      // 'http://192.168.102.116:8001';
+    //   'http://192.168.1.77:8001';
 
   // ── Production WebSocket base (authoritative per Handover Bible §3) ──
   // Updated 2026-09-23 alongside [mediaBaseUrl] — same domain move.
@@ -69,7 +69,7 @@ class Env {
   // CalServices instance -- revert together with it.
   static const String wsBaseUrl =
       'wss://sevo.co.in/ws';
-    //   'ws://192.168.102.116:8000/ws';
+    //   'ws://http://192.168.1.77:8001/ws';
 
   // ── WebSocket channel paths ──
   /// Tracking channel: append `/{identifier}/?token=<tracking_token>`

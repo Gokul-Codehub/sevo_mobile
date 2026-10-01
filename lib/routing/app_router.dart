@@ -26,6 +26,7 @@ import '../features/catalog/presentation/screens/category_detail_screen.dart';
 import '../features/catalog/presentation/screens/grocery_product_detail_screen.dart';
 import '../features/catalog/presentation/screens/search_screen.dart';
 import '../features/catalog/presentation/screens/seller_hub_groceries_screen.dart';
+import '../features/catalog/presentation/screens/seller_hub_vegetables_screen.dart';
 import '../features/catalog/presentation/screens/service_detail_screen.dart';
 import '../features/feedback/presentation/screens/feedback_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
@@ -40,6 +41,7 @@ import '../features/profile/presentation/screens/profile_screen.dart';
 import '../features/support/presentation/screens/support_screen.dart';
 import '../features/tracking/presentation/screens/live_tracking_screen.dart';
 import '../features/work_extension/presentation/screens/work_extension_screen.dart';
+import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_shell.dart';
 
 // ── Route path constants ────────────────────────────────────────────────────
@@ -57,6 +59,12 @@ abstract final class AppRoutes {
   // categoryDetail's Vegetable Inventory tree and from the flat, no-tree
   // GroceryHubCategoryScreen).
   static const String sellerHubGroceries = '/groceries/seller-hub';
+  // Added 2026-09-30 — Fresh Vegetables & Fruits, browsed by the same
+  // Seller Hub Marketplace category tree as sellerHubGroceries above (the
+  // admin now adds produce as its own main category → sub-category → leaf
+  // in that tree, replacing the old, separate Vegetable Inventory module
+  // categoryDetail's grocery branch still reads from).
+  static const String sellerHubVegetables = '/vegetables/seller-hub';
   static const String serviceDetail = '/services/:slug';
   // Added 2026-09-28 — dedicated product page for groceries/vegetables/
   // fruits, distinct from serviceDetail's scheduled-service layout (see
@@ -196,6 +204,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             // straight into the right department instead of always
             // defaulting to the first one.
             builder: (context, state) => SellerHubGroceriesScreen(
+              initialCategorySlug: state.uri.queryParameters['category'],
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.sellerHubVegetables,
+            name: 'seller-hub-vegetables',
+            // Same `?category=<slug>` deep-link support as
+            // seller-hub-groceries above.
+            builder: (context, state) => SellerHubVegetablesScreen(
               initialCategorySlug: state.uri.queryParameters['category'],
             ),
           ),
@@ -417,6 +434,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 
+// Rebranded 2026-10-01 — this used to be the raw go_router/Material default
+// look (a bare 🔍 emoji, default AppBar, no brand color anywhere), which
+// stood out as visibly off-brand against every other screen in the app the
+// moment a customer hit a bad/stale deep link. Matches the same AppColors
+// tokens and rounded-pill button shape used everywhere else (see
+// NoInternetScreen for the sibling "something's wrong" state).
 class _NotFoundScreen extends StatelessWidget {
   const _NotFoundScreen({this.error});
   final Exception? error;
@@ -424,23 +447,70 @@ class _NotFoundScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Page Not Found')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('🔍', style: TextStyle(fontSize: 64)),
-            const SizedBox(height: 16),
-            Text(
-              'Page not found',
-              style: Theme.of(context).textTheme.headlineMedium,
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primaryLight,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.search_off_rounded,
+                    size: 44,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  "Page Not Found",
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "The page you're looking for doesn't exist or may\nhave moved. Let's get you back on track.",
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 28),
+                FilledButton.icon(
+                  onPressed: () => context.go(AppRoutes.home),
+                  icon: const Icon(Icons.home_rounded),
+                  label: const Text('Go Home'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => context.go(AppRoutes.home),
-              child: const Text('Go Home'),
-            ),
-          ],
+          ),
         ),
       ),
     );
