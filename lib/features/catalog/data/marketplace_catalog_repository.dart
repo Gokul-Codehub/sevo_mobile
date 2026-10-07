@@ -303,12 +303,164 @@ class MarketplaceCatalogRepository {
     }
   }
 
+  /// `GET /api/marketplace/products/<id>/` — one product by its real Seller
+  /// Hub id. Added 2026-10-05 for the Grocery Home Section Builder's
+  /// "Specific Products" source mode (an admin-curated list of exact
+  /// products, as opposed to "Categories" mode's whole-department filter).
+  /// There is no bulk-by-ids endpoint on the vendor side to proxy, so
+  /// [marketplaceProductsByIdsProvider] below calls this once per id in
+  /// parallel — acceptable because every layout that offers "Specific
+  /// Products" caps how many an admin can pick to a small curated count
+  /// (Featured Hero, Deal Cards, Split Featured and similar spotlight
+  /// layouts), never the full department-sized lists Categories mode loads.
+  Future<Result<MarketplaceProduct>> getProductDetail(int id) async {
+    try {
+      final response = await api.get('/marketplace/products/$id/');
+      // Same unwrapped-vendor-shape convention as getProducts() above — the
+      // detail view (marketplace_views.py's MarketplaceProductDetailView)
+      // returns the single product object with no {success, data} envelope.
+      final dynamic body = response.data;
+      if (body is! Map) return Failure(UnknownError('Unexpected product detail shape'));
+      final product = MarketplaceProduct.fromJson(Map<String, dynamic>.from(body));
+      if (product.title.isEmpty) return Failure(UnknownError('Product not found'));
+      return Success(product);
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// `GET /api/marketplace/warehouses/` — active Seller Hub fulfillment
+  /// warehouses, so a caller can resolve a warehouse_id before calling
+  /// [getDeliverySlots]. Added for the grocery "Instant / Scheduled
+  /// delivery" feature ("the slots for grocery/vegetable should be from
+  /// the seller hub-delivery slot"), replacing the previously hardcoded
+  /// "6:00 PM - 8:00 PM" window on [GroceryCartScreen].
+  Future<Result<List<DeliveryWarehouse>>> getWarehouses() async {
+    try {
+      final response = await api.get('/marketplace/warehouses/');
+      return ResponseNormalizer.extract(response, (data) {
+        final list = data is List ? data : const [];
+        return list
+            .whereType<Map>()
+            .map((m) => DeliveryWarehouse.fromJson(Map<String, dynamic>.from(m)))
+            .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// `GET /api/marketplace/delivery-slots/?warehouse_id=&date=` — the real,
+  /// admin-configured Seller Hub delivery slots (Seller Hub > Delivery
+  /// Slots & Capacity) for one warehouse and one calendar date, with live
+  /// per-date capacity/cutoff already applied server-side. [warehouseId]
+  /// may be omitted — the CalServices proxy falls back to the first active
+  /// warehouse (today there is exactly one, "Jeemangalam Hub").
+  Future<Result<DeliverySlotDay>> getDeliverySlots({
+    int? warehouseId,
+    required String date,
+  }) async {
+    try {
+      final response = await api.get('/marketplace/delivery-slots/', queryParameters: {
+        if (warehouseId != null) 'warehouse_id': warehouseId,
+        'date': date,
+      });
+      return ResponseNormalizer.extract(response, (data) {
+        final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+        return DeliverySlotDay.fromJson(map);
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
   ApiError _toError(Object e) {
     if (e is ApiError) return e;
     if (e is DioException && e.error is ApiError) {
       return e.error! as ApiError;
     }
     return UnknownError(e.toString());
+  }
+}
+
+/// One active Seller Hub fulfillment warehouse
+/// (`PublicWarehouseListView` on the vendor backend).
+class DeliveryWarehouse {
+  const DeliveryWarehouse({required this.id, required this.name});
+
+  final int id;
+  final String name;
+
+  factory DeliveryWarehouse.fromJson(Map<String, dynamic> json) {
+    return DeliveryWarehouse(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      name: (json['name'] ?? '').toString(),
+    );
+  }
+}
+
+/// One real, admin-configured delivery window for a warehouse on a given
+/// date (`workforce_api.DeliverySlot` on the vendor, surfaced through
+/// `PublicDeliverySlotsView`) — e.g. "09:00-11:00", "Standard Delivery",
+/// with live capacity/cutoff already applied for the requested date.
+class DeliverySlotOption {
+  const DeliverySlotOption({
+    required this.id,
+    required this.label,
+    required this.startTime,
+    required this.endTime,
+    required this.isAvailable,
+  });
+
+  final int id;
+  final String label;
+  final String startTime; // "HH:MM"
+  final String endTime; // "HH:MM"
+  final bool isAvailable;
+
+  factory DeliverySlotOption.fromJson(Map<String, dynamic> json) {
+    return DeliverySlotOption(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      label: (json['label'] ?? '').toString(),
+      startTime: (json['start_time'] ?? '').toString(),
+      endTime: (json['end_time'] ?? '').toString(),
+      isAvailable: json['available'] == true,
+    );
+  }
+}
+
+/// One warehouse's real delivery slots for one calendar date — the direct
+/// response shape of [MarketplaceCatalogRepository.getDeliverySlots].
+class DeliverySlotDay {
+  const DeliverySlotDay({
+    required this.warehouseId,
+    this.warehouseName,
+    required this.date,
+    required this.slots,
+  });
+
+  final int? warehouseId;
+  final String? warehouseName;
+  final String date;
+  final List<DeliverySlotOption> slots;
+
+  static const empty = DeliverySlotDay(warehouseId: null, date: '', slots: []);
+
+  factory DeliverySlotDay.fromJson(Map<String, dynamic> json) {
+    final rawSlots = json['slots'];
+    return DeliverySlotDay(
+      warehouseId: int.tryParse(json['warehouse_id']?.toString() ?? ''),
+      warehouseName: (json['warehouse_name'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['warehouse_name'].toString(),
+      date: (json['date'] ?? '').toString(),
+      slots: rawSlots is List
+          ? rawSlots
+              .whereType<Map>()
+              .map((m) => DeliverySlotOption.fromJson(Map<String, dynamic>.from(m)))
+              .toList()
+          : const [],
+    );
   }
 }
 
@@ -453,4 +605,71 @@ final marketplaceMergedProductsProvider =
     }
   }
   return merged;
+});
+
+/// An admin-curated exact list of product ids ([MobileGrocerySection]'s
+/// "Specific Products" source mode, added 2026-10-05) — unlike
+/// [marketplaceMergedProductsProvider] above, order is preserved exactly as
+/// the admin picked it (a Split Featured or Deal Cards layout cares which
+/// product is first) and nothing is deduped, since an admin picking the
+/// same product twice is their own choice, not a merge artifact. Keyed by
+/// the ids joined in order (not sorted) so re-ordering the admin's picks
+/// correctly invalidates this `.family` provider's cache. A failed id is
+/// dropped rather than failing the whole section, same "fail open"
+/// convention as the rest of this file.
+final marketplaceProductsByIdsProvider =
+    FutureProvider.autoDispose.family<List<MarketplaceProduct>, String>((ref, idsKey) async {
+  final ids = idsKey.split(',').where((s) => s.isNotEmpty).map(int.parse).toList();
+  if (ids.isEmpty) return const [];
+
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final results = await Future.wait(ids.map((id) => repo.getProductDetail(id)));
+
+  final ordered = <MarketplaceProduct>[];
+  for (final result in results) {
+    switch (result) {
+      case Success(:final data):
+        ordered.add(data);
+      case Failure():
+        break;
+    }
+  }
+  return ordered;
+});
+
+/// Active Seller Hub fulfillment warehouses — fetched once and kept alive
+/// for [GroceryCartScreen]'s delivery-option picker's lifetime. Never
+/// throws to its watcher; an unreachable vendor just means an empty list
+/// (the picker falls back to its own "unavailable" messaging) rather than
+/// crashing checkout, same "fail open" convention as the rest of this
+/// file.
+final marketplaceWarehousesProvider = FutureProvider.autoDispose<List<DeliveryWarehouse>>((ref) async {
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final result = await repo.getWarehouses();
+  switch (result) {
+    case Success(:final data):
+      return data;
+    case Failure():
+      return const [];
+  }
+});
+
+/// Real, admin-configured Seller Hub delivery slots for one calendar date
+/// (`YYYY-MM-DD`) — `.family` so [GroceryCartScreen]'s "Scheduled"
+/// delivery-date picker can hold each visited date's slot list without
+/// refetching every tap. Added replacing the previously hardcoded daily
+/// "6:00 PM - 8:00 PM" window ("the slots for grocery/vegetable should be
+/// from the seller hub-delivery slot"). A failed/unreachable fetch
+/// resolves to an empty slot list rather than throwing, so the picker can
+/// show "No slots available for this date" instead of crashing.
+final marketplaceDeliverySlotsForDateProvider =
+    FutureProvider.autoDispose.family<DeliverySlotDay, String>((ref, date) async {
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final result = await repo.getDeliverySlots(date: date);
+  switch (result) {
+    case Success(:final data):
+      return data;
+    case Failure():
+      return DeliverySlotDay.empty;
+  }
 });

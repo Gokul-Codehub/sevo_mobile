@@ -412,38 +412,68 @@ class _GroceryProductDetailBody extends ConsumerWidget {
           color: Colors.white,
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2))],
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '₹${product.effectivePrice}',
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '₹${product.effectivePrice}',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                      ),
+                      if (product.displayUnit.isNotEmpty)
+                        Text(product.displayUnit, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                    ],
                   ),
-                  if (product.displayUnit.isNotEmpty)
-                    Text(product.displayUnit, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
-                ],
+                ),
+                // Fixed 2026-09-28 per reported crash log (creator chain
+                // "ConstrainedBox ← _InputPadding ← ... ← FilledButton ←
+                // _CartAction ← Row", constraints "BoxConstraints(unconstrained)",
+                // additionalConstraints "w=Infinity"): _CartAction's "Add to
+                // Cart" state renders a FilledButton, which internally builds a
+                // _RenderInputPadding to enforce its minimum tap-target size —
+                // that widget's constraint math produces an invalid
+                // tight-infinite width whenever it's handed unbounded width,
+                // which is exactly what a Row always gives a non-flex child.
+                // Same exact bug already diagnosed and fixed the same way on
+                // CategoryDetailScreen's cart bar (see that screen's matching
+                // doc comment) — IntrinsicWidth measures the child's natural
+                // width first and lays it out with that concrete, finite
+                // number, so the button never sees an unbounded constraint.
+                IntrinsicWidth(
+                  child: _CartAction(product: product, quantityInCart: quantityInCart),
+                ),
+              ],
+            ),
+            // Added 2026-10-06 per explicit request ("i have added a
+            // product then it should show the 'Go to cart' to redirect")
+            // — reuses the exact same green pill "Go to Cart" affordance
+            // already used on CategoryDetailScreen/SellerHubGroceries-
+            // Screen/SellerHubVegetablesScreen's cart bars, wrapped in
+            // IntrinsicWidth for the same unbounded-width reason as above.
+            // Only shown once this product is actually in the cart.
+            if (quantityInCart > 0) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => context.go('/cart'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF059669),
+                    side: const BorderSide(color: Color(0xFF059669)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  icon: const Icon(Icons.shopping_cart_checkout, size: 16),
+                  label: const Text('Go to Cart', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                ),
               ),
-            ),
-            // Fixed 2026-09-28 per reported crash log (creator chain
-            // "ConstrainedBox ← _InputPadding ← ... ← FilledButton ←
-            // _CartAction ← Row", constraints "BoxConstraints(unconstrained)",
-            // additionalConstraints "w=Infinity"): _CartAction's "Add to
-            // Cart" state renders a FilledButton, which internally builds a
-            // _RenderInputPadding to enforce its minimum tap-target size —
-            // that widget's constraint math produces an invalid
-            // tight-infinite width whenever it's handed unbounded width,
-            // which is exactly what a Row always gives a non-flex child.
-            // Same exact bug already diagnosed and fixed the same way on
-            // CategoryDetailScreen's cart bar (see that screen's matching
-            // doc comment) — IntrinsicWidth measures the child's natural
-            // width first and lays it out with that concrete, finite
-            // number, so the button never sees an unbounded constraint.
-            IntrinsicWidth(
-              child: _CartAction(product: product, quantityInCart: quantityInCart),
-            ),
+            ],
           ],
         ),
       ),

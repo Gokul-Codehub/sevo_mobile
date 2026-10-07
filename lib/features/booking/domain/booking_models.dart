@@ -392,14 +392,29 @@ class Booking extends Equatable {
 
   /// Whether this booking is a grocery-supply order rather than a scheduled
   /// service (AC, electrician, plumbing, cleaning, etc). Derived from the
-  /// items actually on the booking (via ServiceItem.flowType, which itself
-  /// comes from the live catalog's categoryId) — never hardcoded per
-  /// booking, so it stays correct however many item types a booking has.
-  /// A booking with no items resolves to "service" (the more common case
-  /// for a single scheduled visit that may not echo back cart items).
+  /// items actually on the booking — never hardcoded per booking, so it
+  /// stays correct however many item types a booking has. A booking with no
+  /// items resolves to "service" (the more common case for a single
+  /// scheduled visit that may not echo back cart items).
+  ///
+  /// Fixed 2026-10-07 ("Grocery delivery is showing as service"): this used
+  /// to check `item.service.flowType == CatalogFlowType.grocery` directly.
+  /// [ServiceItem.flowType] is a pure category-slug/name keyword match, and
+  /// a booking's own echoed `cart_data` (the schemaless JSONField this
+  /// screen's items are actually parsed from — see [Booking.fromJson]
+  /// above) frequently omits `category_slug`/`category_name` entirely, so a
+  /// genuine grocery item (e.g. "Green Chilli (Hari Mirch)") rebuilt from it
+  /// silently resolved to [CatalogFlowType.serviceBooking] and the My
+  /// Bookings list tagged it "SERVICE" instead of "GROCERY". This is the
+  /// exact same class of bug already fixed for the Home screen's "Book
+  /// Again" tiles and for `cartSummaryProvider`'s fee calculation
+  /// (2026-10-06/07) by switching to [ServiceItem.isGroceryFlow], which
+  /// falls back to the vegetable-category fields and the grocery cart-id
+  /// offset when the keyword match alone is inconclusive. Using that same
+  /// getter here fixes this screen too, from the one place the signal is
+  /// actually derived.
   bool get isGroceryBooking =>
-      items.isNotEmpty &&
-      items.every((i) => i.service.flowType == CatalogFlowType.grocery);
+      items.isNotEmpty && items.every((i) => i.service.isGroceryFlow);
   bool get isCancelled => status == 'cancelled';
 
   factory Booking.fromJson(Map<String, dynamic> json) {

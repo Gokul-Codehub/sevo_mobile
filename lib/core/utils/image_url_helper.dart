@@ -141,6 +141,13 @@ abstract final class ImageUrlHelper {
       if (n.contains('egg')) {
         return 'https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=400&auto=format&fit=crop&q=80';
       }
+      // Added 2026-10-07 — "Red Banana" was one of the reported items
+      // with no admin photo; it had no keyword match anywhere in this
+      // table, so it always fell through to the generic produce-basket
+      // default at the bottom instead of a real banana photo.
+      if (n.contains('banana')) {
+        return 'https://images.unsplash.com/photo-1543218024-57a70143c369?w=400&auto=format&fit=crop&q=80';
+      }
     }
 
     // 100% Accurate Verified Studio & Realistic Food Photography

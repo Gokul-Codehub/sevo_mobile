@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -433,6 +436,51 @@ class BookingRepository {
           return Booking.fromJson(inner);
         },
       );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  // ── Download invoice PDF ──────────────────────────────────────────────────
+  // The backend already has a fully-built, ownership-verified PDF generator
+  // at GET /api/booking/<id>/invoice/ (service_requests/payment_views.py ->
+  // InvoiceDownloadView) -- it was simply never called from this app, so a
+  // customer who had paid had no way to see/download an invoice from
+  // Bookings. Ownership is satisfied by the normal authenticated Bearer
+  // token this app already attaches to every request (AuthInterceptor) as
+  // long as the logged-in user is the booking's own customer -- no extra
+  // token/param needed. Returns the raw PDF bytes for the caller to
+  // save/share.
+  Future<Result<Uint8List>> downloadInvoice(int bookingId) async {
+    try {
+      final response = await api.get<List<int>>(
+        '/booking/$bookingId/invoice/',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final data = response.data;
+      if (data == null || data.isEmpty) {
+        return const Failure(
+            ValidationError('Invoice is not available for this booking yet.'));
+      }
+      return Success(Uint8List.fromList(data));
+    } on DioException catch (e) {
+      // On failure (e.g. a cancelled booking) the backend returns a normal
+      // JSON error body, not bytes -- surface its real message instead of a
+      // generic failure.
+      final respData = e.response?.data;
+      String? msg;
+      if (respData is List<int>) {
+        try {
+          final decoded = jsonDecode(utf8.decode(respData));
+          if (decoded is Map) {
+            msg = (decoded['message'] ?? decoded['error'] ?? decoded['detail'])
+                ?.toString();
+          }
+        } catch (_) {
+          // Not JSON — fall through to the generic error below.
+        }
+      }
+      return Failure(msg != null ? ValidationError(msg) : _toError(e));
     } on Exception catch (e) {
       return Failure(_toError(e));
     }

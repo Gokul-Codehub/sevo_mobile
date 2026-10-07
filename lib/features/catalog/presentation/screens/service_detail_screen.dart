@@ -8,6 +8,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/slow_load_gate.dart';
+import '../../../../shared/utils/app_toast.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
@@ -690,7 +691,71 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: 12),
+                  // Fixed 2026-10-07 ("The cart section is only working for
+                  // groceries and vegetables not for the services block"):
+                  // scheduled/non-grocery services previously had NO way to
+                  // enter the shared `cartProvider` at all — "Book Now" (kept
+                  // below, unchanged, for the one-tap single-service flow)
+                  // pushed straight to /checkout and never called
+                  // `addService()`. This mirrors the grocery branch's
+                  // Add-to-Cart/View-Cart toggle so a service can also be
+                  // added to the real cart, picked up by the Cart tab and by
+                  // `checkout_screen.dart`'s existing shared-cart fallback.
+                  SizedBox(
+                    height: 52,
+                    width: 52,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        if (quantityInCart == 0) {
+                          ref.read(cartProvider.notifier).addService(service);
+                          AppToast.addedToCart(context, service.title);
+                        } else {
+                          context.push('/cart');
+                        }
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        side: const BorderSide(color: AppColors.serviceBlue),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [
+                          const Icon(
+                            Icons.shopping_cart_outlined,
+                            color: AppColors.serviceBlue,
+                            size: 22,
+                          ),
+                          if (quantityInCart > 0)
+                            Positioned(
+                              top: -6,
+                              right: -6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.serviceBlue,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '$quantityInCart',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: SizedBox(
                       height: 52,

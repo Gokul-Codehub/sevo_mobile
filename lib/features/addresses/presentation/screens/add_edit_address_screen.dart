@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show Factory;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
@@ -118,36 +120,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         CameraUpdate.newLatLng(LatLng(position.latitude, position.longitude)),
       );
 
-      // Reverse-geocode the coordinates into address fields. Best-effort:
-      // if this fails (no network, unsupported platform, no result), the
-      // pinned coordinates are still saved — only the text fields are left
-      // for the customer to fill in manually.
-      try {
-        final placemarks = await placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-        if (placemarks.isNotEmpty) {
-          final p = placemarks.first;
-          final streetBits = [p.street, p.subLocality]
-              .where((s) => s != null && s.trim().isNotEmpty)
-              .join(', ');
-          if (streetBits.isNotEmpty && _line2Controller.text.trim().isEmpty) {
-            _line2Controller.text = streetBits;
-          }
-          if ((p.locality ?? '').trim().isNotEmpty) {
-            _cityController.text = p.locality!.trim();
-          }
-          if ((p.administrativeArea ?? '').trim().isNotEmpty) {
-            _stateController.text = p.administrativeArea!.trim();
-          }
-          if ((p.postalCode ?? '').trim().isNotEmpty) {
-            _pincodeController.text = p.postalCode!.trim();
-          }
-        }
-      } catch (_) {
-        // Reverse geocoding is best-effort — coordinates above are already set.
-      }
+      await _reverseGeocodeAndFillFields(position.latitude, position.longitude);
 
       if (mounted) {
         setState(() {});
@@ -162,6 +135,42 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
       _showLocationError('Could not detect your location. Please try again.');
     } finally {
       if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  // Fixed 2026-10-06: this reverse-geocode (coordinates -> City/State/PIN
+  // Code text fields) used to run only after "Use Current Location" — not
+  // when the customer tapped or dragged the pin directly on the map, which
+  // is the most common way to place it. That left the PIN Code field (and
+  // so the serviceability banner below, keyed off it) stuck on whatever it
+  // last held — the default Hosur PIN code on a brand new address — no
+  // matter where the pin actually moved to. Extracted so onTap/onDragEnd
+  // (see the GoogleMap below) can call the same logic. Best-effort: on
+  // failure (no network, no result) the pinned coordinates are still kept —
+  // only the text fields are left for the customer to fill in by hand.
+  Future<void> _reverseGeocodeAndFillFields(double lat, double lng) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(lat, lng);
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+        final streetBits = [p.street, p.subLocality]
+            .where((s) => s != null && s.trim().isNotEmpty)
+            .join(', ');
+        if (streetBits.isNotEmpty && _line2Controller.text.trim().isEmpty) {
+          _line2Controller.text = streetBits;
+        }
+        if ((p.locality ?? '').trim().isNotEmpty) {
+          _cityController.text = p.locality!.trim();
+        }
+        if ((p.administrativeArea ?? '').trim().isNotEmpty) {
+          _stateController.text = p.administrativeArea!.trim();
+        }
+        if ((p.postalCode ?? '').trim().isNotEmpty) {
+          _pincodeController.text = p.postalCode!.trim();
+        }
+      }
+    } catch (_) {
+      // Reverse geocoding is best-effort — pinned coordinates are still set.
     }
   }
 
@@ -231,9 +240,14 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentPincode = _pincodeController.text.trim();
-    final serviceabilityAsync = currentPincode.length == 6
-        ? ref.watch(serviceabilityProvider(currentPincode))
-        : null;
+    // Fixed 2026-10-06: always check against the live pinned coordinates
+    // (always present — defaults to Hosur) rather than gating on a 6-digit
+    // PIN code that a freshly-dropped pin may not have resolved yet.
+    final serviceabilityAsync = ref.watch(serviceabilityProvider((
+      pincode: currentPincode,
+      lat: _currentLat,
+      lng: _currentLng,
+    )));
 
     final targetPos = LatLng(_currentLat, _currentLng);
 
@@ -268,11 +282,35 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                           zoom: 14.5,
                         ),
                         onMapCreated: (c) => _mapController = c,
+                        // Fixed 2026-10-06 ("the map could not be move it
+                        // has fixed"): a GoogleMap nested inside a
+                        // SingleChildScrollView loses every pan/drag gesture
+                        // to the ancestor scroll view's own vertical drag
+                        // recognizer — Flutter's gesture arena hands drags
+                        // to the Scrollable by default, so the map behaves
+                        // as if frozen even though nothing disabled it.
+                        // EagerGestureRecognizer (built into
+                        // package:flutter/gestures.dart) claims the gesture
+                        // for the map immediately instead of waiting to lose
+                        // that arbitration — the standard fix for Google
+                        // Maps Flutter embedded in a scrollable.
+                        gestureRecognizers: {
+                          Factory<OneSequenceGestureRecognizer>(
+                            () => EagerGestureRecognizer(),
+                          ),
+                        },
                         onTap: (latLng) {
                           setState(() {
                             _currentLat = latLng.latitude;
                             _currentLng = latLng.longitude;
                           });
+                          // Fixed 2026-10-06: tapping/dragging the pin used
+                          // to leave City/State/PIN Code — and so the
+                          // serviceability banner below, keyed off them —
+                          // stuck on whatever they last held. Now every pin
+                          // move re-resolves them for the new spot.
+                          _reverseGeocodeAndFillFields(
+                              latLng.latitude, latLng.longitude);
                         },
                         markers: {
                           Marker(
@@ -284,6 +322,8 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                                 _currentLat = newPos.latitude;
                                 _currentLng = newPos.longitude;
                               });
+                              _reverseGeocodeAndFillFields(
+                                  newPos.latitude, newPos.longitude);
                             },
                           ),
                         },
@@ -474,8 +514,11 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   },
                 ),
 
-                // Live Serviceability Status Banner
-                if (serviceabilityAsync != null) ...[
+                // Live Serviceability Status Banner — always shown now
+                // (the pin always has coordinates, Hosur default included),
+                // so it reflects the actual pinned location, not just a
+                // typed PIN code.
+                ...[
                   const SizedBox(height: 14),
                   serviceabilityAsync.when(
                     loading: () => Container(

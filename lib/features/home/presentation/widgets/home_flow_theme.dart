@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../shared/theme/app_colors.dart';
 import '../../domain/home_flow_mode.dart';
 
 /// Per-mode color palette + copy for Home's two themed variants.
@@ -58,15 +57,10 @@ class HomeFlowTheme {
 
   static const services = HomeFlowTheme(
     mode: HomeFlowMode.services,
-    accent: AppColors.serviceBlue,
-    accentDark: AppColors.navy,
-    // Lightened 2026-09-28 per explicit follow-up ("brighten the
-    // background around the logo... lighten the entire background color")
-    // — the SEVO logo was reading as low-contrast against the old solid
-    // AppColors.navy top backdrop. Uses the palette's own existing lighter
-    // navy shade rather than inventing a new color.
-    gradientTop: AppColors.navyLight,
-    searchPlaceholder: 'Search services...',
+    accent: Color(0xFF1E3A5F),
+    accentDark: Color(0xFF0D253A),
+    gradientTop: Color(0xFF1E3A5F),
+    searchPlaceholder: "Search for 'AC service'",
     categoryGridTitle: 'Browse by Category',
     trustSectionTitle: 'Why Choose SEVO?',
     trustBadges: [
@@ -75,25 +69,15 @@ class HomeFlowTheme {
       (Icons.access_time_filled_rounded, 'On-time\nService'),
       (Icons.security_rounded, 'Service\nWarranty'),
     ],
-    // Widened/shortened 2026-09-19 per explicit request ("reduce the
-    // height and occupy the entire width of the user mobile screen") —
-    // the carousel is now full-bleed edge-to-edge (see home_screen.dart's
-    // _PromoBannerCarousel, viewportFraction 1.0) instead of an inset
-    // peeking card, so this ratio only needs to control height for a
-    // width that's now the full device width, not ~88% of it.
-    bannerAspectRatio: 1.9,
+    bannerAspectRatio: 2.0,
   );
 
   static const groceries = HomeFlowTheme(
     mode: HomeFlowMode.groceries,
-    accent: AppColors.groceryGreen,
-    accentDark: Color(0xFF0F4C2E),
-    // Lightened 2026-09-28, same reason as Services' gradientTop above —
-    // was the same very dark 0xFF0F4C2E as accentDark; now a lighter,
-    // still-on-brand green (the palette's own groceryGreenDark) so the
-    // logo has real contrast against it.
-    gradientTop: AppColors.groceryGreenDark,
-    searchPlaceholder: 'Search groceries...',
+    accent: Color(0xFF15803D),
+    accentDark: Color(0xFF14532D),
+    gradientTop: Color(0xFF8DC63F),
+    searchPlaceholder: "Search for 'fresh vegetables'...",
     categoryGridTitle: 'Shop by Category',
     trustSectionTitle: 'Why Shop With SEVO?',
     trustBadges: [
@@ -102,11 +86,7 @@ class HomeFlowTheme {
       (Icons.currency_rupee_rounded, 'Honest\nPricing'),
       (Icons.replay_rounded, 'Easy\nReplacements'),
     ],
-    // Wider/shorter than Services' — grocery promo photography (a produce
-    // basket, a delivery bag) tends to read better landscape than the
-    // taller shape Services uses. Widened further 2026-09-19 alongside
-    // Services' own change, for the same full-bleed, shorter-banner reason.
-    bannerAspectRatio: 2.2,
+    bannerAspectRatio: 2.0,
   );
 
   static HomeFlowTheme of(HomeFlowMode mode) =>

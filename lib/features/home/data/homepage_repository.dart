@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/api_error.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
+import '../domain/grocery_section_layout.dart';
 
 /// One admin-configured promotional offer/banner item from the homepage CMS.
 ///
@@ -314,39 +315,234 @@ class MobileBestsellerItem {
 /// — see [MarketplaceHomeSection] in marketplace_catalog_repository.dart),
 /// picked read-only from the admin's own category picker; this never
 /// writes to that tree, only curates which of its existing nodes feed this
-/// section and how. [layout] is deliberately just two values — a single
-/// horizontally-scrolling row, or a 3-across grid wrapping vertically — per
-/// explicit clarification ("one is strict single like horizontal listing
-/// other one is grid concept may show 3 in horizontal other in vertical").
+/// section and how.
+///
+/// Extended 2026-10-05 (Grocery Home Section Builder) from a 2-value
+/// `layout` to the full [GrocerySectionLayout] vocabulary, plus a
+/// `configuration` map for per-layout settings — currently just
+/// `max_products`, read by [maxProducts]. Both changes are additive: a
+/// section saved before this upgrade has no `configuration` key and a
+/// `layout` of `horizontal`/`grid`, and parses here exactly as it always
+/// did (see [GrocerySectionLayoutX.fromRaw]'s backward-compatibility note).
+///
+/// Extended again 2026-10-05 (same day, improvement pass) with banner
+/// fields for the Banner + Product Rail layout, read from
+/// `configuration.image`/`.image_url`/`.banner_title`/`.banner_subtitle`/
+/// `.banner_cta_text`/`.banner_cta_link`. These reuse the exact same
+/// `image`/`image_url` convention every other admin-uploaded image on this
+/// Home screen already uses (HomePageConfigAPIView's `_resolve_image_urls`
+/// auto-resolves any `image` key to a sibling `image_url`, recursively,
+/// with zero backend schema change needed — see
+/// `settings_hub/views_homepage.py`) — [bannerImageUrl] prefers the
+/// resolved `image_url`, falling back to the raw `image` path only if the
+/// backend hasn't resolved it (same "prefer image_url over image" fix
+/// already applied to [HomeOffer]/[MobileMediaItem]/[MobileTopCardItem]
+/// above). All five are optional and default empty, so a section saved
+/// before this upgrade (or any non-banner layout) parses exactly as before.
 class MobileGrocerySection {
   const MobileGrocerySection({
     required this.id,
     required this.title,
-    this.layout = 'horizontal',
+    this.layout = GrocerySectionLayout.horizontalCarousel,
     this.categoryIds = const [],
+    this.productIds = const [],
+    this.maxProducts = 30,
+    this.configuredMaxProducts,
     this.enabled = true,
+    this.bannerImageUrl,
+    this.bannerTitle = '',
+    this.bannerSubtitle = '',
+    this.bannerCtaText = '',
+    this.bannerCtaLink = '',
+    this.showProductImage = true,
+    this.showProductPrice = true,
+    this.showProductDiscount = true,
+    this.showAddButton = true,
+    this.showSeeAll = false,
+    this.categoryTileColumns = 3,
+    this.showCategoryImage = true,
+    this.showCategoryName = true,
+    this.showCategoryProductCount = true,
   });
 
   final String id;
   final String title;
-  final String layout;
+  final GrocerySectionLayout layout;
   final List<int> categoryIds;
+
+  /// Added 2026-10-05 (Phase B, layout-aware config). Non-empty means this
+  /// product-driven section is in "Specific Products" source mode
+  /// (`configuration.product_source == 'products'`) — an admin-curated,
+  /// order-preserving list of exact products, resolved via
+  /// [marketplaceProductsByIdsProvider] instead of the category merge
+  /// [marketplaceMergedProductsProvider] uses for "Categories" mode (the
+  /// default, and the only mode any section saved before this field
+  /// existed can be in — [categoryIds] then drives the section exactly as
+  /// it always did).
+  final List<int> productIds;
+
+  /// Caps how many merged products this section ever renders/fetches —
+  /// the "don't load the entire catalog just because a section exists"
+  /// performance rule. Admin-configurable (`configuration.max_products`);
+  /// falls back to 30 for sections saved before this field existed.
+  final int maxProducts;
+
+  /// The raw `configuration.max_products` value, or null when that key was
+  /// never set at all. Added 2026-10-05 for [_SplitFeaturedLayout]
+  /// specifically: that layout's own historical default was always exactly
+  /// 2 cards (`.take(2)`, never configurable), not [maxProducts]' generic
+  /// 30 — using [maxProducts]' default here would have silently jumped
+  /// every Split Featured section saved before today from 2 cards to 3.
+  /// [maxProducts] itself is untouched and still defaults to 30 for every
+  /// other layout, exactly as before.
+  final int? configuredMaxProducts;
   final bool enabled;
 
-  bool get isGrid => layout == 'grid';
+  /// Resolved CDN URL for the section's banner image (Banner + Product
+  /// Rail only) — null when no banner image is configured.
+  final String? bannerImageUrl;
+  final String bannerTitle;
+  final String bannerSubtitle;
+  final String bannerCtaText;
+
+  /// Raw admin link string in the same `?category=<slug>` / `/products/<slug>` / `https://...` convention [handleAdminLinkTap] (shared/
+  /// navigation/admin_link_resolver.dart) already interprets for every
+  /// other admin-configured link on this Home screen.
+  final String bannerCtaLink;
+
+  /// Added 2026-10-05 (Phase B, layout-aware config) — the spec's
+  /// "Display" checkbox group for Horizontal Carousel / Grid 3 / Grid 2
+  /// (via [ProductCard]'s matching flags) and Compact List / Quick Add
+  /// List (via `_ProductRow` in grocery_section_layouts.dart). All default
+  /// to exactly what every section already rendered before these existed
+  /// — image/price/discount/add-button visible, no "See All" row — so a
+  /// section saved before today parses and renders identically.
+  final bool showProductImage;
+  final bool showProductPrice;
+  final bool showProductDiscount;
+  final bool showAddButton;
+  final bool showSeeAll;
+
+  /// Added 2026-10-05 (Phase B, Sections 13-14) — Category Tile Grid /
+  /// Circular Category Rail only. `categoryTileColumns` (Category Tile
+  /// Grid's "Columns" dropdown) defaults to 3, matching that layout's
+  /// original hardcoded `crossAxisCount`, so a section saved before this
+  /// existed renders an identical 3-across grid. The two category-display
+  /// flags both default true, matching every category tile/avatar's
+  /// original always-shown name and product count.
+  final int categoryTileColumns;
+  final bool showCategoryImage;
+  final bool showCategoryName;
+  final bool showCategoryProductCount;
+
+  bool get isGrid => layout == GrocerySectionLayout.grid3;
+
+  /// True when this section should resolve its products from
+  /// [productIds] directly rather than merging by [categoryIds].
+  bool get usesSpecificProducts => productIds.isNotEmpty;
+
+  /// Whether there's an actual banner to show (image, title or subtitle) —
+  /// a Banner + Product Rail section with none of these configured falls
+  /// back to rendering a plain product rail instead of an empty banner box.
+  bool get hasBanner =>
+      (bannerImageUrl != null && bannerImageUrl!.isNotEmpty) ||
+      bannerTitle.isNotEmpty ||
+      bannerSubtitle.isNotEmpty;
 
   factory MobileGrocerySection.fromJson(Map<String, dynamic> json) {
     final rawIds = json['category_ids'];
     final categoryIds = rawIds is List
         ? rawIds.map((v) => int.tryParse(v.toString())).whereType<int>().toList()
         : const <int>[];
-    final rawLayout = (json['layout'] ?? '').toString().trim().toLowerCase();
+    final configuration = json['configuration'];
+    final config = configuration is Map ? Map<String, dynamic>.from(configuration) : const <String, dynamic>{};
+    final rawMaxProducts = config['max_products'];
+    final maxProducts = int.tryParse(rawMaxProducts?.toString() ?? '');
+    final rawBannerImageUrl = (config['image_url'] ?? config['image'] ?? '').toString().trim();
+    // "Specific Products" entries are written by the admin as either a bare
+    // id or `{id, title}` (the title is only there so the admin UI can show
+    // a chip without re-fetching) — accept both shapes here.
+    final rawProductIds = config['product_ids'];
+    final productIds = rawProductIds is List
+        ? rawProductIds
+            .map((v) => v is Map ? v['id'] : v)
+            .map((v) => int.tryParse(v?.toString() ?? ''))
+            .whereType<int>()
+            .toList()
+        : const <int>[];
+    // Display checkboxes -- an absent key means "on" for every flag except
+    // `see_all` (absent means "off"), so a section saved before this
+    // existed, or one that never touched this group, renders exactly as it
+    // always did.
+    final rawDisplay = config['display'];
+    final display = rawDisplay is Map ? Map<String, dynamic>.from(rawDisplay) : const <String, dynamic>{};
+    bool displayFlag(String key, bool fallback) {
+      final v = display[key];
+      if (v is bool) return v;
+      return fallback;
+    }
+
     return MobileGrocerySection(
       id: (json['id'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
-      layout: rawLayout == 'grid' ? 'grid' : 'horizontal',
+      layout: GrocerySectionLayoutX.fromRaw(json['layout']?.toString()),
       categoryIds: categoryIds,
+      productIds: productIds,
+      maxProducts: (maxProducts != null && maxProducts > 0) ? maxProducts : 30,
+      configuredMaxProducts: (maxProducts != null && maxProducts > 0) ? maxProducts : null,
       enabled: json['enabled'] != false,
+      bannerImageUrl: rawBannerImageUrl.isEmpty ? null : rawBannerImageUrl,
+      bannerTitle: (config['banner_title'] ?? '').toString(),
+      bannerSubtitle: (config['banner_subtitle'] ?? '').toString(),
+      bannerCtaText: (config['banner_cta_text'] ?? '').toString(),
+      bannerCtaLink: (config['banner_cta_link'] ?? '').toString(),
+      showProductImage: displayFlag('image', true),
+      showProductPrice: displayFlag('price', true),
+      showProductDiscount: displayFlag('discount', true),
+      showAddButton: displayFlag('add_button', true),
+      showSeeAll: displayFlag('see_all', false),
+      categoryTileColumns: (() {
+        final raw = int.tryParse(config['columns']?.toString() ?? '');
+        return (raw != null && raw >= 2 && raw <= 4) ? raw : 3;
+      })(),
+      showCategoryImage: displayFlag('category_image', true),
+      showCategoryName: displayFlag('category_name', true),
+      showCategoryProductCount: displayFlag('category_product_count', true),
+    );
+  }
+}
+
+/// One admin-configured trust/quick badge from the homepage CMS (config.hero.quickBadges).
+class QuickBadgeItem {
+  const QuickBadgeItem({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    this.icon,
+    this.iconName,
+    this.badgeColor,
+    this.link,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final String? icon;
+  final String? iconName;
+  final String? badgeColor;
+  final String? link;
+
+  String? get resolvedIcon => iconName ?? icon;
+
+  factory QuickBadgeItem.fromJson(Map<String, dynamic> json) {
+    return QuickBadgeItem(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? json['text'] ?? '').toString(),
+      subtitle: (json['subtitle'] ?? '').toString(),
+      icon: (json['icon'] ?? json['icon_name'] ?? '').toString(),
+      iconName: (json['icon_name'] ?? json['icon'] ?? '').toString(),
+      badgeColor: (json['badge_color'] ?? json['color'] ?? '').toString(),
+      link: (json['link'] ?? json['url'] ?? '').toString(),
     );
   }
 }
@@ -360,9 +556,22 @@ class HomepageConfig {
     this.topCards = const [],
     this.bestsellers = const [],
     this.grocerySections = const [],
+    this.greetingServices = '',
+    this.greetingGroceries = '',
+    this.quickBadges = const [],
   });
 
   final List<HomeOffer> offers;
+  final List<QuickBadgeItem> quickBadges;
+
+  /// Added 2026-10-06 per explicit request ("Vanakkam Hosur" / "Welcome,
+  /// foodie!" greeting headline shown above the banner, "customized by the
+  /// admin through the adminpannel privilage"): admin-authored, per-mode
+  /// greeting text (config.mobile.greetingServices / .greetingGroceries) —
+  /// empty by default, in which case home_screen.dart falls back to its own
+  /// existing mode-themed heading rather than rendering a blank line.
+  final String greetingServices;
+  final String greetingGroceries;
 
   /// Mobile-only banner carousel images, from the admin's "Mobile App ▸
   /// App Banners" tab. Preferred over [offers] for the Home screen
@@ -502,6 +711,16 @@ class HomepageRepository {
                 .toList()
             : <MobileGrocerySection>[];
 
+        final heroSection = config['hero'] is Map ? config['hero'] as Map : null;
+        final rawQuickBadges = heroSection?['quickBadges'] ?? config['quickBadges'];
+        final quickBadges = (rawQuickBadges is List)
+            ? rawQuickBadges
+                .whereType<Map>()
+                .map((m) => QuickBadgeItem.fromJson(Map<String, dynamic>.from(m)))
+                .where((b) => b.title.isNotEmpty)
+                .toList()
+            : const <QuickBadgeItem>[];
+
         return HomepageConfig(
           offers: items,
           mobileBanners: mobileBanners,
@@ -509,6 +728,9 @@ class HomepageRepository {
           topCards: topCards,
           bestsellers: bestsellers,
           grocerySections: grocerySections,
+          greetingServices: (mobileSection['greetingServices'] ?? '').toString(),
+          greetingGroceries: (mobileSection['greetingGroceries'] ?? '').toString(),
+          quickBadges: quickBadges,
         );
       });
     } on Exception catch (e) {

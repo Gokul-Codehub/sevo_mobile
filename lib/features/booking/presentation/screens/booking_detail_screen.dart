@@ -1,12 +1,18 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/errors/api_error.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../data/booking_repository.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../widgets/active_quote_card.dart';
@@ -492,10 +498,66 @@ class BookingDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
+                // Fixed per explicit report ("after the payment there user
+                // should get the invoice that also not places in Booking to
+                // seen by user"): the backend already generates a real,
+                // ownership-verified invoice PDF
+                // (GET /api/booking/<id>/invoice/) — this app just never
+                // called it. Mirrors the backend's own restriction
+                // (service_requests/payment_views.py InvoiceDownloadView):
+                // not available for a cancelled or rejected booking.
+                if (booking.status != 'cancelled' && booking.status != 'rejected') ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _downloadInvoice(context, ref, booking),
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: const Text('Download Invoice'),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 const SizedBox(height: 40),
               ],
             ),
           );
+  }
+
+  // Fetches the real backend-generated invoice PDF and hands it to the
+  // system share sheet so the customer can view, save, or send it on --
+  // avoids building a dedicated in-app PDF viewer just for this.
+  Future<void> _downloadInvoice(
+      BuildContext context, WidgetRef ref, Booking booking) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Preparing invoice…')));
+
+    final result =
+        await ref.read(bookingRepositoryProvider).downloadInvoice(booking.id);
+
+    if (!context.mounted) return;
+
+    switch (result) {
+      case Success(:final data):
+        try {
+          final dir = await getTemporaryDirectory();
+          final file = File('${dir.path}/Invoice-${booking.requestId}.pdf');
+          await file.writeAsBytes(data, flush: true);
+          await Share.shareXFiles(
+            [XFile(file.path, mimeType: 'application/pdf')],
+            subject: 'Invoice ${booking.requestId}',
+          );
+        } catch (_) {
+          if (context.mounted) {
+            messenger.showSnackBar(const SnackBar(
+              content: Text('Could not open the invoice. Please try again.'),
+              backgroundColor: AppColors.error,
+            ));
+          }
+        }
+      case Failure(:final error):
+        messenger.showSnackBar(SnackBar(
+          content: Text(error.message),
+          backgroundColor: AppColors.error,
+        ));
+    }
   }
 
   // Preset cancellation reasons shown as selectable options, with a final

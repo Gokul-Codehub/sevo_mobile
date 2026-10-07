@@ -18,11 +18,22 @@ final selectedBookingDateProvider = StateProvider<DateTime>((ref) {
 /// Currently selected booking time slot.
 final selectedTimeSlotProvider = StateProvider<TimeSlot?>((ref) => null);
 
-/// Provider fetching time slots for a given date formatted as YYYY-MM-DD.
-final timeSlotsProvider =
-    FutureProvider.family<List<TimeSlot>, String>((ref, date) async {
+/// Fixed 2026-10-06: slots must be fetched per the specific service being
+/// booked (admin's Time Slot Management is configured per service — hours,
+/// duration, capacity all differ), not just per date. `CheckoutScreen` sets
+/// this (to the service's slug) as soon as it knows which service is being
+/// booked, and clears it on dispose. Left `null` for flows with no single
+/// service in scope — [LogisticsRepository.getTimeSlots] then calls the
+/// `resolve` endpoint, which falls back to a sane default service rather
+/// than failing.
+final selectedBookingServiceIdProvider = StateProvider<String?>((ref) => null);
+
+/// Provider fetching time slots for a given date (YYYY-MM-DD) + service id/slug.
+final timeSlotsProvider = FutureProvider.family<List<TimeSlot>,
+    ({String date, String? serviceId})>((ref, params) async {
   final repo = ref.watch(logisticsRepositoryProvider);
-  final result = await repo.getTimeSlots(date: date);
+  final result =
+      await repo.getTimeSlots(date: params.date, serviceId: params.serviceId);
 
   return switch (result) {
     Success(:final data) => data,
@@ -30,17 +41,27 @@ final timeSlotsProvider =
   };
 });
 
-/// Convenience provider for slots of the currently selected date.
+/// Convenience provider for slots of the currently selected date + service.
 final currentSelectedDateSlotsProvider = FutureProvider<List<TimeSlot>>((ref) {
   final selectedDate = ref.watch(selectedBookingDateProvider);
+  final serviceId = ref.watch(selectedBookingServiceIdProvider);
   final dateString = DateFormat('yyyy-MM-dd').format(selectedDate);
-  return ref.watch(timeSlotsProvider(dateString).future);
+  return ref.watch(
+      timeSlotsProvider((date: dateString, serviceId: serviceId)).future);
 });
 
-/// Provider checking serviceability for a pincode.
-final serviceabilityProvider =
-    FutureProvider.family<ServiceabilityResult, String>((ref, pincode) async {
-  if (pincode.trim().length != 6) {
+/// Provider checking serviceability for a pincode, optionally refined with
+/// the exact pinned map coordinates. Fixed 2026-10-06: previously keyed by
+/// pincode text alone, so the "Add New Address" screen's serviceability
+/// banner never reflected where the customer actually dropped the map pin
+/// — only whatever was last typed/reverse-geocoded into the PIN Code field.
+/// [AddEditAddressScreen] now passes the live pin's lat/lng here too, and
+/// `LogisticsRepository.checkServiceability` already accepts them (it just
+/// wasn't being given any).
+final serviceabilityProvider = FutureProvider.family<ServiceabilityResult,
+    ({String pincode, double? lat, double? lng})>((ref, params) async {
+  final pincode = params.pincode;
+  if (pincode.trim().length != 6 && params.lat == null) {
     return const ServiceabilityResult(
       isServiceable: false,
       message: 'Please enter a valid 6-digit postal code',
@@ -48,7 +69,11 @@ final serviceabilityProvider =
   }
 
   final repo = ref.watch(logisticsRepositoryProvider);
-  final result = await repo.checkServiceability(postalCode: pincode);
+  final result = await repo.checkServiceability(
+    postalCode: pincode,
+    latitude: params.lat,
+    longitude: params.lng,
+  );
 
   return switch (result) {
     Success(:final data) => data,

@@ -87,104 +87,138 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
           ],
         ),
       ),
-      body: bookingsAsync.when(
-        loading: () => ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: 3,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
-          itemBuilder: (context, index) => const ShimmerCard(height: 160),
-        ),
-        error: (err, stackTrace) => ErrorStateWidget(
-          message: err.toString(),
-          onRetry: () => ref.refresh(myBookingsProvider(null)),
-        ),
-        data: (allBookings) {
-          // Services & Groceries are the two things this app sells — a
-          // scheduled/direct-booked service (AC, electrician, plumbing,
-          // cleaning...) versus a grocery-supply order (cart + checkout).
-          // Both land here once checked out/booked; this filter just lets
-          // the customer narrow the list to one or the other. Derived from
-          // real booking data (Booking.isGroceryBooking), never hardcoded.
-          // Added 2026-09-26: a Painting/Masonry quotation, once accepted,
-          // creates a second "quoted_work" ServiceRequest linked back to the
-          // original inspection booking via parent_request — matches the
-          // web app's own convention (frontend/src/ui/pages/BookingPage.jsx)
-          // of hiding these Stage-2 children from the primary list entirely
-          // rather than showing what looks like a duplicate booking; the
-          // parent's own detail screen is where its quotation/decision
-          // lives, and once converted the customer still reaches the actual
-          // work booking through that same parent (ActiveQuoteCard's
-          // "accepted" banner references it directly).
-          final visibleBookings = allBookings.where((b) => !b.isQuotedWorkBooking).toList();
+      body: _buildBody(bookingsAsync),
+    );
+  }
 
-          final filteredBookings = switch (_categoryFilter) {
-            _BookingCategoryFilter.all => visibleBookings,
-            _BookingCategoryFilter.services =>
-              visibleBookings.where((b) => !b.isGroceryBooking).toList(),
-            _BookingCategoryFilter.groceries =>
-              visibleBookings.where((b) => b.isGroceryBooking).toList(),
-          };
+  /// Fixed 2026-10-07 ("the Services page shows the loading indicator
+  /// again, even though the user has already visited that page and its
+  /// data was previously loaded"): `myBookingsProvider` is no longer
+  /// `.autoDispose` (see its doc comment in booking_providers.dart), so
+  /// `bookingsAsync.valueOrNull` now survives this screen being torn down
+  /// and recreated on a bottom-tab switch, and can be rendered instantly.
+  /// Whenever cached data already exists — first load already happened,
+  /// this visit or an earlier one — it's rendered immediately; a
+  /// background refresh (resume, or after create/cancel/reschedule) shows
+  /// only a thin top-of-screen progress bar, never the full-list shimmer
+  /// again. The full shimmer is now reserved for the genuine first-ever
+  /// load, when there is truly nothing to show yet.
+  Widget _buildBody(AsyncValue<List<Booking>> bookingsAsync) {
+    final cachedBookings = bookingsAsync.valueOrNull;
+    if (cachedBookings != null) {
+      return Stack(
+        children: [
+          _buildBookingsContent(cachedBookings),
+          if (bookingsAsync.isLoading)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+        ],
+      );
+    }
 
-          final upcoming = filteredBookings.where((b) => b.isUpcoming).toList();
-          final history = filteredBookings.where((b) => !b.isUpcoming).toList();
+    return bookingsAsync.when(
+      loading: () => ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: 3,
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
+        itemBuilder: (context, index) => const ShimmerCard(height: 160),
+      ),
+      error: (err, stackTrace) => ErrorStateWidget(
+        message: err.toString(),
+        onRetry: () => ref.refresh(myBookingsProvider(null)),
+      ),
+      data: (allBookings) => _buildBookingsContent(allBookings),
+    );
+  }
 
-          return Column(
+  Widget _buildBookingsContent(List<Booking> allBookings) {
+    // Services & Groceries are the two things this app sells — a
+    // scheduled/direct-booked service (AC, electrician, plumbing,
+    // cleaning...) versus a grocery-supply order (cart + checkout).
+    // Both land here once checked out/booked; this filter just lets
+    // the customer narrow the list to one or the other. Derived from
+    // real booking data (Booking.isGroceryBooking), never hardcoded.
+    // Added 2026-09-26: a Painting/Masonry quotation, once accepted,
+    // creates a second "quoted_work" ServiceRequest linked back to the
+    // original inspection booking via parent_request — matches the
+    // web app's own convention (frontend/src/ui/pages/BookingPage.jsx)
+    // of hiding these Stage-2 children from the primary list entirely
+    // rather than showing what looks like a duplicate booking; the
+    // parent's own detail screen is where its quotation/decision
+    // lives, and once converted the customer still reaches the actual
+    // work booking through that same parent (ActiveQuoteCard's
+    // "accepted" banner references it directly).
+    final visibleBookings = allBookings.where((b) => !b.isQuotedWorkBooking).toList();
+
+    final filteredBookings = switch (_categoryFilter) {
+      _BookingCategoryFilter.all => visibleBookings,
+      _BookingCategoryFilter.services =>
+        visibleBookings.where((b) => !b.isGroceryBooking).toList(),
+      _BookingCategoryFilter.groceries =>
+        visibleBookings.where((b) => b.isGroceryBooking).toList(),
+    };
+
+    final upcoming = filteredBookings.where((b) => b.isUpcoming).toList();
+    final history = filteredBookings.where((b) => !b.isUpcoming).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Row(
-                  children: [
-                    _CategoryFilterChip(
-                      label: 'All',
-                      selected: _categoryFilter == _BookingCategoryFilter.all,
-                      color: AppColors.navy,
-                      onTap: () => setState(
-                          () => _categoryFilter = _BookingCategoryFilter.all),
-                    ),
-                    const SizedBox(width: 8),
-                    _CategoryFilterChip(
-                      label: 'Services',
-                      selected:
-                          _categoryFilter == _BookingCategoryFilter.services,
-                      color: AppColors.serviceBlue,
-                      onTap: () => setState(() =>
-                          _categoryFilter = _BookingCategoryFilter.services),
-                    ),
-                    const SizedBox(width: 8),
-                    _CategoryFilterChip(
-                      label: 'Groceries',
-                      selected:
-                          _categoryFilter == _BookingCategoryFilter.groceries,
-                      color: AppColors.groceryGreen,
-                      onTap: () => setState(() =>
-                          _categoryFilter = _BookingCategoryFilter.groceries),
-                    ),
-                  ],
-                ),
+              _CategoryFilterChip(
+                label: 'All',
+                selected: _categoryFilter == _BookingCategoryFilter.all,
+                color: AppColors.navy,
+                onTap: () => setState(
+                    () => _categoryFilter = _BookingCategoryFilter.all),
               ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _BookingListView(
-                      bookings: upcoming,
-                      emptyTitle: 'No Active Bookings',
-                      emptySubtitle: 'Book a service today and enjoy hassle-free home maintenance.',
-                      onRefresh: () => ref.refresh(myBookingsProvider(null).future),
-                    ),
-                    _BookingListView(
-                      bookings: history,
-                      emptyTitle: 'No Past Bookings',
-                      emptySubtitle: 'Your completed or cancelled bookings will appear here.',
-                      onRefresh: () => ref.refresh(myBookingsProvider(null).future),
-                    ),
-                  ],
-                ),
+              const SizedBox(width: 8),
+              _CategoryFilterChip(
+                label: 'Services',
+                selected:
+                    _categoryFilter == _BookingCategoryFilter.services,
+                color: AppColors.serviceBlue,
+                onTap: () => setState(() =>
+                    _categoryFilter = _BookingCategoryFilter.services),
+              ),
+              const SizedBox(width: 8),
+              _CategoryFilterChip(
+                label: 'Groceries',
+                selected:
+                    _categoryFilter == _BookingCategoryFilter.groceries,
+                color: AppColors.groceryGreen,
+                onTap: () => setState(() =>
+                    _categoryFilter = _BookingCategoryFilter.groceries),
               ),
             ],
-          );
-        },
-      ),
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _BookingListView(
+                bookings: upcoming,
+                emptyTitle: 'No Active Bookings',
+                emptySubtitle: 'Book a service today and enjoy hassle-free home maintenance.',
+                onRefresh: () => ref.refresh(myBookingsProvider(null).future),
+              ),
+              _BookingListView(
+                bookings: history,
+                emptyTitle: 'No Past Bookings',
+                emptySubtitle: 'Your completed or cancelled bookings will appear here.',
+                onRefresh: () => ref.refresh(myBookingsProvider(null).future),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

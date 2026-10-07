@@ -234,8 +234,24 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
 
   final totalSavings = originalTotal > subtotal ? originalTotal - subtotal : Decimal.zero;
 
+  // Bug found (reported by a customer: Grand Total jumped from the
+  // itemized ₹83 to ₹126.15 with no matching line item in "Bill Details" --
+  // Delivery charge and Handling & packaging both correctly showed ₹0/FREE,
+  // but nothing accounted for the remaining ~₹43): this used to check only
+  // `service.flowType == CatalogFlowType.grocery`, which is a pure
+  // category-name/slug keyword match and unreliable whenever a ServiceItem
+  // is rebuilt from data that omits category info (the exact failure mode
+  // already fixed for the Home screen's "Book Again" tiles). When this
+  // flipped to `false` for a genuine grocery item, the branch below fell
+  // through to the home-service fee formula (platform fee + GST) instead of
+  // delivery/handling/small-cart fees, and that extra amount was folded
+  // straight into `total` with no corresponding row in the UI at all.
+  // ServiceItem.isGroceryFlow adds the same vegetable-category and
+  // marketplace/grocery-hub id-offset fallbacks already proven for Book
+  // Again, so this can't silently charge a grocery cart as if it were a
+  // service booking again.
   final isGrocery =
-      items.isNotEmpty && items.any((i) => i.service.flowType == CatalogFlowType.grocery);
+      items.isNotEmpty && items.any((i) => i.service.isGroceryFlow);
 
   if (count == 0) {
     return CartSummary(
@@ -291,10 +307,33 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
     );
   }
 
-  // ── Home Service & Technician Booking Fee Rules (admin-configurable) ─────
-  final serviceFee = pricing.platformFee; // Platform/safety & assurance fee
-  final taxes =
-      ((subtotal * pricing.gstPercent) / Decimal.fromInt(100)).toDecimal();
+  // ── Home Service & Technician Booking Fee Rules ───────────────────────────
+  // Bug found (reported: "there is cost estimation differently by web and
+  // mobile... for every package there is gst and platform fee that is
+  // making trouble"): this used to apply the SAME flat GST% and platform
+  // fee -- the admin's Settings > Pricing > "Home Services" page -- to
+  // every booking regardless of which package was actually in the cart.
+  // But the real backend already supports a different GST/platform fee per
+  // package (Package.gst_rate / Package.platform_fee, admin-set per package
+  // in the Service Catalog, already returned on every catalog response —
+  // see ServiceItem.gstRate/platformFee), and the web app's own booking
+  // flow (frontend/src/ui/pages/BookingPage.jsx) has always priced bookings
+  // that way: summing each item's own gst_rate against its own line total,
+  // and taking the HIGHEST platform_fee across the cart -- defaulting to
+  // 18% / ₹29 for any package that doesn't set its own. Web never actually
+  // reads the admin Pricing page's flat Home Services values at all, so
+  // this app silently charged a different total than the website for the
+  // exact same package. Mirroring web's real formula (not the unused admin
+  // page) is what makes the two uniform.
+  const fallbackGstRate = 18.0;
+  final fallbackPlatformFee = Decimal.fromInt(29);
+  final taxes = items.fold<Decimal>(Decimal.zero, (sum, item) {
+    final rate = Decimal.parse((item.service.gstRate ?? fallbackGstRate).toString());
+    return sum + ((item.totalPrice * rate) / Decimal.fromInt(100)).toDecimal();
+  });
+  final serviceFee = items
+      .map((item) => item.service.platformFee ?? fallbackPlatformFee)
+      .reduce((a, b) => a > b ? a : b);
   final total = subtotal + serviceFee + taxes;
 
   // Advance deposit: pricing.minAdvancePercent of total, or the configured

@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/env.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/sevo_logo.dart';
 import '../../domain/auth_models.dart';
 import '../../domain/auth_notifier.dart';
 
@@ -108,30 +109,17 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                 const SizedBox(height: 12),
 
                 // ── Centered SEVO Logo ──
-                Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'SEVO',
-                        style: TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                          color: AppColors.navy,
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.only(left: 3, bottom: 2),
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                // Fixed 2026-10-07 ("use our text logo there"): this was a
+                // plain hardcoded Text('SEVO') + a manually drawn dot — an
+                // approximation of the brand wordmark, not the real one.
+                // [SevoLogo] (shared/widgets/sevo_logo.dart) already renders
+                // the actual brand artwork and is the single source of truth
+                // used elsewhere in the app (e.g. the splash screen); this
+                // screen now uses the same widget instead of its own
+                // hand-drawn stand-in, so the login page's branding matches
+                // the real logo pixel-for-pixel.
+                const Center(
+                  child: SevoLogo(height: 40),
                 ),
 
                 const SizedBox(height: 28),

@@ -13,23 +13,42 @@ import 'cart_notifier.dart';
 
 /// Provider for list of customer bookings filtered by status ('active', 'completed', or null).
 ///
-/// Fixed 2026-09-17 — root cause of "shows a stale status like 'Booking
-/// Confirmed' after closing and reopening the app, instead of the real
-/// current status (e.g. 'Service in progress')": this was a plain
-/// `FutureProvider.family`, which — unlike the explicitly `ref.keepAlive()`
-/// -marked catalog providers elsewhere in this app — has no reason to be
-/// cached forever, yet without `.autoDispose` that's exactly what Riverpod
-/// did: the very first fetch of a given (statusFilter) key was kept and
-/// never re-run, no matter how long the app sat backgrounded or how many
-/// times the Bookings screen was left and revisited, because nothing was
-/// watching it in between to trigger a natural dispose+refetch. `.autoDispose`
-/// lets it drop its cached value once the Bookings screen stops watching
-/// it (e.g. navigating away), so the next time it's watched — including
-/// after the app is resumed from the background, paired with the explicit
-/// `ref.invalidate` on `AppLifecycleState.resumed` in `MyBookingsScreen` —
-/// it fetches the real, current status instead of replaying old data.
-final myBookingsProvider = FutureProvider.autoDispose
-    .family<List<Booking>, String?>((ref, statusFilter) async {
+/// Fixed 2026-09-17: made `.autoDispose` to stop it caching forever and
+/// showing a stale status like "Booking Confirmed" after closing and
+/// reopening the app. That fixed staleness, but had a side effect nobody
+/// noticed until the full navigation audit below: `MyBookingsScreen` (and
+/// Home's "Book Again" strip, which watches this same provider) sit under
+/// a `ShellRoute` bottom-tab shell where switching tabs via `context.go()`
+/// destroys and recreates the destination screen's widget/State — see
+/// `app_shell.dart`'s tab `onTap` and `app_router.dart`'s `ShellRoute`.
+/// Every time `_MyBookingsScreenState` was torn down (left the Bookings
+/// tab) its listener count hit zero, and `.autoDispose` immediately threw
+/// the cached list away — not just marked it stale. So returning to the
+/// tab created a brand-new widget watching a provider with ZERO previous
+/// value, forcing `MyBookingsScreen`'s full `ShimmerCard` list every
+/// single time, even on the 2nd/3rd/Nth visit in the same session —
+/// exactly the "page shows the loading indicator again even though
+/// already visited" bug.
+///
+/// Fixed 2026-10-07: restored to a plain, `ref.keepAlive()`-marked
+/// `FutureProvider.family` (same pattern as `categoriesProvider` and the
+/// other catalog providers in catalog_providers.dart) so a tab-switch
+/// teardown/recreate of the watching widget no longer wipes the cached
+/// list — the next visit renders instantly from cache instead of
+/// reloading. Freshness is still handled, just no longer by *destroying*
+/// the data: every place that already called `ref.invalidate
+/// (myBookingsProvider)` for a real reason — `createBooking`/
+/// `cancelBooking`/`rescheduleBooking`/`decide` below, and
+/// `MyBookingsScreen.didChangeAppLifecycleState`'s resume hook — still
+/// does, but `ref.invalidate` on a kept-alive provider triggers a
+/// BACKGROUND refetch while the previous list stays visible
+/// (`AsyncValue.valueOrNull`/`.previous` carries forward through the
+/// reload), instead of a full dispose that blanks the screen. See
+/// `MyBookingsScreen`'s body for the instant-render-from-cache +
+/// subtle-refresh-indicator pattern this enables.
+final myBookingsProvider =
+    FutureProvider.family<List<Booking>, String?>((ref, statusFilter) async {
+  ref.keepAlive();
   final repo = ref.watch(bookingRepositoryProvider);
   final result = await repo.getMyBookings(statusFilter: statusFilter);
 
