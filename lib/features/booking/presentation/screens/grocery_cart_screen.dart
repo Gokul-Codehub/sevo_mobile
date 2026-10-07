@@ -10,16 +10,45 @@ import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
-import '../../../../shared/widgets/common_widgets.dart';
 import '../../../addresses/domain/address_models.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../auth/domain/auth_notifier.dart';
-import '../../../catalog/domain/catalog_providers.dart';
 import '../../../home/domain/home_flow_mode.dart';
 import '../../../logistics/domain/logistics_models.dart';
-import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
+import '../../../pricing/domain/pricing_providers.dart';
+import '../../../catalog/data/marketplace_catalog_repository.dart';
+import '../widgets/coupon_bottom_sheet.dart';
+
+/// Added 2026-10-06 per explicit request ("Before checkout ask the user
+/// to select the delivery option below [Quick delivery, Slot booking
+/// (every day 6pm to 8pm)]"): the two delivery-timing choices a grocery
+/// order can be placed with. [quick] = Instant Delivery — the next
+/// available real slot for today. [scheduled] = Scheduled Delivery — a
+/// customer-picked date (today + the next two days) and a real slot for
+/// that date.
+///
+/// Corrected 2026-10-07 ("the slots for grocery/vegetale of should from
+/// the seller hub-delivery slot as per the uploaded image"): both options
+/// used to resolve to ONE hardcoded fixed window (quick = a fake "10-15
+/// Min Express Delivery", scheduled = a fixed daily "6:00 PM - 8:00 PM")
+/// with no connection to any real delivery capacity. Both now resolve to
+/// a real `workforce_api.DeliverySlot` from the Vendor Seller Hub's own
+/// admin-configured "Delivery Slots & Capacity" page (e.g. 09:00-11:00,
+/// 11:00-13:00, 14:00-16:00, 16:00-18:00 for "Jeemangalam Hub" today),
+/// fetched live via [marketplaceDeliverySlotsForDateProvider] — see that
+/// provider's doc comment for the full proxy chain.
+enum _DeliveryOption { quick, scheduled }
+
+/// The next 3 calendar dates (today + 2) a customer can pick a Scheduled
+/// delivery slot for — "List 3 dates with slots which is getting from the
+/// vendor application - seller hub - delivery slots".
+List<DateTime> _nextThreeDeliveryDates() {
+  final today = DateTime.now();
+  final base = DateTime(today.year, today.month, today.day);
+  return [base, base.add(const Duration(days: 1)), base.add(const Duration(days: 2))];
+}
 
 /// Authoritative Quick Commerce Grocery Cart & Checkout Screen matching calservices_web.
 class GroceryCartScreen extends ConsumerStatefulWidget {
@@ -35,6 +64,30 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   String? _errorMessage;
   bool _isCustomTipOpen = false;
   final TextEditingController _customTipController = TextEditingController();
+  // Added 2026-10-07 ("the promp/coupons model is not showing up"): this
+  // whole grocery checkout flow never had ANY coupon entry point at all —
+  // [_handlePlaceOrder] below creates the booking directly from this
+  // screen without ever routing through checkout_screen.dart (the
+  // scheduled-service booking flow's own checkout), which was the only
+  // screen with a working Apply Coupon box. There is no separate
+  // "coupon_code" field on the booking API — exactly like
+  // checkout_screen.dart's own `_openCouponSheet`/`_couponDiscountAmount`,
+  // the discount is applied by folding it into the lower `totalAmount`
+  // this screen already sends to `createBooking`, never by telling the
+  // backend which coupon was used.
+  String? _appliedCouponCode;
+  int _couponDiscountAmount = 0;
+  // Null until the customer actually picks one — Proceed to Pay opens the
+  // picker instead of placing the order whenever this is still null, so a
+  // delivery option is always explicitly chosen before checkout, never
+  // silently defaulted.
+  _DeliveryOption? _deliveryOption;
+  // The real Seller Hub DeliverySlot the picker resolved — for [quick]
+  // this is the earliest available slot for today; for [scheduled] it's
+  // whichever slot the customer tapped for [_selectedSlotDate]. Both are
+  // set together, only on a successful "Confirm" in the picker sheet.
+  DeliverySlotOption? _selectedSlot;
+  String? _selectedSlotDate;
 
   @override
   void initState() {
@@ -45,12 +98,62 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ensureLocationEnabled(context);
     });
+    // Fixed 2026-10-06 ("set the minimum order in the admin page it does
+    // not change the visual in the cart and it does not perform as per
+    // the setting"): PricingConfigNotifier only ever fetches the live
+    // admin-set values once, the moment the app process starts (see
+    // pricing_providers.dart's build()) — it never refetches after that.
+    // The admin Settings > Pricing page's own "How this reaches the app"
+    // banner explicitly promises "The customer app fetches these values
+    // when a customer opens checkout or the grocery cart", but nothing
+    // actually called the `refreshNow()` it provides for exactly that —
+    // so an admin's price change never reached an already-running app
+    // until the customer force-quit and reopened it. Now the cart
+    // actually re-fetches every time it's opened, matching that promise.
+    ref.read(pricingConfigProvider.notifier).refreshNow();
   }
 
   @override
   void dispose() {
     _customTipController.dispose();
     super.dispose();
+  }
+
+  /// Opens the real [CouponBottomSheet] (live coupons from the backend,
+  /// "No coupons available right now." when there are none) and applies
+  /// whatever it returns — mirrors checkout_screen.dart's own
+  /// `_openCouponSheet` exactly, since that's the screen this flow never
+  /// shared a coupon mechanism with.
+  Future<void> _openCouponSheet() async {
+    final cartTotalForCoupon = ref.read(cartSummaryProvider).subtotal;
+    final applied = await CouponBottomSheet.show(
+      context,
+      cartTotal: cartTotalForCoupon,
+      currentCode: _appliedCouponCode,
+    );
+
+    if (applied != null && mounted) {
+      setState(() {
+        _appliedCouponCode = applied.code;
+        _couponDiscountAmount = applied.discountAmount.toDouble().round();
+      });
+      if (mounted) {
+        AppToast.show(
+          context,
+          'Coupon "${applied.code}" applied! Saved ₹$_couponDiscountAmount',
+        );
+      }
+    }
+  }
+
+  /// `cartSummary.total` minus whatever coupon discount is currently
+  /// applied, floored at zero — the single place both the displayed Grand
+  /// Total/sticky bar amount and the real `totalAmount` sent to
+  /// `createBooking` in [_handlePlaceOrder] derive the discounted figure
+  /// from, so the two can never drift apart.
+  Decimal _effectiveGrandTotal(CartSummary summary) {
+    final discount = Decimal.fromInt(_couponDiscountAmount);
+    return summary.total > discount ? summary.total - discount : Decimal.zero;
   }
 
   @override
@@ -162,7 +265,15 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       );
     }
 
-    final freeThreshold = Decimal.parse('200.00');
+    // Fixed 2026-10-06: this used to be a literal '200.00', completely
+    // independent of the admin-configurable PricingConfig — so this
+    // banner's progress bar and "₹x/₹y" text kept showing the old
+    // hardcoded ₹200 target no matter what the admin set Free Delivery
+    // Threshold to in Settings > Pricing (cartSummary.deliveryFee itself,
+    // down in Bill Details, was already correctly reading the real admin
+    // value via cart_notifier.dart — only this banner had its own
+    // disconnected copy of the number).
+    final freeThreshold = ref.watch(pricingConfigProvider).freeDeliveryThreshold;
     final amountForFreeDelivery = cartSummary.subtotal < freeThreshold
         ? freeThreshold - cartSummary.subtotal
         : Decimal.zero;
@@ -411,13 +522,39 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             clipBehavior: Clip.antiAlias,
+                            // Fixed 2026-10-07 ("Images are not showing
+                            // inside cart"): `title` was never passed here,
+                            // which was one real bug — but STILL showed the
+                            // generic icon afterward for Seller Hub
+                            // Marketplace / Grocery Hub items (e.g. "Red
+                            // Banana") because of a second one: this passed
+                            // `item.service.categoryName` (the raw vendor
+                            // category label, e.g. "Fruits") as the grocery
+                            // signal, but ImageUrlHelper's grocery check is
+                            // a bare `contains('veg') || contains('groc')`
+                            // substring match — "Fruits", "Dairy", "Chips &
+                            // Namkeen" etc. never match it. `categoryId`
+                            // doesn't help either: MarketplaceProduct.
+                            // toServiceItem() / GroceryHubProduct.
+                            // toServiceItem() never set it at all. Every
+                            // grocery source instead force-sets
+                            // `categorySlug` to literally contain
+                            // "vegetable"/"grocery" for exactly this
+                            // reason (see those two toServiceItem() doc
+                            // comments) — using THAT here instead, the same
+                            // fix already applied to the Home screen's
+                            // "Book Again" tile, makes the grocery signal
+                            // reliable regardless of the vendor's own
+                            // category naming.
                             child: AppRemoteImage(
                               imageUrl: item.service.imageUrl,
                               rawPath: item.service.imageUrl,
-                              categoryName: item.service.categoryName,
-                              slug: item.service.slug,
+                              title: item.service.title,
+                              categoryName: item.service.categorySlug,
+                              categoryId: item.service.categoryId,
+                              slug: item.service.categorySlug,
                               semanticIcon: ImageUrlHelper.mapCategoryIcon(
-                                  item.service.categoryName, item.service.slug),
+                                  item.service.categorySlug, item.service.categorySlug),
                               width: 58,
                               height: 58,
                               fit: BoxFit.cover,
@@ -848,6 +985,83 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     ),
                   ],
 
+                  const SizedBox(height: 10),
+
+                  // ── Apply Coupon / Promo Code ──
+                  // Added 2026-10-07 — see the doc comment on
+                  // `_appliedCouponCode` above for why this didn't exist
+                  // here at all until now.
+                  InkWell(
+                    onTap: _openCouponSheet,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.discount_outlined,
+                              size: 15,
+                              color: _appliedCouponCode != null
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _appliedCouponCode != null
+                                  ? 'Coupon: $_appliedCouponCode'
+                                  : 'Apply Coupon / Promo Code',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: _appliedCouponCode != null
+                                    ? AppColors.primary
+                                    : AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: AppColors.textHint,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (_couponDiscountAmount > 0) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.local_offer_outlined,
+                                size: 15, color: Color(0xFF059669)),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Coupon Discount ($_appliedCouponCode)',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: Color(0xFF059669),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '-₹$_couponDiscountAmount',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF059669),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
                   const Divider(height: 22, color: AppColors.border),
 
                   // Grand Total
@@ -863,7 +1077,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         ),
                       ),
                       Text(
-                        '₹${cartSummary.total}',
+                        '₹${_effectiveGrandTotal(cartSummary)}',
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w900,
@@ -1140,6 +1354,91 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               ),
               const SizedBox(height: 10),
 
+              // Delivery Option Row — added 2026-10-06 ("Before checkout
+              // ask the user to select the delivery option below [Quick
+              // delivery, Slot booking (every day 6pm to 8pm)]"). Mirrors
+              // the Address Row immediately above it: a summary of the
+              // current choice (or a prompt, while none has been made
+              // yet) plus a button that opens the picker sheet.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _deliveryOption == _DeliveryOption.scheduled
+                                ? Icons.event_available_outlined
+                                : Icons.bolt_outlined,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _deliveryOption == null
+                                    ? 'Choose delivery option'
+                                    : 'Delivery: ${_deliveryOptionLabel(_deliveryOption!)}',
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                _deliveryOption == null
+                                    ? 'Required before you can pay'
+                                    : _deliveryOptionSubtitle(_deliveryOption!),
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  color: AppColors.textSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  OutlinedButton(
+                    onPressed: () => _openDeliveryOptionSheet(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      minimumSize: const Size(0, 28),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      _deliveryOption == null ? 'Choose' : 'Change',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
               // Big Green Proceed To Pay Button
               SizedBox(
                 width: double.infinity,
@@ -1147,7 +1446,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 child: FilledButton(
                   onPressed: _isSubmitting
                       ? null
-                      : () => _handlePlaceOrder(context, ref, activeAddress),
+                      : () => _onProceedToPayTapped(context, activeAddress),
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF059669),
                     disabledBackgroundColor:
@@ -1165,7 +1464,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '₹${cartSummary.total}',
+                            '₹${_effectiveGrandTotal(cartSummary)}',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
@@ -1316,6 +1615,334 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     );
   }
 
+  String _deliveryOptionLabel(_DeliveryOption option) {
+    switch (option) {
+      case _DeliveryOption.quick:
+        return 'Instant Delivery';
+      case _DeliveryOption.scheduled:
+        return 'Scheduled Delivery';
+    }
+  }
+
+  /// Describes whichever REAL Seller Hub slot [_selectedSlot] /
+  /// [_selectedSlotDate] currently holds for [option] — before one has
+  /// been resolved yet (picker never opened, or opened and abandoned
+  /// without confirming) this falls back to a generic prompt rather than
+  /// a fake time window.
+  String _deliveryOptionSubtitle(_DeliveryOption option) {
+    if (_selectedSlot == null || _selectedSlotDate == null) {
+      switch (option) {
+        case _DeliveryOption.quick:
+          return 'Same-day — next available slot';
+        case _DeliveryOption.scheduled:
+          return 'Pick a date and a real delivery slot';
+      }
+    }
+    final date = DateTime.parse(_selectedSlotDate!);
+    return '${_describeSlotDate(date)}, ${_slotTimeRangeLabel(_selectedSlot!)}';
+  }
+
+  /// "Today" / "Tomorrow" / "Mon D" for one of [_nextThreeDeliveryDates] —
+  /// replacing the old fixed "every day 6pm-8pm" framing now that the
+  /// customer actually picks among real, separately-dated slot lists.
+  String _describeSlotDate(DateTime date) {
+    final today = DateTime.now();
+    final base = DateTime(today.year, today.month, today.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = target.difference(base).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Tomorrow';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}';
+  }
+
+  String _formatDateForBooking(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  /// "09:00" -> "9:00 AM" — the Vendor Seller Hub stores slot times as
+  /// plain 24-hour strings; this is purely a display formatter, the raw
+  /// "HH:MM" strings are still what's sent to [TimeSlot] for booking.
+  String _formatTimeLabel(String hhmm) {
+    final parts = hhmm.split(':');
+    if (parts.length < 2) return hhmm;
+    var hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts[1].padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12;
+    if (hour == 0) hour = 12;
+    return '$hour:$minute $period';
+  }
+
+  String _slotTimeRangeLabel(DeliverySlotOption slot) =>
+      '${_formatTimeLabel(slot.startTime)} - ${_formatTimeLabel(slot.endTime)}';
+
+  /// Fixed 2026-10-07 ("in at scheduled delivery the past time slots also
+  /// showing"): `DeliverySlotOption.isAvailable` only reflects the Seller
+  /// Hub's configured capacity/cutoff for the slot in general — it does
+  /// NOT know the customer's current wall-clock time, so a 09:00-11:00
+  /// slot for "Today" still came back `available: true` from the backend
+  /// at 2pm. This filters those out purely on the client: a slot counts
+  /// as past only when [date] is today AND the slot's own end time has
+  /// already elapsed; slots for any other date are never touched.
+  bool _isSlotPast(DateTime date, DeliverySlotOption slot) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    if (target != today) return false;
+    final parts = slot.endTime.split(':');
+    if (parts.length < 2) return false;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return false;
+    final slotEnd = DateTime(now.year, now.month, now.day, hour, minute);
+    return !slotEnd.isAfter(now);
+  }
+
+  /// Gates "Proceed to Pay": a delivery option must be explicitly chosen
+  /// first (per "Before checkout ask the user to select the delivery
+  /// option"), so this opens the picker instead of placing the order
+  /// whenever none has been chosen yet, and only calls through to
+  /// [_handlePlaceOrder] once one has.
+  void _onProceedToPayTapped(BuildContext context, Address? activeAddress) {
+    if (_deliveryOption == null) {
+      _openDeliveryOptionSheet(context, onConfirmed: () {
+        _handlePlaceOrder(context, ref, activeAddress);
+      });
+      return;
+    }
+    _handlePlaceOrder(context, ref, activeAddress);
+  }
+
+  /// Delivery option picker — "Before checkout ask the user to select the
+  /// delivery option below". [onConfirmed], when provided, runs
+  /// immediately after a choice is confirmed (used by the Proceed to Pay
+  /// gate above so choosing an option and placing the order feels like
+  /// one action rather than two separate taps); the "Change" button in
+  /// the bottom bar omits it since there the customer is just updating an
+  /// existing choice, not trying to check out.
+  ///
+  /// Corrected 2026-10-07: both options now resolve to a REAL
+  /// `workforce_api.DeliverySlot` fetched live from the Vendor Seller
+  /// Hub — Instant Delivery auto-picks the earliest available slot for
+  /// today (fetched on Confirm); Scheduled Delivery lets the customer
+  /// pick one of [_nextThreeDeliveryDates] and then one of that date's
+  /// real slots. Neither path can confirm with no real slot resolved.
+  void _openDeliveryOptionSheet(BuildContext context, {VoidCallback? onConfirmed}) {
+    var pending = _deliveryOption ?? _DeliveryOption.quick;
+    var pendingDate = pending == _DeliveryOption.scheduled && _selectedSlotDate != null
+        ? DateTime.parse(_selectedSlotDate!)
+        : _nextThreeDeliveryDates().first;
+    DeliverySlotOption? pendingSlot =
+        pending == _DeliveryOption.scheduled ? _selectedSlot : null;
+    var isConfirming = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final pendingDateStr = _formatDateForBooking(pendingDate);
+
+          Future<void> confirm() async {
+            if (pending == _DeliveryOption.quick) {
+              setSheetState(() => isConfirming = true);
+              final todayStr = _formatDateForBooking(_nextThreeDeliveryDates().first);
+              final day = await ref.read(marketplaceDeliverySlotsForDateProvider(todayStr).future);
+              final todayDate = _nextThreeDeliveryDates().first;
+              final available = day.slots
+                  .where((s) => s.isAvailable && !_isSlotPast(todayDate, s));
+              if (available.isEmpty) {
+                setSheetState(() => isConfirming = false);
+                AppToast.show(
+                  context,
+                  'No delivery slots are available today. Please choose Scheduled Delivery instead.',
+                  type: AppToastType.error,
+                );
+                return;
+              }
+              setState(() {
+                _deliveryOption = _DeliveryOption.quick;
+                _selectedSlot = available.first;
+                _selectedSlotDate = todayStr;
+              });
+              Navigator.pop(ctx);
+              onConfirmed?.call();
+              return;
+            }
+
+            if (pendingSlot == null) {
+              AppToast.show(
+                context,
+                'Please choose a delivery date and slot.',
+                type: AppToastType.error,
+              );
+              return;
+            }
+            setState(() {
+              _deliveryOption = _DeliveryOption.scheduled;
+              _selectedSlot = pendingSlot;
+              _selectedSlotDate = pendingDateStr;
+            });
+            Navigator.pop(ctx);
+            onConfirmed?.call();
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Choose Delivery Option',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _DeliveryOptionTile(
+                    icon: Icons.bolt_outlined,
+                    title: 'Instant Delivery',
+                    subtitle: 'Same-day — next available slot',
+                    isSelected: pending == _DeliveryOption.quick,
+                    onTap: () => setSheetState(() => pending = _DeliveryOption.quick),
+                  ),
+                  const SizedBox(height: 10),
+                  _DeliveryOptionTile(
+                    icon: Icons.event_available_outlined,
+                    title: 'Scheduled Delivery',
+                    subtitle: 'Pick a date and a real delivery slot',
+                    isSelected: pending == _DeliveryOption.scheduled,
+                    onTap: () =>
+                        setSheetState(() => pending = _DeliveryOption.scheduled),
+                  ),
+                  if (pending == _DeliveryOption.scheduled) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Delivery date',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: _nextThreeDeliveryDates().map((date) {
+                        final isPickedDate = date.year == pendingDate.year &&
+                            date.month == pendingDate.month &&
+                            date.day == pendingDate.day;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _SlotChip(
+                            label: _describeSlotDate(date),
+                            isSelected: isPickedDate,
+                            onTap: () => setSheetState(() {
+                              pendingDate = date;
+                              pendingSlot = null;
+                            }),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Available slots',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Consumer(
+                      builder: (consumerContext, consumerRef, _) {
+                        final slotsAsync =
+                            consumerRef.watch(marketplaceDeliverySlotsForDateProvider(pendingDateStr));
+                        return slotsAsync.when(
+                          data: (day) {
+                            final visibleSlots = day.slots
+                                .where((slot) => !_isSlotPast(pendingDate, slot))
+                                .toList();
+                            if (visibleSlots.isEmpty) {
+                              return const Text(
+                                'No delivery slots available for this date.',
+                                style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                              );
+                            }
+                            return Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: visibleSlots.map((slot) {
+                                return _SlotChip(
+                                  label: slot.label.isNotEmpty ? slot.label : _slotTimeRangeLabel(slot),
+                                  isSelected: pendingSlot?.id == slot.id,
+                                  isDisabled: !slot.isAvailable,
+                                  onTap: slot.isAvailable
+                                      ? () => setSheetState(() => pendingSlot = slot)
+                                      : null,
+                                );
+                              }).toList(),
+                            );
+                          },
+                          loading: () => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (_, __) => const Text(
+                            'Could not load delivery slots. Please try again.',
+                            style: TextStyle(fontSize: 11.5, color: AppColors.error),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: isConfirming ? null : confirm,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF059669),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: isConfirming
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text(
+                              'Confirm',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _handlePlaceOrder(
     BuildContext context,
     WidgetRef ref,
@@ -1349,24 +1976,50 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     });
 
     try {
-      final today = DateTime.now();
-      final todayStr =
-          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      // Fixed 2026-10-07 ("the slots for grocery/vegetale of should from
+      // the seller hub-delivery slot as per the uploaded image"): every
+      // grocery order used to submit a hardcoded window (a fake "10-15
+      // Min Express Delivery" or a fixed daily "6:00 PM - 8:00 PM") with
+      // no connection to any real delivery capacity. Now it submits
+      // whichever REAL Seller Hub DeliverySlot the picker resolved
+      // (_openDeliveryOptionSheet, above) for either option.
+      // `_selectedSlot`/`_selectedSlotDate` defaulting here too is just a
+      // defensive fallback — _onProceedToPayTapped never reaches this
+      // call with either still null.
+      final slotDateStr = _selectedSlotDate ?? _formatDateForBooking(DateTime.now());
+      final chosenSlot = _selectedSlot;
+      final slot = chosenSlot != null
+          ? TimeSlot(
+              id: 'seller_hub_slot_${chosenSlot.id}_$slotDateStr',
+              date: slotDateStr,
+              startTime: chosenSlot.startTime,
+              endTime: chosenSlot.endTime,
+              label: chosenSlot.label.isNotEmpty
+                  ? chosenSlot.label
+                  : _slotTimeRangeLabel(chosenSlot),
+            )
+          : TimeSlot(
+              id: 'express_${DateTime.now().millisecondsSinceEpoch}',
+              date: slotDateStr,
+              startTime: '10:00',
+              endTime: '10:15',
+              label: '10-15 Min Express Delivery',
+            );
 
       final result = await ref
           .read(bookingActionControllerProvider.notifier)
           .createBooking(
-            date: todayStr,
-            slot: TimeSlot(
-              id: 'express_${DateTime.now().millisecondsSinceEpoch}',
-              date: todayStr,
-              startTime: '10:00',
-              endTime: '10:15',
-              label: '10-15 Min Express Delivery',
-            ),
+            date: slotDateStr,
+            slot: slot,
             specialInstructions: 'Quick Commerce Vegetable Order',
             contactPhone: ref.read(currentUserProvider)?.phone,
-            totalAmount: ref.read(cartSummaryProvider).total,
+            // Fixed 2026-10-07: now sends the coupon-discounted total (see
+            // `_effectiveGrandTotal`) instead of the full `cartSummary.total`
+            // — otherwise an applied coupon would show correctly in the
+            // Bill Details card above but the customer would still be
+            // charged the full, undiscounted amount at the actual booking
+            // step, which is the one place that matters.
+            totalAmount: _effectiveGrandTotal(ref.read(cartSummaryProvider)),
           );
 
       if (!context.mounted) return;
@@ -1375,12 +2028,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         if (mounted) {
           setState(() => _errorMessage = result.error);
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.error!),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.show(context, result.error!, type: AppToastType.error);
       } else if (result.booking != null) {
         AppToast.bookingSuccessful(context);
         context.go(
@@ -1397,5 +2045,146 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+}
+
+/// A single selectable row in [_GroceryCartScreenState._openDeliveryOptionSheet]
+/// — same selected/unselected visual language as
+/// [_GroceryCartScreenState._buildTipCard] (navy fill when selected,
+/// light surface otherwise), just icon + title + subtitle instead of a
+/// label + amount, since each delivery option needs a one-line
+/// explanation of what it actually means.
+class _DeliveryOptionTile extends StatelessWidget {
+  const _DeliveryOptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF0F172A) : AppColors.border,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? Colors.white70 : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small selectable pill used for the 3-day date picker and the real
+/// delivery-slot list in
+/// [_GroceryCartScreenState._openDeliveryOptionSheet] — unlike
+/// [_DeliveryOptionTile] (a full-width row for the two top-level delivery
+/// options), dates and slots are shown as compact chips since there can
+/// be several of them side by side (one per real
+/// `workforce_api.DeliverySlot` the Seller Hub admin has configured, e.g.
+/// 09:00-11:00, 11:00-13:00, 14:00-16:00, 16:00-18:00). [isDisabled]
+/// renders a slot whose capacity/cutoff has made it unavailable today
+/// (per `PublicDeliverySlotsView`'s live `available` flag) as struck
+/// through and untappable, rather than hiding it — the customer can see
+/// it exists, just not right now.
+class _SlotChip extends StatelessWidget {
+  const _SlotChip({
+    required this.label,
+    required this.isSelected,
+    this.isDisabled = false,
+    this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final bool isDisabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = isDisabled
+        ? const Color(0xFFF1F5F9)
+        : isSelected
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFF8FAFC);
+    final foreground = isDisabled
+        ? AppColors.textSecondary
+        : isSelected
+            ? Colors.white
+            : AppColors.textPrimary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected && !isDisabled ? const Color(0xFF0F172A) : AppColors.border,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: foreground,
+            decoration: isDisabled ? TextDecoration.lineThrough : null,
+          ),
+        ),
+      ),
+    );
   }
 }

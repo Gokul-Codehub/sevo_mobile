@@ -222,6 +222,37 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
   }
 }
 
+/// Splits AI Mitra's markdown-flavored reply text into plain and
+/// `**bold**` spans so the chat bubble below can render real bold text
+/// instead of showing the literal `**` markers — the backend's AI
+/// gateway formats headings/emphasis with basic markdown (e.g.
+/// "**Tap & mixer**", "**Tap installation/replacement**: ₹291.00"), but
+/// the bubble used to just dump `message.content` into a single plain
+/// `Text`, so every customer saw the raw asterisks. Deliberately a small
+/// hand-rolled parser rather than pulling in a full markdown rendering
+/// package — this app has no other markdown surface, and `**bold**` is
+/// the only formatting the gateway actually emits.
+List<InlineSpan> _parseAiMarkdownSpans(String text, TextStyle baseStyle) {
+  final boldStyle = baseStyle.copyWith(fontWeight: FontWeight.w800);
+  final pattern = RegExp(r'\*\*(.+?)\*\*');
+  final spans = <InlineSpan>[];
+  var lastEnd = 0;
+  for (final match in pattern.allMatches(text)) {
+    if (match.start > lastEnd) {
+      spans.add(TextSpan(text: text.substring(lastEnd, match.start), style: baseStyle));
+    }
+    final boldText = match.group(1);
+    if (boldText != null && boldText.isNotEmpty) {
+      spans.add(TextSpan(text: boldText, style: boldStyle));
+    }
+    lastEnd = match.end;
+  }
+  if (lastEnd < text.length) {
+    spans.add(TextSpan(text: text.substring(lastEnd), style: baseStyle));
+  }
+  return spans.isEmpty ? [TextSpan(text: text, style: baseStyle)] : spans;
+}
+
 class _ChatBubble extends StatelessWidget {
   const _ChatBubble({required this.message});
 
@@ -257,9 +288,13 @@ class _ChatBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              message.content,
-              style: TextStyle(fontSize: 14, color: textColor, height: 1.35),
+            Text.rich(
+              TextSpan(
+                children: _parseAiMarkdownSpans(
+                  message.content,
+                  TextStyle(fontSize: 14, color: textColor, height: 1.35),
+                ),
+              ),
             ),
             if (message.sources.isNotEmpty) ...[
               const SizedBox(height: 6),

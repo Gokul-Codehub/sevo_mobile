@@ -107,6 +107,23 @@ class ServiceCard extends ConsumerWidget {
     context.go(AppRoutes.cart);
   }
 
+  // Fixed 2026-10-07 — same root cause and fix as ProductCard._lockTextScale
+  // (see that file's comment for the full explanation): this card's rows
+  // use fixed-height image thumbnails and divider spacing tuned for the
+  // platform's default text scale, so a device with a larger system
+  // font-size setting can push the real content a few pixels past what
+  // those rows budgeted for. Locking this card's own text scale to 1.0
+  // keeps it deterministic across devices without touching accessibility
+  // scaling anywhere else in the app.
+  Widget _lockTextScale(BuildContext context, Widget child) {
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        textScaler: const TextScaler.linear(1.0),
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isGrocery = service.flowType == CatalogFlowType.grocery;
@@ -117,7 +134,7 @@ class ServiceCard extends ConsumerWidget {
     AppLogger.d('[P0-CARD]',
         'building ServiceCard: title=${service.title}, id=${service.id}, quantityInCart=$quantityInCart, isGrocery=$isGrocery');
 
-    return Container(
+    return _lockTextScale(context, Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -154,7 +171,7 @@ class ServiceCard extends ConsumerWidget {
                 ),
               ),
             ),
-    );
+    ));
   }
 
   Widget _buildCardContent(

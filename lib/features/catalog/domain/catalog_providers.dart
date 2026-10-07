@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error.dart';
 import '../data/catalog_repository.dart';
+import '../data/marketplace_catalog_repository.dart';
 import 'catalog_models.dart';
 
 /// Provider for list of all categories.
@@ -90,17 +91,61 @@ final serviceDetailProvider =
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
 /// Provider for search results based on active query.
+///
+/// Fixed 2026-10-07 ("The search bar for services has being work perfect
+/// but the grocery/vegetable search bar not working" — explicit repro:
+/// searching "banana" always returned "No Services Found"): this only ever
+/// called [CatalogRepository.searchServices], which hits
+/// `GET /catalog/services/` — the scheduled-service catalog. Grocery and
+/// vegetable products live in a completely separate catalog (the Vendor
+/// Seller Hub / marketplace, fetched via [MarketplaceCatalogRepository]),
+/// so no text typed here could ever match a grocery item — not a filtering
+/// bug, the grocery catalog was never queried at all. This now runs both
+/// searches in parallel and merges the results into one list; marketplace
+/// products are converted with their own `toServiceItem()` (the same
+/// conversion every other grocery screen already uses), so the existing
+/// [ServiceCard] rendering in search_screen.dart needs no changes — it
+/// already routes a grocery-flavored ServiceItem to the product detail
+/// page correctly. A failure in one source never blocks the other: each
+/// is caught independently so, e.g., a marketplace hiccup still returns
+/// service results instead of failing the whole search.
 final searchResultsProvider = FutureProvider<List<ServiceItem>>((ref) async {
   final query = ref.watch(searchQueryProvider).trim();
   if (query.isEmpty) return const [];
 
-  final repo = ref.watch(catalogRepositoryProvider);
-  final result = await repo.searchServices(query);
+  final catalogRepo = ref.watch(catalogRepositoryProvider);
+  final marketplaceRepo = ref.watch(marketplaceCatalogRepositoryProvider);
 
-  return switch (result) {
+  // Both repo calls already catch their own exceptions internally and
+  // return Failure(...) rather than throwing, so starting them here before
+  // either is awaited is enough to run them concurrently without any
+  // Future.wait/type-casting gymnastics.
+  final serviceFuture = catalogRepo.searchServices(query);
+  final marketplaceFuture = marketplaceRepo.getProducts(search: query);
+
+  final serviceResult = await serviceFuture;
+  final marketplaceResult = await marketplaceFuture;
+
+  final serviceItems = switch (serviceResult) {
     Success(:final data) => data,
-    Failure(:final error) => throw error,
+    Failure() => <ServiceItem>[],
   };
+  final groceryItems = switch (marketplaceResult) {
+    Success(:final data) => data.products.map((p) => p.toServiceItem()).toList(),
+    Failure() => <ServiceItem>[],
+  };
+
+  // Surface a real error only when BOTH sources failed — if either one
+  // succeeded (even with zero matches) that's a normal "no results", not
+  // an error state for the whole screen.
+  if (serviceItems.isEmpty &&
+      groceryItems.isEmpty &&
+      serviceResult is Failure &&
+      marketplaceResult is Failure) {
+    throw (serviceResult as Failure).error;
+  }
+
+  return [...serviceItems, ...groceryItems];
 });
 
 /// Provider for Farm-Fresh grocery produce items.

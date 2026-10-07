@@ -31,16 +31,121 @@ class OtpVerifyScreen extends ConsumerStatefulWidget {
 class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
   final List<TextEditingController> _digitControllers =
       List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  // Fixed 2026-10-07 ("the clear of a single box also inappropriate"): each
+  // FocusNode now owns an `onKeyEvent` handler (set once, here, since a
+  // FocusNode's key-event callback is fixed at construction and each one
+  // needs to know its own index) instead of the plain `FocusNode()` list
+  // this used to be. See [_handleBackspaceKey] for what it does and why.
+  late final List<FocusNode> _focusNodes = List.generate(
+    6,
+    (index) => FocusNode(onKeyEvent: (node, event) => _handleBackspaceKey(event, index)),
+  );
 
   bool _isLoading = false;
   int _secondsRemaining = 30;
   Timer? _timer;
+  // Guards the programmatic `controller.text = ...` writes in
+  // [_distributePastedDigits] from re-entering [_onDigitChanged] through the
+  // TextEditingController's own change notifications — without this, each
+  // write would be treated as if the user had typed that digit themselves
+  // and would redundantly re-run the focus-advance logic out of order.
+  bool _isDistributingPaste = false;
 
   @override
   void initState() {
     super.initState();
     _startCountdown();
+  }
+
+  /// Lets backspace continue walking backward through already-filled boxes
+  /// instead of stalling the moment it reaches one that's already empty.
+  ///
+  /// Fixed 2026-10-07 ("the clear of a single box of a otp also
+  /// inappropriate make it clear"): [onChanged] below only ever fires when a
+  /// box's own text actually changes. Backspacing a box that has a digit
+  /// clears that digit and (correctly) moves focus to the previous box —
+  /// but the previous box's digit is left untouched, so a second backspace
+  /// press on it does nothing visible until it, in turn, has a digit to
+  /// delete. In practice this reads as "backspace doesn't really clear
+  /// things" — the user has to press it once per box just to arrive, then
+  /// again to actually delete, instead of one continuous backspace walking
+  /// all the way back. Catching the backspace key directly, only when the
+  /// CURRENT box is already empty, and using it to clear and refocus the
+  /// PREVIOUS box in the same keystroke fixes that: holding or repeatedly
+  /// pressing backspace now deletes one digit per press with no dead presses
+  /// in between, matching how every native OTP input behaves.
+  KeyEventResult _handleBackspaceKey(KeyEvent event, int index) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.backspace &&
+        _digitControllers[index].text.isEmpty &&
+        index > 0) {
+      _digitControllers[index - 1].clear();
+      _focusNodes[index - 1].requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Handles one box's [onChanged] firing, including the multi-digit case.
+  ///
+  /// Fixed 2026-10-07 ("speed otp entry is not allowed"): each box used to
+  /// be capped with `maxLength: 1`, so whenever more than one digit landed
+  /// in a single text-field update — pasting a copied code, or the
+  /// SMS-autofill suggestion Android/iOS show above the keyboard, both of
+  /// which insert the full 6-digit code into whichever box is focused in
+  /// one shot — Flutter's length-limiting formatter silently truncated it
+  /// to just the first digit and discarded the rest. Typing fast enough
+  /// that the OS batches a couple of keystrokes into one update hit the
+  /// same truncation. `maxLength: 1` is gone from the field now (see
+  /// `build()` below); this method does the single-digit-per-box
+  /// enforcement itself, and also recognizes a multi-character update as
+  /// "spread these across the remaining boxes starting here" instead of
+  /// clipping it.
+  void _onDigitChanged(String val, int index) {
+    if (_isDistributingPaste) return;
+    final digits = val.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length > 1) {
+      _distributePastedDigits(digits, index);
+      return;
+    }
+    if (digits.length != val.length) {
+      // The formatter already strips non-digits before this runs, but a
+      // defensive re-sync keeps the controller's text exactly one digit.
+      _digitControllers[index].text = digits;
+      _digitControllers[index].selection =
+          TextSelection.collapsed(offset: digits.length);
+    }
+    if (digits.isNotEmpty) {
+      if (index < 5) {
+        _focusNodes[index + 1].requestFocus();
+      } else {
+        _focusNodes[index].unfocus();
+        _handleVerify();
+      }
+    } else if (index > 0) {
+      _focusNodes[index - 1].requestFocus();
+    }
+  }
+
+  /// Spreads a pasted/autofilled multi-digit string across boxes
+  /// `startIndex, startIndex + 1, ...`, landing focus on the next empty box
+  /// (or triggering verification once all 6 are filled).
+  void _distributePastedDigits(String digits, int startIndex) {
+    _isDistributingPaste = true;
+    var filled = 0;
+    for (; filled < digits.length && startIndex + filled < 6; filled++) {
+      final controller = _digitControllers[startIndex + filled];
+      controller.text = digits[filled];
+      controller.selection = const TextSelection.collapsed(offset: 1);
+    }
+    _isDistributingPaste = false;
+    final nextIndex = startIndex + filled;
+    if (nextIndex >= 6) {
+      _focusNodes[5].unfocus();
+      _handleVerify();
+    } else {
+      _focusNodes[nextIndex].requestFocus();
+    }
   }
 
   void _startCountdown() {
@@ -260,7 +365,14 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
                       autofocus: index == 0,
-                      maxLength: 1,
+                      // Fixed 2026-10-07 ("speed otp entry is not
+                      // allowed"): `maxLength: 1` used to truncate any
+                      // multi-character update — a pasted code, SMS
+                      // autofill, or just typing fast — down to one digit
+                      // and threw the rest away. [_onDigitChanged] now
+                      // does its own single-digit enforcement and spreads
+                      // a longer update across the remaining boxes, so the
+                      // cap on this field is gone.
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -288,18 +400,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                               const BorderSide(color: AppColors.primary, width: 2),
                         ),
                       ),
-                      onChanged: (val) {
-                        if (val.isNotEmpty) {
-                          if (index < 5) {
-                            _focusNodes[index + 1].requestFocus();
-                          } else {
-                            _focusNodes[index].unfocus();
-                            _handleVerify();
-                          }
-                        } else if (val.isEmpty && index > 0) {
-                          _focusNodes[index - 1].requestFocus();
-                        }
-                      },
+                      onChanged: (val) => _onDigitChanged(val, index),
                     ),
                   );
                 }),

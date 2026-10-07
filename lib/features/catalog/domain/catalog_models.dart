@@ -257,6 +257,8 @@ class ServiceItem extends Equatable {
     this.vegetableCategoryFullPath,
     this.inStock = true,
     this.maxQuantity = 99,
+    this.gstRate,
+    this.platformFee,
   });
 
   final int id;
@@ -332,6 +334,26 @@ class ServiceItem extends Equatable {
   // catalog payload without these keys behaves exactly as before.
   final bool inStock;
   final int maxQuantity;
+
+  // ── Per-package GST / platform fee (added 2026-10-07) ─────────────────────
+  //
+  // Bug found: the web app (frontend/src/ui/pages/BookingPage.jsx) has
+  // always priced each package using ITS OWN `gst_rate`/`platform_fee`
+  // (admin-set per package in the Service Catalog; falls back to 18% / ₹29
+  // when a package doesn't set its own) -- already returned by the backend's
+  // CatalogServiceSerializer on every catalog response. The admin's global
+  // Settings > Pricing > "Home Services" page (a single flat GST% and
+  // Platform Fee for every service) is a SEPARATE config the web booking
+  // flow never actually reads. This app, however, only ever read that flat
+  // global config (features/pricing/) and never parsed these per-package
+  // fields at all -- so mobile and web could show two different totals for
+  // the exact same package. These carry the per-package override through so
+  // cart_notifier.dart's cartSummaryProvider can match web's real formula
+  // instead of the flat admin page. Null means the backend didn't send one
+  // for this package (legacy payload, or genuinely unset) -- callers fall
+  // back to web's own default (18% / ₹29), never to the flat global config.
+  final double? gstRate;
+  final Decimal? platformFee;
 
   /// Whether this item was filed under a real Vegetable Inventory category
   /// (as opposed to a plain grocery Package with no category tree entry).
@@ -432,6 +454,35 @@ class ServiceItem extends Equatable {
     }
     return CatalogFlowType.serviceBooking;
   }
+
+  // Marketplace-sourced items are id-offset by +800000000, Grocery-Hub-
+  // sourced ones by +900000000 (see MarketplaceProduct.toServiceItem() /
+  // GroceryHubProduct.toServiceItem()) specifically so they never collide
+  // with a catalog service id in the cart -- a side effect is that id is
+  // also a reliable "this came from a grocery source" signal in its own
+  // right, independent of category metadata.
+  static const int _groceryCartIdOffset = 800000000;
+
+  /// Whether this item is a grocery/vegetable item, for places where
+  /// [flowType]'s pure category-keyword match is not reliable on its own.
+  ///
+  /// Bug found: a booking's own echoed `cart_data` (a schemaless JSONField)
+  /// frequently omits `category_slug`/`category_name`, so a `ServiceItem`
+  /// rebuilt from it silently misclassified as [CatalogFlowType.serviceBooking]
+  /// even for a genuine grocery item. That was already fixed for the Home
+  /// screen's "Book Again" tiles (2026-10-06/07) with this exact fallback
+  /// chain; `cartSummaryProvider` (cart_notifier.dart) had the identical bug
+  /// in its own `isGrocery` check -- charging a grocery cart the home-service
+  /// fee formula (platform fee + GST) instead of delivery/handling/small-cart
+  /// fees, folded into the grand total with no line item shown for it at
+  /// all. Prefer this getter over a bare `flowType ==
+  /// CatalogFlowType.grocery` check anywhere pricing or cart-mode filtering
+  /// depends on getting this right.
+  bool get isGroceryFlow =>
+      flowType == CatalogFlowType.grocery ||
+      hasVegetableCategory ||
+      (vegetableCategoryName?.isNotEmpty ?? false) ||
+      id >= _groceryCartIdOffset;
 
   /// Formatted weight/unit string for grocery items (defaults to '500 g' or '1 unit' if unspecified).
   String get displayUnit {
@@ -568,6 +619,8 @@ class ServiceItem extends Equatable {
       vegetableCategoryFullPath: _nonEmpty(json['vegetable_category_full_path']),
       inStock: parseBoolOrDefault(json['in_stock'], true),
       maxQuantity: parseInt(json['max_quantity'], fallback: 99),
+      gstRate: parseDoubleOrNull(json['gst_rate']),
+      platformFee: parseMoneyOrNull(json['platform_fee']),
     );
   }
 
@@ -605,6 +658,8 @@ class ServiceItem extends Equatable {
           'vegetable_category_full_path': vegetableCategoryFullPath,
         'in_stock': inStock,
         'max_quantity': maxQuantity,
+        if (gstRate != null) 'gst_rate': gstRate,
+        if (platformFee != null) 'platform_fee': platformFee.toString(),
       };
 
   @override
@@ -638,6 +693,8 @@ class ServiceItem extends Equatable {
         vegetableCategoryFullPath,
         inStock,
         maxQuantity,
+        gstRate,
+        platformFee,
       ];
 }
 

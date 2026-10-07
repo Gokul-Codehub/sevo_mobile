@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../routing/app_router.dart';
+import '../../../catalog/domain/catalog_providers.dart';
+import '../../../home/data/homepage_repository.dart';
 
 /// Screen 1: Splash Screen
 ///
@@ -45,6 +47,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _animController.forward();
+    // Added 2026-10-07 ("while loading the splash screen load the entire
+    // application fastly atleast home page"): before this, Home's own
+    // `ref.watch(homepageConfigProvider)`/`ref.watch(categoriesProvider)`
+    // calls in home_screen.dart's build() were the EARLIEST point either
+    // ever got read — meaning their network fetch only started AFTER this
+    // screen's fixed _displayDuration had already elapsed and navigation
+    // to Home had happened, wasting the ~2.2s this screen is shown for
+    // anyway. Both are plain (non-`.autoDispose`) FutureProviders, so
+    // merely reading them — not awaiting the result — starts their fetch
+    // immediately and keeps it cached; doing that here runs the fetch in
+    // parallel with the branding timer below, so by the time Home actually
+    // builds, its own `ref.watch` calls usually just reuse an
+    // already-finished (or much further along) Future instead of starting
+    // a fresh one ~2.2s late. Deliberately fire-and-forget: a failure here
+    // is not handled specially, since home_screen.dart's own `.when()`
+    // error/retry handling already covers it the moment Home itself reads
+    // the same provider.
+    ref.read(homepageConfigProvider);
+    ref.read(categoriesProvider);
     _navTimer = Timer(_displayDuration, () async {
       if (!mounted) return;
       // Fixed 2026-09-19 — this used to go straight to Home on every cold

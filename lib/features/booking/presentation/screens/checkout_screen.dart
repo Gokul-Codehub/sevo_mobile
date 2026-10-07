@@ -57,10 +57,32 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ensureLocationEnabled(context);
     });
+    // Fixed 2026-10-06: PricingConfigNotifier only fetches the live
+    // admin-set pricing once, at app cold start — the admin Settings >
+    // Pricing page's own banner promises "The customer app fetches these
+    // values when a customer opens checkout or the grocery cart", but
+    // nothing called the refreshNow() it exposes for exactly that. See
+    // the matching fix in grocery_cart_screen.dart's initState.
+    ref.read(pricingConfigProvider.notifier).refreshNow();
   }
 
   void _bootstrapInitialService() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Fixed 2026-10-06: the time-slot grid (SlotPickerWidget, below) must
+      // know which service is being booked — admin's Time Slot Management
+      // is configured per service (hours/duration/capacity), and slots
+      // fetched without a service id only ever matched the global default
+      // config, never the specific one the customer was actually seeing.
+      // This write has to happen here, inside a post-frame callback — doing
+      // it directly in initState() throws Riverpod's "Tried to modify a
+      // provider while the widget tree was building" (initState counts as
+      // "building" for this purpose, same as build/dispose/didUpdateWidget).
+      final initialSlug = _scheduledService?.slug ?? widget.initialServiceSlug;
+      if (initialSlug != null) {
+        ref.read(selectedBookingServiceIdProvider.notifier).state =
+            initialSlug;
+      }
+
       if (_scheduledService == null && widget.initialServiceSlug != null) {
         final fetched = await ref.read(
           serviceDetailProvider(widget.initialServiceSlug!).future,
@@ -69,6 +91,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           setState(() {
             _scheduledService = fetched;
           });
+          ref.read(selectedBookingServiceIdProvider.notifier).state =
+              fetched.slug;
         }
       }
 
@@ -89,6 +113,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void dispose() {
     _notesController.dispose();
     _phoneController.dispose();
+    // Not clearing selectedBookingServiceIdProvider/selectedTimeSlotProvider
+    // here: modifying a provider inside dispose() throws Riverpod's "Tried
+    // to modify a provider while the widget tree was building" (dispose
+    // counts, same as initState/build). The next screen that cares about
+    // either provider (this screen, next time it opens) already overwrites
+    // them itself in its own post-frame callback above, so a stale value
+    // sitting here between visits is harmless.
     super.dispose();
   }
 
@@ -116,12 +147,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Coupon "${applied.code}" applied! Saved ₹$_couponDiscountAmount'),
-            backgroundColor: AppColors.primary,
-          ),
+        AppToast.show(
+          context,
+          'Coupon "${applied.code}" applied! Saved ₹$_couponDiscountAmount',
         );
       }
     }
@@ -149,11 +177,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (itemsToBook.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a service first.'),
-          backgroundColor: AppColors.warning,
-        ),
+      AppToast.show(
+        context,
+        'Please select a service first.',
+        type: AppToastType.error,
       );
       return;
     }
@@ -173,22 +200,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (selectedAddress == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select or add a service address.'),
-          backgroundColor: AppColors.warning,
-        ),
+      AppToast.show(
+        context,
+        'Please select or add a service address.',
+        type: AppToastType.error,
       );
       context.push('/addresses?select=true');
       return;
     }
 
     if (selectedSlot == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an appointment time slot.'),
-          backgroundColor: AppColors.warning,
-        ),
+      AppToast.show(
+        context,
+        'Please select an appointment time slot.',
+        type: AppToastType.error,
       );
       return;
     }
@@ -244,10 +269,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _isLoading = false);
 
     if (result.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(result.error!), backgroundColor: AppColors.error),
-      );
+      AppToast.show(context, result.error!, type: AppToastType.error);
     } else if (result.booking != null) {
       AppToast.bookingSuccessful(context);
       context.go('/bookings/success/${result.booking!.id}',

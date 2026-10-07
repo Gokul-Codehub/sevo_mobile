@@ -17,6 +17,7 @@ import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/booking/domain/booking_models.dart';
 import '../features/booking/presentation/screens/booking_detail_screen.dart';
 import '../features/booking/presentation/screens/booking_success_screen.dart';
+import '../features/booking/domain/cart_notifier.dart';
 import '../features/booking/presentation/screens/checkout_screen.dart';
 import '../features/booking/presentation/screens/grocery_cart_screen.dart';
 import '../features/booking/presentation/screens/my_bookings_screen.dart';
@@ -159,7 +160,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.cart,
             name: 'cart',
-            builder: (context, state) => const GroceryCartScreen(),
+            builder: (context, state) => const _CartRouteScreen(),
           ),
           GoRoute(
             path: AppRoutes.support,
@@ -514,5 +515,31 @@ class _NotFoundScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Added 2026-10-07 ("The cart section is only working for groceries and
+/// vegetables not for the services block"): the bottom-nav Cart tab used to
+/// unconditionally build [GroceryCartScreen], which only ever reads/renders
+/// grocery items and shows its grocery-flavored empty state for anyone else
+/// — so a customer who had added a *service* to the shared [cartProvider]
+/// (see the new Add-to-Cart button on the service detail screen) could never
+/// actually see or check out that item from the Cart tab. [CheckoutScreen]
+/// already falls back to reading the full shared cart whenever it's opened
+/// without a single pinned `initialService` (see its `_handlePlaceOrder`/
+/// `build`), so it's the correct destination for a cart that contains any
+/// non-grocery item. A cart that's empty, or contains only grocery/vegetable
+/// items, keeps going to [GroceryCartScreen] exactly as before.
+class _CartRouteScreen extends ConsumerWidget {
+  const _CartRouteScreen();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(cartProvider);
+    final hasServiceItem = items.any((i) => !i.service.isGroceryFlow);
+    if (hasServiceItem) {
+      return const CheckoutScreen();
+    }
+    return const GroceryCartScreen();
   }
 }

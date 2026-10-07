@@ -122,7 +122,22 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
   Widget build(BuildContext context) {
     final couponsAsync = ref.watch(availableCouponsProvider);
 
-    return Container(
+    // Fixed 2026-10-07 ("the promo/coupons model is not showing up instead
+    // it show little dark [box]"): the `Flexible` around the coupon list
+    // below sits in a `Column` with `mainAxisSize.min`, but
+    // `showModalBottomSheet` never gives this content a bounded height —
+    // `Flexible`/`Expanded` need a finite main-axis constraint from their
+    // parent, so layout threw mid-build (RenderFlex "incoming height
+    // constraints are unbounded") and every render object downstream
+    // (the sheet's own rounded shape, the barrier, the tap handler) failed
+    // to lay out, which is what rendered as a tiny broken dark box instead
+    // of the sheet. Capping the sheet's own height here gives `Flexible` a
+    // real, finite bound to shrink/scroll within.
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      child: Container(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
@@ -205,36 +220,53 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  SizedBox(
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed:
-                          _isValidating ? null : () => _applyCode(_controller.text),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  // Fixed 2026-10-07 — second, separate crash in this same
+                  // sheet ("BoxConstraints forces an infinite width" /
+                  // RenderConstrainedBox(w=Infinity, h=50.0), cascading up
+                  // through the button's Material/ink render objects):
+                  // a bare `SizedBox(height: 50, child: ElevatedButton(...))`
+                  // sitting directly in a `Row` with no `Expanded`/`Flexible`
+                  // gets an UNBOUNDED (infinite) max-width constraint from
+                  // the Row for sizing — completely normal Flutter behavior
+                  // for a non-flex Row child, but the button's internal
+                  // Material tap-target padding then fails to resolve a
+                  // size under that infinite width. Wrapping it in
+                  // `IntrinsicWidth` forces a real, finite width (computed
+                  // from the button's own content) before that unbounded
+                  // constraint ever reaches it.
+                  IntrinsicWidth(
+                    child: SizedBox(
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _isValidating
+                            ? null
+                            : () => _applyCode(_controller.text),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
                         ),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _isValidating
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Apply',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                       ),
-                      child: _isValidating
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              'Apply',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
                     ),
                   ),
                 ],
@@ -400,6 +432,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

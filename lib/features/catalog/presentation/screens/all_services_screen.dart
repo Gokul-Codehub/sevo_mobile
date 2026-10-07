@@ -30,65 +30,90 @@ class AllServicesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Services'),
       ),
-      body: categoriesAsync.when(
-              loading: () => GridView.builder(
+      // Fixed 2026-10-06 ("remove the white space at every card"): every
+      // tile used one hardcoded `childAspectRatio: 0.62` regardless of how
+      // tall its actual content was. GridView gives each cell that exact
+      // fixed height, but _ServiceCategoryTile's white card wraps its
+      // content with `mainAxisSize: MainAxisSize.min` and top-aligns it —
+      // so whenever the real content was shorter than the guessed 0.62
+      // ratio implied, the leftover showed as blank white space at the
+      // bottom of the card. Same root cause/fix class as the grocery
+      // product card and grid overflow fixes: measure the real cell width
+      // via LayoutBuilder and derive the aspect ratio FROM
+      // _ServiceCategoryTile's own declared content height
+      // (_ServiceCategoryTile.cardHeight) instead of a guessed ratio that
+      // can drift out of sync with the tile's actual layout.
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Must stay in sync with this GridView's own padding (20+20) and
+          // crossAxisSpacing (14) below — this is what turns the
+          // available width into the real on-screen width of one cell.
+          final cellWidth = (constraints.maxWidth - 40 - 14) / 2;
+          final cardAspectRatio =
+              cellWidth / _ServiceCategoryTile.cardHeight(cellWidth);
+
+          return categoriesAsync.when(
+            loading: () => GridView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              itemCount: 6,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: cardAspectRatio,
+              ),
+              itemBuilder: (context, index) =>
+                  ShimmerCard(height: _ServiceCategoryTile.cardHeight(cellWidth)),
+            ),
+            error: (err, st) => Center(
+              child: ErrorStateWidget(
+                message: 'Could not load services.',
+                onRetry: () => ref.refresh(categoriesProvider),
+              ),
+            ),
+            data: (categories) {
+              // Fixed 2026-09-19: strict `== serviceBooking` silently
+              // dropped Goods & Transport off this entire screen the
+              // moment CatalogFlowType.logistics became its own distinct
+              // value — this grid is meant to show "every non-grocery
+              // category" (grocery has its own dedicated flow/screens),
+              // not specifically serviceBooking ones.
+              final services = categories
+                  .where((c) => c.flowType != CatalogFlowType.grocery)
+                  .toList();
+
+              if (services.isEmpty) {
+                return const EmptyStateWidget(
+                  title: 'No Services Found',
+                  subtitle: 'We are currently expanding our service offerings.',
+                  emoji: '🛠️',
+                );
+              }
+
+              // A fixed "Need Help Choosing a Service?" card always closes
+              // the grid (matches the reference screenshot's last cell) —
+              // not a category, so it isn't counted against the admin's
+              // real category list, just appended after it.
+              return GridView.builder(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                itemCount: 6,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                itemCount: services.length + 1,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  childAspectRatio: 0.62,
+                  childAspectRatio: cardAspectRatio,
                 ),
-                itemBuilder: (context, index) => const ShimmerCard(height: 210),
-              ),
-              error: (err, st) => Center(
-                child: ErrorStateWidget(
-                  message: 'Could not load services.',
-                  onRetry: () => ref.refresh(categoriesProvider),
-                ),
-              ),
-              data: (categories) {
-                // Fixed 2026-09-19: strict `== serviceBooking` silently
-                // dropped Goods & Transport off this entire screen the
-                // moment CatalogFlowType.logistics became its own distinct
-                // value — this grid is meant to show "every non-grocery
-                // category" (grocery has its own dedicated flow/screens),
-                // not specifically serviceBooking ones.
-                final services = categories
-                    .where((c) => c.flowType != CatalogFlowType.grocery)
-                    .toList();
-
-                if (services.isEmpty) {
-                  return const EmptyStateWidget(
-                    title: 'No Services Found',
-                    subtitle: 'We are currently expanding our service offerings.',
-                    emoji: '🛠️',
-                  );
-                }
-
-                // A fixed "Need Help Choosing a Service?" card always closes
-                // the grid (matches the reference screenshot's last cell) —
-                // not a category, so it isn't counted against the admin's
-                // real category list, just appended after it.
-                return GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                  itemCount: services.length + 1,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                    childAspectRatio: 0.62,
-                  ),
-                  itemBuilder: (context, index) {
-                    if (index == services.length) {
-                      return const _NeedHelpTile();
-                    }
-                    return _ServiceCategoryTile(category: services[index]);
-                  },
-                );
-              },
-            ),
+                itemBuilder: (context, index) {
+                  if (index == services.length) {
+                    return const _NeedHelpTile();
+                  }
+                  return _ServiceCategoryTile(category: services[index]);
+                },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -177,6 +202,44 @@ class _ServiceCategoryTile extends StatelessWidget {
 
   final Category category;
 
+  // Every size literal below mirrors one actually used in build() —
+  // kept in sync by hand since Flutter has no way to ask a widget for
+  // its own natural height before laying it out. [cardHeight] is the
+  // single source of truth AllServicesScreen's LayoutBuilder uses to
+  // derive the grid's childAspectRatio, so the cell height always
+  // matches this card's real content height instead of a guessed ratio.
+  static const double _imageAspectRatio = 16 / 11;
+  static const double _contentTopPadding = 22; // Padding(12, 22, ...)
+  static const double _contentBottomPadding = 12; // Padding(..., 12)
+  // fontSize 14 * height 1.2 * 2 lines, rounded up — see the name Text's
+  // fixed-height SizedBox below, which guarantees this regardless of
+  // whether the real category name wraps to 1 or 2 lines.
+  static const double _nameBlockHeight = 34;
+  static const double _nameSubtitleGap = 4; // SizedBox(height: 4)
+  // fontSize 10.5 * height 1.2 * 2 lines, rounded up — same fixed-height
+  // guarantee as the name block, for the same reason.
+  static const double _subtitleBlockHeight = 26;
+  static const double _subtitleTaglineGap = 8; // SizedBox(height: 8)
+  // Tagline pill: vertical padding 3+3 plus its single text line — always
+  // exactly 1 line (maxLines: 1), so this is already deterministic.
+  static const double _taglineBlockHeight = 20;
+  // Rounding/line-height-estimate slack, same safety-margin convention
+  // used by ProductCard.groceryCardHeight.
+  static const double _safetyMargin = 6;
+
+  static double cardHeight(double cellWidth) {
+    final imageHeight = cellWidth / _imageAspectRatio;
+    return imageHeight +
+        _contentTopPadding +
+        _nameBlockHeight +
+        _nameSubtitleGap +
+        _subtitleBlockHeight +
+        _subtitleTaglineGap +
+        _taglineBlockHeight +
+        _contentBottomPadding +
+        _safetyMargin;
+  }
+
   @override
   Widget build(BuildContext context) {
     final style = _styleFor(category.slug, category.name);
@@ -249,15 +312,21 @@ class _ServiceCategoryTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Text(
-                          category.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.navy,
-                            height: 1.2,
+                        child: SizedBox(
+                          height: _nameBlockHeight,
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: Text(
+                              category.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.navy,
+                                height: 1.2,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -274,15 +343,21 @@ class _ServiceCategoryTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    style.subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
-                      height: 1.2,
+                  SizedBox(
+                    height: _subtitleBlockHeight,
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Text(
+                        style.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                          height: 1.2,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),

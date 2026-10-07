@@ -81,34 +81,81 @@ class LogisticsRepository {
   }
 
   // ── Get bookable time slots ──────────────────────────────────────────────
-  // AUDIT BUG-003: GET /api/logistics/slots/ returns 404 on VPS (verified 2026-08-25).
-  // The backend endpoint for time slots has not been deployed or is at a different path.
-  // TODO: Confirm correct endpoint from Django urls.py and update this call.
-  // Until resolved, _generateDefaultSlots() always activates as a temporary fallback.
-  Future<Result<List<TimeSlot>>> getTimeSlots({required String date}) async {
+  // Fixed 2026-10-06 (AUDIT BUG-003 was a wrong-endpoint bug, not a missing
+  // one): `/api/logistics/slots/` was never a real route — it 404'd and this
+  // method silently fell back to `_generateDefaultSlots()` on every call, so
+  // the customer always saw a generic client-made 09:00–18:00 hourly grid
+  // no matter what the admin configured per service in Time Slot Management
+  // (durations, hours, capacity — settings_hub's "Time Slot Management"
+  // screen, backed by `service_requests/views_time_slots.py`). Submitting
+  // one of those fake slots then failed server-side re-validation with
+  // "Sorry, this time slot is no longer available" even on a slot nobody
+  // had booked, because it was never a real slot to begin with.
+  //
+  // The real, confirmed customer endpoint is
+  // `GET /api/services/<service_id>/time-slots/?date=YYYY-MM-DD`
+  // (`CustomerServiceTimeSlotsView`), where `<service_id>` accepts a numeric
+  // id, a slug, or the literal `resolve` (which falls back to resolving
+  // `service`/`service_id`/`package`/`category` query params instead —
+  // used here when [serviceId] is unknown, e.g. a cart with mixed services).
+  // Response: `{success, data: {is_open, reason, groups: {morning,
+  // afternoon, evening}, all_slots: [...]}}`, each slot item shaped
+  // `{time, value, start_time, end_time, available, reason, capacity,
+  // booked_count}` — mapped onto [TimeSlot] below (its own `.label`/
+  // `.startTime` field names don't match these verbatim).
+  Future<Result<List<TimeSlot>>> getTimeSlots({
+    required String date,
+    String? serviceId,
+  }) async {
     try {
+      final path = (serviceId != null && serviceId.trim().isNotEmpty)
+          ? '/services/${Uri.encodeComponent(serviceId.trim())}/time-slots/'
+          : '/services/resolve/time-slots/';
       final response = await api.get(
-        '/logistics/slots/',
-        queryParameters: {'date': date},
+        path,
+        queryParameters: {
+          'date': date,
+          if (serviceId != null && serviceId.trim().isNotEmpty)
+            'service': serviceId.trim(),
+        },
       );
       return ResponseNormalizer.extract(response, (data) {
-        final list = data is List
-            ? data
-            : (data is Map && data['results'] is List
-                ? data['results'] as List
-                : (data is Map && data['data'] is List
-                    ? data['data'] as List
-                    : (data is Map && data['slots'] is List ? data['slots'] as List : [])));
+        final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+        final isOpen = map['is_open'];
+        if (isOpen == false) {
+          // Closed for this date (day off, holiday override, booking
+          // disabled) — an empty list renders as "No Available Slots" in
+          // SlotPickerWidget, which is the correct customer-facing state.
+          return <TimeSlot>[];
+        }
 
-        final slots = list
-            .whereType<Map>()
-            .map((m) => TimeSlot.fromJson(Map<String, dynamic>.from(m)))
-            .toList();
+        final groups = map['groups'] is Map ? Map<String, dynamic>.from(map['groups']) : const {};
+        final allSlots = map['all_slots'] is List
+            ? map['all_slots'] as List
+            : [
+                ...(groups['morning'] is List ? groups['morning'] as List : const []),
+                ...(groups['afternoon'] is List ? groups['afternoon'] as List : const []),
+                ...(groups['evening'] is List ? groups['evening'] as List : const []),
+              ];
 
-        return slots.isNotEmpty ? slots : _generateDefaultSlots(date);
+        return allSlots.whereType<Map>().map((raw) {
+          final m = Map<String, dynamic>.from(raw);
+          final start = (m['start_time'] ?? m['value'] ?? '').toString();
+          final end = (m['end_time'] ?? '').toString();
+          return TimeSlot(
+            id: start.isNotEmpty ? '${date}_$start' : '${date}_${m['time']}',
+            date: date,
+            startTime: start,
+            endTime: end,
+            label: (m['time'] ?? (start.isNotEmpty ? start : '')).toString(),
+            isAvailable: m['available'] == true,
+          );
+        }).toList();
       });
     } on Exception catch (_) {
-      // Temporary fallback — activates while /logistics/slots/ returns 404 on VPS (BUG-003)
+      // Network/parsing failure — fall back to the generic hourly grid
+      // rather than leaving the customer with a blank/broken slot picker.
+      // This is a true network-error fallback now, not the everyday path.
       return Success(_generateDefaultSlots(date));
     }
   }
