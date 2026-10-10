@@ -106,13 +106,19 @@ class _BannerVideoCache {
         _entries.remove(key);
         entry.controller.dispose();
       }
-      final controller = VideoPlayerController.networkUrl(uri);
+      // Banner videos are always silent: mixWithOthers stops the player from
+      // taking audio focus, so it can never pause the user's music either.
+      final controller = VideoPlayerController.networkUrl(
+        uri,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
       controller.setLooping(true);
       controller.setVolume(0);
       entry = _BannerVideoEntry(controller);
       final created = entry;
       created.initFuture = controller.initialize().then((_) {
         created.initializing = false;
+        controller.setVolume(0);
       }).catchError((Object error) {
         created.initializing = false;
         created.failed = true;
@@ -177,7 +183,9 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     if (!controller.value.isPlaying) {
-      controller.play();
+      controller
+        ..setVolume(0)
+        ..play();
     }
   }
 
@@ -190,7 +198,9 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
     if (controller == null) return;
     final value = controller.value;
     if (value.isInitialized && !value.isPlaying && !value.isBuffering) {
-      controller.play();
+      controller
+        ..setVolume(0)
+        ..play();
     }
   }
 
@@ -233,7 +243,9 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
     controller.addListener(_onControllerValueChanged);
     if (controller.value.isInitialized) {
       // Cache hit: already decoded — show immediately and resume.
-      controller.play();
+      controller
+        ..setVolume(0)
+        ..play();
       return;
     }
     entry.initFuture?.then((_) {
@@ -243,7 +255,9 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
         return;
       }
       setState(() {});
-      controller.play();
+      controller
+        ..setVolume(0)
+        ..play();
     });
   }
 

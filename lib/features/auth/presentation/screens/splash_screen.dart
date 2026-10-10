@@ -8,7 +8,6 @@ import '../../../../routing/app_router.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../home/data/homepage_repository.dart';
-import '../../../../shared/widgets/branded_loading_screen.dart';
 
 /// Screen 1: Splash Screen
 ///
@@ -36,14 +35,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final AnimationController _animController;
   late final Animation<double> _fadeAnim;
   Timer? _navTimer;
-  bool _waitingForData = false;
 
   static const _splashAsset = 'assets/images/sevo_splash.webp';
-  /// Shortest the brand splash stays up (so it never just flashes) ...
-  static const _minDisplay = Duration(milliseconds: 1400);
+  /// The brand splash image always stays up this long (the original 2.2 s) ...
+  static const _minDisplay = Duration(milliseconds: 2200);
 
-  /// ... and the longest it waits for Home's first data before moving on
-  /// anyway (Home has its own skeleton + retry for anything still missing).
+  /// ... and, if Home's first data is still loading after that, a little
+  /// longer — never more than this in total — so Home opens filled in.
   static const _maxWait = Duration(seconds: 6);
 
   @override
@@ -100,7 +98,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // Hold the splash until the data Home needs has arrived, so the
       // customer lands on a filled-in page instead of a wall of skeletons.
       // Errors/timeouts are ignored here — Home handles those itself.
-      setState(() => _waitingForData = true);
       try {
         await Future.wait<Object?>([
           ref.read(homepageConfigProvider.future),
@@ -150,21 +147,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               errorBuilder: (context, error, stackTrace) =>
                   const ColoredBox(color: Colors.white),
             ),
-            // Still waiting on Home's data after the brand image: cross-fade
-            // to the illustration loader instead of leaving the logo up.
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: !_waitingForData,
-                child: AnimatedOpacity(
-                  opacity: _waitingForData ? 1 : 0,
-                  duration: const Duration(milliseconds: 400),
-                  child: const ColoredBox(
-                    color: Colors.white,
-                    child: BrandedLoader(),
-                  ),
-                ),
-              ),
-            ),
             // Loader sits inside the bottom of the image itself, not in a
             // separate area below it.
             Positioned(
@@ -173,9 +155,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               bottom: 56,
               child: SafeArea(
                 top: false,
-                child: Center(
-                  child: _waitingForData ? const SizedBox.shrink() : const _ThreeDotLoader(),
-                ),
+                child: Center(child: _ThreeDotLoader()),
               ),
             ),
           ],

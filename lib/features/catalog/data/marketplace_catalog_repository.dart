@@ -851,6 +851,56 @@ final marketplaceProductsByCategoryProvider =
   }
 });
 
+/// Photos to stand in for categories that have no image of their own (the
+/// Seller Hub often has none uploaded): category id -> the first product
+/// photo found anywhere in that category's subtree, parents included.
+///
+/// Built from ONE paged products fetch plus the category tree — not a request
+/// per tile — so a rail or grid of 30 tiles fills in together and quickly.
+/// Kept alive once it has data; a failed/empty result is dropped so the next
+/// build retries.
+final marketplaceCategoryCoverImagesProvider =
+    FutureProvider.autoDispose<Map<int, String>>((ref) async {
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final tree = await ref.watch(marketplaceCategoryTreeProvider.future);
+
+  final parentOf = <int, int?>{};
+  void walk(List<MarketplaceCategory> nodes, int? parent) {
+    for (final n in nodes) {
+      parentOf[n.id] = parent;
+      walk(n.children, n.id);
+    }
+  }
+
+  walk(tree, null);
+
+  final covers = <int, String>{};
+  var page = 1;
+  var totalPages = 1;
+  do {
+    final result = await repo.getProducts(page: page, pageSize: 100);
+    if (result is! Success<MarketplaceProductPage>) break;
+    final data = result.data;
+    totalPages = data.totalPages;
+    for (final p in data.products) {
+      final img = p.galleryImages.firstOrNull;
+      final cid = p.categoryId;
+      if (img == null || img.isEmpty || cid == null) continue;
+      // The product's own category and every ancestor above it.
+      int? node = cid;
+      var guard = 0;
+      while (node != null && guard++ < 12) {
+        covers.putIfAbsent(node, () => img);
+        node = parentOf[node];
+      }
+    }
+    page++;
+  } while (page <= totalPages && page <= 6);
+
+  if (covers.isNotEmpty) ref.keepAlive();
+  return covers;
+});
+
 /// Merged, deduped products across every category id an admin-curated
 /// [MobileGrocerySection] (home_screen.dart) picked — keyed by a
 /// comma-joined, sorted string of ids rather than `List<int>` directly,

@@ -726,7 +726,13 @@ class HomepageRepository {
             ? rawGrocerySections
                 .whereType<Map>()
                 .map((m) => MobileGrocerySection.fromJson(Map<String, dynamic>.from(m)))
-                .where((s) => s.enabled && s.title.isNotEmpty && s.categoryIds.isNotEmpty)
+                // A section is usable with categories OR, in "Specific Products"
+                // mode, with picked products and NO categories at all — the
+                // old categories-only check silently dropped those.
+                .where((s) =>
+                    s.enabled &&
+                    s.title.isNotEmpty &&
+                    (s.categoryIds.isNotEmpty || s.productIds.isNotEmpty))
                 .toList()
             : <MobileGrocerySection>[];
 
