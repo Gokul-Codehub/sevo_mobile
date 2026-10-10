@@ -14,6 +14,7 @@ import '../../../addresses/domain/address_models.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../auth/domain/auth_notifier.dart';
 import '../../../logistics/domain/logistics_models.dart';
+import '../../../home/domain/home_flow_mode.dart';
 import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
@@ -240,7 +241,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 ),
                 const SizedBox(height: 28),
                 FilledButton.icon(
-                  onPressed: () => context.go('/categories/vegetables_groceries'),
+                  onPressed: _goShopGroceries,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF0F766E),
                     padding: const EdgeInsets.symmetric(
@@ -355,7 +356,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -386,6 +387,85 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 ),
               ),
             ],
+
+            // ── Delivery address (moved up from the fixed bottom bar) ───────
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border, width: 0.6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.location_on_rounded,
+                      size: 20,
+                      color: Color(0xFF059669),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Delivering to ${activeAddress != null ? activeAddress.addressType : "Home"}',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          activeAddress?.formattedAddress ?? 'Hosur, Tamil Nadu',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            height: 1.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: () => _openAddressSheet(context, addresses),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                      minimumSize: const Size(0, 32),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Change',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
 
             // ── Free Delivery Incentive Card ────────────────────────────────
             Container(
@@ -510,9 +590,28 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                       final effectivePrice = item.service.effectivePrice;
                       final mrp = item.service.mrp;
 
+                      // Tapping the image or details opens that product's own
+                      // page (same route the product cards use).
+                      void openProduct() {
+                        final slug = item.service.slug.isNotEmpty
+                            ? item.service.slug
+                            : 'svc-${item.service.id}';
+                        context.push(
+                          '/products/${Uri.encodeComponent(slug)}',
+                          extra: item.service,
+                        );
+                      }
+
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: openProduct,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
                           // Thumbnail
                           Container(
                             width: 58,
@@ -577,32 +676,37 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                                const SizedBox(height: 3),
+                                // "500 g • ₹90.00" — pack size and unit price.
+                                Text(
+                                  [
+                                    if ((item.service.unit ?? '').trim().isNotEmpty)
+                                      item.service.unit!.trim(),
+                                    '₹${effectivePrice.toStringAsFixed(2)}',
+                                  ].join(' • '),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
                                 const SizedBox(height: 2),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    '8 MINS',
-                                    style: TextStyle(
-                                      fontSize: 9.5,
-                                      color: Color(0xFF0F766E),
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                const Text(
+                                  'Seller: SevoGrocery',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
+                                // Line total for this quantity.
                                 Row(
                                   children: [
                                     Text(
-                                      '₹$effectivePrice',
+                                      '₹${item.totalPrice}',
                                       style: const TextStyle(
-                                        fontSize: 14,
+                                        fontSize: 14.5,
                                         fontWeight: FontWeight.w900,
                                         color: AppColors.textPrimary,
                                       ),
@@ -610,12 +714,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                     if (mrp > effectivePrice) ...[
                                       const SizedBox(width: 6),
                                       Text(
-                                        '₹$mrp',
+                                        '₹${mrp * Decimal.fromInt(item.quantity)}',
                                         style: const TextStyle(
                                           fontSize: 11.5,
                                           color: AppColors.textSecondary,
-                                          decoration:
-                                              TextDecoration.lineThrough,
+                                          decoration: TextDecoration.lineThrough,
                                         ),
                                       ),
                                     ],
@@ -624,6 +727,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                               ],
                             ),
                           ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
 
                           // Quantity Stepper matching Web
                           Container(
@@ -716,9 +824,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   const Divider(height: 1, color: AppColors.border),
                   InkWell(
                     onTap: () {
-                      // Always push to the grocery category screen — never use pop()
-                      // which could navigate to an unrelated screen
-                      context.push('/categories/vegetables_groceries');
+                      // Back to the Groceries home to keep shopping.
+                      _goShopGroceries();
                     },
                     borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(8)),
@@ -749,6 +856,68 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
             // ── Delivery slot card (inline, always visible) ──────────────────
             _buildDeliverySlotCard(context),
+            const SizedBox(height: 14),
+
+            // ── Payment method (moved up from the fixed bottom bar) ──────────
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border, width: 0.6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet_outlined,
+                          size: 18, color: AppColors.textPrimary),
+                      SizedBox(width: 8),
+                      Text(
+                        'Payment method',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _GroceryPaymentMethodOption(
+                          label: 'Cash on Delivery',
+                          subtitle: 'Cash / UPI on arrival',
+                          icon: Icons.payments_outlined,
+                          selected: _paymentMethod == 'COD',
+                          onTap: () => setState(() => _paymentMethod = 'COD'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _GroceryPaymentMethodOption(
+                          label: 'Pay Online',
+                          subtitle: 'Card / UPI / Wallet now',
+                          icon: Icons.account_balance_wallet_outlined,
+                          selected: _paymentMethod == 'ONLINE',
+                          onTap: () => setState(() => _paymentMethod = 'ONLINE'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 14),
 
             // ── Bill Details Card (Matching Web Reference) ───────────────────
@@ -1283,204 +1452,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Address Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.location_on_outlined,
-                            size: 16,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Delivering to ${activeAddress != null ? activeAddress.addressType : "Home"}',
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              Text(
-                                activeAddress?.formattedAddress ??
-                                    'Hosur, Tamil Nadu',
-                                style: const TextStyle(
-                                  fontSize: 10.5,
-                                  color: AppColors.textSecondary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  OutlinedButton(
-                    onPressed: () => _openAddressSheet(context, addresses),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 2,
-                      ),
-                      minimumSize: const Size(0, 28),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Change',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // Delivery Option Row — added 2026-10-06 ("Before checkout
-              // ask the user to select the delivery option below [Quick
-              // delivery, Slot booking (every day 6pm to 8pm)]"). Mirrors
-              // the Address Row immediately above it: a summary of the
-              // current choice (or a prompt, while none has been made
-              // yet) plus a button that opens the picker sheet.
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            _deliveryOption == _DeliveryOption.scheduled
-                                ? Icons.event_available_outlined
-                                : Icons.bolt_outlined,
-                            size: 16,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _deliveryOption == null
-                                    ? 'Choose delivery option'
-                                    : 'Delivery: ${_deliveryOptionLabel(_deliveryOption!)}',
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              Text(
-                                _deliveryOption == null
-                                    ? 'Required before you can pay'
-                                    : _deliveryOptionSubtitle(_deliveryOption!),
-                                style: const TextStyle(
-                                  fontSize: 10.5,
-                                  color: AppColors.textSecondary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  OutlinedButton(
-                    onPressed: () => _openDeliveryOptionSheet(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 2,
-                      ),
-                      minimumSize: const Size(0, 28),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      _deliveryOption == null ? 'Choose' : 'Change',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // Payment Method Row — added 2026-10-08, see the doc comment
-              // on `_paymentMethod` above for why. Mirrors
-              // checkout_screen.dart's "Payment Method" selector so the
-              // two flows look/behave consistently.
-              const Text(
-                'Payment Method',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: _GroceryPaymentMethodOption(
-                      label: 'Cash on Delivery',
-                      subtitle: 'Cash / UPI on arrival',
-                      icon: Icons.payments_outlined,
-                      selected: _paymentMethod == 'COD',
-                      onTap: () => setState(() => _paymentMethod = 'COD'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _GroceryPaymentMethodOption(
-                      label: 'Pay Online',
-                      subtitle: 'Card / UPI / Wallet now',
-                      icon: Icons.account_balance_wallet_outlined,
-                      selected: _paymentMethod == 'ONLINE',
-                      onTap: () => setState(() => _paymentMethod = 'ONLINE'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
               // Big Green Proceed To Pay Button
               SizedBox(
                 width: double.infinity,
@@ -1598,6 +1569,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     );
   }
 
+
+  /// Takes the customer to the Groceries home page to shop (the old
+  /// /categories/vegetables_groceries route now lands on "No Produce Found").
+  void _goShopGroceries() {
+    ref.read(homeFlowModeProvider.notifier).state = HomeFlowMode.groceries;
+    context.go(AppRoutes.home);
+  }
 
   void _openAddressSheet(BuildContext context, List<Address> addresses) {
     showModalBottomSheet(
@@ -1817,33 +1795,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     );
   }
 
-  String _deliveryOptionLabel(_DeliveryOption option) {
-    switch (option) {
-      case _DeliveryOption.quick:
-        return 'Instant Delivery';
-      case _DeliveryOption.scheduled:
-        return 'Scheduled Delivery';
-    }
-  }
-
-  /// Describes whichever REAL Seller Hub slot [_selectedSlot] /
-  /// [_selectedSlotDate] currently holds for [option] — before one has
-  /// been resolved yet (picker never opened, or opened and abandoned
-  /// without confirming) this falls back to a generic prompt rather than
-  /// a fake time window.
-  String _deliveryOptionSubtitle(_DeliveryOption option) {
-    if (_selectedSlot == null || _selectedSlotDate == null) {
-      switch (option) {
-        case _DeliveryOption.quick:
-          return 'Same-day — next available slot';
-        case _DeliveryOption.scheduled:
-          return 'Pick a date and a real delivery slot';
-      }
-    }
-    final date = DateTime.parse(_selectedSlotDate!);
-    return '${_describeSlotDate(date)}, ${_slotTimeRangeLabel(_selectedSlot!)}';
-  }
-
   /// "Today" / "Tomorrow" / "Mon D" for one of [_nextThreeDeliveryDates] —
   /// replacing the old fixed "every day 6pm-8pm" framing now that the
   /// customer actually picks among real, separately-dated slot lists.
@@ -1918,240 +1869,17 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   /// whenever none has been chosen yet, and only calls through to
   /// [_handlePlaceOrder] once one has.
   void _onProceedToPayTapped(BuildContext context, Address? activeAddress) {
-    if (_deliveryOption == null) {
-      _openDeliveryOptionSheet(context, onConfirmed: () {
-        _handlePlaceOrder(context, ref, activeAddress);
-      });
+    if (_deliveryOption == null || _selectedSlot == null) {
+      // The delivery slot card is on this page — point the customer at it
+      // instead of opening a second picker.
+      AppToast.show(
+        context,
+        'Please choose a delivery slot first (Instant or a scheduled slot).',
+        type: AppToastType.error,
+      );
       return;
     }
     _handlePlaceOrder(context, ref, activeAddress);
-  }
-
-  /// Delivery option picker — "Before checkout ask the user to select the
-  /// delivery option below". [onConfirmed], when provided, runs
-  /// immediately after a choice is confirmed (used by the Proceed to Pay
-  /// gate above so choosing an option and placing the order feels like
-  /// one action rather than two separate taps); the "Change" button in
-  /// the bottom bar omits it since there the customer is just updating an
-  /// existing choice, not trying to check out.
-  ///
-  /// Corrected 2026-10-07: both options now resolve to a REAL
-  /// `workforce_api.DeliverySlot` fetched live from the Vendor Seller
-  /// Hub — Instant Delivery auto-picks the earliest available slot for
-  /// today (fetched on Confirm); Scheduled Delivery lets the customer
-  /// pick one of [_nextThreeDeliveryDates] and then one of that date's
-  /// real slots. Neither path can confirm with no real slot resolved.
-  void _openDeliveryOptionSheet(BuildContext context, {VoidCallback? onConfirmed}) {
-    var pending = _deliveryOption ?? _DeliveryOption.quick;
-    var pendingDate = pending == _DeliveryOption.scheduled && _selectedSlotDate != null
-        ? DateTime.parse(_selectedSlotDate!)
-        : _nextThreeDeliveryDates().first;
-    DeliverySlotOption? pendingSlot =
-        pending == _DeliveryOption.scheduled ? _selectedSlot : null;
-    var isConfirming = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          final pendingDateStr = _formatDateForBooking(pendingDate);
-
-          Future<void> confirm() async {
-            if (pending == _DeliveryOption.quick) {
-              setSheetState(() => isConfirming = true);
-              final todayStr = _formatDateForBooking(_nextThreeDeliveryDates().first);
-              final day = await ref.read(marketplaceDeliverySlotsForDateProvider(todayStr).future);
-              final todayDate = _nextThreeDeliveryDates().first;
-              final available = day.slots
-                  .where((s) => s.isAvailable && !_isSlotPast(todayDate, s));
-              if (available.isEmpty) {
-                setSheetState(() => isConfirming = false);
-                AppToast.show(
-                  context,
-                  'No delivery slots are available today. Please choose Scheduled Delivery instead.',
-                  type: AppToastType.error,
-                );
-                return;
-              }
-              setState(() {
-                _deliveryOption = _DeliveryOption.quick;
-                _selectedSlot = available.first;
-                _selectedSlotDate = todayStr;
-              });
-              Navigator.pop(ctx);
-              onConfirmed?.call();
-              return;
-            }
-
-            if (pendingSlot == null) {
-              AppToast.show(
-                context,
-                'Please choose a delivery date and slot.',
-                type: AppToastType.error,
-              );
-              return;
-            }
-            setState(() {
-              _deliveryOption = _DeliveryOption.scheduled;
-              _selectedSlot = pendingSlot;
-              _selectedSlotDate = pendingDateStr;
-            });
-            Navigator.pop(ctx);
-            onConfirmed?.call();
-          }
-
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Choose Delivery Option',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _DeliveryOptionTile(
-                    icon: Icons.bolt_outlined,
-                    title: 'Instant Delivery',
-                    subtitle: 'Same-day — next available slot',
-                    isSelected: pending == _DeliveryOption.quick,
-                    onTap: () => setSheetState(() => pending = _DeliveryOption.quick),
-                  ),
-                  const SizedBox(height: 10),
-                  _DeliveryOptionTile(
-                    icon: Icons.event_available_outlined,
-                    title: 'Scheduled Delivery',
-                    subtitle: 'Pick a date and a real delivery slot',
-                    isSelected: pending == _DeliveryOption.scheduled,
-                    onTap: () =>
-                        setSheetState(() => pending = _DeliveryOption.scheduled),
-                  ),
-                  if (pending == _DeliveryOption.scheduled) ...[
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Delivery date',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: _nextThreeDeliveryDates().map((date) {
-                        final isPickedDate = date.year == pendingDate.year &&
-                            date.month == pendingDate.month &&
-                            date.day == pendingDate.day;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: _SlotChip(
-                            label: _describeSlotDate(date),
-                            isSelected: isPickedDate,
-                            onTap: () => setSheetState(() {
-                              pendingDate = date;
-                              pendingSlot = null;
-                            }),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 14),
-                    const Text(
-                      'Available slots',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Consumer(
-                      builder: (consumerContext, consumerRef, _) {
-                        final slotsAsync =
-                            consumerRef.watch(marketplaceDeliverySlotsForDateProvider(pendingDateStr));
-                        return slotsAsync.when(
-                          data: (day) {
-                            final visibleSlots = day.slots
-                                .where((slot) => !_isSlotPast(pendingDate, slot))
-                                .toList();
-                            if (visibleSlots.isEmpty) {
-                              return const Text(
-                                'No delivery slots available for this date.',
-                                style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-                              );
-                            }
-                            return Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: visibleSlots.map((slot) {
-                                return _SlotChip(
-                                  label: slot.label.isNotEmpty ? slot.label : _slotTimeRangeLabel(slot),
-                                  isSelected: pendingSlot?.id == slot.id,
-                                  isDisabled: !slot.isAvailable,
-                                  onTap: slot.isAvailable
-                                      ? () => setSheetState(() => pendingSlot = slot)
-                                      : null,
-                                );
-                              }).toList(),
-                            );
-                          },
-                          loading: () => const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                          error: (_, __) => const Text(
-                            'Could not load delivery slots. Please try again.',
-                            style: TextStyle(fontSize: 11.5, color: AppColors.error),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: FilledButton(
-                      onPressed: isConfirming ? null : confirm,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF059669),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: isConfirming
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text(
-                              'Confirm',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
   }
 
   Future<void> _handlePlaceOrder(

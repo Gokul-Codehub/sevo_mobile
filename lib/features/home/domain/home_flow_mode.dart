@@ -11,12 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Flipkart switches its top category tabs.
 enum HomeFlowMode { services, groceries }
 
-/// Defaults to [HomeFlowMode.services] per explicit decision — booking
-/// services is this app's primary business line, matching what the app
-/// already showed before this redesign. In-memory only for now (resets to
-/// services on a fresh app launch, doesn't persist across restarts); that's
-/// a deliberate, smaller first cut — swap this for a
-/// SharedPreferences-backed provider later if "remember my last choice" is
-/// wanted.
+/// Defaults to [HomeFlowMode.groceries]: the app opens on the Groceries &
+/// Vegetables home, and the customer can switch to Services from the top
+/// card. In-memory only (resets to groceries on a fresh app launch).
 final homeFlowModeProvider =
-    StateProvider<HomeFlowMode>((ref) => HomeFlowMode.services);
+    StateProvider<HomeFlowMode>((ref) => HomeFlowMode.groceries);

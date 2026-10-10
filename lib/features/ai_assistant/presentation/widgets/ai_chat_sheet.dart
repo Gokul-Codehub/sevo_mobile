@@ -2,10 +2,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../../catalog/domain/catalog_providers.dart';
+import '../../../home/domain/home_flow_mode.dart';
 import '../../domain/ai_assistant_models.dart';
 import '../../domain/ai_assistant_providers.dart';
 
@@ -67,67 +70,6 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
   /// chips (e.g. an order to pick, a return reason, "Talk to a human").
   void _tapOption(AiChatOption option) {
     ref.read(aiChatControllerProvider.notifier).sendOption(option);
-    _scrollToBottom();
-  }
-
-  /// Opens the same camera/gallery picker sheet `profile_screen.dart` uses,
-  /// then sends the chosen photo through `AiChatController.sendImage` — the
-  /// wizard step asks for this (`expects: AiChatExpects.image`) when the
-  /// customer needs to show a damaged or wrong item.
-  Future<void> _attachPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_rounded, color: AppColors.primary),
-              title: const Text('Take a Photo'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
-              title: const Text('Choose from Gallery'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (source == null || !mounted) return;
-
-    final picker = ImagePicker();
-    XFile? picked;
-    try {
-      picked = await picker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not open ${source == ImageSource.camera ? "camera" : "gallery"}: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-    if (picked == null) return;
-
-    final bytes = await picked.readAsBytes();
-    final caption = _inputController.text;
-    _inputController.clear();
-    ref.read(aiChatControllerProvider.notifier).sendImage(
-          imageBytes: bytes,
-          imageFileName: picked.name,
-          caption: caption,
-        );
     _scrollToBottom();
   }
 
@@ -330,18 +272,6 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
         padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
         child: Row(
           children: [
-            // Added 2026-10-08 — lets the customer attach a photo any time,
-            // highlighted when the wizard's current step is specifically
-            // asking for one (`expects == AiChatExpects.image`).
-            IconButton(
-              onPressed: isSending ? null : _attachPhoto,
-              icon: Icon(
-                Icons.camera_alt_rounded,
-                color: expects == AiChatExpects.image
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
-              ),
-            ),
             Expanded(
               child: TextField(
                 controller: _inputController,
@@ -391,17 +321,64 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
   }
 }
 
-/// Splits AI Mitra's markdown-flavored reply text into plain and
-/// `**bold**` spans so the chat bubble below can render real bold text
-/// instead of showing the literal `**` markers — the backend's AI
-/// gateway formats headings/emphasis with basic markdown (e.g.
-/// "**Tap & mixer**", "**Tap installation/replacement**: ₹291.00"), but
-/// the bubble used to just dump `message.content` into a single plain
-/// `Text`, so every customer saw the raw asterisks. Deliberately a small
-/// hand-rolled parser rather than pulling in a full markdown rendering
-/// package — this app has no other markdown surface, and `**bold**` is
-/// the only formatting the gateway actually emits.
-List<InlineSpan> _parseAiMarkdownSpans(String text, TextStyle baseStyle) {
+/// Splits AI Mitra's markdown-flavored reply text into plain, `**bold**` and
+/// `[label](/path)` link spans, so the chat bubble renders real bold text and
+/// TAPPABLE links (the web chat already does) instead of the literal markers.
+/// Deliberately a small hand-rolled parser rather than a full markdown
+/// package — bold and links are the only formatting the gateway emits.
+///
+/// [onLink] receives the raw target (a web path like
+/// `/booking/services?category=ac_appliance`, or an absolute URL); see
+/// [openAiAssistantLink] for how it is mapped onto app screens. When it is
+/// null links are shown as plain text.
+List<InlineSpan> _parseAiMarkdownSpans(
+  String text,
+  TextStyle baseStyle, {
+  void Function(String url)? onLink,
+}) {
+  // `[label](url)` — the model sometimes wraps the label in ** and sometimes
+  // leaves a space between ] and (.
+  final linkPattern = RegExp(r'\[([^\]]+)\]\s*\(([^)\s]+)\)');
+  final spans = <InlineSpan>[];
+  var lastEnd = 0;
+  for (final match in linkPattern.allMatches(text)) {
+    if (match.start > lastEnd) {
+      spans.addAll(_boldSpans(text.substring(lastEnd, match.start), baseStyle));
+    }
+    final label = match.group(1)!.replaceAll('**', '').trim();
+    final url = match.group(2)!;
+    if (onLink == null) {
+      spans.add(TextSpan(text: label, style: baseStyle.copyWith(fontWeight: FontWeight.w800)));
+    } else {
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onLink(url),
+            child: Text(
+              label,
+              style: baseStyle.copyWith(
+                color: AppColors.serviceBlue,
+                fontWeight: FontWeight.w800,
+                decoration: TextDecoration.underline,
+                decorationColor: AppColors.serviceBlue,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    lastEnd = match.end;
+  }
+  if (lastEnd < text.length) {
+    spans.addAll(_boldSpans(text.substring(lastEnd), baseStyle));
+  }
+  return spans.isEmpty ? [TextSpan(text: text, style: baseStyle)] : spans;
+}
+
+List<InlineSpan> _boldSpans(String text, TextStyle baseStyle) {
   final boldStyle = baseStyle.copyWith(fontWeight: FontWeight.w800);
   final pattern = RegExp(r'\*\*(.+?)\*\*');
   final spans = <InlineSpan>[];
@@ -420,6 +397,91 @@ List<InlineSpan> _parseAiMarkdownSpans(String text, TextStyle baseStyle) {
     spans.add(TextSpan(text: text.substring(lastEnd), style: baseStyle));
   }
   return spans.isEmpty ? [TextSpan(text: text, style: baseStyle)] : spans;
+}
+
+/// Opens a link from an AI reply. The backend writes WEB paths (the same
+/// replies power the website chat), so each is mapped onto the matching app
+/// screen; anything the app has no screen for opens on the website instead.
+///
+///   /booking/services?category=<slug>   -> that service category
+///   /booking                            -> all services
+///   /trucks/..  /two-wheelers/..  /packers..  -> Goods & Transport
+///   /vegetables  /groceries             -> Groceries home
+///   /bookings  /cart  /profile  /support -> the matching tab/screen
+void openAiAssistantLink(BuildContext context, WidgetRef ref, String rawUrl) {
+  var uri = Uri.tryParse(rawUrl.trim());
+  if (uri == null) return;
+
+  final router = GoRouter.of(context);
+  final navigator = Navigator.of(context);
+
+  if (uri.hasScheme) {
+    final isSevo = uri.host == 'sevo.co.in' || uri.host.endsWith('.sevo.co.in');
+    if (!isSevo) {
+      launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    uri = Uri(path: uri.path, query: uri.hasQuery ? uri.query : null);
+  }
+
+  var path = uri.path;
+  if (path.length > 1 && path.endsWith('/')) path = path.substring(0, path.length - 1);
+  final q = uri.queryParameters;
+
+  String? route;
+  var goHome = false;
+  if ((path == '/booking/services' || path == '/services') && (q['category'] ?? '').isNotEmpty) {
+    // The web groups some services under combined names the app's catalog
+    // doesn't have; use the nearest real category, else the full list.
+    const aliases = {
+      'electrician_plumbing_carpentry': 'electrician',
+      'home_pest_control': 'cleaning',
+    };
+    var slug = q['category']!;
+    final known = ref.read(categoriesProvider).valueOrNull;
+    if (known != null && !known.any((c) => c.slug == slug)) {
+      final alias = aliases[slug];
+      slug = (alias != null && known.any((c) => c.slug == alias)) ? alias : '';
+    }
+    route = slug.isEmpty ? '/categories' : '/categories/${Uri.encodeComponent(slug)}';
+  } else if (path == '/booking' || path == '/services' || path == '/categories') {
+    route = '/categories';
+  } else if (path.startsWith('/trucks')) {
+    route = '/goods-transport/booking?category=truck';
+  } else if (path.startsWith('/two-wheelers') || path.startsWith('/two-wheeler')) {
+    route = '/goods-transport/booking?category=two_wheeler';
+  } else if (path.startsWith('/packers')) {
+    route = '/goods-transport/booking?category=packers_movers';
+  } else if (path == '/vegetables' || path == '/groceries' || path == '/grocery') {
+    goHome = true;
+  } else if (path == '/bookings' || path == '/my-bookings') {
+    route = '/bookings';
+  } else if (path == '/cart') {
+    route = '/cart';
+  } else if (path == '/profile') {
+    route = '/profile';
+  } else if (path == '/support') {
+    route = '/support';
+  }
+
+  if (route == null && !goHome) {
+    // No app screen for this one (policy pages etc.) — show it on the site.
+    launchUrl(
+      Uri.https('sevo.co.in', path, q.isEmpty ? null : q),
+      mode: LaunchMode.externalApplication,
+    );
+    return;
+  }
+
+  if (goHome) {
+    ref.read(homeFlowModeProvider.notifier).state = HomeFlowMode.groceries;
+  }
+  navigator.pop(); // close the chat sheet
+  if (goHome) {
+    router.go('/');
+  } else {
+    router.push(route!);
+  }
 }
 
 class _ChatBubble extends ConsumerWidget {
@@ -478,6 +540,7 @@ class _ChatBubble extends ConsumerWidget {
                   children: _parseAiMarkdownSpans(
                     message.content,
                     TextStyle(fontSize: 14, color: textColor, height: 1.35),
+                    onLink: (url) => openAiAssistantLink(context, ref, url),
                   ),
                 ),
               ),

@@ -8,6 +8,7 @@ import '../../../../routing/app_router.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../home/data/homepage_repository.dart';
+import '../../../../shared/widgets/branded_loading_screen.dart';
 
 /// Screen 1: Splash Screen
 ///
@@ -35,9 +36,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final AnimationController _animController;
   late final Animation<double> _fadeAnim;
   Timer? _navTimer;
+  bool _waitingForData = false;
 
   static const _splashAsset = 'assets/images/sevo_splash.webp';
-  static const _displayDuration = Duration(milliseconds: 2200);
+  /// Shortest the brand splash stays up (so it never just flashes) ...
+  static const _minDisplay = Duration(milliseconds: 1400);
+
+  /// ... and the longest it waits for Home's first data before moving on
+  /// anyway (Home has its own skeleton + retry for anything still missing).
+  static const _maxWait = Duration(seconds: 6);
 
   @override
   void initState() {
@@ -88,7 +95,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // every cold start, so the account's saved address is back in
     // `selectedAddressProvider` by the time Home/Checkout need it.
     ref.read(addressListProvider);
-    _navTimer = Timer(_displayDuration, () async {
+    _navTimer = Timer(_minDisplay, () async {
+      if (!mounted) return;
+      // Hold the splash until the data Home needs has arrived, so the
+      // customer lands on a filled-in page instead of a wall of skeletons.
+      // Errors/timeouts are ignored here — Home handles those itself.
+      setState(() => _waitingForData = true);
+      try {
+        await Future.wait<Object?>([
+          ref.read(homepageConfigProvider.future),
+          ref.read(categoriesProvider.future),
+        ]).timeout(_maxWait - _minDisplay);
+      } catch (_) {}
       if (!mounted) return;
       // Fixed 2026-09-19 — this used to go straight to Home on every cold
       // start, which meant OnboardingScreen and LocationAccessScreen
@@ -132,6 +150,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               errorBuilder: (context, error, stackTrace) =>
                   const ColoredBox(color: Colors.white),
             ),
+            // Still waiting on Home's data after the brand image: cross-fade
+            // to the illustration loader instead of leaving the logo up.
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_waitingForData,
+                child: AnimatedOpacity(
+                  opacity: _waitingForData ? 1 : 0,
+                  duration: const Duration(milliseconds: 400),
+                  child: const ColoredBox(
+                    color: Colors.white,
+                    child: BrandedLoader(),
+                  ),
+                ),
+              ),
+            ),
             // Loader sits inside the bottom of the image itself, not in a
             // separate area below it.
             Positioned(
@@ -140,7 +173,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               bottom: 56,
               child: SafeArea(
                 top: false,
-                child: Center(child: _ThreeDotLoader()),
+                child: Center(
+                  child: _waitingForData ? const SizedBox.shrink() : const _ThreeDotLoader(),
+                ),
               ),
             ),
           ],

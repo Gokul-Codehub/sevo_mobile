@@ -18,9 +18,13 @@ import '../../../booking/domain/cart_notifier.dart'
     show isUserAuthenticatedProvider;
 import '../../../catalog/domain/catalog_models.dart';
 import '../../../catalog/domain/catalog_providers.dart';
+import '../../../../core/errors/api_error.dart';
+import '../../domain/gt_models.dart';
+import '../../domain/gt_providers.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
-import '../widgets/slot_picker_widget.dart';
+import '../widgets/gt_extras_section.dart';
+import '../widgets/gt_slot_picker.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 
@@ -51,6 +55,17 @@ import '../../../../shared/widgets/common_widgets.dart';
 ///    the vehicle category (Truck / 2-Wheeler) and tier entirely from the
 ///    real `ServiceTier` catalog (`GET /api/logistics/tiers/`), which is a
 ///    separate, dedicated backend app from the generic services catalog.
+/// Result of [_GoodsTransportBookingScreenState._prepareGtBooking].
+typedef _GtBookingPrep = ({
+  String? error,
+  List<Map<String, dynamic>>? cart,
+  Map<String, dynamic> extra,
+  Decimal? total,
+  String paymentMethod,
+  bool insurance,
+  int? laneId,
+});
+
 class GoodsTransportBookingScreen extends ConsumerStatefulWidget {
   const GoodsTransportBookingScreen({
     super.key,
@@ -74,7 +89,9 @@ class GoodsTransportBookingScreen extends ConsumerStatefulWidget {
 
 class _GoodsTransportBookingScreenState
     extends ConsumerState<GoodsTransportBookingScreen> {
-  final _cargoDescriptionController = TextEditingController();
+  // Built from the cargo details at submit (the backend requires a
+  // non-empty `description` for every logistics booking).
+  String _cargoDescription = '';
   final _dropAddressDetailController = TextEditingController();
   final _dropContactNameController = TextEditingController();
   final _dropContactPhoneController = TextEditingController();
@@ -83,28 +100,6 @@ class _GoodsTransportBookingScreenState
 
   bool _isLoading = false;
   bool _inventorySectionExpanded = true;
-  final Set<int> _collapsedCategoryIds = <int>{};
-
-  void _toggleCategory(int categoryId) {
-    setState(() {
-      if (_collapsedCategoryIds.contains(categoryId)) {
-        _collapsedCategoryIds.remove(categoryId);
-      } else {
-        _collapsedCategoryIds.add(categoryId);
-      }
-    });
-  }
-
-  void _toggleAllCategories(List<PmGoodsCategory> categories) {
-    setState(() {
-      final allCollapsed = categories.every((c) => _collapsedCategoryIds.contains(c.id));
-      if (allCollapsed) {
-        _collapsedCategoryIds.clear();
-      } else {
-        _collapsedCategoryIds.addAll(categories.map((c) => c.id));
-      }
-    });
-  }
 
   LogisticsVehicleCategory _resolveVehicleCategory(Subcategory sub) {
     final slug = sub.slug.toLowerCase();
@@ -308,6 +303,18 @@ class _GoodsTransportBookingScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ensureLocationEnabled(context);
+        // A new booking starts from a clean slate (these providers outlive
+        // the screen).
+        ref.read(cargoDeclarationProvider.notifier).state = const CargoDeclaration();
+        ref.read(loadingHelpProvider.notifier).state = true;
+        ref.read(selectedGtLaneProvider.notifier).state = null;
+        ref.read(acceptEstimatedDistanceProvider.notifier).state = false;
+        ref.read(insuranceOptInProvider.notifier).state = false;
+        ref.read(customerGstinProvider.notifier).state = '';
+        ref.read(ewayBillNumberProvider.notifier).state = '';
+        ref.read(ptlModeProvider.notifier).state = false;
+        ref.read(ptlWeightKgProvider.notifier).state = null;
+        ref.read(ptlLoadAssistProvider.notifier).state = false;
         if (widget.initialVehicleCategory != null) {
           ref.read(selectedVehicleCategoryProvider.notifier).state =
               widget.initialVehicleCategory!;
@@ -325,13 +332,247 @@ class _GoodsTransportBookingScreenState
 
   @override
   void dispose() {
-    _cargoDescriptionController.dispose();
     _dropAddressDetailController.dispose();
     _dropContactNameController.dispose();
     _dropContactPhoneController.dispose();
     _declaredValueController.dispose();
     _consigneeRelationshipController.dispose();
     super.dispose();
+  }
+
+  // ── Goods & Transport quote lock / extras (updated backend contract) ──────
+
+  /// 15-character GSTIN only. A half-typed value is neither quoted nor
+  /// booked, so the quote's customer binding and the booking always agree.
+  String? get _effectiveGstin {
+    final g = ref.read(customerGstinProvider).trim();
+    return g.length == 15 ? g : null;
+  }
+
+  /// The one place the spot-quote key is built, so the fare shown on screen
+  /// and the quote locked at submit are the SAME cached quote (same
+  /// quote_id / quote_hash).
+  LogisticsQuoteParam _spotParam({
+    required LogisticsVehicleCategory category,
+    required LogisticsTier tier,
+    required double pickupLat,
+    required double pickupLng,
+    required double dropLat,
+    required double dropLng,
+  }) {
+    final cargo = ref.read(cargoDeclarationProvider);
+    return LogisticsQuoteParam(
+      tierId: tier.id,
+      serviceCategory: category.serviceCategoryValue,
+      pickupLatitude: pickupLat,
+      pickupLongitude: pickupLng,
+      dropLatitude: dropLat,
+      dropLongitude: dropLng,
+      loadingHelp: ref.read(loadingHelpProvider),
+      cargo: cargo.isEmpty ? null : cargo,
+      customerGstin: _effectiveGstin,
+    );
+  }
+
+  String _apiMsg(Object e) => e is ApiError ? e.message : e.toString();
+
+  /// Locks the fare with the server and builds the booking's quote echo
+  /// (`cart_data[0].quote_id/quote_hash/expires_at` + the exact quoted
+  /// total), Light PTL fields, cargo, consent, GSTIN and e-way bill.
+  /// Mirrors `resolve_logistics_fare_v2`'s verification so the booking is
+  /// charged exactly what the customer was shown.
+  Future<_GtBookingPrep> _prepareGtBooking({
+    required LogisticsVehicleCategory category,
+    required LogisticsTier tier,
+    required double pickupLat,
+    required double pickupLng,
+    required double dropLat,
+    required double dropLng,
+    required ServiceItem bookingItem,
+  }) async {
+    _GtBookingPrep fail(String message) => (
+          error: message,
+          cart: null,
+          extra: const <String, dynamic>{},
+          total: null,
+          paymentMethod: 'COD',
+          insurance: false,
+          laneId: null,
+        );
+
+    final extra = <String, dynamic>{};
+    final gstin = _effectiveGstin;
+    if (gstin != null) extra['customer_gstin'] = gstin;
+
+    final eway = ref.read(ewayBillNumberProvider).trim();
+    if (eway.isNotEmpty) {
+      if (!RegExp(r'^\d{12}$').hasMatch(eway)) {
+        return fail('The e-way bill number must be exactly 12 digits.');
+      }
+      extra['eway_bill_number'] = eway;
+    }
+
+    final insurance = ref.read(insuranceOptInProvider) &&
+        (_declaredValue?.toDouble() ?? 0) > 0;
+    final paymentMethod = insurance ? 'ONLINE' : 'COD';
+
+    Map<String, dynamic> line(double price, Map<String, dynamic> more) => {
+          'id': bookingItem.id,
+          'name': bookingItem.title,
+          'price': price,
+          'quantity': 1,
+          'categoryName': bookingItem.categoryName ?? '',
+          ...more,
+        };
+
+    final isPtl = category == LogisticsVehicleCategory.truck &&
+        ref.read(ptlModeProvider);
+
+    if (isPtl) {
+      final weight = ref.read(ptlWeightKgProvider);
+      if (weight == null || weight <= 0) {
+        return fail('Enter the cargo weight in kg for Part Truck Load.');
+      }
+      final assist = ref.read(ptlLoadAssistProvider);
+      final laneId = ref.read(selectedGtLaneProvider)?.id;
+      final param = PtlQuoteParam(
+        tierId: tier.id,
+        declaredWeightKg: weight,
+        pickupLatitude: pickupLat,
+        pickupLongitude: pickupLng,
+        dropLatitude: dropLat,
+        dropLongitude: dropLng,
+        laneId: laneId,
+        loadAssist: assist,
+      );
+      PtlQuote q;
+      try {
+        q = await ref.read(ptlQuoteProvider(param).future);
+        if (q.isExpired) {
+          ref.invalidate(ptlQuoteProvider(param));
+          q = await ref.read(ptlQuoteProvider(param).future);
+        }
+      } catch (e) {
+        return fail(_apiMsg(e));
+      }
+      extra['logistics_booking_mode'] = 'ptl';
+      extra['ptl_declared_weight_kg'] = weight;
+      extra['ptl_load_assist'] = assist;
+      return (
+        error: null,
+        cart: [
+          line(q.total, {
+            if ((q.quoteId ?? '').isNotEmpty) 'quote_id': q.quoteId,
+            if ((q.quoteHash ?? '').isNotEmpty) 'quote_hash': q.quoteHash,
+            if ((q.expiresAt ?? '').isNotEmpty) 'expires_at': q.expiresAt,
+            'declared_weight_kg': weight,
+            'load_assist': assist,
+          }),
+        ],
+        extra: extra,
+        total: Decimal.parse(q.total.toStringAsFixed(2)),
+        paymentMethod: paymentMethod,
+        insurance: insurance,
+        laneId: laneId,
+      );
+    }
+
+    // Spot (distance) booking: re-use the quote on screen, refreshing it if
+    // it has expired.
+    final param = _spotParam(
+      category: category,
+      tier: tier,
+      pickupLat: pickupLat,
+      pickupLng: pickupLng,
+      dropLat: dropLat,
+      dropLng: dropLng,
+    );
+    LogisticsQuote q;
+    try {
+      q = await ref.read(logisticsQuoteProvider(param).future);
+      if (q.isExpired) {
+        ref.invalidate(logisticsQuoteProvider(param));
+        q = await ref.read(logisticsQuoteProvider(param).future);
+      }
+    } catch (e) {
+      return fail(_apiMsg(e));
+    }
+    if (!q.quotable) {
+      return fail('We could not calculate the fare for this trip. Please try again.');
+    }
+    if (GtQuoteNotices.needsEstimateConsent(q)) {
+      if (!ref.read(acceptEstimatedDistanceProvider)) {
+        return fail(
+          'This fare uses an estimated distance. Please accept the estimate to continue.',
+        );
+      }
+      extra['accept_estimated_distance'] = true;
+    }
+    final cargo = ref.read(cargoDeclarationProvider);
+    if (!cargo.isEmpty) extra.addAll(cargo.toPayload());
+
+    return (
+      error: null,
+      cart: [line(q.total, q.toCartEcho())],
+      extra: extra,
+      total: Decimal.parse(q.total.toStringAsFixed(2)),
+      paymentMethod: paymentMethod,
+      insurance: insurance,
+      laneId: null,
+    );
+  }
+
+  /// Human-readable cargo summary sent as the booking `description`
+  /// (the backend requires one for logistics and scans it for prohibited
+  /// goods). Returns null when the customer has not told us what they are
+  /// moving.
+  String? _buildCargoDescription(LogisticsVehicleCategory category) {
+    if (category == LogisticsVehicleCategory.packersMovers) {
+      final qty = ref.read(pmSelectedQuantitiesProvider);
+      final all = ref
+              .read(packersMoversInventoryProvider)
+              .valueOrNull
+              ?.expand((c) => c.items)
+              .toList() ??
+          const <PmGoodsItem>[];
+      final parts = <String>[];
+      for (final e in qty.entries) {
+        if (e.value <= 0) continue;
+        final it = all.where((i) => i.id == e.key).firstOrNull;
+        parts.add('${e.value} × ${it?.name ?? 'item'}');
+      }
+      return parts.isEmpty ? null : 'Packers & Movers: ${parts.join(', ')}';
+    }
+
+    if (category == LogisticsVehicleCategory.truck && ref.read(ptlModeProvider)) {
+      final w = ref.read(ptlWeightKgProvider);
+      return (w == null || w <= 0)
+          ? null
+          : 'Part Truck Load, approx. ${w.toStringAsFixed(0)} kg';
+    }
+
+    final cargo = ref.read(cargoDeclarationProvider);
+    if (cargo.isEmpty) return null;
+    final parts = <String>[];
+    final cat = ref
+        .read(goodsCategoriesProvider)
+        .valueOrNull
+        ?.where((c) => c.id == cargo.goodsCategoryId)
+        .firstOrNull;
+    if (cat != null) parts.add(cat.name);
+    if (cargo.items.isNotEmpty) {
+      final known = cargo.goodsCategoryId == null
+          ? null
+          : ref.read(goodsItemsProvider(cargo.goodsCategoryId)).valueOrNull;
+      parts.add(cargo.items.map((l) {
+        final it = known?.where((i) => i.id == l.itemId).firstOrNull;
+        return '${l.quantity} × ${it?.name ?? 'item'}';
+      }).join(', '));
+    }
+    if (cargo.declaredWeightKg != null) {
+      parts.add('approx. ${cargo.declaredWeightKg!.toStringAsFixed(0)} kg');
+    }
+    return parts.join(' · ');
   }
 
   Decimal? get _declaredValue {
@@ -401,12 +642,19 @@ class _GoodsTransportBookingScreenState
       return;
     }
 
-    if (_cargoDescriptionController.text.trim().isEmpty) {
+    final builtDescription = _buildCargoDescription(vehicleCategory);
+    if (builtDescription == null) {
       _warn(
-        "Please describe what you're shipping (items, approximate weight, fragile/special-handling notes).",
+        vehicleCategory == LogisticsVehicleCategory.packersMovers
+            ? 'Please add at least one item to move.'
+            : (ref.read(ptlModeProvider) &&
+                    vehicleCategory == LogisticsVehicleCategory.truck)
+                ? 'Enter the cargo weight in kg for Part Truck Load.'
+                : 'Please add your cargo details (type of goods, items or weight).',
       );
       return;
     }
+    _cargoDescription = builtDescription;
 
     if (_isHighValue && _consigneeRelationshipController.text.trim().isEmpty) {
       _warn(
@@ -452,6 +700,22 @@ class _GoodsTransportBookingScreenState
       categorySlug: widget.category?.slug ?? 'goods_transports',
     );
 
+    final prep = await _prepareGtBooking(
+      category: vehicleCategory,
+      tier: selectedTier,
+      pickupLat: selectedAddress.latitude!,
+      pickupLng: selectedAddress.longitude!,
+      dropLat: dropLocation.latitude,
+      dropLng: dropLocation.longitude,
+      bookingItem: bookingItem,
+    );
+    if (!mounted) return;
+    if (prep.error != null) {
+      setState(() => _isLoading = false);
+      AppToast.show(context, prep.error!, type: AppToastType.error);
+      return;
+    }
+
     final result = await ref
         .read(bookingActionControllerProvider.notifier)
         .createBooking(
@@ -463,10 +727,16 @@ class _GoodsTransportBookingScreenState
           // (resolve_logistics_fare_v2), it is never trusted as submitted.
           // The live quote shown above the submit button reflects that same
           // computation, so this is not a surprise to the customer.
-          totalAmount: Decimal.parse(
-            (selectedTier.startingPrice ?? 0).toString(),
-          ),
-          specialInstructions: _cargoDescriptionController.text.trim(),
+          // Now the server-locked quote total (quote_id/hash echoed in
+          // cart_data); the tier's starting price is only a last resort.
+          totalAmount: prep.total ??
+              Decimal.parse((selectedTier.startingPrice ?? 0).toString()),
+          cartDataOverride: prep.cart,
+          extraPayload: prep.extra,
+          paymentMethod: prep.paymentMethod,
+          insuranceOptedIn: prep.insurance ? true : null,
+          logisticsLane: prep.laneId,
+          specialInstructions: _cargoDescription,
           contactPhone: currentUser?.phone,
           dropAddress: dropAddressFull,
           dropLatitude: dropLocation.latitude,
@@ -635,7 +905,7 @@ class _GoodsTransportBookingScreenState
           // Matches quote.total exactly — the backend's verify step rejects a
           // submitted total that doesn't equal the verified quote's total.
           totalAmount: Decimal.parse(quote.total!.toStringAsFixed(2)),
-          specialInstructions: _cargoDescriptionController.text.trim(),
+          specialInstructions: _cargoDescription,
           contactPhone: currentUser?.phone,
           dropAddress: dropAddressFull,
           dropLatitude: dropLocation.latitude,
@@ -705,6 +975,12 @@ class _GoodsTransportBookingScreenState
     ) {
       if (prev != null && prev != next) {
         ref.read(selectedLogisticsTierProvider.notifier).state = null;
+        // Slots are per service category on the server.
+        ref.read(selectedTimeSlotProvider.notifier).state = null;
+        // Items valid for one vehicle type may not be for the other.
+        ref.read(cargoDeclarationProvider.notifier).state = ref
+            .read(cargoDeclarationProvider)
+            .copyWith(items: const []);
         // A Packers & Movers inventory selection is meaningless once the
         // customer switches away from it (and vice versa) — clear it so a
         // stale selection can't silently ride along into a Truck/2-Wheeler
@@ -716,19 +992,28 @@ class _GoodsTransportBookingScreenState
     final isPackersMovers =
         vehicleCategory == LogisticsVehicleCategory.packersMovers;
 
+    // Watched so a change re-builds and re-quotes (the values themselves are
+    // read inside _spotParam so build and submit share one quote key).
+    ref.watch(loadingHelpProvider);
+    ref.watch(cargoDeclarationProvider);
+    ref.watch(customerGstinProvider);
+    final ptlMode = ref.watch(ptlModeProvider) &&
+        vehicleCategory == LogisticsVehicleCategory.truck;
+
     LogisticsQuoteParam? quoteParam;
     if (!isPackersMovers &&
+        !ptlMode &&
         selectedTier != null &&
         selectedAddress?.latitude != null &&
         selectedAddress?.longitude != null &&
         dropLocation != null) {
-      quoteParam = LogisticsQuoteParam(
-        tierId: selectedTier.id,
-        serviceCategory: vehicleCategory.serviceCategoryValue,
-        pickupLatitude: selectedAddress!.latitude!,
-        pickupLongitude: selectedAddress.longitude!,
-        dropLatitude: dropLocation.latitude,
-        dropLongitude: dropLocation.longitude,
+      quoteParam = _spotParam(
+        category: vehicleCategory,
+        tier: selectedTier,
+        pickupLat: selectedAddress!.latitude!,
+        pickupLng: selectedAddress.longitude!,
+        dropLat: dropLocation.latitude,
+        dropLng: dropLocation.longitude,
       );
     }
 
@@ -1089,7 +1374,7 @@ class _GoodsTransportBookingScreenState
                                   const SizedBox(height: 3),
                                   Text(
                                     _inventorySectionExpanded
-                                        ? 'Click sub-headers to shrink/unshrink rooms & categories.'
+                                        ? 'Pick a room on the left, then add its items on the right.'
                                         : 'Tap to unshrink moving inventory list.',
                                     style: const TextStyle(
                                       fontSize: 11.5,
@@ -1124,39 +1409,7 @@ class _GoodsTransportBookingScreenState
                               ),
                             );
                           }
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  TextButton(
-                                    onPressed: () => _toggleAllCategories(categories),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: Text(
-                                      categories.every((c) => _collapsedCategoryIds.contains(c.id))
-                                          ? 'Expand All'
-                                          : 'Collapse All',
-                                      style: const TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.serviceBlue,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              for (final category in categories) ...[
-                                _buildCategoryAccordion(category, pmQuantities),
-                                const SizedBox(height: 8),
-                              ],
-                            ],
-                          );
+                          return PmInventoryPicker(categories: categories);
                         },
                         loading: () => Column(
                           children: List.generate(
@@ -1627,7 +1880,15 @@ class _GoodsTransportBookingScreenState
                             },
                           ))
                   : (quoteParam == null
-                        ? const Row(
+                        ? (ptlMode
+                            ? const Text(
+                                'The Part Truck Load fare is shown in the Part Truck Load section.',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: AppColors.textSecondary,
+                                ),
+                              )
+                            : const Row(
                             children: [
                               Icon(
                                 Icons.calculate_outlined,
@@ -1645,7 +1906,7 @@ class _GoodsTransportBookingScreenState
                                 ),
                               ),
                             ],
-                          )
+                          ))
                         : Consumer(
                             builder: (context, ref, _) {
                               final quoteAsync = ref.watch(
@@ -1673,12 +1934,37 @@ class _GoodsTransportBookingScreenState
                                     height: 1.4,
                                   ),
                                 ),
-                                data: (quote) => _FareQuoteView(quote: quote),
+                                data: (quote) => Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _FareQuoteView(quote: quote),
+                                    GtQuoteNotices(quote: quote),
+                                  ],
+                                ),
                               );
                             },
                           )),
             ),
             const SizedBox(height: 18),
+
+            // ── Part Truck Load (truck only) + cargo details / fitment ──
+            if (!isPackersMovers) ...[
+              if (vehicleCategory == LogisticsVehicleCategory.truck) ...[
+                GtPtlSection(
+                  city: selectedTier?.city ?? 'Hosur',
+                  tier: selectedTier,
+                  pickupLatitude: selectedAddress?.latitude,
+                  pickupLongitude: selectedAddress?.longitude,
+                  dropLatitude: dropLocation?.latitude,
+                  dropLongitude: dropLocation?.longitude,
+                ),
+                const SizedBox(height: 18),
+              ],
+              if (!ptlMode) ...[
+                GtCargoSection(city: selectedTier?.city ?? 'Hosur'),
+                const SizedBox(height: 18),
+              ],
+            ],
 
             // ── Declared value / consignee relationship ──
             _SectionCard(
@@ -1724,43 +2010,25 @@ class _GoodsTransportBookingScreenState
             ),
             const SizedBox(height: 18),
 
-            // ── Pickup date & time ──
-            _SectionCard(child: const SlotPickerWidget()),
+            // ── Loading help, insurance, GST / e-way bill ──
+            if (!isPackersMovers) ...[
+              GtOptionsSection(declaredValue: _declaredValue?.toDouble()),
+              const SizedBox(height: 18),
+            ],
+
+            // ── Pickup date & time (server-driven slots) ──
+            _SectionCard(
+              child: GtSlotPicker(
+                category: ptlMode ? 'ptl' : vehicleCategory.serviceCategoryValue,
+                city: selectedTier?.city,
+              ),
+            ),
             const SizedBox(height: 18),
 
-            // ── Cargo description (REQUIRED — the backend rejects a
-            // logistics booking without this: "Please describe what
-            // you're moving..."). ──
-            _SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "What are you shipping? *",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Items, approximate weight, and any fragile/special-handling notes.',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _cargoDescriptionController,
-                    maxLines: 3,
-                    decoration: _fieldDecoration(
-                      'e.g. 2 sofas + 1 fridge, ~150kg total, fridge needs careful handling',
-                    ),
-                  ),
-                ],
-              ),
+            GtPoliciesSection(
+              serviceCategory: vehicleCategory.serviceCategoryValue,
+              faqCategory: vehicleCategory.tierCategoryValue,
+              city: selectedTier?.city,
             ),
             const SizedBox(height: 120),
           ],
@@ -1814,6 +2082,7 @@ class _GoodsTransportBookingScreenState
   }
 
   String _friendlyQuoteError(Exception err) {
+    if (err is ApiError) return err.message;
     final msg = err.toString();
     // ApiError subtypes already carry a customer-facing message (see
     // error_interceptor.dart's structured {message, error_code} parsing for
@@ -1841,108 +2110,6 @@ class _GoodsTransportBookingScreenState
     ),
   );
 
-  Widget _buildCategoryAccordion(
-    PmGoodsCategory category,
-    Map<int, int> pmQuantities,
-  ) {
-    final isCollapsed = _collapsedCategoryIds.contains(category.id);
-    final selectedCountInCategory = category.items.fold<int>(
-      0,
-      (sum, item) => sum + (pmQuantities[item.id] ?? 0),
-    );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isCollapsed
-              ? AppColors.border
-              : AppColors.serviceBlue.withValues(alpha: 0.35),
-          width: isCollapsed ? 0.8 : 1.2,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () => _toggleCategory(category.id),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      category.name,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.serviceBlue,
-                      ),
-                    ),
-                  ),
-                  if (selectedCountInCategory > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      margin: const EdgeInsets.only(right: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.serviceBlue,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '$selectedCountInCategory item${selectedCountInCategory > 1 ? 's' : ''}',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  Icon(
-                    isCollapsed
-                        ? Icons.keyboard_arrow_down_rounded
-                        : Icons.keyboard_arrow_up_rounded,
-                    color: AppColors.serviceBlue,
-                    size: 22,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (!isCollapsed) ...[
-            const Divider(height: 1, color: AppColors.border),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Column(
-                children: [
-                  for (final item in category.items)
-                    _PmItemRow(
-                      item: item,
-                      quantity: pmQuantities[item.id] ?? 0,
-                      onChanged: (qty) {
-                        final next = Map<int, int>.from(pmQuantities);
-                        if (qty <= 0) {
-                          next.remove(item.id);
-                        } else {
-                          next[item.id] = qty;
-                        }
-                        ref
-                            .read(pmSelectedQuantitiesProvider.notifier)
-                            .state = next;
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 }
 
 /// Renders a [LogisticsQuote] the same way the real customer web app's
@@ -2152,87 +2319,6 @@ class _SectionCard extends StatelessWidget {
 /// requires_review/requires_survey, which this screen can't turn into an
 /// instant booking, so it's shown disabled with an explanation instead of a
 /// stepper that would look like it works.
-class _PmItemRow extends StatelessWidget {
-  const _PmItemRow({
-    required this.item,
-    required this.quantity,
-    required this.onChanged,
-  });
-
-  final PmGoodsItem item;
-  final int quantity;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!item.configured) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                item.name,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                  height: 1.3,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Contact us to quote',
-              style: TextStyle(
-                fontSize: 10.5,
-                color: AppColors.textHint,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              item.name,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.navy,
-              ),
-            ),
-          ),
-          _QtyButton(
-            icon: Icons.remove_rounded,
-            onTap: quantity > 0 ? () => onChanged(quantity - 1) : null,
-          ),
-          SizedBox(
-            width: 28,
-            child: Text(
-              '$quantity',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppColors.navy,
-              ),
-            ),
-          ),
-          _QtyButton(
-            icon: Icons.add_rounded,
-            onTap: () => onChanged(quantity + 1),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _QtyButton extends StatelessWidget {
   const _QtyButton({required this.icon, required this.onTap});
 

@@ -70,7 +70,7 @@ class _SlowLoadGateState extends State<SlowLoadGate> {
       child: _isSlow
           ? BrandedLoadingScreen(
               key: const ValueKey('slow'),
-              tagline: widget.tagline ?? 'Good things, on the way',
+              tagline: widget.tagline ?? 'Everything you need, delivered at your doorstep',
             )
           : KeyedSubtree(
               key: const ValueKey('skeleton'),

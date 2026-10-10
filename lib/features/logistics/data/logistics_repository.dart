@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/api_error.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
+import '../domain/gt_models.dart';
 import '../domain/logistics_models.dart';
 
 /// Repository for serviceability checks and booking slot logistics.
@@ -221,6 +222,14 @@ class LogisticsRepository {
     required double pickupLongitude,
     required double dropLatitude,
     required double dropLongitude,
+    // Added for the updated backend quote contract (all optional, so existing
+    // callers are unchanged):
+    int? laneId,
+    bool? loadingHelp,
+    CargoDeclaration? cargo,
+    String? customerGstin,
+    // Intermediate stops as {lat, lng}; the booking must send the same list.
+    List<Map<String, double>>? waypoints,
   }) async {
     try {
       final response = await api.post(
@@ -232,7 +241,13 @@ class LogisticsRepository {
           'pickup_longitude': pickupLongitude,
           'drop_latitude': dropLatitude,
           'drop_longitude': dropLongitude,
-          'stop_count': 2,
+          'stop_count': 2 + (waypoints?.length ?? 0),
+          if (laneId != null) 'lane_id': laneId,
+          if (loadingHelp != null) 'loading_help': loadingHelp,
+          if (cargo != null) ...cargo.toPayload(),
+          if (customerGstin != null && customerGstin.trim().isNotEmpty)
+            'customer_gstin': customerGstin.trim(),
+          if (waypoints != null && waypoints.isNotEmpty) 'waypoints': waypoints,
         },
       );
       return ResponseNormalizer.extract(
@@ -366,6 +381,209 @@ class LogisticsRepository {
             .map((m) => LogisticsArea.fromJson(Map<String, dynamic>.from(m)))
             .where((a) => a.isActive)
             .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  // ── Goods & Transport: catalogue, cargo fitment, slots, policies, PTL ────
+  //
+  // Wired to `backend/logistics/views.py` + `public_policy_views.py`.
+
+  /// GET /api/logistics/goods-categories/
+  Future<Result<List<GoodsCategory>>> getGoodsCategories() async {
+    try {
+      final response = await api.get('/logistics/goods-categories/');
+      return ResponseNormalizer.extract(response, (data) {
+        return _unwrapList(data)
+            .whereType<Map>()
+            .map((m) => GoodsCategory.fromJson(Map<String, dynamic>.from(m)))
+            .where((c) => !c.isProhibited)
+            .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/goods-items/?category=<id|slug>
+  Future<Result<List<GoodsItem>>> getGoodsItems({Object? category}) async {
+    try {
+      final response = await api.get(
+        '/logistics/goods-items/',
+        queryParameters: {if (category != null) 'category': category.toString()},
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        return _unwrapList(data)
+            .whereType<Map>()
+            .map((m) => GoodsItem.fromJson(Map<String, dynamic>.from(m)))
+            .where((i) => !i.isProhibited)
+            .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /api/logistics/evaluate-cargo/ — which vehicles can safely carry
+  /// the declared load, and the recommended one.
+  Future<Result<CargoFitment>> evaluateCargo({
+    required CargoDeclaration cargo,
+    required String city,
+  }) async {
+    try {
+      final response = await api.post(
+        '/logistics/evaluate-cargo/',
+        data: {...cargo.toPayload(), 'city': city},
+      );
+      return ResponseNormalizer.extract(
+        response,
+        (data) => CargoFitment.fromJson(
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
+        ),
+      );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/slots/?date=&category=&city= — server-authoritative
+  /// slot availability (cut-off, lead time, capacity). [category] is
+  /// "goods_transport_truck" | "goods_transport_two_wheeler" |
+  /// "packers_movers" | "ptl".
+  Future<Result<GtSlotsResult>> getGtSlots({
+    required String date,
+    required String category,
+    String? city,
+  }) async {
+    try {
+      final response = await api.get(
+        '/logistics/slots/',
+        queryParameters: {
+          'date': date,
+          'category': category,
+          if (city != null && city.trim().isNotEmpty) 'city': city.trim().toLowerCase(),
+        },
+      );
+      return ResponseNormalizer.extract(
+        response,
+        (data) => GtSlotsResult.fromJson(
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
+        ),
+      );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/faqs/?category=&city=
+  Future<Result<List<GtFaq>>> getGtFaqs({String? category, String? city}) async {
+    try {
+      final response = await api.get(
+        '/logistics/faqs/',
+        queryParameters: {
+          if (category != null && category.isNotEmpty) 'category': category,
+          if (city != null && city.isNotEmpty) 'city': city,
+        },
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        return _unwrapList(data)
+            .whereType<Map>()
+            .map((m) => GtFaq.fromJson(Map<String, dynamic>.from(m)))
+            .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/policies/?service_category= — cancellation, waiting,
+  /// extra-charge, claims and e-way-bill terms to show before booking.
+  Future<Result<GtPolicyTerms>> getGtPolicies(String serviceCategory) async {
+    try {
+      final response = await api.get(
+        '/logistics/policies/',
+        queryParameters: {'service_category': serviceCategory},
+      );
+      return ResponseNormalizer.extract(
+        response,
+        (data) => GtPolicyTerms.fromJson(
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
+        ),
+      );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/insurance-terms/?declared_value=
+  Future<Result<InsuranceTerms>> getInsuranceTerms(double declaredValue) async {
+    try {
+      final response = await api.get(
+        '/logistics/insurance-terms/',
+        queryParameters: {'declared_value': declaredValue.toStringAsFixed(2)},
+      );
+      return ResponseNormalizer.extract(
+        response,
+        (data) => InsuranceTerms.fromJson(
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
+        ),
+      );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/ptl/config/?city=
+  Future<Result<PtlConfig>> getPtlConfig({String? city}) async {
+    try {
+      final response = await api.get(
+        '/logistics/ptl/config/',
+        queryParameters: {if (city != null && city.isNotEmpty) 'city': city},
+      );
+      return ResponseNormalizer.extract(
+        response,
+        (data) => PtlConfig.fromJson(
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
+        ),
+      );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /api/logistics/ptl/quote/ — per-kg quote. Response is
+  /// `{success, quote: {...}}` (no `data` wrapper), so the `quote` key is
+  /// unwrapped here.
+  Future<Result<PtlQuote>> getPtlQuote({
+    required int tierId,
+    required double declaredWeightKg,
+    required double pickupLatitude,
+    required double pickupLongitude,
+    required double dropLatitude,
+    required double dropLongitude,
+    int? laneId,
+    bool loadAssist = false,
+  }) async {
+    try {
+      final response = await api.post(
+        '/logistics/ptl/quote/',
+        data: {
+          'tier_id': tierId,
+          if (laneId != null) 'lane_id': laneId,
+          'declared_weight_kg': declaredWeightKg,
+          'pickup_latitude': pickupLatitude,
+          'pickup_longitude': pickupLongitude,
+          'drop_latitude': dropLatitude,
+          'drop_longitude': dropLongitude,
+          'load_assist': loadAssist,
+        },
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+        final q = map['quote'];
+        return PtlQuote.fromJson(q is Map ? Map<String, dynamic>.from(q) : map);
       });
     } on Exception catch (e) {
       return Failure(_toError(e));

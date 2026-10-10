@@ -88,6 +88,14 @@ class BookingRepository {
     // built below for every other booking, so when provided this replaces
     // the auto-built cart_data entirely rather than being merged with it.
     List<Map<String, dynamic>>? cartDataOverride,
+    // Added for the updated Goods & Transport backend: extra top-level
+    // booking fields merged verbatim into the payload — cargo_items /
+    // goods_category_id / declared_weight_kg / declared_cft, loading_help,
+    // logistics_booking_mode ('ptl'), ptl_declared_weight_kg,
+    // ptl_load_assist, accept_estimated_distance, customer_gstin,
+    // eway_bill_number, stops/waypoints, cargo_access. Null for every
+    // non-logistics booking, so existing callers are unchanged.
+    Map<String, dynamic>? extraPayload,
   }) async {
     try {
       // Fixed 2026-10-01: these two checks used to be `assert()`s. An
@@ -222,6 +230,10 @@ class BookingRepository {
                     })
                 .toList(),
       };
+
+      if (extraPayload != null && extraPayload.isNotEmpty) {
+        payload.addAll(extraPayload);
+      }
 
       debugPrint(
           '[BookingRepository] POST /booking/ payload: categoryId=$categoryId, serviceId=${firstItem.service.id}, addressId=$addressId, date=$scheduledDate, slot=$scheduledTimeSlot, itemsCount=${items.length}, totalAmount=$totalAmount');

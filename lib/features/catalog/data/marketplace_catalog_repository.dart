@@ -513,7 +513,16 @@ class MarketplaceCatalogRepository {
       // returns the single product object with no {success, data} envelope.
       final dynamic body = response.data;
       if (body is! Map) return Failure(UnknownError('Unexpected product detail shape'));
-      final product = MarketplaceProduct.fromJson(Map<String, dynamic>.from(body));
+      // The proxy now answers `{success, data: {...product...}, message}`;
+      // older deployments returned the bare product. Accept both — without
+      // this the title parsed as empty, the call "failed", and the detail
+      // page never got its variants / image gallery / specs.
+      var map = Map<String, dynamic>.from(body);
+      final inner = map['data'];
+      if (inner is Map && (map['title'] == null || map['title'].toString().isEmpty)) {
+        map = Map<String, dynamic>.from(inner);
+      }
+      final product = MarketplaceProduct.fromJson(map);
       if (product.title.isEmpty) return Failure(UnknownError('Product not found'));
       return Success(product);
     } on Exception catch (e) {
