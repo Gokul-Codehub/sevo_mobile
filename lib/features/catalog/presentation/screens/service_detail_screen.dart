@@ -8,7 +8,6 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/slow_load_gate.dart';
-import '../../../../shared/utils/app_toast.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
@@ -44,6 +43,28 @@ class ServiceDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
+  // Fixed 2026-10-08 (QA CME05/CME04 — "the admin removes the image for the
+  // package, it is still shows to the customer" / "the application
+  // automatically refresh/update the latest data"): `serviceDetailProvider`
+  // (catalog_providers.dart) is a `ref.keepAlive()` FutureProvider.family —
+  // once fetched it never asks the backend again for the rest of the app
+  // session, so an admin removing/changing a package's image (or any other
+  // field) never reaches a customer already viewing it, or revisiting it
+  // later in the same session. Invalidating it every time this screen is
+  // entered re-fetches in the background; `AsyncValue.when`/`valueOrNull`
+  // keeps showing the last-known data while that happens
+  // (`skipLoadingOnRefresh` is Riverpod's default), so this reads as a
+  // silent sync rather than a reload flash — see the matching fix on
+  // category_detail_screen.dart's `initState` for the same pattern.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(serviceDetailProvider);
+    });
+  }
+
   Widget _buildHeroImageOrIcon(ServiceItem service) {
     return AppRemoteImage(
       imageUrl: service.imageUrl,
@@ -613,7 +634,40 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     ],
                   ),
                   const SizedBox(width: 20),
-                  if (quantityInCart == 0)
+                  // Fixed 2026-10-08 ("the admin inactivate the service, but
+                  // it is still able to book by the customer" / QA CMP01):
+                  // `ServiceItem.isAvailable` reflects the backend's
+                  // `status` (PackageStatus — ACTIVE/INACTIVE/DRAFT/
+                  // ARCHIVED). An admin-deactivated item must never reach
+                  // "Add to Cart", so this is checked first, before the
+                  // existing in-cart/not-in-cart branch.
+                  if (!service.isAvailable)
+                    Expanded(
+                      child: SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.textSecondary.withValues(alpha: 0.35),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: AppColors.textSecondary.withValues(alpha: 0.35),
+                            disabledForegroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Unavailable',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (quantityInCart == 0)
                     Expanded(
                       child: SizedBox(
                         height: 52,
@@ -691,92 +745,45 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(width: 12),
-                  // Fixed 2026-10-07 ("The cart section is only working for
-                  // groceries and vegetables not for the services block"):
-                  // scheduled/non-grocery services previously had NO way to
-                  // enter the shared `cartProvider` at all — "Book Now" (kept
-                  // below, unchanged, for the one-tap single-service flow)
-                  // pushed straight to /checkout and never called
-                  // `addService()`. This mirrors the grocery branch's
-                  // Add-to-Cart/View-Cart toggle so a service can also be
-                  // added to the real cart, picked up by the Cart tab and by
-                  // `checkout_screen.dart`'s existing shared-cart fallback.
-                  SizedBox(
-                    height: 52,
-                    width: 52,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        if (quantityInCart == 0) {
-                          ref.read(cartProvider.notifier).addService(service);
-                          AppToast.addedToCart(context, service.title);
-                        } else {
-                          context.push('/cart');
-                        }
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        side: const BorderSide(color: AppColors.serviceBlue),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.center,
-                        children: [
-                          const Icon(
-                            Icons.shopping_cart_outlined,
-                            color: AppColors.serviceBlue,
-                            size: 22,
-                          ),
-                          if (quantityInCart > 0)
-                            Positioned(
-                              top: -6,
-                              right: -6,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: AppColors.serviceBlue,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '$quantityInCart',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 24),
+                  // Reverted 2026-10-08 per explicit correction ("Grocery
+                  // and services cannot be the same cart at all - this is
+                  // two different workflow... the service is click package
+                  // enter details choose slots and book the service this
+                  // never to be enter into cart" / "remove the cart button
+                  // beside the book now button"): the Add-to-Cart/View-Cart
+                  // button added here on 2026-10-07 was wrong — services
+                  // never go through the shared cart at all, they always go
+                  // straight to Checkout via "Book Now" below. Removed; see
+                  // app_router.dart's matching revert of the `/cart` route.
+                  // Fixed 2026-10-08 (QA CMP01 — see the matching comment on
+                  // the grocery "Add to Cart" branch above): same gate for
+                  // the service-booking "Book Now" CTA.
                   Expanded(
                     child: SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: () {
-                          context.push(
-                            '/checkout?service=${service.slug}',
-                            extra: service,
-                          );
-                        },
+                        onPressed: service.isAvailable
+                            ? () {
+                                context.push(
+                                  '/checkout?service=${service.slug}',
+                                  extra: service,
+                                );
+                              }
+                            : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.serviceBlue,
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor: AppColors.textSecondary.withValues(alpha: 0.35),
+                          disabledForegroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                           elevation: 0,
                         ),
-                        child: const Text(
-                          'Book Now',
-                          style: TextStyle(
+                        child: Text(
+                          service.isAvailable ? 'Book Now' : 'Unavailable',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),

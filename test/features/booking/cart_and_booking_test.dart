@@ -33,13 +33,13 @@ void main() {
       final summary = container.read(cartSummaryProvider);
       expect(summary.itemCount, 1);
       expect(summary.subtotal, Decimal.parse('1000.00'));
-      expect(summary.serviceFee, Decimal.parse('49.00'));
-      expect(summary.taxes, Decimal.parse('50.00')); // 5% GST of 1000
-      expect(summary.total, Decimal.parse('1099.00'));
+      expect(summary.serviceFee, Decimal.parse('29'));
+      expect(summary.taxes, Decimal.parse('180.00')); // 18% GST of 1000
+      expect(summary.total, Decimal.parse('1209.00'));
 
-      // 20% of 1099.00 is 219.80 (which is > 149.00 min advance)
-      expect(summary.advancePayable, Decimal.parse('219.80'));
-      expect(summary.balancePayable, Decimal.parse('879.20'));
+      // 20% of 1209.00 is 241.80 (which is > 149.00 min advance)
+      expect(summary.advancePayable, Decimal.parse('241.80'));
+      expect(summary.balancePayable, Decimal.parse('967.20'));
     });
   });
 

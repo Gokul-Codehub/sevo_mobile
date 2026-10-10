@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/material.dart';
@@ -6,8 +7,6 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-import 'package:decimal/decimal.dart';
 
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -154,6 +153,11 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  /// Set when the customer taps the other mode tab so the mode-specific
+  /// content below fades in (instead of snapping); stays false on first
+  /// paint so the initial load isn't delayed by a fade.
+  bool _animateModeContent = false;
+
   @override
   void initState() {
     super.initState();
@@ -357,19 +361,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // when greetingText is empty — the gradient just fades a little
             // lower than before.
             height: 340,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    flowTheme.gradientTop,
-                    flowTheme.gradientTop.withValues(alpha: 0.16),
-                    AppColors.background,
-                  ],
-                  stops: const [0.0, 0.65, 1.0],
-                ),
-              ),
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: flowTheme.gradientTop),
+              duration: const Duration(milliseconds: 380),
+              curve: Curves.easeInOutCubic,
+              builder: (context, topColor, _) {
+                final top = topColor ?? flowTheme.gradientTop;
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        top,
+                        top.withValues(alpha: 0.16),
+                        AppColors.background,
+                      ],
+                      stops: const [0.0, 0.65, 1.0],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           SafeArea(
@@ -474,49 +486,73 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onTap: () => context.push('/addresses?select=true'),
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    // 2026-10-09: white pill/box removed per request
+                    // ("remove the container/box around the logo and
+                    // location") — logo + location now sit directly on the
+                    // header background. Tap target is unchanged.
                     child: Row(
                       children: [
-                        const SevoLogo(height: 18),
+                        const SevoLogo(height: 20),
                         const SizedBox(width: 10),
                         Container(
-                            width: 1,
-                            height: 18,
-                            color: AppColors.textMuted),
+                          width: 1,
+                          height: 22,
+                          color: const Color(0x26000000),
+                        ),
                         const SizedBox(width: 10),
-                        Icon(
-                          Icons.location_on_rounded,
-                          size: 18,
-                          color: flowTheme.accent,
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: flowTheme.accent.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.location_on_rounded,
+                            size: 16,
+                            color: flowTheme.accent,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            displayLocation,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.navy,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    'DELIVERING TO',
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.6,
+                                      color: flowTheme.accent,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    size: 14,
+                                    color: flowTheme.accent,
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                displayLocation.isNotEmpty
+                                    ? displayLocation
+                                    : 'Select delivery address',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.navy,
+                                  height: 1.15,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 18,
-                          color: AppColors.navy,
                         ),
                       ],
                     ),
@@ -547,6 +583,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onModeCardTap: (card) {
                     final mode = _flowModeForCard(card);
                     if (mode != null) {
+                      if (mode != flowMode) _animateModeContent = true;
                       ref.read(homeFlowModeProvider.notifier).state = mode;
                     }
                   },
@@ -567,7 +604,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // mode never shows service content (Recommended Services,
             // service categories) and vice versa, a clean Amazon/Flipkart
             // -style split rather than one page with both mixed together.
-            ...(flowMode == HomeFlowMode.groceries
+            _ModeContentFade(
+              key: ValueKey(flowMode),
+              animate: _animateModeContent,
+              slivers: flowMode == HomeFlowMode.groceries
                 ? _buildGroceriesContentSlivers(
                     context: context,
                     groceryCategory: groceryCategoryForShopByCategory,
@@ -582,7 +622,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     popularServicesAsync: popularServicesAsync,
                     myBookingsAsync: myBookingsAsync,
                     screenWidth: screenWidth,
-                  )),
+                  ),
+            ),
           ],
                     ),
                   ),
@@ -727,6 +768,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         children: [
                           for (var i = 0; i < recentItems.length; i++) ...[
                             _BookAgainTile(
+                              key: ValueKey('book-again-${recentItems[i].id}'),
                               service: recentItems[i],
                               width: cardWidth,
                             ),
@@ -973,6 +1015,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         children: [
                           for (var i = 0; i < recentItems.length; i++) ...[
                             _BookAgainTile(
+                              key: ValueKey('book-again-${recentItems[i].id}'),
                               service: recentItems[i],
                               width: cardWidth,
                             ),
@@ -1095,6 +1138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 childAspectRatio: 0.82,
               ),
               itemBuilder: (context, i) => _AdminBestsellerTile(
+                key: ValueKey('admin-bestseller-${adminBestsellers[i].id}'),
                 item: adminBestsellers[i],
                 onTap: () => _handleAdminLinkTap(
                   context,
@@ -1139,6 +1183,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 childAspectRatio: 0.82,
               ),
               itemBuilder: (context, i) => _GroceryHubBestsellerTile(
+                key: ValueKey('grocery-hub-bestseller-${groceryHubCategories[i].name}'),
                 group: groceryHubCategories[i],
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
@@ -1592,21 +1637,28 @@ class _MarketplaceDepartmentCarousel extends ConsumerWidget {
 /// background color, exactly matching Swiggy (Images 3 & 4) and
 /// the user's annotated layout (Images 1 & 2).
 class _UnifiedActiveBackgroundPainter extends CustomPainter {
-  const _UnifiedActiveBackgroundPainter({
-    required this.isGroceriesActive,
-    required this.gradient,
+  _UnifiedActiveBackgroundPainter({
+    required this.progress,
+    required this.servicesGradient,
+    required this.groceriesGradient,
     required this.tabHeight,
     required this.padX,
     required this.gap,
-    required this.shadowColor,
-  });
+    required this.servicesShadow,
+    required this.groceriesShadow,
+  }) : super(repaint: progress);
 
-  final bool isGroceriesActive;
-  final Gradient gradient;
+  /// 0 = Services tab active (right), 1 = Groceries tab active (left).
+  /// Values in between animate the raised tab sliding across; the painter
+  /// repaints itself every animation tick without rebuilding any widgets.
+  final Animation<double> progress;
+  final LinearGradient servicesGradient;
+  final LinearGradient groceriesGradient;
   final double tabHeight;
   final double padX;
   final double gap;
-  final Color shadowColor;
+  final Color servicesShadow;
+  final Color groceriesShadow;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1616,95 +1668,48 @@ class _UnifiedActiveBackgroundPainter extends CustomPainter {
     const rBody = 24.0;
     const rInner = 14.0;
     final tabBoundary = w / 2;
+    final t = progress.value.clamp(0.0, 1.0);
+    final gradient = LinearGradient.lerp(servicesGradient, groceriesGradient, t)!;
+    final shadowColor = Color.lerp(servicesShadow, groceriesShadow, t)!;
 
-    final path = Path();
-    if (isGroceriesActive) {
-      // Groceries active (left tab)
-      // Continuous outer left edge (x=0) all the way up to top-left corner
-      path.moveTo(0, rTab);
-      path.arcToPoint(
-        const Offset(rTab, 0),
-        radius: const Radius.circular(rTab),
-      );
-      path.lineTo(tabBoundary - rTab, 0);
-      path.arcToPoint(
-        Offset(tabBoundary, rTab),
-        radius: const Radius.circular(rTab),
-      );
-      // Down vertical divider to concave fillet
-      path.lineTo(tabBoundary, tabHeight - rInner);
-      path.quadraticBezierTo(
-        tabBoundary,
-        tabHeight,
-        tabBoundary + rInner,
-        tabHeight,
-      );
-      // Horizontal shoulder under inactive Services tab
-      path.lineTo(w - rBody, tabHeight);
-      path.arcToPoint(
-        Offset(w, tabHeight + rBody),
-        radius: const Radius.circular(rBody),
-      );
-      // Continuous vertical right edge
-      path.lineTo(w, h - rBody);
-      path.arcToPoint(
-        Offset(w - rBody, h),
-        radius: const Radius.circular(rBody),
-      );
-      // Bottom edge
-      path.lineTo(rBody, h);
-      path.arcToPoint(
-        Offset(0, h - rBody),
-        radius: const Radius.circular(rBody),
-      );
-      // Continuous vertical left edge (no outer notch/shelf)
-      path.lineTo(0, rTab);
-      path.close();
-    } else {
-      // Services active (right tab)
-      // Starts at shoulder under inactive Groceries tab
-      path.moveTo(0, tabHeight + rBody);
-      path.arcToPoint(
-        Offset(rBody, tabHeight),
-        radius: const Radius.circular(rBody),
-      );
-      // Horizontal shoulder under inactive Groceries tab
-      path.lineTo(tabBoundary - rInner, tabHeight);
-      // Concave fillet up into active Services tab
-      path.quadraticBezierTo(
-        tabBoundary,
-        tabHeight,
-        tabBoundary,
-        tabHeight - rInner,
-      );
-      // Up vertical divider to active Services top-left corner
-      path.lineTo(tabBoundary, rTab);
-      path.arcToPoint(
-        Offset(tabBoundary + rTab, 0),
-        radius: const Radius.circular(rTab),
-      );
-      // Top edge of active Services tab
-      path.lineTo(w - rTab, 0);
-      path.arcToPoint(
-        Offset(w, rTab),
-        radius: const Radius.circular(rTab),
-      );
-      // Continuous vertical right edge (no outer notch/shelf)
-      path.lineTo(w, h - rBody);
-      path.arcToPoint(
-        Offset(w - rBody, h),
-        radius: const Radius.circular(rBody),
-      );
-      // Bottom edge
-      path.lineTo(rBody, h);
-      path.arcToPoint(
-        Offset(0, h - rBody),
-        radius: const Radius.circular(rBody),
-      );
-      // Left edge
-      path.lineTo(0, tabHeight + rBody);
-      path.close();
+    // The raised tab spans [a, b]: Services = [w/2, w], Groceries = [0, w/2].
+    final a = tabBoundary * (1 - t);
+    final b = w - tabBoundary * t;
+
+    // Corner radii on each side shrink to zero as the tab reaches that
+    // outer edge, so the edge stays one straight line there.
+    final sl = (a / (rBody + rInner)).clamp(0.0, 1.0);
+    final sr = ((w - b) / (rBody + rInner)).clamp(0.0, 1.0);
+    final rBodyL = rBody * sl;
+    final rInnerL = rInner * sl;
+    final rBodyR = rBody * sr;
+    final rInnerR = rInner * sr;
+
+    final path = Path()..moveTo(0, tabHeight + rBodyL);
+    // Left shoulder + fillet up into the raised tab.
+    if (rBodyL > 0.01) {
+      path.arcToPoint(Offset(rBodyL, tabHeight), radius: Radius.circular(rBodyL));
     }
+    path.lineTo(a - rInnerL, tabHeight);
+    path.quadraticBezierTo(a, tabHeight, a, tabHeight - rInnerL);
+    path.lineTo(a, rTab);
+    path.arcToPoint(Offset(a + rTab, 0), radius: const Radius.circular(rTab));
+    // Tab top.
+    path.lineTo(b - rTab, 0);
+    path.arcToPoint(Offset(b, rTab), radius: const Radius.circular(rTab));
+    // Right fillet + shoulder down to the outer right edge.
+    path.lineTo(b, tabHeight - rInnerR);
+    path.quadraticBezierTo(b, tabHeight, b + rInnerR, tabHeight);
+    path.lineTo(w - rBodyR, tabHeight);
+    if (rBodyR > 0.01) {
+      path.arcToPoint(Offset(w, tabHeight + rBodyR), radius: Radius.circular(rBodyR));
+    }
+    // Right edge, bottom, left edge.
+    path.lineTo(w, h - rBody);
+    path.arcToPoint(Offset(w - rBody, h), radius: const Radius.circular(rBody));
+    path.lineTo(rBody, h);
+    path.arcToPoint(Offset(0, h - rBody), radius: const Radius.circular(rBody));
+    path.close();
 
     // Drop shadow
     canvas.drawShadow(path, shadowColor, 8.0, false);
@@ -1717,18 +1722,93 @@ class _UnifiedActiveBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _UnifiedActiveBackgroundPainter oldDelegate) {
-    return oldDelegate.isGroceriesActive != isGroceriesActive ||
-        oldDelegate.gradient != gradient ||
+    return oldDelegate.progress != progress ||
+        oldDelegate.servicesGradient != servicesGradient ||
+        oldDelegate.groceriesGradient != groceriesGradient ||
         oldDelegate.tabHeight != tabHeight ||
         oldDelegate.padX != padX ||
         oldDelegate.gap != gap ||
-        oldDelegate.shadowColor != shadowColor;
+        oldDelegate.servicesShadow != servicesShadow ||
+        oldDelegate.groceriesShadow != groceriesShadow;
+  }
+}
+
+/// Cycling search hint animator that cross-fades popular search queries like Swiggy & Blinkit.
+class _AnimatedSearchHints extends StatefulWidget {
+  const _AnimatedSearchHints({
+    super.key,
+    required this.hints,
+    required this.defaultPlaceholder,
+  });
+
+  final List<String> hints;
+  final String defaultPlaceholder;
+
+  @override
+  State<_AnimatedSearchHints> createState() => _AnimatedSearchHintsState();
+}
+
+class _AnimatedSearchHintsState extends State<_AnimatedSearchHints> {
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.hints.isNotEmpty) {
+      _timer = Timer.periodic(const Duration(milliseconds: 2800), (_) {
+        if (mounted) {
+          setState(() {
+            _index = (_index + 1) % widget.hints.length;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentText = widget.hints.isNotEmpty
+        ? widget.hints[_index]
+        : widget.defaultPlaceholder;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.0, 0.35),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: Text(
+        currentText,
+        key: ValueKey<String>(currentText),
+        style: const TextStyle(
+          fontSize: 13.5,
+          color: AppColors.textHint,
+          fontWeight: FontWeight.w400,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
   }
 }
 
 /// The unified active section: renders the top switcher tabs and the themed
 /// container below as one continuous visual unit.
-class _UnifiedActiveModeSection extends StatelessWidget {
+class _UnifiedActiveModeSection extends StatefulWidget {
   const _UnifiedActiveModeSection({
     required this.flowMode,
     required this.flowTheme,
@@ -1749,7 +1829,92 @@ class _UnifiedActiveModeSection extends StatelessWidget {
   final List<MobileTopCardItem> extraQuickAccessCards;
   final List<Category> liveCategories;
 
+  @override
+  State<_UnifiedActiveModeSection> createState() => _UnifiedActiveModeSectionState();
+}
+
+/// Drives the Groceries <-> Services switch animation: the raised tab slides
+/// across and the container colour cross-fades (see
+/// [_UnifiedActiveBackgroundPainter.progress]) instead of snapping.
+class _UnifiedActiveModeSectionState extends State<_UnifiedActiveModeSection>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 380),
+    value: widget.flowMode == HomeFlowMode.groceries ? 1.0 : 0.0,
+  );
+  late final Animation<double> _progress =
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOutCubic);
+
+  @override
+  void didUpdateWidget(covariant _UnifiedActiveModeSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.flowMode != widget.flowMode) {
+      _controller.animateTo(widget.flowMode == HomeFlowMode.groceries ? 1.0 : 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _UnifiedActiveModeBody(
+      progress: _progress,
+      flowMode: widget.flowMode,
+      flowTheme: widget.flowTheme,
+      switcherCards: widget.switcherCards,
+      onModeCardTap: widget.onModeCardTap,
+      greetingText: widget.greetingText,
+      topCategoryTiles: widget.topCategoryTiles,
+      extraQuickAccessCards: widget.extraQuickAccessCards,
+      liveCategories: widget.liveCategories,
+    );
+  }
+}
+
+class _UnifiedActiveModeBody extends StatelessWidget {
+  const _UnifiedActiveModeBody({
+    required this.progress,
+    required this.flowMode,
+    required this.flowTheme,
+    required this.switcherCards,
+    required this.onModeCardTap,
+    required this.greetingText,
+    required this.topCategoryTiles,
+    required this.extraQuickAccessCards,
+    required this.liveCategories,
+  });
+
+  final Animation<double> progress;
+  final HomeFlowMode flowMode;
+  final HomeFlowTheme flowTheme;
+  final List<MobileTopCardItem> switcherCards;
+  final ValueChanged<MobileTopCardItem> onModeCardTap;
+  final String greetingText;
+  final List<({String label, String? image, String? slug, VoidCallback onTap})> topCategoryTiles;
+  final List<MobileTopCardItem> extraQuickAccessCards;
+  final List<Category> liveCategories;
+
   Widget _buildSearchBar(BuildContext context) {
+    final isGroceries = flowMode == HomeFlowMode.groceries;
+    final hints = isGroceries
+        ? const [
+            "Search 'fresh vegetables & fruits'",
+            "Search 'milk, eggs & bread'",
+            "Search 'cooking oil & atta'",
+            "Search 'snacks & beverages'",
+          ]
+        : const [
+            "Search 'AC service & repair'",
+            "Search 'home deep cleaning'",
+            "Search 'electrician & plumbing'",
+            "Search 'appliance repair'",
+          ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
       child: GestureDetector(
@@ -1763,7 +1928,7 @@ class _UnifiedActiveModeSection extends StatelessWidget {
             border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x080F172A),
+                color: Color(0x0C0F172A),
                 blurRadius: 10,
                 offset: Offset(0, 3),
               ),
@@ -1771,18 +1936,14 @@ class _UnifiedActiveModeSection extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.search_rounded,
-                  color: Color(0xFF64748B), size: 22),
+              Icon(Icons.search_rounded,
+                  color: flowTheme.accent, size: 22),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  flowTheme.searchPlaceholder,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    color: AppColors.textHint,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                child: _AnimatedSearchHints(
+                  key: ValueKey(flowMode),
+                  hints: hints,
+                  defaultPlaceholder: flowTheme.searchPlaceholder,
                 ),
               ),
             ],
@@ -1799,21 +1960,32 @@ class _UnifiedActiveModeSection extends StatelessWidget {
     const padX = 10.0;
     const gap = 10.0;
 
-    final activeGradient = isGroceries
-        ? const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF8DC63F), Color(0xFF15803D)],
-          )
-        : const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1E3A5F), Color(0xFF0D253A)],
-          );
+    // Groceries switched 2026-10-09 from green to a warm Blinkit-style yellow
+    // ("make this kind of layout and color for the groceries section") —
+    // a deeper golden yellow at the top easing to a pale butter yellow, with
+    // near-black text on top of it (see [textOnContainer] below).
+    const groceriesGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xFFF9C93A), Color(0xFFFFE98A)],
+    );
+    // Light-blue Services container (2026-10-09, "shall we use light
+    // blue for services as like uploaded reference image?") — replaces
+    // the old dark navy gradient. Text drawn on it is dark now; see
+    // [textOnContainer] below and _TopCardBanner's matching change.
+    const servicesGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xFF8EC3F2), Color(0xFFE4F1FE)],
+    );
 
-    final shadowColor = isGroceries
-        ? const Color(0xFF15803D).withValues(alpha: 0.28)
-        : const Color(0xFF0D253A).withValues(alpha: 0.35);
+    final groceriesShadow = const Color(0xFFD99A00).withValues(alpha: 0.28);
+    final servicesShadow = const Color(0xFF1D6FD6).withValues(alpha: 0.18);
+
+    // Near-black on Groceries' yellow, dark navy on Services' light blue —
+    // white text only ever worked on the old dark containers.
+    final textOnContainer =
+        isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy;
 
     // Resolve Groceries on left and Services on right
     final groceriesCard = switcherCards.firstWhere(
@@ -1860,18 +2032,21 @@ class _UnifiedActiveModeSection extends StatelessWidget {
               ? const ['Shop', 'Cook', 'Eat Fresh', 'Save']
               : const ['Book', 'Fix', 'Clean', 'Relax']),
       accentColor: flowTheme.accent,
+      textColor: textOnContainer,
     );
 
     return LayoutBuilder(
       builder: (context, constraints) {
         return CustomPaint(
           painter: _UnifiedActiveBackgroundPainter(
-            isGroceriesActive: isGroceries,
-            gradient: activeGradient,
+            progress: progress,
+            servicesGradient: servicesGradient,
+            groceriesGradient: groceriesGradient,
             tabHeight: tabHeight,
             padX: padX,
             gap: gap,
-            shadowColor: shadowColor,
+            servicesShadow: servicesShadow,
+            groceriesShadow: groceriesShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1910,78 +2085,175 @@ class _UnifiedActiveModeSection extends StatelessWidget {
               ),
 
               const SizedBox(height: 10),
+              const SizedBox(height: 10),
+              // Everything under the tabs cross-fades and the container
+              // height eases between the two modes' layouts.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeInOutCubic,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.topCenter,
+                    fit: StackFit.passthrough,
+                    children: [...previous, if (current != null) current],
+                  ),
+                  child: Column(
+                    key: ValueKey(flowMode),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
 
-              // ── Search Bar ──
-              _buildSearchBar(context),
+                    // ── Search Bar ──
+                    _buildSearchBar(context),
 
-              // Groceries: greeting sits right under the search bar.
-              if (isGroceries) greetingWidget,
+                    // Groceries: greeting sits right under the search bar.
+                    if (isGroceries) greetingWidget,
 
-              // ── Category Tiles Strip (in Services mode) ──
-              if (topCategoryTiles.isNotEmpty)
-                SizedBox(
-                  height: 108,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: topCategoryTiles.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(width: 14),
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return _CategoryQuickTile(
-                          label: 'View All',
-                          icon: Icons.grid_view_rounded,
-                          color: isGroceries ? AppColors.groceryGreen : flowTheme.accent,
-                          labelColor: Colors.white,
-                          indicatorColor: Colors.white,
-                          isViewAll: true,
-                          isActive: true,
-                          onTap: () => context.push(
-                              flowMode == HomeFlowMode.services
-                                  ? '/all-services'
-                                  : '/groceries/seller-hub'),
-                        );
-                      }
-                      final tile = topCategoryTiles[index - 1];
-                      return _CategoryQuickTile(
-                        label: tile.label,
-                        imageUrl: tile.image,
-                        icon: ImageUrlHelper.mapCategoryIcon(
-                            tile.label, tile.slug),
-                        color: flowTheme.accent,
-                        labelColor: Colors.white,
-                        isViewAll: false,
-                        onTap: tile.onTap,
-                      );
-                    },
+                    // ── Category Tiles Strip (in Services mode) ──
+                    if (topCategoryTiles.isNotEmpty)
+                      SizedBox(
+                        height: 108,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: topCategoryTiles.length + 1,
+                          separatorBuilder: (_, __) => const SizedBox(width: 14),
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return _CategoryQuickTile(
+                                label: 'View All',
+                                icon: Icons.grid_view_rounded,
+                                color: isGroceries ? AppColors.groceryGreen : flowTheme.accent,
+                                labelColor: textOnContainer,
+                                indicatorColor: isGroceries ? const Color(0xFF1A1A1A) : flowTheme.accent,
+                                isViewAll: true,
+                                isActive: true,
+                                // Fixed 2026-10-08 ("when i click 'ALL' in the
+                                // category listing it shows [Page Not Found]"):
+                                // this pushed the literal path '/all-services',
+                                // but AllServicesScreen is actually registered in
+                                // app_router.dart at AppRoutes.categories
+                                // ('/categories') — 'all-services' only exists as
+                                // that GoRoute's `name`, never as a real path, so
+                                // go_router had nothing to match and fell through
+                                // to its errorBuilder. Pushing the real path.
+                                onTap: () => context.push(
+                                    flowMode == HomeFlowMode.services
+                                        ? '/categories'
+                                        : '/groceries/seller-hub'),
+                              );
+                            }
+                            final tile = topCategoryTiles[index - 1];
+                            return _CategoryQuickTile(
+                              label: tile.label,
+                              imageUrl: tile.image,
+                              icon: ImageUrlHelper.mapCategoryIcon(
+                                  tile.label, tile.slug),
+                              color: flowTheme.accent,
+                              labelColor: textOnContainer,
+                              isViewAll: false,
+                              onTap: tile.onTap,
+                            );
+                          },
+                        ),
+                      ),
+
+                    // ── Quick-Access Pills (any extra non-Groceries/Services cards) ──
+                    if (extraQuickAccessCards.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                        child: _HomeScreenState._buildQuickAccessPillRow(
+                          cards: extraQuickAccessCards,
+                          onTap: (card) => _handleQuickAccessTap(context, card, liveCategories),
+                        ),
+                      ),
+
+                    // Services: greeting sits below the category tiles / quick
+                    // access pills, directly above the banner.
+                    if (!isGroceries) greetingWidget,
+
+                    // ── Admin hero video (per mode, Mobile App ▸ Home Banners) ──
+                    _HomeHeroVideo(mode: flowMode, aspectRatio: flowTheme.bannerAspectRatio),
+
+                    // ── Promo Banner Carousel ──
+                    _PromoBannerCarousel(
+                      mode: flowMode,
+                      aspectRatio: flowTheme.bannerAspectRatio,
+                    ),
+
+                    const SizedBox(height: 16),
+                    ],
                   ),
                 ),
-
-              // ── Quick-Access Pills (any extra non-Groceries/Services cards) ──
-              if (extraQuickAccessCards.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                  child: _HomeScreenState._buildQuickAccessPillRow(
-                    cards: extraQuickAccessCards,
-                    onTap: (card) => _handleQuickAccessTap(context, card, liveCategories),
-                  ),
-                ),
-
-              // Services: greeting sits below the category tiles / quick
-              // access pills, directly above the banner.
-              if (!isGroceries) greetingWidget,
-
-              // ── Promo Banner Carousel ──
-              _PromoBannerCarousel(
-                mode: flowMode,
-                aspectRatio: flowTheme.bannerAspectRatio,
               ),
-
-              const SizedBox(height: 16),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Clips a widget so its bottom edge is a continuous sine wave (see
+/// [_PromoBannerSlide._waveCard]). The wave occupies the bottom ~2x[amplitude]
+/// pixels; everything above is a normal rectangle.
+class _WaveBottomClipper extends CustomClipper<Path> {
+  const _WaveBottomClipper({this.amplitude = 7, this.periods = 5});
+
+  final double amplitude;
+  final double periods;
+
+  @override
+  Path getClip(Size size) {
+    final w = size.width;
+    final h = size.height;
+    final path = Path()..moveTo(0, 0)..lineTo(w, 0);
+    // Walk the bottom edge right -> left sampling a sine wave that stays
+    // within [h - 2*amplitude, h].
+    double yAt(double x) =>
+        h - amplitude + amplitude * math.sin(2 * math.pi * periods * x / w);
+    path.lineTo(w, yAt(w));
+    for (double x = w; x >= 0; x -= 2) {
+      path.lineTo(x, yAt(x));
+    }
+    path.lineTo(0, yAt(0));
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _WaveBottomClipper old) =>
+      old.amplitude != amplitude || old.periods != periods;
+}
+
+/// Dedicated admin-uploaded hero video (or image) for the active Home mode,
+/// shown flush inside the header gradient with feathered top/bottom edges
+/// so it blends in instead of reading as a boxed card. Renders nothing
+/// when the admin hasn't uploaded one for this mode.
+class _HomeHeroVideo extends ConsumerWidget {
+  const _HomeHeroVideo({required this.mode, required this.aspectRatio});
+
+  final HomeFlowMode mode;
+  final double aspectRatio;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cfg = ref.watch(homepageConfigProvider).valueOrNull;
+    final item = mode == HomeFlowMode.groceries ? cfg?.heroVideoGroceries : cfg?.heroVideoServices;
+    if (item == null) return const SizedBox.shrink();
+    return AspectRatio(
+      aspectRatio: aspectRatio,
+      child: _PromoBannerSlide._feather(
+        BannerMedia(
+          url: item.imageUrl,
+          mediaType: item.mediaType,
+          title: 'Home video',
+          fit: BoxFit.cover,
+        ),
+      ),
     );
   }
 }
@@ -2005,7 +2277,16 @@ class _UnifiedActiveModeSection extends StatelessWidget {
 /// Self-contained (owns its own Timer, cancelled in dispose) so it doesn't
 /// need to touch _HomeScreenState's own lifecycle.
 class _RotatingHeroGreeting extends StatefulWidget {
-  const _RotatingHeroGreeting({super.key, required this.words, required this.accentColor});
+  const _RotatingHeroGreeting({
+    super.key,
+    required this.words,
+    required this.accentColor,
+    this.textColor = Colors.white,
+  });
+
+  /// Color of both the "IT'S TIME TO" label and the cycling word — white on
+  /// Groceries' green container, dark navy on Services' light-blue one.
+  final Color textColor;
 
   /// The cycling words themselves — e.g. Groceries: shop → cook → eat
   /// fresh → save; Services: book → fix → clean → relax. Chosen per mode by
@@ -2063,7 +2344,7 @@ class _RotatingHeroGreetingState extends State<_RotatingHeroGreeting> {
             style: GoogleFonts.poppins(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: Colors.white.withValues(alpha: 0.85),
+              color: widget.textColor.withValues(alpha: 0.85),
               letterSpacing: 2.2,
             ),
           ),
@@ -2107,15 +2388,20 @@ class _RotatingHeroGreetingState extends State<_RotatingHeroGreeting> {
               style: GoogleFonts.baloo2(
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: widget.textColor,
                 height: 1.05,
-                shadows: [
-                  Shadow(
-                    color: widget.accentColor.withValues(alpha: 0.6),
-                    offset: const Offset(0, 2),
-                    blurRadius: 10,
-                  ),
-                ],
+                // The soft accent glow only helps white text on a dark
+                // backdrop; on the light-blue Services container it just
+                // smears dark text, so it's skipped there.
+                shadows: widget.textColor == Colors.white
+                    ? [
+                        Shadow(
+                          color: widget.accentColor.withValues(alpha: 0.6),
+                          offset: const Offset(0, 2),
+                          blurRadius: 10,
+                        ),
+                      ]
+                    : null,
               ),
             ),
           ),
@@ -2139,6 +2425,26 @@ class _RotatingHeroGreetingState extends State<_RotatingHeroGreeting> {
 ///
 /// Driven dynamically from backend/admin CMS (card.label and card.imageUrl),
 /// falling back to bundled webp icons when not yet configured in admin.
+/// Fades a mode's sliver list in when the Groceries/Services tab changes
+/// (keyed by mode, so a switch builds a fresh instance that animates 0 -> 1).
+class _ModeContentFade extends StatelessWidget {
+  const _ModeContentFade({super.key, required this.animate, required this.slivers});
+
+  final bool animate;
+  final List<Widget> slivers;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: animate ? 0.0 : 1.0, end: 1.0),
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOut,
+      builder: (context, value, child) => SliverOpacity(opacity: value, sliver: child),
+      child: SliverMainAxisGroup(slivers: slivers),
+    );
+  }
+}
+
 class _TopCardBanner extends StatelessWidget {
   const _TopCardBanner({
     required this.card,
@@ -2183,7 +2489,7 @@ class _TopCardBanner extends StatelessWidget {
         // Active tab seamlessly merges into the unified container background painter
         backgroundGradient = null;
         solidBackgroundColor = Colors.transparent;
-        textColor = Colors.white;
+        textColor = isGroceriesCard ? const Color(0xFF1A1A1A) : AppColors.navy;
         shadows = null;
         border = null;
       } else if (isGroceriesCard) {
@@ -2271,8 +2577,9 @@ class _TopCardBanner extends StatelessWidget {
                   : Icon(fallbackIcon, size: 28, color: textColor),
             ),
             const SizedBox(height: 4),
-            Text(
-              card.label,
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOut,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
@@ -2282,6 +2589,7 @@ class _TopCardBanner extends StatelessWidget {
                 height: 1.12,
                 color: textColor,
               ),
+              child: Text(card.label),
             ),
           ],
         ),
@@ -2436,21 +2744,21 @@ class _CategoryQuickTile extends StatelessWidget {
               height: iconBoxSize,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isViewAll ? color.withValues(alpha: 0.35) : const Color(0xFFE2E8F0),
                   width: 1.0,
                 ),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x060F172A),
-                    blurRadius: 6,
-                    offset: Offset(0, 2),
+                    color: AppColors.cardShadow,
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
                   ),
                 ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(15),
                 child: isViewAll
                     ? Center(
                         child: Icon(
@@ -2526,7 +2834,7 @@ class _CategoryQuickTile extends StatelessWidget {
 /// pill is simply omitted once every product actually fits in the 2x2
 /// preview.
 class _GroceryHubBestsellerTile extends StatelessWidget {
-  const _GroceryHubBestsellerTile({required this.group, required this.onTap});
+  const _GroceryHubBestsellerTile({super.key, required this.group, required this.onTap});
 
   final GroceryHubCategoryGroup group;
   final VoidCallback onTap;
@@ -2641,7 +2949,7 @@ class _GroceryHubBestsellerTile extends StatelessWidget {
 /// first cut of this tile rendered one flat image, not the reference's 2x2
 /// grid — see [MobileBestsellerItem.thumbnails] doc comment.
 class _AdminBestsellerTile extends StatelessWidget {
-  const _AdminBestsellerTile({required this.item, required this.onTap});
+  const _AdminBestsellerTile({super.key, required this.item, required this.onTap});
 
   final MobileBestsellerItem item;
   final VoidCallback onTap;
@@ -2748,7 +3056,7 @@ class _AdminBestsellerTile extends StatelessWidget {
 /// rating) since this is a quick-glance shortcut back to something already
 /// booked before, not another full product listing.
 class _BookAgainTile extends ConsumerWidget {
-  const _BookAgainTile({required this.service, required this.width});
+  const _BookAgainTile({super.key, required this.service, required this.width});
 
   final ServiceItem service;
   final double width;
@@ -3537,7 +3845,12 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
                     mediaType: m.mediaType,
                   ))
               .toList()
-        : homepageConfig?.offers ?? const [];
+        // Groceries never falls back to the web "Promotional Offers" list
+        // (2026-10-09: removed Groceries banners must not be replaced by
+        // other content) — only banners the admin explicitly set for it.
+        : (widget.mode == HomeFlowMode.groceries
+            ? const <HomeOffer>[]
+            : homepageConfig?.offers ?? const []);
 
     // Added 2026-09-19: mode-filter both the static templates and the real
     // admin offers, so Groceries mode's carousel never shows a service
@@ -3549,6 +3862,13 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
             (widget.mode == HomeFlowMode.groceries))
         .toList();
     final modeOffers = liveOffers.where((o) {
+      // Groceries (2026-10-09, "i removed all the banners for groceries but
+      // it shows the services banner inside it"): show ONLY banners whose
+      // admin "Show On" is Groceries (or explicitly Both) — never banners
+      // with no setting, and never ones guessed from keywords in the link.
+      if (widget.mode == HomeFlowMode.groceries) {
+        return o.flow == 'groceries' || o.flow == 'both' || o.flow == 'all';
+      }
       // The admin's explicit "Show On" choice always wins when set — no
       // guessing needed. Only falls through to the keyword guess below for
       // items with no flow set at all (the web `offers` section, or a
@@ -3585,6 +3905,13 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
         aspectRatio: widget.aspectRatio,
         child: const ShimmerCard(borderRadius: 0),
       );
+    }
+
+    // Groceries: when the admin has no Groceries banners, show nothing
+    // (no built-in fallback banner) — 2026-10-09.
+    if (banners.isEmpty && widget.mode == HomeFlowMode.groceries) {
+      _slideCount = 0;
+      return const SizedBox.shrink();
     }
 
     // Fallback to mode-themed hero banners (matching Image 1 & 2) when admin hasn't published custom banners yet
@@ -3636,17 +3963,25 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
               return _PromoBannerSlide(
                 key: ValueKey(banner.imageUrl ?? banner.assetFallback ?? banner.title),
                 banner: banner,
+                blendIntoBackground: widget.mode == HomeFlowMode.groceries,
               );
             },
           ),
         ),
-        const SizedBox(height: 10),
+        // Slide-count dots removed in Groceries (2026-10-09 request).
+        if (widget.mode != HomeFlowMode.groceries) const SizedBox(height: 10),
+        if (widget.mode != HomeFlowMode.groceries)
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(effectiveBanners.length > 1 ? effectiveBanners.length : 2, (index) {
             final isActive = index == _currentPage;
-            const dotActiveColor = Colors.white;
-            final dotInactiveColor = Colors.white.withValues(alpha: 0.45);
+            // Dark dots on Groceries' yellow container, accent-blue dots on
+            // Services' light-blue one (white would vanish against either).
+            final dotInk = widget.mode == HomeFlowMode.services
+                ? HomeFlowTheme.services.accent
+                : const Color(0xFF1A1A1A);
+            final dotActiveColor = dotInk;
+            final dotInactiveColor = dotInk.withValues(alpha: 0.3);
             return AnimatedContainer(
               duration: const Duration(milliseconds: 250),
               margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -4334,9 +4669,49 @@ class _MobileAdCard extends ConsumerWidget {
 }
 
 class _PromoBannerSlide extends ConsumerWidget {
-  const _PromoBannerSlide({super.key, required this.banner});
+  const _PromoBannerSlide({super.key, required this.banner, this.blendIntoBackground = false});
 
   final _PromoBanner banner;
+
+  /// Groceries mode (2026-10-09, "how the video has blended with that theme
+  /// without border difference"): instead of an inset rounded card with a
+  /// shadow — which always reads as a separate rectangle sitting on the
+  /// header — the media runs edge to edge with no radius/shadow, and its top
+  /// and bottom edges are feathered to transparent so they dissolve into the
+  /// yellow header gradient painted behind it. Same trick Blinkit uses: the
+  /// clip's own background matches the header color and its edges fade out.
+  final bool blendIntoBackground;
+
+  /// Feathers [media]'s top/bottom edges to transparent (see
+  /// [blendIntoBackground]). Uses dstIn so only the media's alpha changes —
+  /// whatever is painted behind it (the header gradient) shows through.
+  static Widget _feather(Widget media) {
+    // Used ONLY by the Home hero video/image (_HomeHeroVideo): its top and
+    // bottom edges dissolve into the header gradient so it blends with the
+    // background (2026-10-09 request). Carousel banners use [_waveCard].
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) => const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
+        stops: [0.0, 0.18, 0.82, 1.0],
+      ).createShader(rect),
+      child: media,
+    );
+  }
+
+  /// Groceries carousel banner (2026-10-09): inset 16px on the left and
+  /// right, crisp (no blur), with a continuous wave along the bottom edge.
+  static Widget _waveCard(Widget media) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ClipPath(
+        clipper: const _WaveBottomClipper(),
+        child: media,
+      ),
+    );
+  }
 
   // Resolves this banner's tap destination against the LIVE, admin-managed
   // category list — never a hardcoded slug. Falls back to the full
@@ -4378,6 +4753,22 @@ class _PromoBannerSlide extends ConsumerWidget {
     // gradient/icon/text design below whenever this specific offer has no
     // image yet, so the carousel is never a blank/broken tile.
     if (banner.imageUrl != null && banner.imageUrl!.isNotEmpty) {
+      if (blendIntoBackground) {
+        return GestureDetector(
+          onTap: () => _handleTap(context, liveCategories),
+          child: SizedBox.expand(
+            child: _waveCard(
+              BannerMedia(
+                url: banner.imageUrl,
+                mediaType: banner.mediaType,
+                title: banner.title,
+                semanticIcon: banner.icon,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        );
+      }
       return GestureDetector(
         onTap: () => _handleTap(context, liveCategories),
         child: Container(
@@ -4406,6 +4797,16 @@ class _PromoBannerSlide extends ConsumerWidget {
     }
 
     if (banner.assetFallback != null && banner.assetFallback!.isNotEmpty) {
+      if (blendIntoBackground) {
+        return GestureDetector(
+          onTap: () => _handleTap(context, liveCategories),
+          child: SizedBox.expand(
+            child: _waveCard(
+              Image.asset(banner.assetFallback!, fit: BoxFit.cover),
+            ),
+          ),
+        );
+      }
       return GestureDetector(
         onTap: () => _handleTap(context, liveCategories),
         child: Container(

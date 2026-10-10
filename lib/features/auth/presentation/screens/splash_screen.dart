@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../routing/app_router.dart';
+import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../home/data/homepage_repository.dart';
 
@@ -66,6 +67,27 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // the same provider.
     ref.read(homepageConfigProvider);
     ref.read(categoriesProvider);
+    // Fixed 2026-10-08 ("the saved address has cleared automatically...
+    // that should be stored in that account"): the address itself was
+    // never actually lost on the backend — `selectedAddressProvider`
+    // (address_notifier.dart) is a plain in-memory `StateProvider` that
+    // always starts `null` on every cold start, and the ONLY code that
+    // ever re-populates it from the account's saved addresses is
+    // `AddressListNotifier.build()`'s auto-select-default logic — which
+    // only runs once something actually reads/watches `addressListProvider`.
+    // Nothing did that early: Home and Checkout both only ever watched
+    // `selectedAddressProvider` itself, never `addressListProvider`, so
+    // unless the customer happened to open the Addresses list screen
+    // first, the saved default address never got loaded back in for the
+    // rest of the session — reading as "my saved address disappeared"
+    // even though it was sitting untouched in their account the whole
+    // time. Reading it here (same fire-and-forget pattern as
+    // homepageConfigProvider/categoriesProvider just above — a guest
+    // session's `build()` returns `const []` immediately and does nothing
+    // further) starts that fetch-and-auto-select as early as possible on
+    // every cold start, so the account's saved address is back in
+    // `selectedAddressProvider` by the time Home/Checkout need it.
+    ref.read(addressListProvider);
     _navTimer = Timer(_displayDuration, () async {
       if (!mounted) return;
       // Fixed 2026-09-19 — this used to go straight to Home on every cold

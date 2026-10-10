@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 
@@ -70,24 +71,28 @@ class NotificationService {
       iOS: darwinSettings,
     );
 
-    await _plugin.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
+    try {
+      await _plugin.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: _onNotificationTapped,
+      );
 
-    const androidChannel = AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      description: _channelDescription,
-      importance: Importance.high,
-    );
-    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    await androidImpl?.createNotificationChannel(androidChannel);
-    // Android 13+ (API 33) requires this explicit runtime request before
-    // any notification can be shown; a no-op on older Android. iOS
-    // permission is requested via DarwinInitializationSettings above.
-    await androidImpl?.requestNotificationsPermission();
+      const androidChannel = AndroidNotificationChannel(
+        _channelId,
+        _channelName,
+        description: _channelDescription,
+        importance: Importance.high,
+      );
+      final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await androidImpl?.createNotificationChannel(androidChannel);
+      // Android 13+ (API 33) requires this explicit runtime request before
+      // any notification can be shown; a no-op on older Android. iOS
+      // permission is requested via DarwinInitializationSettings above.
+      await androidImpl?.requestNotificationsPermission();
+    } catch (e) {
+      debugPrint('[NotificationService] Failed to initialize notifications plugin: $e');
+    }
   }
 
   void _onNotificationTapped(NotificationResponse response) {
@@ -107,21 +112,25 @@ class NotificationService {
     String? routePayload,
   }) async {
     if (!_initialized) await initialize();
-    await _plugin.show(
-      _nextId++,
-      title,
-      body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: _channelDescription,
-          importance: Importance.high,
-          priority: Priority.high,
+    try {
+      await _plugin.show(
+        _nextId++,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            _channelName,
+            channelDescription: _channelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
         ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      payload: routePayload,
-    );
+        payload: routePayload,
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] Failed to show notification: $e');
+    }
   }
 }

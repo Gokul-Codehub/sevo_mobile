@@ -559,6 +559,27 @@ class ServiceCard extends ConsumerWidget {
                     ),
                   ),
                 ),
+                // Fixed 2026-10-08 (QA CMP04 — "the word 'Unavailable'
+                // does not show for the unavailable packages"): an admin-
+                // deactivated package (`service.isAvailable` false, see
+                // ServiceItem.status) is still returned by the catalog so
+                // the customer can see it was once offered, but nothing
+                // marked it as such — this greys the whole hero image and
+                // adds the same "Unavailable" label CMP01's booking gate
+                // (service_detail_screen.dart) now enforces, so the two
+                // read as one consistent state instead of a silent block.
+                if (!service.isAvailable) ...[
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  const Positioned.fill(
+                    child: Center(
+                      child: _UnavailableBadge(),
+                    ),
+                  ),
+                ],
                 // Added 2026-09-17 per a supplied reference screenshot: a
                 // "Most Booked" badge, driven by the real `isPopular` flag
                 // the backend already sends (CatalogServiceSerializer) —
@@ -748,6 +769,33 @@ class ServiceCard extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Small pill shown over a deactivated package's hero image — see the
+/// "Fixed 2026-10-08 (QA CMP04...)" comment above where this is used.
+class _UnavailableBadge extends StatelessWidget {
+  const _UnavailableBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1),
+      ),
+      child: const Text(
+        'Unavailable',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+          letterSpacing: 0.3,
+        ),
+      ),
     );
   }
 }

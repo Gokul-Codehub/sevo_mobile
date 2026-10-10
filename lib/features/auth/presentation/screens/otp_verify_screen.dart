@@ -269,6 +269,20 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
   Future<void> _handleResendOtp() async {
     if (_secondsRemaining > 0) return;
 
+    // Fixed 2026-10-08 ("once the user clicks resend OTP the older enterd
+    // one should be cleared and let the user to enter newly"): the 6 boxes
+    // used to keep whatever digits were typed for the OLD code, so after a
+    // resend the customer either had to notice and manually clear each box
+    // themselves, or risked submitting a mix of old-code leftovers and the
+    // new code's digits. Clear every box and send focus back to the first
+    // one, exactly like a fresh arrival at this screen.
+    for (final c in _digitControllers) {
+      c.clear();
+    }
+    if (_focusNodes.isNotEmpty) {
+      _focusNodes.first.requestFocus();
+    }
+
     setState(() => _isLoading = true);
 
     final result = await ref.read(authProvider.notifier).requestOtp(
@@ -350,7 +364,11 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                 ),
               ),
 
-              const SizedBox(height: 36),
+              // Fixed 2026-10-08 ("small space problem between the email
+              // and otp entry section"): there was no gap at all here
+              // before — the phone/email RichText butted straight up
+              // against the OTP box row.
+              const SizedBox(height: 28),
 
               // ── 6 Individual OTP Digit Boxes ──
               Row(
@@ -358,7 +376,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                 children: List.generate(6, (index) {
                   return SizedBox(
                     width: 46,
-                    height: 54,
+                    height: 58,
                     child: TextFormField(
                       controller: _digitControllers[index],
                       focusNode: _focusNodes[index],
@@ -374,30 +392,31 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                       // a longer update across the remaining boxes, so the
                       // cap on this field is gone.
                       style: const TextStyle(
-                        fontSize: 22,
+                        fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: AppColors.navy,
+                        height: 1.0,
                       ),
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(
                         counterText: '',
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide:
-                              const BorderSide(color: AppColors.border, width: 1.2),
+                              const BorderSide(color: AppColors.border, width: 1.5),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide:
-                              const BorderSide(color: AppColors.border, width: 1.2),
+                              const BorderSide(color: AppColors.border, width: 1.5),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide:
-                              const BorderSide(color: AppColors.primary, width: 2),
+                              const BorderSide(color: AppColors.primary, width: 2.5),
                         ),
                       ),
                       onChanged: (val) => _onDigitChanged(val, index),
@@ -406,19 +425,31 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                 }),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
-              // ── Resend Timer Row ──
+              // ── Resend Timer Pill ──
               Center(
-                child: Text(
-                  _secondsRemaining > 0
-                      ? 'Resend OTP in ${_formatTimer(_secondsRemaining)}'
-                      : '',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
-                  ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _secondsRemaining > 0
+                      ? Container(
+                          key: const ValueKey('timer'),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryTint,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Resend OTP in ${_formatTimer(_secondsRemaining)}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('empty')),
                 ),
               ),
 
@@ -434,7 +465,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                     backgroundColor: AppColors.navy,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     elevation: 0,
                   ),

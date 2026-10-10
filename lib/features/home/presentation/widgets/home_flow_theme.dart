@@ -57,9 +57,16 @@ class HomeFlowTheme {
 
   static const services = HomeFlowTheme(
     mode: HomeFlowMode.services,
-    accent: Color(0xFF1E3A5F),
-    accentDark: Color(0xFF0D253A),
-    gradientTop: Color(0xFF1E3A5F),
+    // Switched 2026-10-09 from the dark navy palette to a light-blue one
+    // ("shall we use light blue for services as like uploaded reference
+    // image?") — a saturated mid-blue accent for links/icons/active
+    // states, with a pale sky-blue gradientTop for the backdrop. Text that
+    // used to be white-on-navy (greeting, category labels, active tab) now
+    // reads dark on this light backdrop — see home_screen.dart's
+    // _UnifiedActiveModeSection.
+    accent: Color(0xFF1D6FD6),
+    accentDark: Color(0xFF0D3B7A),
+    gradientTop: Color(0xFF8EC3F2),
     searchPlaceholder: "Search for 'AC service'",
     categoryGridTitle: 'Browse by Category',
     trustSectionTitle: 'Why Choose SEVO?',
@@ -76,7 +83,10 @@ class HomeFlowTheme {
     mode: HomeFlowMode.groceries,
     accent: Color(0xFF15803D),
     accentDark: Color(0xFF14532D),
-    gradientTop: Color(0xFF8DC63F),
+    // Warm golden yellow backdrop (2026-10-09, Blinkit-style Groceries
+    // look). The accent stays green so "See all" links, ADD buttons and
+    // cart CTAs keep their fresh-grocery green on top of the yellow.
+    gradientTop: Color(0xFFF9C93A),
     searchPlaceholder: "Search for 'fresh vegetables'...",
     categoryGridTitle: 'Shop by Category',
     trustSectionTitle: 'Why Shop With SEVO?',

@@ -259,6 +259,7 @@ class ServiceItem extends Equatable {
     this.maxQuantity = 99,
     this.gstRate,
     this.platformFee,
+    this.status,
   });
 
   final int id;
@@ -354,6 +355,32 @@ class ServiceItem extends Equatable {
   // back to web's own default (18% / ₹29), never to the flat global config.
   final double? gstRate;
   final Decimal? platformFee;
+
+  // ── Admin availability status (added 2026-10-08) ──────────────────────────
+  //
+  // Bug found via QA ("the admin inactivate the service, but it is still
+  // able to book by the customer" / "the word 'Unavailable' does not show
+  // for the unavailable packages"): the backend's CatalogServiceSerializer
+  // already serializes the Package's `status` field (PackageStatus: DRAFT /
+  // ACTIVE / INACTIVE / ARCHIVED — service_requests/models.py) on every
+  // catalog response, and the public catalog listing view already lets an
+  // INACTIVE package through on purpose (DRAFT/ARCHIVED are excluded, but
+  // INACTIVE items stay visible so the customer can see what used to be
+  // offered) — but this model never parsed that field at all, so nothing in
+  // the app could show an "Unavailable" badge or stop a customer from
+  // booking one. Null means the backend didn't send a status (treated as
+  // available, same as [isAvailable]'s default), never as "unavailable" —
+  // this must never make an older/legacy payload silently un-bookable.
+  final String? status;
+
+  /// Whether this item can currently be booked / added to cart. False only
+  /// for an explicit non-ACTIVE status from the backend; unknown/missing
+  /// status is always treated as available.
+  bool get isAvailable {
+    final s = status?.trim().toUpperCase();
+    if (s == null || s.isEmpty) return true;
+    return s == 'ACTIVE';
+  }
 
   /// Whether this item was filed under a real Vegetable Inventory category
   /// (as opposed to a plain grocery Package with no category tree entry).
@@ -621,6 +648,7 @@ class ServiceItem extends Equatable {
       maxQuantity: parseInt(json['max_quantity'], fallback: 99),
       gstRate: parseDoubleOrNull(json['gst_rate']),
       platformFee: parseMoneyOrNull(json['platform_fee']),
+      status: json['status']?.toString(),
     );
   }
 
@@ -660,6 +688,7 @@ class ServiceItem extends Equatable {
         'max_quantity': maxQuantity,
         if (gstRate != null) 'gst_rate': gstRate,
         if (platformFee != null) 'platform_fee': platformFee.toString(),
+        if (status != null) 'status': status,
       };
 
   @override
@@ -695,6 +724,7 @@ class ServiceItem extends Equatable {
         maxQuantity,
         gstRate,
         platformFee,
+        status,
       ];
 }
 

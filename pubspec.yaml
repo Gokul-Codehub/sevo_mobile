@@ -29,6 +29,13 @@ dependencies:
   shimmer: ^3.0.0
   cached_network_image: ^3.4.1
 
+  # --- Lottie animations ---
+  # Added 2026-10-08 to render the "AI Mitra" bottom-nav tab icon as an
+  # animated robot (assets/animations/ai_mitra_robot.json, supplied by
+  # Divya) instead of the static Icons.auto_awesome glyph — see
+  # shared/widgets/app_shell.dart.
+  lottie: ^3.6.1
+
   # --- Maps ---
   google_maps_flutter: ^2.9.0
 

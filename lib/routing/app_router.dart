@@ -17,12 +17,14 @@ import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/booking/domain/booking_models.dart';
 import '../features/booking/presentation/screens/booking_detail_screen.dart';
 import '../features/booking/presentation/screens/booking_success_screen.dart';
-import '../features/booking/domain/cart_notifier.dart';
 import '../features/booking/presentation/screens/checkout_screen.dart';
 import '../features/booking/presentation/screens/grocery_cart_screen.dart';
 import '../features/booking/presentation/screens/my_bookings_screen.dart';
+import '../features/catalog/data/basket_models.dart';
 import '../features/catalog/domain/catalog_models.dart';
 import '../features/catalog/presentation/screens/all_services_screen.dart';
+import '../features/catalog/presentation/screens/basket_detail_screen.dart';
+import '../features/catalog/presentation/screens/basket_list_screen.dart';
 import '../features/catalog/presentation/screens/category_detail_screen.dart';
 import '../features/catalog/presentation/screens/grocery_product_detail_screen.dart';
 import '../features/catalog/presentation/screens/search_screen.dart';
@@ -72,6 +74,10 @@ abstract final class AppRoutes {
   // GroceryProductDetailScreen's doc comment for why these can't share a
   // screen).
   static const String groceryProductDetail = '/products/:slug';
+  // Added 2026-10-08 — Seller Hub combo/bundle offers ("Baskets"); see
+  // BasketListScreen/BasketDetailScreen's doc comments.
+  static const String baskets = '/baskets';
+  static const String basketDetail = '/baskets/:id';
   static const String cart = '/cart';
   static const String addresses = '/addresses';
   static const String addAddress = '/addresses/add';
@@ -160,7 +166,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.cart,
             name: 'cart',
-            builder: (context, state) => const _CartRouteScreen(),
+            builder: (context, state) => const GroceryCartScreen(),
           ),
           GoRoute(
             path: AppRoutes.support,
@@ -240,6 +246,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return GroceryProductDetailScreen(
                 productSlug: slug,
                 initialProduct: extra is ServiceItem ? extra : null,
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.baskets,
+            name: 'baskets',
+            builder: (context, state) => const BasketListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.basketDetail,
+            name: 'basket-detail',
+            builder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+              final extra = state.extra;
+              return BasketDetailScreen(
+                basketId: id,
+                initialBasket: extra is MarketplaceBasket ? extra : null,
               );
             },
           ),
@@ -515,31 +538,5 @@ class _NotFoundScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Added 2026-10-07 ("The cart section is only working for groceries and
-/// vegetables not for the services block"): the bottom-nav Cart tab used to
-/// unconditionally build [GroceryCartScreen], which only ever reads/renders
-/// grocery items and shows its grocery-flavored empty state for anyone else
-/// — so a customer who had added a *service* to the shared [cartProvider]
-/// (see the new Add-to-Cart button on the service detail screen) could never
-/// actually see or check out that item from the Cart tab. [CheckoutScreen]
-/// already falls back to reading the full shared cart whenever it's opened
-/// without a single pinned `initialService` (see its `_handlePlaceOrder`/
-/// `build`), so it's the correct destination for a cart that contains any
-/// non-grocery item. A cart that's empty, or contains only grocery/vegetable
-/// items, keeps going to [GroceryCartScreen] exactly as before.
-class _CartRouteScreen extends ConsumerWidget {
-  const _CartRouteScreen();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final items = ref.watch(cartProvider);
-    final hasServiceItem = items.any((i) => !i.service.isGroceryFlow);
-    if (hasServiceItem) {
-      return const CheckoutScreen();
-    }
-    return const GroceryCartScreen();
   }
 }

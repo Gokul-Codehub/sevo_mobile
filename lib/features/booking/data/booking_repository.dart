@@ -37,6 +37,14 @@ class BookingRepository {
     required Decimal totalAmount,
     String? specialInstructions,
     String? contactPhone,
+    // Fixed 2026-10-08 (QA CME02 — "the payment method is not shown to the
+    // customer... but it is showed on the web"): this payload never sent a
+    // `payment_method` key at all, so BookingCreateView's own
+    // `(request.data.get('payment_method') or 'COD').upper()` fallback
+    // silently defaulted every mobile booking to Cash on Service. 'COD'
+    // keeps that same default for any existing caller that doesn't pass
+    // this yet (e.g. the grocery cart flow).
+    String paymentMethod = 'COD',
     String? customerName,
     double? latitude,
     double? longitude,
@@ -157,6 +165,12 @@ class BookingRepository {
         // endpoints). Omitting this field is what was making the amount
         // show as 0 right after booking.
         'total_amount': totalAmount.toString(),
+        // Fixed 2026-10-08 (QA CME02 — see this method's `paymentMethod`
+        // param doc comment): previously never sent, so the backend's own
+        // `(... or 'COD').upper()` fallback silently chose Cash on
+        // Service for every mobile booking regardless of what the
+        // customer might have wanted.
+        'payment_method': paymentMethod,
         if (contactPhone != null && contactPhone.isNotEmpty) ...{
           'phone': contactPhone,
           'contact_phone': contactPhone,

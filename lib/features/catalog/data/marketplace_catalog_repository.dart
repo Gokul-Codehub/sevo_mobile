@@ -8,6 +8,7 @@ import '../../../core/errors/api_error.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
 import '../domain/catalog_models.dart';
+import 'basket_models.dart';
 
 /// Seller Hub Marketplace catalog — the REAL, admin-managed category tree
 /// for packaged groceries.
@@ -118,6 +119,71 @@ class MarketplaceCategory {
 
 /// One sellable product from `GET /api/marketplace/products/` (a published,
 /// APPROVED, in-stock `SellerProduct` on the vendor).
+/// One admin/seller-entered attribute row on a product's "About this item"
+/// section (e.g. label "Health Benefits", value "Vitamin C & Vitamin K
+/// Rich") — the vendor's own detail endpoint returns these as a free-form
+/// `specs` list, not a fixed set of columns, so this app renders whatever
+/// the seller filled in rather than hardcoding specific attribute names.
+class MarketplaceProductSpec {
+  const MarketplaceProductSpec({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory MarketplaceProductSpec.fromJson(Map<String, dynamic> json) {
+    return MarketplaceProductSpec(
+      label: (json['label'] ?? '').toString().trim(),
+      value: (json['value'] ?? '').toString().trim(),
+    );
+  }
+}
+
+/// Resolves the vendor's `images` gallery (a list of URL strings or of
+/// `{image|url|path: ...}` maps) into distinct absolute URLs.
+List<String> _parseGallery(dynamic raw) {
+  if (raw is! List) return const [];
+  final out = <String>[];
+  for (final item in raw) {
+    dynamic v = item;
+    if (item is Map) v = item['image'] ?? item['url'] ?? item['path'] ?? item['src'];
+    final url = _resolveSellerHubMedia(v);
+    if (url != null && url.isNotEmpty && !out.contains(url)) out.add(url);
+  }
+  return out;
+}
+
+/// Units of one product (500g / 1kg / 5kg) arrive as separate list rows
+/// sharing a `variant_group_id`. The customer should see ONE listing for
+/// the product and choose the unit on its detail page, so keep a single
+/// representative per group (lowest-priced in-stock unit, at the position
+/// of the group's first appearance). Standalone products are untouched.
+List<MarketplaceProduct> _collapseVariantGroups(List<MarketplaceProduct> products) {
+  final best = <int, MarketplaceProduct>{};
+  for (final p in products) {
+    final g = p.variantGroupId;
+    if (g == null) continue;
+    final cur = best[g];
+    if (cur == null) {
+      best[g] = p;
+      continue;
+    }
+    final better = (p.inStock && !cur.inStock) ||
+        (p.inStock == cur.inStock && p.sellingPrice < cur.sellingPrice);
+    if (better) best[g] = p;
+  }
+  final emitted = <int>{};
+  final out = <MarketplaceProduct>[];
+  for (final p in products) {
+    final g = p.variantGroupId;
+    if (g == null) {
+      out.add(p);
+    } else if (emitted.add(g)) {
+      out.add(best[g]!);
+    }
+  }
+  return out;
+}
+
 class MarketplaceProduct {
   const MarketplaceProduct({
     required this.id,
@@ -128,12 +194,21 @@ class MarketplaceProduct {
     this.packSize,
     this.mrp,
     this.primaryImage,
+    this.images = const [],
     this.categoryId,
     this.categoryName,
     this.categorySlug,
     this.sellerName,
     this.inStock = true,
     this.availableStock = 0,
+    this.description,
+    this.storageInfo,
+    this.expiryInfo,
+    this.specs = const [],
+    this.variantGroupId,
+    this.variantAttributeName,
+    this.variantLabel,
+    this.variants = const [],
   });
 
   final int id;
@@ -144,12 +219,66 @@ class MarketplaceProduct {
   final String? packSize;
   final Decimal? mrp;
   final String? primaryImage;
+
+  /// Full gallery (vendor `images`), already resolved to absolute URLs and
+  /// de-duplicated, with [primaryImage] first. Empty when the vendor sent
+  /// none; use [galleryImages] for a never-empty-if-any-image view.
+  final List<String> images;
   final int? categoryId;
   final String? categoryName;
   final String? categorySlug;
   final String? sellerName;
   final bool inStock;
   final num availableStock;
+
+  // Fixed 2026-10-08 ("See here the description and all other details of
+  // the product has not been shown in the mobile application" — compared
+  // against sevo.co.in's own "About this item" card for the same Seller
+  // Hub Marketplace product): the vendor's product detail/list endpoints
+  // (workforce_api/views_marketplace_integration.py) already return
+  // `description` (plain, pre-sanitized text), `storage_info`, `expiry_info`
+  // and (detail only) a free-form `specs` label/value list — this model
+  // just never parsed any of them, so every Seller Hub Marketplace product
+  // silently had no description data at all on this app, regardless of
+  // what the seller had actually entered.
+  final String? description;
+  final String? storageInfo;
+  final String? expiryInfo;
+  final List<MarketplaceProductSpec> specs;
+
+  // ── Product variations (added 2026-10-08, ported from the Vendor Seller
+  // Hub's existing variant-group feature — "for a particular product there
+  // are three variations, 1kg/500g/5kg"): the vendor backend already groups
+  // sibling products (e.g. "Atta 1kg", "Atta 5kg") under one
+  // `variant_group_id`, each sibling being its own REAL, independently
+  // priced/stocked SellerProduct row — not a sub-field of one product. The
+  // CalServices proxy (marketplace_views.py) already forwards all of this
+  // untouched; this app's model just never parsed it. [variantLabel] is
+  // THIS product's own variant (e.g. "500g"), [variantAttributeName] is
+  // what that label represents (e.g. "Size" or "Weight", seller-chosen),
+  // and [variants] is every sibling in the group INCLUDING this product
+  // itself, each parsed as a full (if sparser — no category/seller)
+  // [MarketplaceProduct] so [toServiceItem] and existing cart/detail
+  // navigation work on a selected variant with no special-casing.
+  final int? variantGroupId;
+  final String? variantAttributeName;
+  final String? variantLabel;
+  final List<MarketplaceProduct> variants;
+
+  /// Whether this product has more than one real, selectable variant worth
+  /// showing a picker for — a lone product technically "in its own group"
+  /// (or with no group at all) has nothing to switch between.
+  bool get hasSelectableVariants => variants.length > 1;
+
+  /// Every distinct image to show in the detail carousel: the gallery, or
+  /// just the primary image when no gallery was returned.
+  List<String> get galleryImages {
+    final out = <String>[];
+    for (final u in [if (primaryImage != null) primaryImage!, ...images]) {
+      if (u.isNotEmpty && !out.contains(u)) out.add(u);
+    }
+    return out;
+  }
 
   /// Only shows a strike-through MRP when it's a real, higher figure — same
   /// "never render a fake discount" rule as [GroceryHubProduct].
@@ -161,6 +290,29 @@ class MarketplaceProduct {
   // class's matching doc comment for why this matters for the shared cart.
   static const int _cartIdOffset = 800000000;
 
+  /// Combines `specs` + `storage_info` + `expiry_info` + `description` into
+  /// one readable block of text, in the same order the vendor's own detail
+  /// page lists them in — this app has no dedicated widgets for each of
+  /// those separate fields, but [ServiceItem.description] is already
+  /// rendered as-is (newlines included) by grocery_product_detail_screen.dart's
+  /// existing "About this product" section, so feeding it everything here
+  /// is enough to show it all without needing a new UI section.
+  String? get _combinedDescription {
+    final lines = <String>[
+      for (final spec in specs)
+        if (spec.label.isNotEmpty && spec.value.isNotEmpty) '${spec.label}: ${spec.value}',
+      if ((storageInfo ?? '').trim().isNotEmpty) 'Storage: ${storageInfo!.trim()}',
+      if ((expiryInfo ?? '').trim().isNotEmpty) 'Shelf Life: ${expiryInfo!.trim()}',
+    ];
+    final attributeBlock = lines.join('\n');
+    final desc = (description ?? '').trim();
+    final combined = [
+      if (desc.isNotEmpty) desc,
+      if (attributeBlock.isNotEmpty) attributeBlock,
+    ].join('\n\n');
+    return combined.isEmpty ? null : combined;
+  }
+
   ServiceItem toServiceItem() {
     final hasMrp = hasStrikeThroughMrp;
     return ServiceItem(
@@ -169,7 +321,11 @@ class MarketplaceProduct {
       slug: 'seller-hub-$id',
       price: hasMrp ? mrp! : sellingPrice,
       discountedPrice: hasMrp ? sellingPrice : null,
-      unit: unit,
+      // Prefer the real variant label (e.g. "1kg", "500g") over the plain
+      // `unit` field when this product belongs to a variant group — it's
+      // the more specific, customer-meaningful weight/size for THIS
+      // particular variant.
+      unit: (variantLabel != null && variantLabel!.isNotEmpty) ? variantLabel : unit,
       categoryName: categoryName,
       // Forced to contain "grocer" so ServiceItem.flowType always resolves
       // to CatalogFlowType.grocery regardless of this tree's own category
@@ -178,6 +334,7 @@ class MarketplaceProduct {
       imageUrl: primaryImage,
       inStock: inStock,
       maxQuantity: availableStock > 0 ? availableStock.floor().clamp(1, 99) : 0,
+      description: _combinedDescription,
     );
   }
 
@@ -208,12 +365,47 @@ class MarketplaceProduct {
       packSize: rawPack.isNotEmpty ? rawPack : null,
       mrp: parseDecimal(json['mrp']),
       primaryImage: _resolveSellerHubMedia(json['primary_image']),
+      images: _parseGallery(json['images']),
       categoryId: int.tryParse(category['id']?.toString() ?? ''),
       categoryName: (category['name'] ?? '').toString().trim().isEmpty ? null : category['name'].toString(),
       categorySlug: (category['slug'] ?? '').toString().trim().isEmpty ? null : category['slug'].toString(),
       sellerName: (seller['name'] ?? '').toString().trim().isEmpty ? null : seller['name'].toString(),
       inStock: json['in_stock'] != false,
       availableStock: num.tryParse(json['available_stock']?.toString() ?? '') ?? 0,
+      description: (json['description'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['description'].toString().trim(),
+      storageInfo: (json['storage_info'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['storage_info'].toString().trim(),
+      expiryInfo: (json['expiry_info'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['expiry_info'].toString().trim(),
+      // Only present on the single-product detail endpoint — list responses
+      // don't include it, so this is naturally empty there.
+      specs: json['specs'] is List
+          ? (json['specs'] as List)
+              .whereType<Map>()
+              .map((m) => MarketplaceProductSpec.fromJson(Map<String, dynamic>.from(m)))
+              .where((s) => s.label.isNotEmpty && s.value.isNotEmpty)
+              .toList()
+          : const [],
+      variantGroupId: int.tryParse(json['variant_group_id']?.toString() ?? ''),
+      variantAttributeName: (json['variant_attribute_name'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['variant_attribute_name'].toString().trim(),
+      variantLabel: (json['variant_label'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['variant_label'].toString().trim(),
+      // Siblings never carry their own nested `variants` key, so this
+      // recursion is naturally one level deep only.
+      variants: json['variants'] is List
+          ? (json['variants'] as List)
+              .whereType<Map>()
+              .map((m) => MarketplaceProduct.fromJson(Map<String, dynamic>.from(m)))
+              .where((p) => p.id != 0 && p.title.isNotEmpty)
+              .toList()
+          : const [],
     );
   }
 }
@@ -293,7 +485,7 @@ class MarketplaceCatalogRepository {
               .toList()
           : <MarketplaceProduct>[];
       return Success(MarketplaceProductPage(
-        products: products,
+        products: _collapseVariantGroups(products),
         count: int.tryParse(map['count']?.toString() ?? '') ?? products.length,
         page: int.tryParse(map['page']?.toString() ?? '') ?? page,
         totalPages: int.tryParse(map['total_pages']?.toString() ?? '') ?? 1,
@@ -374,6 +566,76 @@ class MarketplaceCatalogRepository {
     }
   }
 
+  /// `GET /api/marketplace/baskets/` — Seller Hub combo/bundle offers.
+  /// Added 2026-10-08 ("the grocery developer has implemented another
+  /// feature something like Basket could you get into our app?") — the
+  /// backend proxy (`CustomerMarketplaceBasketListView`) already sanitizes
+  /// and paginates this, same unwrapped-vendor-shape convention as
+  /// [getProducts] above (no `{success, data}` envelope).
+  Future<Result<MarketplaceBasketPage>> getBaskets({
+    int? companyId,
+    String? search,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final response = await api.get('/marketplace/baskets/', queryParameters: {
+        if (companyId != null) 'company_id': companyId,
+        if (search != null && search.isNotEmpty) 'search': search,
+        'page': page,
+        'page_size': pageSize,
+      });
+      final dynamic body = response.data;
+      if (body is List) {
+        // The view returns a bare list when the vendor's own response had
+        // no "results" key (see CustomerMarketplaceBasketListView.get).
+        final baskets = body
+            .whereType<Map>()
+            .map((m) => MarketplaceBasket.fromJson(Map<String, dynamic>.from(m)))
+            .where((b) => b.id != 0)
+            .toList();
+        return Success(MarketplaceBasketPage(
+          baskets: baskets,
+          count: baskets.length,
+          page: page,
+          totalPages: 1,
+        ));
+      }
+      final map = body is Map ? Map<String, dynamic>.from(body) : <String, dynamic>{};
+      final rawResults = map['results'];
+      final baskets = rawResults is List
+          ? rawResults
+              .whereType<Map>()
+              .map((m) => MarketplaceBasket.fromJson(Map<String, dynamic>.from(m)))
+              .where((b) => b.id != 0)
+              .toList()
+          : <MarketplaceBasket>[];
+      return Success(MarketplaceBasketPage(
+        baskets: baskets,
+        count: int.tryParse(map['count']?.toString() ?? '') ?? baskets.length,
+        page: int.tryParse(map['page']?.toString() ?? '') ?? page,
+        totalPages: int.tryParse(map['total_pages']?.toString() ?? '') ?? 1,
+      ));
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// `GET /api/marketplace/baskets/<id>/` — full basket detail with its
+  /// component slots/items, for the basket detail screen's option picker.
+  Future<Result<MarketplaceBasket>> getBasketDetail(int basketId) async {
+    try {
+      final response = await api.get('/marketplace/baskets/$basketId/');
+      final dynamic body = response.data;
+      if (body is! Map) return Failure(UnknownError('Unexpected basket detail shape'));
+      final basket = MarketplaceBasket.fromJson(Map<String, dynamic>.from(body));
+      if (basket.id == 0) return Failure(UnknownError('Basket not found'));
+      return Success(basket);
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
   ApiError _toError(Object e) {
     if (e is ApiError) return e;
     if (e is DioException && e.error is ApiError) {
@@ -437,6 +699,7 @@ class DeliverySlotDay {
     this.warehouseName,
     required this.date,
     required this.slots,
+    this.failed = false,
   });
 
   final int? warehouseId;
@@ -444,7 +707,12 @@ class DeliverySlotDay {
   final String date;
   final List<DeliverySlotOption> slots;
 
+  /// True when the fetch itself failed (network/server) — distinct from a
+  /// date that genuinely has no slots, so the UI can offer a retry.
+  final bool failed;
+
   static const empty = DeliverySlotDay(warehouseId: null, date: '', slots: []);
+  static const fetchFailed = DeliverySlotDay(warehouseId: null, date: '', slots: [], failed: true);
 
   factory DeliverySlotDay.fromJson(Map<String, dynamic> json) {
     final rawSlots = json['slots'];
@@ -637,6 +905,28 @@ final marketplaceProductsByIdsProvider =
   return ordered;
 });
 
+/// One Seller Hub Marketplace product's full detail (id -> [MarketplaceProduct],
+/// specs included) — added 2026-10-08 so
+/// grocery_product_detail_screen.dart can enrich its instantly-painted
+/// `initialProduct` (which only ever carries list-endpoint data — no
+/// `specs` — see [MarketplaceCatalogRepository.getProducts]'s doc comment)
+/// with the admin/seller attribute rows (Health Benefits, Disclaimer,
+/// Customer Care Details, Country of Origin, etc.) that only the single
+/// `GET /marketplace/products/<id>/` detail call returns. `.family` so
+/// revisiting the same product doesn't refetch.
+final marketplaceProductDetailProvider =
+    FutureProvider.autoDispose.family<MarketplaceProduct?, int>((ref, id) async {
+  ref.keepAlive();
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final result = await repo.getProductDetail(id);
+  switch (result) {
+    case Success(:final data):
+      return data;
+    case Failure():
+      return null;
+  }
+});
+
 /// Active Seller Hub fulfillment warehouses — fetched once and kept alive
 /// for [GroceryCartScreen]'s delivery-option picker's lifetime. Never
 /// throws to its watcher; an unreachable vendor just means an empty list
@@ -670,6 +960,38 @@ final marketplaceDeliverySlotsForDateProvider =
     case Success(:final data):
       return data;
     case Failure():
-      return DeliverySlotDay.empty;
+      return DeliverySlotDay.fetchFailed;
+  }
+});
+
+/// Combo/bundle offers for the grocery home "Combo Offers" section — fails
+/// open to an empty list, same convention as [marketplaceWarehousesProvider]
+/// above, so an unreachable vendor just means the section renders nothing
+/// rather than crashing the Home screen.
+final marketplaceBasketsProvider =
+    FutureProvider.autoDispose<List<MarketplaceBasket>>((ref) async {
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final result = await repo.getBaskets();
+  switch (result) {
+    case Success(:final data):
+      return data.baskets;
+    case Failure():
+      return const [];
+  }
+});
+
+/// One basket's full detail (slots/items) for [BasketDetailScreen] —
+/// `.family` so revisiting the same basket doesn't refetch, same pattern
+/// as [marketplaceProductDetailProvider] above.
+final marketplaceBasketDetailProvider =
+    FutureProvider.autoDispose.family<MarketplaceBasket?, int>((ref, id) async {
+  ref.keepAlive();
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final result = await repo.getBasketDetail(id);
+  switch (result) {
+    case Success(:final data):
+      return data;
+    case Failure():
+      return null;
   }
 });

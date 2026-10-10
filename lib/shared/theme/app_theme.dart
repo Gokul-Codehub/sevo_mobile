@@ -146,7 +146,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.textOnPrimary,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(
             fontSize: 15,
@@ -163,7 +163,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.textOnPrimary,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(
             fontSize: 15,
@@ -179,7 +179,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.primary,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           side: const BorderSide(color: AppColors.primary, width: 1.5),
           textStyle: const TextStyle(
@@ -206,23 +206,23 @@ abstract final class AppTheme {
     fillColor: AppColors.surface,
     contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.border),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.primary, width: 2),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.error),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.error, width: 2),
     ),
     hintStyle: TextStyle(
@@ -236,10 +236,11 @@ abstract final class AppTheme {
   static const CardThemeData _cardTheme = CardThemeData(
     color: AppColors.cardSurface,
     elevation: 0,
-    shadowColor: Colors.transparent,
+    shadowColor: AppColors.cardShadow,
+    surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
-      side: BorderSide(color: AppColors.border, width: 0.8),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+      side: BorderSide(color: AppColors.borderSubtle, width: 0.8),
     ),
     margin: EdgeInsets.zero,
   );
@@ -261,9 +262,9 @@ abstract final class AppTheme {
     ),
     side: const BorderSide(color: AppColors.border, width: 0.8),
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderRadius: BorderRadius.all(Radius.circular(20)),
     ),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     iconTheme: const IconThemeData(size: 16, color: AppColors.textSecondary),
   );
 

@@ -89,6 +89,20 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
             backgroundColor: Colors.white,
             foregroundColor: AppColors.textPrimary,
             elevation: 0.5,
+            actions: [
+              // Added 2026-10-08 ("the grocery developer has implemented
+              // another feature something like Basket could you get into
+              // our app?") — the only entry point into the new Seller Hub
+              // combo/bundle offers; see BasketListScreen's doc comment.
+              TextButton.icon(
+                onPressed: () => context.push('/baskets'),
+                icon: const Icon(Icons.card_giftcard_rounded, size: 18, color: AppColors.primary),
+                label: const Text(
+                  'Combos',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
+                ),
+              ),
+            ],
           ),
           Expanded(
             child: treeAsync.when(

@@ -38,26 +38,8 @@ class BookingSuccessScreen extends ConsumerWidget {
             children: [
               const SizedBox(height: 10),
 
-              // ── Green Check Icon with Glowing Ring ──
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDF4),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFFDCFCE7),
-                    width: 6,
-                  ),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.check_circle_rounded,
-                    color: AppColors.primary,
-                    size: 58,
-                  ),
-                ),
-              ),
+              // ── Green Check Icon with Animated Glowing Ring ──
+              const _AnimatedSuccessBadge(),
               const SizedBox(height: 20),
 
               const Text(
@@ -85,11 +67,18 @@ class BookingSuccessScreen extends ConsumerWidget {
               // ── Booking Summary Card ──
               if (booking != null) ...[
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.border, width: 0.8),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderSubtle, width: 0.8),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: AppColors.cardShadow,
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -133,7 +122,7 @@ class BookingSuccessScreen extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 height: 52,
-                child: ElevatedButton(
+                child: ElevatedButton.icon(
                   onPressed: () {
                     // Fixed 2026-08-27: this pushed '/bookings/$bookingId/track',
                     // a path that doesn't match any registered route (the real
@@ -148,15 +137,16 @@ class BookingSuccessScreen extends ConsumerWidget {
                         booking?.trackingIdentifier ?? '$bookingId';
                     context.push('/track/$identifier', extra: booking);
                   },
+                  icon: const Icon(Icons.navigation_rounded, size: 18),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
+                  label: const Text(
                     'Track Service',
                     style: TextStyle(
                       fontSize: 16,
@@ -176,7 +166,7 @@ class BookingSuccessScreen extends ConsumerWidget {
                     foregroundColor: AppColors.navy,
                     side: const BorderSide(color: AppColors.border, width: 1),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   child: const Text(
@@ -233,11 +223,114 @@ class _SummaryRow extends StatelessWidget {
             style: TextStyle(
               fontSize: isHighlight ? 14.5 : 13,
               fontWeight: isHighlight ? FontWeight.w800 : FontWeight.w600,
-              color: isHighlight ? AppColors.navy : AppColors.textPrimary,
+              color: label == 'Total Amount'
+                  ? AppColors.priceColor
+                  : (isHighlight ? AppColors.navy : AppColors.textPrimary),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Celebratory animated badge for booking confirmation.
+class _AnimatedSuccessBadge extends StatefulWidget {
+  const _AnimatedSuccessBadge();
+
+  @override
+  State<_AnimatedSuccessBadge> createState() => _AnimatedSuccessBadgeState();
+}
+
+class _AnimatedSuccessBadgeState extends State<_AnimatedSuccessBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
+  late final Animation<double> _outerPulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+
+    _scaleAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 0.7, curve: Curves.elasticOut),
+    );
+
+    _outerPulseAnimation = Tween<double>(begin: 0.8, end: 1.15).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.2, 1.0, curve: Curves.easeOutQuad),
+      ),
+    );
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Outer glowing ring
+            Transform.scale(
+              scale: _outerPulseAnimation.value,
+              child: Container(
+                width: 112,
+                height: 112,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(
+                    alpha: 0.12 * (1.0 - _controller.value * 0.5),
+                  ),
+                ),
+              ),
+            ),
+            // Middle ring
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFFDCFCE7),
+                  width: 6,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+            ),
+            // Scaling checkmark icon
+            Transform.scale(
+              scale: _scaleAnimation.value,
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.primary,
+                size: 58,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -8,6 +8,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:calservices_customer/features/logistics/domain/logistics_providers.dart';
+
+class _TestCustomerLocationNotifier extends CustomerLocationNotifier {
+  _TestCustomerLocationNotifier() : super() {
+    state = const CustomerLocationState(address: '', pincode: '', isDetected: false);
+  }
+
+  @override
+  Future<void> detectAndSetCurrentLocation() async {}
+}
+
 void main() {
   group('Address Parsing & Reflection Suite', () {
     test('ADDR-01: Address.fromJson handles String latitude and longitude without type cast error', () {
@@ -109,6 +120,7 @@ void main() {
                 )),
             categoriesProvider.overrideWith((ref) async => const []),
             selectedAddressProvider.overrideWith((ref) => selected),
+            customerLocationProvider.overrideWith((ref) => _TestCustomerLocationNotifier()),
           ],
           child: const MaterialApp(
             home: HomeScreen(),
@@ -119,8 +131,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('HOME: Trinity Home Decors, Hosur'), findsOneWidget);
-      expect(find.text('Change'), findsOneWidget);
+      expect(find.text('HOME: Trinity Home Decors'), findsOneWidget);
+      expect(find.text('DELIVERING TO'), findsOneWidget);
     });
 
     testWidgets('ADDR-05: HomeScreen displays fallback text when no address is selected', (tester) async {
@@ -130,6 +142,7 @@ void main() {
             currentUserProvider.overrideWith((ref) => null),
             categoriesProvider.overrideWith((ref) async => const []),
             selectedAddressProvider.overrideWith((ref) => null),
+            customerLocationProvider.overrideWith((ref) => _TestCustomerLocationNotifier()),
           ],
           child: const MaterialApp(
             home: HomeScreen(),
@@ -140,8 +153,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Set your service location'), findsOneWidget);
-      expect(find.text('Change'), findsOneWidget);
+      expect(find.text('Select delivery address'), findsOneWidget);
+      expect(find.text('DELIVERING TO'), findsOneWidget);
     });
   });
 }

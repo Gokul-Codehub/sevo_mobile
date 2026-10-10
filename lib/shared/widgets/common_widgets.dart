@@ -207,8 +207,78 @@ class CategoryTileSkeleton extends StatelessWidget {
   }
 }
 
+/// Skeleton loader for a booking card, matching the structure of `_BookingCard`
+/// in my_bookings_screen.dart (request-id + status chip / title / date-time row
+/// / price+button footer). Shown during the very first bookings load only.
+class BookingCardSkeleton extends StatelessWidget {
+  const BookingCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderSubtle, width: 0.8),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: request id + status chip
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ShimmerLine(width: 120, height: 12),
+              ShimmerLine(width: 72, height: 22, borderRadius: 8),
+            ],
+          ),
+          SizedBox(height: 12),
+          Divider(height: 1, color: AppColors.borderSubtle),
+          SizedBox(height: 10),
+          // Title
+          ShimmerLine(width: double.infinity, height: 13),
+          SizedBox(height: 6),
+          ShimmerLine(width: 180, height: 11),
+          SizedBox(height: 12),
+          // Date-time row
+          Row(
+            children: [
+              ShimmerCircle(size: 14),
+              SizedBox(width: 6),
+              ShimmerLine(width: 80, height: 10),
+              SizedBox(width: 16),
+              ShimmerCircle(size: 14),
+              SizedBox(width: 6),
+              ShimmerLine(width: 60, height: 10),
+            ],
+          ),
+          SizedBox(height: 12),
+          Divider(height: 1, color: AppColors.borderSubtle),
+          SizedBox(height: 10),
+          // Footer: price + button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ShimmerLine(width: 70, height: 16),
+              ShimmerLine(width: 72, height: 30, borderRadius: 8),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Empty state widget shown when a list has no items.
-class EmptyStateWidget extends StatelessWidget {
+class EmptyStateWidget extends StatefulWidget {
   const EmptyStateWidget({
     super.key,
     required this.title,
@@ -225,35 +295,87 @@ class EmptyStateWidget extends StatelessWidget {
   final String? actionLabel;
 
   @override
+  State<EmptyStateWidget> createState() => _EmptyStateWidgetState();
+}
+
+class _EmptyStateWidgetState extends State<EmptyStateWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 64)),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: theme.textTheme.headlineSmall,
-              textAlign: TextAlign.center,
+      child: FadeTransition(
+        opacity: _fadeAnim,
+        child: SlideTransition(
+          position: _slideAnim,
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryTint,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      widget.emoji,
+                      style: const TextStyle(fontSize: 44),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  widget.title,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.subtitle,
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                if (widget.action != null && widget.actionLabel != null) ...[
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: widget.action,
+                    child: Text(widget.actionLabel!),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            if (action != null && actionLabel != null) ...[
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: action,
-                child: Text(actionLabel!),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -280,15 +402,25 @@ class ErrorStateWidget extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.wifi_off_rounded,
-              size: 64,
-              color: AppColors.textHint,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.errorLight,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                size: 38,
+                color: AppColors.error,
+              ),
             ),
             const SizedBox(height: 20),
             Text(
               'Something went wrong',
-              style: theme.textTheme.headlineSmall,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
@@ -296,11 +428,13 @@ class ErrorStateWidget extends StatelessWidget {
               message,
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 24),
-            OutlinedButton.icon(
+            FilledButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
               label: const Text('Try Again'),
             ),
           ],

@@ -82,9 +82,11 @@ class BookingDetailScreen extends ConsumerWidget {
         children: [
                 // ── 1. Header Card with ID and Status ───────────────────────
                 Card(
+                  elevation: 0,
+                  color: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: AppColors.border, width: 0.5),
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -131,9 +133,11 @@ class BookingDetailScreen extends ConsumerWidget {
 
                 // ── 2. Booking Timeline Tracker ─────────────────────────────
                 Card(
+                  elevation: 0,
+                  color: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: AppColors.border, width: 0.5),
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -158,10 +162,11 @@ class BookingDetailScreen extends ConsumerWidget {
                 // ── 3. Assigned Technician Card (if assigned) ───────────────
                 if (booking.technician != null) ...[
                   Card(
+                    elevation: 0,
                     color: AppColors.surfaceVariant,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: const BorderSide(color: AppColors.primaryLight, width: 0.5),
+                      borderRadius: BorderRadius.circular(14),
+                      side: const BorderSide(color: AppColors.primaryLight, width: 0.8),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -288,9 +293,11 @@ class BookingDetailScreen extends ConsumerWidget {
 
                 // ── 4. Appointment Schedule & Location ──────────────────────
                 Card(
+                  elevation: 0,
+                  color: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: AppColors.border, width: 0.5),
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -379,9 +386,11 @@ class BookingDetailScreen extends ConsumerWidget {
 
                 // ── 5. Service Items & Bill Summary ─────────────────────────
                 Card(
+                  elevation: 0,
+                  color: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: AppColors.border, width: 0.5),
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -846,40 +855,64 @@ class _TimelineTracker extends StatelessWidget {
           final isCompleted = stepIndex < activeIndex;
           return Expanded(
             child: Container(
-              height: 2,
+              height: 2.5,
               color: isCompleted ? AppColors.primary : AppColors.divider,
             ),
           );
         }
 
         final stepIndex = index ~/ 2;
-        final isPassed = stepIndex <= activeIndex;
+        final isCompleted = stepIndex < activeIndex;
+        final isCurrent = stepIndex == activeIndex;
         final label = _steps[stepIndex].$2;
 
         return Column(
           children: [
             Container(
-              width: 22,
-              height: 22,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isPassed ? AppColors.primary : AppColors.surface,
+                color: isCompleted
+                    ? AppColors.primary
+                    : isCurrent
+                        ? AppColors.primaryLight
+                        : AppColors.surface,
                 border: Border.all(
-                  color: isPassed ? AppColors.primary : AppColors.border,
-                  width: 2,
+                  color: (isCompleted || isCurrent)
+                      ? AppColors.primary
+                      : AppColors.border,
+                  width: isCurrent ? 2.5 : 1.5,
                 ),
               ),
-              child: isPassed
-                  ? const Icon(Icons.check, size: 12, color: Colors.white)
-                  : null,
+              child: Center(
+                child: isCompleted
+                    ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                    : isCurrent
+                        ? Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : null,
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
             Text(
               label,
               style: TextStyle(
-                fontSize: 9,
-                fontWeight: isPassed ? FontWeight.bold : FontWeight.normal,
-                color: isPassed ? AppColors.primary : AppColors.textSecondary,
+                fontSize: 9.5,
+                fontWeight: (isCompleted || isCurrent)
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+                color: isCurrent
+                    ? AppColors.navy
+                    : isCompleted
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
               ),
             ),
           ],
@@ -920,7 +953,7 @@ class _BillRow extends StatelessWidget {
           style: TextStyle(
             fontSize: isBold ? 15 : 12,
             fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-            color: AppColors.textPrimary,
+            color: isBold ? AppColors.priceColor : AppColors.textPrimary,
           ),
         ),
       ],

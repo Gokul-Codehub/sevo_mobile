@@ -87,6 +87,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () {
@@ -106,23 +107,24 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 12),
-
-                // ── Centered SEVO Logo ──
-                // Fixed 2026-10-07 ("use our text logo there"): this was a
-                // plain hardcoded Text('SEVO') + a manually drawn dot — an
-                // approximation of the brand wordmark, not the real one.
-                // [SevoLogo] (shared/widgets/sevo_logo.dart) already renders
-                // the actual brand artwork and is the single source of truth
-                // used elsewhere in the app (e.g. the splash screen); this
-                // screen now uses the same widget instead of its own
-                // hand-drawn stand-in, so the login page's branding matches
-                // the real logo pixel-for-pixel.
-                const Center(
-                  child: SevoLogo(height: 40),
+                // ── Branded Header ──
+                Center(
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryTint,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: AppColors.primaryLight, width: 2),
+                    ),
+                    child: const Center(
+                      child: SevoLogo(height: 32),
+                    ),
+                  ),
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
                 // ── Welcome Headline ──
                 const Text(
@@ -411,7 +413,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                       backgroundColor: AppColors.navy,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       elevation: 0,
                     ),
@@ -434,18 +436,25 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
 
-                // Fixed 2026-10-01 per explicit request ("Remove the Google
-                // sign in or up"): this used to show an "or" divider and a
-                // "Continue with Google" button here, but it was never a
-                // real Google sign-in — tapping it just showed a SnackBar
-                // telling the customer to use phone OTP instead. CalServices
-                // only ever authenticates via phone/email OTP (see the
-                // channel switcher above), so a non-functional Google
-                // button only added confusion. Removed outright rather than
-                // wired up to real Google Sign-In, since this project's
-                // OTP flow is the single supported auth path.
+                // ── Trust signals ──
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _TrustBadge(
+                      icon: Icons.lock_outline_rounded,
+                      label: 'OTP Secured',
+                    ),
+                    const SizedBox(width: 20),
+                    _TrustBadge(
+                      icon: Icons.verified_outlined,
+                      label: 'Free to register',
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
 
                 // Guest option
                 Center(
@@ -514,3 +523,30 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   }
 }
 
+
+/// Small icon + label trust signal displayed on the phone auth screen.
+class _TrustBadge extends StatelessWidget {
+  const _TrustBadge({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.primary),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}

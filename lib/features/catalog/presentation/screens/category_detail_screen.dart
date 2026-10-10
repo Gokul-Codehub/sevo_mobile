@@ -272,6 +272,33 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
 class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   String? _selectedSubcategorySlug;
 
+  // Fixed 2026-10-08 (QA CMP02/CMP03/CMP06 — "the page should automatically
+  // refresh/update the latest data without requiring the user to manually
+  // reload" / an admin-deleted package or service still showing): every
+  // catalog provider (catalog_providers.dart) is a plain `ref.keepAlive()`
+  // FutureProvider — correct for making catalog browsing feel instant, but
+  // it means a response fetched once stays cached for as long as the app
+  // process is alive, with nothing to ever ask the backend again. This app
+  // has no catalog push/websocket, so the realistic, testable version of
+  // "auto-refresh" is: ask again every time the customer actually opens
+  // this screen. Invalidating (not refreshing) a FutureProvider.family
+  // with no argument re-fetches every currently-alive instance of it, and
+  // Riverpod's `AsyncValue.when` skips the loading branch on a refresh by
+  // default (`skipLoadingOnRefresh: true`) as long as previous data
+  // exists — so this silently re-syncs in the background and swaps in
+  // fresh data (or quietly drops a since-deleted/deactivated package) the
+  // next time this screen builds, without flashing the shimmer loader seen
+  // on a genuine first-ever load.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(categoryServicesProvider);
+      ref.invalidate(subServicesProvider);
+    });
+  }
+
   // Vegetable Inventory department browse (added 2026-09-23) — independent
   // of [_selectedSubcategorySlug] above (that one filters by the flat
   // Service-level subcategory the admin's older Service Catalog exposes;
@@ -344,8 +371,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   ) {
     final isGroceryCategory = category.flowType == CatalogFlowType.grocery;
 
-    if (!isGroceryCategory &&
-        !cartItems.any((i) => i.service.flowType == CatalogFlowType.grocery)) {
+    if (!isGroceryCategory) {
       return null;
     }
 

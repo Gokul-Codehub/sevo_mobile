@@ -30,9 +30,8 @@ class Env {
   // real vendor.sevo.co.in deploy is current.
   static const String mediaBaseUrl =
       'https://sevo.co.in';
-    //   'http://192.168.1.77:8000';
+      // 'http://192.168.1.77:8000';
       // 'https://127.0.0.1:8000';
-
 
   // ── Vendor Grocery Hub base origin ──
   // Added 2026-09-19, confirmed directly by the user ("i actually working

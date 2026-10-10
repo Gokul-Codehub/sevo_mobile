@@ -111,11 +111,28 @@ class CatalogRepository {
       // what it's given, with no keyword-based reinterpretation.
       final resolvedId = (categoryId != null && categoryId > 0) ? categoryId : null;
       final canonicalSlug = categorySlug?.trim();
+      final canonicalSubSlug = subcategorySlug?.trim();
       final query = <String, dynamic>{
         if (resolvedId != null && resolvedId > 0)
           'category_id': resolvedId.toString()
         else if (canonicalSlug != null && canonicalSlug.isNotEmpty)
           'category': canonicalSlug,
+        // Fixed 2026-10-08 (QA CME03 — "the same electrical service is
+        // displayed under all four electrical categories, instead of only
+        // its assigned category"): a "subcategory" in this screen's terms
+        // IS a real backend `Service` record under the Category (see
+        // `/catalog/sub-services/` → CatalogSubServiceListView, which
+        // returns `Service` rows whose `.slug` is exactly what this screen
+        // calls `subcategorySlug`). `CatalogServiceListView` already
+        // supports filtering authoritatively by `service_slug` server-side
+        // — this request simply never sent it, relying entirely on the
+        // best-effort client-side `.contains()` match further down (which
+        // silently falls back to the FULL unfiltered category whenever it
+        // can't find a match — see that block's updated comment for why
+        // that is exactly what caused every sub-service tab to show every
+        // package in the category).
+        if (canonicalSubSlug != null && canonicalSubSlug.isNotEmpty)
+          'service_slug': canonicalSubSlug,
       };
 
       AppLogger.d('[P0-CATALOG]',
@@ -149,25 +166,21 @@ class CatalogRepository {
 
         AppLogger.d('[P0-CATALOG]', 'parsed item count=${items.length}');
 
-        // If in-memory subcategory filtering is applicable
-        if (subcategorySlug != null && subcategorySlug.isNotEmpty && items.isNotEmpty) {
-          final subLower = subcategorySlug.toLowerCase().replaceAll('-', '_');
-          final beforeCount = items.length;
-          final filtered = items.where((i) {
-            final sSlug = i.slug.toLowerCase().replaceAll('-', '_');
-            final subSlug = (i.subcategorySlug ?? '').toLowerCase().replaceAll('-', '_');
-            final subName = (i.subcategoryName ?? '').toLowerCase().replaceAll('-', '_');
-            return subSlug == subLower ||
-                subSlug.contains(subLower) ||
-                subName.contains(subLower) ||
-                sSlug.contains(subLower);
-          }).toList();
-          AppLogger.d('[P0-CART]',
-              'UI_FILTER subcategorySlug="$subcategorySlug": before=$beforeCount, after=${filtered.length}');
-          if (filtered.isNotEmpty) {
-            items = filtered;
-          }
-        }
+        // Fixed 2026-10-08 (QA CME03 — "the same electrical service is
+        // displayed under all four electrical categories, instead of only
+        // its assigned category"): this used to re-filter the response
+        // in-memory by fuzzy-matching `subcategorySlug` against
+        // `subcategory_slug`/`_name`/the item's own `slug` — and, whenever
+        // that fuzzy match came up empty, silently fell back to the FULL,
+        // unfiltered item list rather than an empty one. Since the request
+        // above now asks the backend to filter by `service_slug` itself —
+        // the real, authoritative queryset filter (`service__slug=
+        // service_slug`) — the response here is already correctly scoped
+        // to exactly this sub-service. Re-filtering it again client-side
+        // added nothing but risk: a fuzzy-match miss on correctly-scoped
+        // data would wrongly drop real items, and a miss on NOTHING
+        // matching was exactly what caused the cross-listing bug. The
+        // server's result is trusted as-is.
 
         return items;
       });

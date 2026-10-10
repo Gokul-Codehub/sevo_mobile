@@ -96,6 +96,13 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
     required Decimal totalAmount,
     String? specialInstructions,
     String? contactPhone,
+    // Fixed 2026-10-08 (QA CME02 — see checkout_screen.dart's
+    // `_paymentMethod` doc comment): forwarded as-is to
+    // BookingRepository.createBooking, which previously never sent any
+    // `payment_method` at all — defaults to 'COD' so every existing caller
+    // (e.g. the grocery cart flow, which doesn't pass this yet) keeps its
+    // current behaviour unchanged.
+    String paymentMethod = 'COD',
     // ── Goods & Transport (logistics) fields ──────────────────────────────
     // Added 2026-09-19 — forwarded as-is to BookingRepository.createBooking;
     // see that method's doc comment for the verified backend field list.
@@ -151,6 +158,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       totalAmount: totalAmount,
       specialInstructions: specialInstructions,
       contactPhone: validPhone,
+      paymentMethod: paymentMethod,
       customerName: currentUser?.name ?? 'Customer',
       // Fixed 2026-08-27: forward the selected address's coordinates so the
       // backend's ServiceRequest.latitude/longitude columns are actually

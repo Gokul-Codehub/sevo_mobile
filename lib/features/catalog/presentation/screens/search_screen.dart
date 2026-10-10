@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +19,24 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _searchController = TextEditingController();
+  Timer? _debounce;
+
+  // Fixed 2026-10-08 ("the search bar does not response as per the
+  // searching especially in service"): [searchResultsProvider] fans out
+  // to TWO backends in parallel per query -- the scheduled-service catalog
+  // (which has no server-side `search` support at all, so it quietly
+  // returns its full, unfiltered PUBLIC package list every time and relies
+  // entirely on this screen filtering that whole list client-side) and the
+  // Seller Hub marketplace. `onChanged` used to push every single keystroke
+  // straight into [searchQueryProvider], re-triggering that whole
+  // fetch-plus-client-filter cycle on every character typed -- on the
+  // larger, unfiltered services list in particular, that made the screen
+  // visibly lag behind what was actually being typed (a keystroke could
+  // still be "catching up" from 2 characters ago when the next one landed),
+  // which read as the search bar simply not responding to what was typed.
+  // Debouncing so the provider -- and therefore the real work -- only
+  // updates once typing pauses fixes that without touching the backend.
+  static const _debounceDelay = Duration(milliseconds: 350);
 
   @override
   void initState() {
@@ -26,6 +46,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -49,29 +70,42 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: AppColors.border),
           ),
-          child: TextField(
-            controller: _searchController,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: 'Search services, AC repair, cleaning...',
-              hintStyle: const TextStyle(fontSize: 14, color: AppColors.textHint),
-              prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        ref.read(searchQueryProvider.notifier).state = '';
-                      },
-                    )
-                  : null,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            onChanged: (val) {
-              ref.read(searchQueryProvider.notifier).state = val;
+          child: ValueListenableBuilder<TextEditingValue>(
+            // Drives just the clear (x) button off the controller directly
+            // so IT still reacts to every keystroke immediately -- only the
+            // actual search (the provider update below) is debounced.
+            valueListenable: _searchController,
+            builder: (context, value, _) {
+              return TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Search services, AC repair, cleaning...',
+                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textHint),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  suffixIcon: value.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _debounce?.cancel();
+                            _searchController.clear();
+                            ref.read(searchQueryProvider.notifier).state = '';
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onChanged: (val) {
+                  _debounce?.cancel();
+                  _debounce = Timer(_debounceDelay, () {
+                    if (!mounted) return;
+                    ref.read(searchQueryProvider.notifier).state = val;
+                  });
+                },
+              );
             },
           ),
         ),

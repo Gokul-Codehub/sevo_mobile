@@ -553,6 +553,8 @@ class HomepageConfig {
     required this.offers,
     this.mobileBanners = const [],
     this.mobileAds = const [],
+    this.heroVideoServices,
+    this.heroVideoGroceries,
     this.topCards = const [],
     this.bestsellers = const [],
     this.grocerySections = const [],
@@ -584,6 +586,12 @@ class HomepageConfig {
   /// Advertisement" tab. Rendered as an extra card on Home only when at
   /// least one enabled item has an image.
   final List<MobileMediaItem> mobileAds;
+
+  /// Dedicated per-mode hero video/image slot (config.mobile.heroVideos
+  /// .services / .groceries, 2026-10-09) — separate from the banner carousel
+  /// so the admin can set one full-bleed looping clip for each Home mode.
+  final MobileMediaItem? heroVideoServices;
+  final MobileMediaItem? heroVideoGroceries;
 
   /// The Home screen's quick-access card row (originally always exactly
   /// "Groceries" + "Services") — now a fully admin-managed list: any
@@ -653,6 +661,17 @@ class HomepageRepository {
 
         final mobileBanners = parseMediaList(mobileSection['banners']);
         final mobileAds = parseMediaList(mobileSection['ads']);
+
+        MobileMediaItem? parseHeroVideo(dynamic raw) {
+          if (raw is! Map) return null;
+          final item = MobileMediaItem.fromJson(Map<String, dynamic>.from(raw));
+          return (item.enabled && item.imageUrl != null) ? item : null;
+        }
+
+        final rawHero = mobileSection['heroVideos'];
+        final heroMap = rawHero is Map ? Map<String, dynamic>.from(rawHero) : <String, dynamic>{};
+        final heroVideoServices = parseHeroVideo(heroMap['services']);
+        final heroVideoGroceries = parseHeroVideo(heroMap['groceries']);
 
         // Fixed 2026-09-18: topCards is now an admin-managed list (any
         // length, editable labels) rather than a fixed {groceries,
@@ -725,6 +744,8 @@ class HomepageRepository {
           offers: items,
           mobileBanners: mobileBanners,
           mobileAds: mobileAds,
+          heroVideoServices: heroVideoServices,
+          heroVideoGroceries: heroVideoGroceries,
           topCards: topCards,
           bestsellers: bestsellers,
           grocerySections: grocerySections,

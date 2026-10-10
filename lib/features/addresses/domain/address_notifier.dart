@@ -19,7 +19,25 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     // client-side, with no request sent and nothing ever auto-selected, so
     // Home's location pill can only ever reflect the real, live GPS fix
     // (or an address the user explicitly picked after signing in).
-    final isAuthenticated = ref.read(isUserAuthenticatedProvider);
+    //
+    // Fixed 2026-10-08 ("the saved address has cleared automatically...
+    // that should be stored in that account"): this used to `ref.read`
+    // `isUserAuthenticatedProvider`, a one-off snapshot. On a cold start
+    // this provider is very often read for the first time (now from
+    // splash_screen.dart, to kick the fetch off as early as possible)
+    // WHILE `authProvider` is still `AuthLoading` — the real session is
+    // only restored from secure storage a moment later, asynchronously
+    // (see AuthNotifier._checkStoredSession). A one-off `ref.read` at that
+    // instant saw "not authenticated yet", permanently cached an empty
+    // address list for this provider, and never looked again — so even
+    // though the address was sitting untouched in the account the whole
+    // time, the app behaved as if it had vanished for the rest of the
+    // session. `ref.watch` instead makes this provider reactive to auth
+    // state: the moment `isUserAuthenticatedProvider` flips from false to
+    // true (auth restore finishing), `build()` re-runs, fetches the real
+    // saved addresses, and auto-selects the default — same as if the
+    // customer had just signed in.
+    final isAuthenticated = ref.watch(isUserAuthenticatedProvider);
     if (!isAuthenticated) return const [];
     return _fetchAddresses();
   }

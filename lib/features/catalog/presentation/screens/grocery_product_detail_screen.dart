@@ -9,6 +9,7 @@ import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/cart_notifier.dart';
+import '../../data/marketplace_catalog_repository.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
 import '../widgets/product_card.dart';
@@ -86,13 +87,68 @@ class GroceryProductDetailScreen extends ConsumerWidget {
   }
 }
 
-class _GroceryProductDetailBody extends ConsumerWidget {
+class _GroceryProductDetailBody extends ConsumerStatefulWidget {
   const _GroceryProductDetailBody({required this.product});
 
   final ServiceItem product;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GroceryProductDetailBody> createState() => _GroceryProductDetailBodyState();
+}
+
+class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetailBody> {
+  /// Which unit/variant of this product is currently shown. Null means the
+  /// product the customer opened. Switching units only swaps what this page
+  /// renders (price, image, stock, description, cart line) — no navigation.
+  int? _selectedVariantId;
+
+  /// Builds the cart/display [ServiceItem] for a sibling unit, borrowing the
+  /// category context the (sparser) sibling payload doesn't carry.
+  ServiceItem _variantItem(MarketplaceProduct v, ServiceItem base) {
+    final s = v.toServiceItem();
+    return ServiceItem(
+      id: s.id,
+      title: s.title,
+      slug: s.slug,
+      price: s.price,
+      discountedPrice: s.discountedPrice,
+      unit: s.unit,
+      description: s.description,
+      rating: base.rating,
+      reviewCount: base.reviewCount,
+      categoryId: base.categoryId,
+      categoryName: base.categoryName ?? s.categoryName,
+      categorySlug: s.categorySlug,
+      imageUrl: s.imageUrl ?? base.imageUrl,
+      inStock: s.inStock,
+      maxQuantity: s.maxQuantity,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = widget.product;
+
+    // Seller Hub detail (variants, full gallery, specs) loads in the
+    // background; the page paints instantly from the list data in [base].
+    final sellerHubId = base.slug.startsWith('seller-hub-')
+        ? int.tryParse(base.slug.substring('seller-hub-'.length))
+        : null;
+    final enrichedProduct = sellerHubId != null
+        ? ref.watch(marketplaceProductDetailProvider(sellerHubId)).valueOrNull
+        : null;
+    final hasUnits = enrichedProduct != null && enrichedProduct.hasSelectableVariants;
+    MarketplaceProduct? selectedVariant;
+    if (hasUnits) {
+      final wanted = _selectedVariantId ?? enrichedProduct!.id;
+      selectedVariant = enrichedProduct!.variants.where((v) => v.id == wanted).firstOrNull;
+    }
+    final switched = selectedVariant != null && selectedVariant.id != enrichedProduct!.id;
+    final ServiceItem product = switched ? _variantItem(selectedVariant!, base) : base;
+    final MarketplaceProduct? activeSource = switched ? selectedVariant : enrichedProduct;
+    var galleryUrls = activeSource?.galleryImages ?? const <String>[];
+    if (galleryUrls.isEmpty && (product.imageUrl ?? '').isNotEmpty) galleryUrls = [product.imageUrl!];
+
     // Added 2026-09-28 — temporary diagnostic for a reported "product page
     // shows empty" bug that couldn't be reproduced from code review alone.
     // Debug-only (AppLogger.d is a no-op in release builds): logs exactly
@@ -145,6 +201,23 @@ class _GroceryProductDetailBody extends ConsumerWidget {
     final cartItems = ref.watch(cartProvider);
     final inCartItem = cartItems.where((i) => i.service.id == product.id).firstOrNull;
     final quantityInCart = inCartItem?.quantity ?? 0;
+
+    // Fixed 2026-10-08 ("the description and all other details of the
+    // product has not been shown" — compared against sevo.co.in's own
+    // "About this item" card for the same Seller Hub Marketplace product):
+    // `initialProduct` only ever carries LIST-endpoint data (see this
+    // screen's own doc comment on why there's no separate detail fetch by
+    // default) — and the vendor's list endpoint doesn't include the
+    // seller's free-form `specs` rows (Health Benefits, Disclaimer,
+    // Customer Care Details, Country of Origin, etc.), only the single
+    // `GET /marketplace/products/<id>/` detail call does. This fetches
+    // that detail in the background — same progressive-enhancement
+    // pattern as the "Similar Products" strip below — and swaps in its
+    // richer combined description once it arrives, without blocking the
+    // instant paint from initialProduct.
+    final effectiveDescription = activeSource?.toServiceItem().description ??
+        product.description ??
+        product.shortDescription;
 
     // Best-effort "Similar Products" — same catalog-category lookup
     // ServiceDetailScreen already uses. Some grocery sources (Seller Hub
@@ -224,16 +297,10 @@ class _GroceryProductDetailBody extends ConsumerWidget {
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 color: AppColors.surfaceVariant,
-                child: AppRemoteImage(
-                  imageUrl: product.imageUrl,
-                  rawPath: product.imageUrl,
-                  title: product.title,
-                  categoryName: product.categoryName,
-                  slug: product.slug,
-                  semanticIcon: ImageUrlHelper.mapCategoryIcon(product.categoryName, product.slug),
-                  width: double.infinity,
-                  height: double.infinity,
-                  fit: BoxFit.contain,
+                child: _ProductGallery(
+                  key: ValueKey('gallery-${product.id}'),
+                  urls: galleryUrls,
+                  product: product,
                 ),
               ),
             ),
@@ -289,6 +356,15 @@ class _GroceryProductDetailBody extends ConsumerWidget {
                       style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                     ),
                   ],
+
+                  // Variant picker (e.g. 500g / 1kg / 5kg) — added 2026-10-08
+                  // per explicit request ("for a particular product there
+                  // are three variations ... could you get into our app").
+                  // Each sibling is a REAL, separately priced/stocked
+                  // product on the vendor (see MarketplaceProduct's doc
+                  // comment on `variants`), only known once the background
+                  // detail enrichment above resolves — same
+                  // progressive-enhancement pattern as the description.
                   const SizedBox(height: 12),
 
                   // Price
@@ -323,62 +399,41 @@ class _GroceryProductDetailBody extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Category info row (in place of a brand row this app has
-                  // no real brand field for)
-                  if ((product.categoryName ?? '').isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.border, width: 0.8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: AppColors.groceryGreenLight,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(Icons.storefront_rounded, size: 18, color: AppColors.groceryGreenDark),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product.categoryName!,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                                ),
-                                const Text(
-                                  'From this category',
-                                  style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-
                   // Stock note
                   if (!product.inStock)
                     _InfoRow(icon: Icons.remove_shopping_cart_outlined, text: 'Currently out of stock', color: AppColors.error)
                   else if (product.maxQuantity > 0 && product.maxQuantity <= 5)
                     _InfoRow(icon: Icons.inventory_2_outlined, text: 'Only ${product.maxQuantity} left in stock', color: AppColors.warning),
 
-                  // Description — real admin-entered copy only.
-                  if ((product.description ?? product.shortDescription)?.trim().isNotEmpty ?? false) ...[
+                  // Choose unit — sibling units of the SAME product live
+                  // here, above "About", and switch in place.
+                  if (hasUnits) ...[
+                    const SizedBox(height: 16),
+                    _UnitSelector(
+                      variants: enrichedProduct!.variants,
+                      selectedId: selectedVariant?.id ?? enrichedProduct.id,
+                      attributeName: enrichedProduct.variantAttributeName,
+                      onSelect: (id) => setState(() => _selectedVariantId = id),
+                    ),
+                  ],
+
+                  // Description — real admin/seller-entered copy only.
+                  // Fixed 2026-10-08 ("align the details properly use bold
+                  // for title and lite for details"): this combined block
+                  // (real description + specs + storage + shelf life, see
+                  // MarketplaceProduct._combinedDescription) is a flat list
+                  // of lines where sellers consistently alternate a short
+                  // label line ("Health Benefits", "Shelf Life", "Country
+                  // of Origin"...) with its value line(s) right after —
+                  // rendering it as one plain Text lost that structure
+                  // entirely. _ProductAboutSection below recognizes the
+                  // known label lines and bolds them, keeping everything
+                  // else as regular/lighter body text.
+                  if ((effectiveDescription ?? '').trim().isNotEmpty) ...[
                     const SizedBox(height: 16),
                     const Text('About this product', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-                    const SizedBox(height: 6),
-                    Text(
-                      (product.description ?? product.shortDescription ?? '').trim(),
-                      style: const TextStyle(fontSize: 13.5, color: AppColors.textSecondary, height: 1.45),
-                    ),
+                    const SizedBox(height: 8),
+                    _ProductAboutSection(text: effectiveDescription!.trim()),
                   ],
 
                   if (relatedAsync != null) ...[
@@ -397,13 +452,13 @@ class _GroceryProductDetailBody extends ConsumerWidget {
         ],
             ),
           ),
-          _buildCartBar(context, ref, quantityInCart),
+          _buildCartBar(context, ref, product, quantityInCart),
         ],
       ),
     );
   }
 
-  Widget _buildCartBar(BuildContext context, WidgetRef ref, int quantityInCart) {
+  Widget _buildCartBar(BuildContext context, WidgetRef ref, ServiceItem product, int quantityInCart) {
     return SafeArea(
       top: false,
       child: Container(
@@ -477,6 +532,225 @@ class _GroceryProductDetailBody extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Renders the combined "About this product" text (real description +
+/// specs + storage + shelf life — see [MarketplaceProduct._combinedDescription])
+/// with seller-entered label lines (e.g. "Health Benefits", "Shelf Life",
+/// "Country of Origin") shown bold, and their value line(s) right after
+/// shown in a lighter/regular weight — added 2026-10-08 per feedback that
+/// the flat text lost that label/value structure entirely.
+class _ProductAboutSection extends StatelessWidget {
+  const _ProductAboutSection({required this.text});
+
+  final String text;
+
+  static const Set<String> _knownLabels = {
+    'health benefits',
+    'description',
+    'unit',
+    'shelf life',
+    'disclaimer',
+    'customer care details',
+    'country of origin',
+    'storage',
+    'storage temperature',
+  };
+
+  bool _isLabelLine(String line) {
+    final normalized = line.trim().toLowerCase().replaceAll(RegExp(r':$'), '').trim();
+    return _knownLabels.contains(normalized);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+
+    final children = <Widget>[];
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final isLabel = _isLabelLine(line);
+      children.add(
+        Padding(
+          padding: EdgeInsets.only(top: isLabel && i > 0 ? 10 : 2),
+          child: Text(
+            line,
+            style: isLabel
+                ? const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)
+                : const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400, color: AppColors.textSecondary, height: 1.45),
+          ),
+        ),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
+  }
+}
+
+/// "Choose unit" section: every real unit/size of this product (e.g. 500g,
+/// 1kg, 5kg) as a selectable card with its own price. Selecting one swaps
+/// the page content in place (see [_GroceryProductDetailBodyState]).
+class _UnitSelector extends StatelessWidget {
+  const _UnitSelector({
+    required this.variants,
+    required this.selectedId,
+    required this.attributeName,
+    required this.onSelect,
+  });
+
+  final List<MarketplaceProduct> variants;
+  final int selectedId;
+  final String? attributeName;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final heading = (attributeName ?? '').isNotEmpty ? 'Choose ${attributeName!.toLowerCase()}' : 'Choose unit';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(heading, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 74,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: variants.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final v = variants[i];
+              final selected = v.id == selectedId;
+              final out = !v.inStock;
+              final label = (v.variantLabel?.isNotEmpty ?? false) ? v.variantLabel! : (v.unit ?? v.title);
+              return GestureDetector(
+                onTap: out ? null : () => onSelect(v.id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  constraints: const BoxConstraints(minWidth: 96),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.groceryGreen.withValues(alpha: 0.08) : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected ? AppColors.groceryGreen : const Color(0xFFE2E8F0),
+                      width: selected ? 1.6 : 1.1,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: out ? AppColors.textHint : AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      if (out)
+                        const Text('Out of stock', style: TextStyle(fontSize: 11, color: AppColors.error, fontWeight: FontWeight.w700))
+                      else
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('\u20b9${v.sellingPrice}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                            if (v.hasStrikeThroughMrp) ...[
+                              const SizedBox(width: 5),
+                              Text(
+                                '\u20b9${v.mrp}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textHint, decoration: TextDecoration.lineThrough),
+                              ),
+                            ],
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Swipeable product photo carousel with page dots. Falls back to a single
+/// image when the vendor sent only one.
+class _ProductGallery extends StatefulWidget {
+  const _ProductGallery({super.key, required this.urls, required this.product});
+
+  final List<String> urls;
+  final ServiceItem product;
+
+  @override
+  State<_ProductGallery> createState() => _ProductGalleryState();
+}
+
+class _ProductGalleryState extends State<_ProductGallery> {
+  final PageController _controller = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _image(String? url) {
+    final p = widget.product;
+    return AppRemoteImage(
+      imageUrl: url,
+      rawPath: url,
+      title: p.title,
+      categoryName: p.categoryName,
+      slug: p.slug,
+      semanticIcon: ImageUrlHelper.mapCategoryIcon(p.categoryName, p.slug),
+      width: double.infinity,
+      height: double.infinity,
+      fit: BoxFit.contain,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = widget.urls;
+    if (urls.length <= 1) return _image(urls.isEmpty ? null : urls.first);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _controller,
+          itemCount: urls.length,
+          onPageChanged: (i) => setState(() => _page = i),
+          itemBuilder: (_, i) => _image(urls[i]),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 10,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(urls.length, (i) {
+              final active = i == _page;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: active ? AppColors.groceryGreen : Colors.black26,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
     );
   }
 }

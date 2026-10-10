@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../features/ai_assistant/presentation/widgets/ai_chat_sheet.dart';
 import '../../features/booking/domain/cart_notifier.dart';
@@ -43,7 +44,9 @@ class AppShell extends ConsumerStatefulWidget {
     // only so `_currentIndex` never mis-highlights this tab as active for
     // an unrelated path; it is otherwise unused for this tab.
     _TabItem(
-      label: 'AI Mitra',
+      // Renamed 2026-10-08 per explicit request ("Change the AI bot name
+      // from 'AI Mitra' to 'Ask Apta'").
+      label: 'Ask Apta',
       icon: Icons.auto_awesome_outlined,
       activeIcon: Icons.auto_awesome_rounded,
       route: AppRoutes.support,
@@ -183,6 +186,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(36),
+                      border: Border.all(color: const Color(0xFFF1F5F9), width: 1.0),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.08),
@@ -197,12 +201,76 @@ class _AppShellState extends ConsumerState<AppShell> {
                         final tab = AppShell._tabs[index];
                         final isSelected = currentIndex == index;
 
-                        Widget iconWidget = Icon(
-                          isSelected ? tab.activeIcon : tab.icon,
-                          size: 24,
-                          color: isSelected
-                              ? AppColors.primary
-                              : const Color(0xFF334155),
+                        // Added 2026-10-08 per explicit request ("replace
+                        // this into the footer/navigator for AI Mitra"):
+                        // the AI Mitra tab now renders an animated robot
+                        // (assets/animations/ai_mitra_robot.json, supplied
+                        // by Divya) instead of the static Icons.auto_awesome
+                        // glyph every other state used. Lottie bakes its own
+                        // colors into the animation, so unlike the plain
+                        // Icon below this can't be recolored per
+                        // selected/unselected state -- the surrounding
+                        // AnimatedContainer's highlight pill background
+                        // still shows which tab is active.
+                        // Fixed 2026-10-08 ("still improper alignment"):
+                        // the AI Mitra tab's icon slot (34x34, for the
+                        // Lottie animation below) was a different size from
+                        // every other tab's bare 24px Icon -- Row's default
+                        // crossAxisAlignment.center then centered each
+                        // tab's whole icon+label Column against the ROW's
+                        // tallest column (AI Mitra's), so the other four
+                        // tabs' icons and labels sat at a different
+                        // vertical offset than AI Mitra's, reading as
+                        // misaligned even though each one was internally
+                        // centered. Every tab's icon now sits inside the
+                        // exact same 34x34 slot (centered), so all 5
+                        // columns are the same height and align on the Row.
+                        const iconSlotSize = 34.0;
+                        Widget iconWidget = SizedBox(
+                          width: iconSlotSize,
+                          height: iconSlotSize,
+                          child: Center(
+                            child: tab.isAiTab
+                                ? ClipRect(
+                                    // See the "white space around it" fix
+                                    // below: the source animation
+                                    // (assets/animations/ai_mitra_robot.json,
+                                    // supplied by Divya) only ever occupies
+                                    // the middle ~43%-76% of its own
+                                    // 700x700 canvas, verified by rendering
+                                    // it frame-by-frame and measuring the
+                                    // actual drawn content -- the rest is
+                                    // permanent transparent padding baked
+                                    // into the file, which BoxFit.contain
+                                    // alone can't crop since it just fits
+                                    // the whole canvas (padding included)
+                                    // into the box. Transform.scale zooms
+                                    // in 1.3x on the canvas to crop most of
+                                    // that padding away; ClipRect keeps the
+                                    // zoomed-in edges from spilling outside
+                                    // this slot. 1.3x was chosen so the
+                                    // single largest moment in the whole
+                                    // animation (a ~535px-tall burst at its
+                                    // widest, measured the same way) still
+                                    // stays just inside the slot instead of
+                                    // getting clipped.
+                                    child: Transform.scale(
+                                      scale: 1.3,
+                                      child: Lottie.asset(
+                                        'assets/animations/ai_mitra_robot.json',
+                                        fit: BoxFit.contain,
+                                        repeat: true,
+                                      ),
+                                    ),
+                                  )
+                                : Icon(
+                                    isSelected ? tab.activeIcon : tab.icon,
+                                    size: 24,
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : const Color(0xFF334155),
+                                  ),
+                          ),
                         );
 
                         if (tab.isCartTab && totalCartCount > 0) {
@@ -222,9 +290,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     minWidth: 16,
                                     minHeight: 16,
                                   ),
-                                  decoration: const BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: AppColors.error,
                                     shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 1.5),
                                   ),
                                   child: Center(
                                     child: Text(
@@ -253,9 +322,23 @@ class _AppShellState extends ConsumerState<AppShell> {
                             }
                             context.go(tab.route);
                           },
+                          // Smoothed 2026-10-08 ("make the footer/navigator
+                          // activate transition smoother"): the highlight
+                          // pill's own fade/resize was already animated, but
+                          // the label underneath switched its color and
+                          // font-weight INSTANTLY the moment a tab became
+                          // selected -- that abrupt snap right next to a
+                          // smoothly-fading pill is what actually read as
+                          // "not smooth". Swapping the plain Text for
+                          // AnimatedDefaultTextStyle (same duration/curve as
+                          // the pill) lets the label cross-fade into its
+                          // selected color/weight instead of jumping, and a
+                          // slightly longer duration + a gentler
+                          // decelerating curve makes the whole tap feel less
+                          // like a toggle switch and more like a transition.
                           child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeInOut,
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeOutCubic,
                             padding: EdgeInsets.symmetric(
                               horizontal: isSelected ? 16 : 10,
                               vertical: 6,
@@ -271,8 +354,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                               children: [
                                 iconWidget,
                                 const SizedBox(height: 3),
-                                Text(
-                                  tab.label,
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeOutCubic,
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: isSelected
@@ -282,6 +366,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                                         ? AppColors.primary
                                         : AppColors.textSecondary,
                                   ),
+                                  child: Text(tab.label),
                                 ),
                               ],
                             ),
