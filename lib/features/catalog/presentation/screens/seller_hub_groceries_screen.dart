@@ -66,6 +66,41 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
   int? _selectedSubcategoryId;
   bool _appliedInitialSlug = false;
 
+  /// Same lookup the body does once on its first build, as a pure function,
+  /// so the AppBar can show the right title on the very first frame.
+  int? _rootIdForSlug(List<MarketplaceCategory> roots, String? rawSlug) {
+    final slug = rawSlug?.trim();
+    if (slug == null || slug.isEmpty) return null;
+    final wanted = slug.replaceAll('-', '_').toLowerCase();
+    for (final root in roots) {
+      if (root.slug.replaceAll('-', '_').toLowerCase() == wanted) return root.id;
+      for (final child in root.children) {
+        if (_subtreeContainsSlug(child, wanted)) return root.id;
+      }
+    }
+    return null;
+  }
+
+  /// The AppBar title: the name of the main category being browsed (e.g.
+  /// "Dairy & Bakery"), not a fixed "Groceries". Falls back to "Groceries"
+  /// while the tree is still loading or empty.
+  String _screenTitle(List<MarketplaceCategory>? tree) {
+    const fallback = 'Groceries';
+    if (tree == null) return fallback;
+    final roots = tree.where((r) => r.hasAnyProducts).toList();
+    if (roots.isEmpty) return fallback;
+    final defaultRoot = roots.firstWhere(
+      (r) => r.name.toLowerCase().contains('grocer') || r.slug.toLowerCase().contains('grocer'),
+      orElse: () => roots.first,
+    );
+    final id = _selectedRootId ??
+        (_appliedInitialSlug ? null : _rootIdForSlug(roots, widget.initialCategorySlug)) ??
+        defaultRoot.id;
+    final root = roots.firstWhere((r) => r.id == id, orElse: () => defaultRoot);
+    final name = root.name.trim();
+    return name.isEmpty ? fallback : name;
+  }
+
   @override
   Widget build(BuildContext context) {
     final treeAsync = ref.watch(marketplaceCategoryTreeProvider);
@@ -85,7 +120,7 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
       child: Column(
         children: [
           AppBar(
-            title: const Text('Groceries'),
+            title: Text(_screenTitle(treeAsync.valueOrNull)),
             backgroundColor: Colors.white,
             foregroundColor: AppColors.textPrimary,
             elevation: 0.5,

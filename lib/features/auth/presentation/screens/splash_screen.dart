@@ -37,7 +37,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Timer? _navTimer;
 
   static const _splashAsset = 'assets/images/sevo_splash.webp';
-  static const _displayDuration = Duration(milliseconds: 2200);
+  /// The brand splash image always stays up this long (the original 2.2 s) ...
+  static const _minDisplay = Duration(milliseconds: 2200);
+
+  /// ... and, if Home's first data is still loading after that, a little
+  /// longer — never more than this in total — so Home opens filled in.
+  static const _maxWait = Duration(seconds: 6);
 
   @override
   void initState() {
@@ -88,7 +93,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // every cold start, so the account's saved address is back in
     // `selectedAddressProvider` by the time Home/Checkout need it.
     ref.read(addressListProvider);
-    _navTimer = Timer(_displayDuration, () async {
+    _navTimer = Timer(_minDisplay, () async {
+      if (!mounted) return;
+      // Hold the splash until the data Home needs has arrived, so the
+      // customer lands on a filled-in page instead of a wall of skeletons.
+      // Errors/timeouts are ignored here — Home handles those itself.
+      try {
+        await Future.wait<Object?>([
+          ref.read(homepageConfigProvider.future),
+          ref.read(categoriesProvider.future),
+        ]).timeout(_maxWait - _minDisplay);
+      } catch (_) {}
       if (!mounted) return;
       // Fixed 2026-09-19 — this used to go straight to Home on every cold
       // start, which meant OnboardingScreen and LocationAccessScreen

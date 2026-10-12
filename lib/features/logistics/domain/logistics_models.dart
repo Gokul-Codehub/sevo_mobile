@@ -280,9 +280,52 @@ class LogisticsQuote extends Equatable {
     this.isEstimate = false,
     this.estimateNotice,
     this.breakdown,
+    this.quoteId,
+    this.quoteHash,
+    this.createdAt,
+    this.expiresAt,
+    this.laneId,
+    this.supplyStatus,
+    this.supplyMessage,
+    this.cargoSummary,
   });
 
   final bool quotable;
+
+  /// Quote lock fields. The booking must echo `quote_id` / `quote_hash` /
+  /// `expires_at` in `cart_data[0]` together with this exact [total] —
+  /// `resolve_logistics_fare_v2` verifies them against the cached quote.
+  final String? quoteId;
+  final String? quoteHash;
+  final String? createdAt;
+  final String? expiresAt;
+
+  /// Lane this quote was priced for (null = plain distance fare).
+  final int? laneId;
+
+  /// Live supply hint: "AVAILABLE" | "NONE_FREE_NEARBY" | "UNKNOWN".
+  /// Informational only — never blocks a booking.
+  final String? supplyStatus;
+  final String? supplyMessage;
+
+  /// Server-resolved cargo summary (weight/CFT/risk) when cargo was sent.
+  final Map<String, dynamic>? cargoSummary;
+
+  bool get hasQuoteLock => (quoteId ?? '').isNotEmpty;
+
+  bool get isExpired {
+    final dt = expiresAt == null ? null : DateTime.tryParse(expiresAt!);
+    return dt != null && DateTime.now().isAfter(dt);
+  }
+
+  bool get noVehicleNearby => supplyStatus == 'NONE_FREE_NEARBY';
+
+  /// The three keys the backend reads from `cart_data[0]`.
+  Map<String, dynamic> toCartEcho() => {
+        if ((quoteId ?? '').isNotEmpty) 'quote_id': quoteId,
+        if ((quoteHash ?? '').isNotEmpty) 'quote_hash': quoteHash,
+        if ((expiresAt ?? '').isNotEmpty) 'expires_at': expiresAt,
+      };
 
   /// "flat" | "distance"
   final String pricingMode;
@@ -303,7 +346,17 @@ class LogisticsQuote extends Equatable {
 
   factory LogisticsQuote.fromJson(Map<String, dynamic> json) {
     final rawBreakdown = json['breakdown'];
+    final rawSupply = json['supply'];
+    final rawCargo = json['cargo_summary'];
     return LogisticsQuote(
+      quoteId: json['quote_id']?.toString(),
+      quoteHash: json['quote_hash']?.toString(),
+      createdAt: json['created_at']?.toString(),
+      expiresAt: json['expires_at']?.toString(),
+      laneId: parseIntOrNull(json['lane_id']),
+      supplyStatus: rawSupply is Map ? rawSupply['status']?.toString() : null,
+      supplyMessage: rawSupply is Map ? rawSupply['message']?.toString() : null,
+      cargoSummary: rawCargo is Map ? Map<String, dynamic>.from(rawCargo) : null,
       quotable: parseBoolOrDefault(json['quotable'], true),
       pricingMode: (json['pricing_mode'] ?? 'flat').toString(),
       total: parseDoubleOrNull(json['total']) ?? 0,
@@ -329,6 +382,11 @@ class LogisticsQuote extends Equatable {
         isEstimate,
         estimateNotice,
         breakdown,
+        quoteId,
+        quoteHash,
+        expiresAt,
+        laneId,
+        supplyStatus,
       ];
 }
 

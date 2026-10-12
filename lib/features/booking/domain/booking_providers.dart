@@ -120,6 +120,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
     String? jobType,
     String? serviceCategoryOverride,
     List<Map<String, dynamic>>? cartDataOverride,
+    Map<String, dynamic>? extraPayload,
   }) async {
     final List<CartItem> items = customItems ?? ref.read(cartProvider);
     final selectedAddress = ref.read(selectedAddressProvider);
@@ -180,6 +181,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       jobType: jobType,
       serviceCategoryOverride: serviceCategoryOverride,
       cartDataOverride: cartDataOverride,
+      extraPayload: extraPayload,
     );
 
     switch (result) {

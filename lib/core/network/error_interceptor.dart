@@ -47,7 +47,10 @@ class ErrorInterceptor extends Interceptor {
     if (code == null) return const UnknownError();
     switch (code) {
       case 400:
+      case 409:
       case 422:
+        // 409 added for Goods & Transport: PRICE_CHANGED / FARE_NOT_CONFIGURED
+        // come back as 409 with a customer-facing message + error code.
         return _parseValidationError(data);
       case 401:
         return const UnauthorizedError();
@@ -67,6 +70,15 @@ class ErrorInterceptor extends Interceptor {
         // a generic message regardless of what the server actually said.
         return _parseValidationError(data);
       case >= 500:
+        // Goods & Transport answers 503 ROAD_ROUTING_UNAVAILABLE with a
+        // customer-facing message + error_code; keep it instead of the
+        // generic server error. Other 5xx bodies carry no error_code.
+        if (data is Map &&
+            (data['error_code'] != null) &&
+            data['message'] is String &&
+            (data['message'] as String).isNotEmpty) {
+          return _parseValidationError(data);
+        }
         return const ServerError();
       default:
         return const UnknownError();
@@ -156,7 +168,22 @@ class ErrorInterceptor extends Interceptor {
       }
 
       if (map['message'] is String && (map['message'] as String).isNotEmpty && map['message'] != 'false') {
-        return ValidationError(map['message'] as String);
+        // Goods & Transport errors: {success:false, error_code|code, message,
+        // ...extras} (e.g. recommended_vehicle, suitable_vehicles,
+        // server_total, restrictions, max_additional_stops). Keep the code
+        // and the extras so screens can react to them.
+        final gtCode = (map['error_code'] ?? map['code'])?.toString();
+        final gtExtra = Map<String, dynamic>.from(map)
+          ..remove('success')
+          ..remove('message')
+          ..remove('error_code')
+          ..remove('code')
+          ..remove('errors');
+        return ValidationError(
+          map['message'] as String,
+          code: gtCode,
+          extra: gtExtra,
+        );
       }
 
       // Shape D-a

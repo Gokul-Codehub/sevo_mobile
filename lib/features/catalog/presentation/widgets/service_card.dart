@@ -699,7 +699,15 @@ class ServiceCard extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
+            // Flexible + scaleDown: on a narrow card (e.g. next to the
+            // subcategory rail) the price / MRP / "% OFF" group shrinks to fit
+            // instead of overflowing past the button.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
@@ -746,13 +754,16 @@ class ServiceCard extends ConsumerWidget {
                 ],
               ],
             ),
+              ),
+            ),
+            const SizedBox(width: 8),
             ElevatedButton(
               onPressed: onTap ?? () => _navigateToDetail(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.serviceBlueLight,
                 foregroundColor: AppColors.serviceBlue,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 minimumSize: const Size(0, 34),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),

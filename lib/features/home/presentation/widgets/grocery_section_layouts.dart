@@ -129,20 +129,48 @@ class _ProductDrivenSection extends ConsumerWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title, {this.showSeeAll = false});
+/// Where a section's "See All" should go: the browse screen already opened on
+/// that section's own department (its picked categories, or — for a
+/// "Specific Products" section — the categories of its picked products). It
+/// used to always open the general page, which defaults to Grocery & Staples.
+/// Falls back to the general page when nothing can be resolved.
+String _seeAllRoute(WidgetRef ref, MobileGrocerySection? section) {
+  const general = '/groceries/seller-hub';
+  if (section == null) return general;
+  final tree = ref.read(marketplaceCategoryTreeProvider).valueOrNull;
+  if (tree == null) return general;
+
+  var ids = section.categoryIds;
+  if (ids.isEmpty && section.productIds.isNotEmpty) {
+    final products = ref
+        .read(marketplaceProductsByIdsProvider(section.productIds.join(',')))
+        .valueOrNull;
+    ids = [
+      for (final p in products ?? const <MarketplaceProduct>[])
+        if (p.categoryId != null) p.categoryId!,
+    ];
+  }
+  final resolved = _resolveSectionCategories(tree, ids);
+  if (resolved.isEmpty) return general;
+  final first = resolved.first;
+  final root = first.isVegetableRoot ? '/vegetables' : '/groceries';
+  return '$root/seller-hub?category=${first.category.slug}';
+}
+
+class _SectionTitle extends ConsumerWidget {
+  const _SectionTitle(this.title, {this.showSeeAll = false, this.section});
   final String title;
 
-  // Added 2026-10-05 (Phase B, "See All" display checkbox). Opens the
-  // general Seller Hub Groceries browse screen (the same fallback
-  // `_BannerProductRailLayout`'s CTA already uses) rather than a dead
-  // link — it isn't pre-filtered to this section's own picked categories,
-  // since that browse screen has no route param for an initial category
-  // today; a real general destination beats a non-functional "See All".
+  /// The section this title belongs to — used to point "See All" at that
+  /// section's own department (see [_seeAllRoute]).
+  final MobileGrocerySection? section;
+
+  // "See All" display checkbox (Phase B). Opens the browse screen on this
+  // section's own category, or the general page when that can't be resolved.
   final bool showSeeAll;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -163,7 +191,7 @@ class _SectionTitle extends StatelessWidget {
           if (showSeeAll)
             InkWell(
               borderRadius: BorderRadius.circular(8),
-              onTap: () => context.push('/groceries/seller-hub'),
+              onTap: () => context.push(_seeAllRoute(ref, section)),
               child: const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Row(
@@ -266,7 +294,7 @@ class _HorizontalCarouselLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section?.title ?? title ?? '', showSeeAll: section?.showSeeAll ?? false),
+        _SectionTitle(section?.title ?? title ?? '', showSeeAll: section?.showSeeAll ?? false, section: section),
         const SizedBox(height: 12),
         _ProductCarouselRow(
           items: items,
@@ -303,7 +331,7 @@ class _ProductGridLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section.title, showSeeAll: section.showSeeAll),
+        _SectionTitle(section.title, showSeeAll: section.showSeeAll, section: section),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -476,6 +504,7 @@ class _ProductRowList extends StatelessWidget {
     this.showDiscount = true,
     this.showAddButton = true,
     this.showSeeAll = false,
+    this.section,
   });
 
   final String title;
@@ -485,13 +514,14 @@ class _ProductRowList extends StatelessWidget {
   final bool showDiscount;
   final bool showAddButton;
   final bool showSeeAll;
+  final MobileGrocerySection? section;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(title, showSeeAll: showSeeAll),
+        _SectionTitle(title, showSeeAll: showSeeAll, section: section),
         const SizedBox(height: 8),
         ListView.separated(
           shrinkWrap: true,
@@ -531,6 +561,7 @@ class _CompactListLayout extends StatelessWidget {
       showDiscount: section.showProductDiscount,
       showAddButton: section.showAddButton,
       showSeeAll: section.showSeeAll,
+      section: section,
     );
   }
 }
@@ -558,6 +589,7 @@ class _QuickAddListLayout extends StatelessWidget {
       showDiscount: section.showProductDiscount,
       showAddButton: section.showAddButton,
       showSeeAll: section.showSeeAll,
+      section: section,
     );
   }
 }
@@ -1306,15 +1338,10 @@ class _CategoryTileGridLayout extends ConsumerWidget {
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(14),
-                          child: AppRemoteImage(
-                            imageUrl: category.image,
-                            rawPath: category.image,
-                            title: category.name,
-                            categoryName: category.name,
-                            slug: category.slug,
+                          child: _CategoryCoverImage(
+                            category: category,
                             width: double.infinity,
                             height: double.infinity,
-                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
@@ -1378,15 +1405,10 @@ class _CircularCategoryRailLayout extends ConsumerWidget {
                     children: [
                       if (section.showCategoryImage)
                         ClipOval(
-                          child: AppRemoteImage(
-                            imageUrl: category.image,
-                            rawPath: category.image,
-                            title: category.name,
-                            categoryName: category.name,
-                            slug: category.slug,
+                          child: _CategoryCoverImage(
+                            category: category,
                             width: 64,
                             height: 64,
-                            fit: BoxFit.cover,
                           ),
                         ),
                       if (section.showCategoryImage) const SizedBox(height: 6),
@@ -1406,6 +1428,39 @@ class _CircularCategoryRailLayout extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A category tile's picture: the admin-uploaded category image when there is
+/// one, otherwise a photo of one of the category's own products (many Seller
+/// Hub categories have no image uploaded, which left empty grey tiles).
+class _CategoryCoverImage extends ConsumerWidget {
+  const _CategoryCoverImage({
+    required this.category,
+    required this.width,
+    required this.height,
+  });
+
+  final MarketplaceCategory category;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final own = category.image;
+    final url = (own != null && own.isNotEmpty)
+        ? own
+        : ref.watch(marketplaceCategoryCoverImagesProvider).valueOrNull?[category.id];
+    return AppRemoteImage(
+      imageUrl: url,
+      rawPath: url,
+      title: category.name,
+      categoryName: category.name,
+      slug: category.slug,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
     );
   }
 }

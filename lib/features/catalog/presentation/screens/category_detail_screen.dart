@@ -8,6 +8,7 @@ import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../shared/widgets/listing_skeleton.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
@@ -32,7 +33,16 @@ class _VerticalDepartmentTile extends StatelessWidget {
     required this.onTap,
     this.image,
     this.icon = Icons.eco_rounded,
+    this.accent = AppColors.groceryGreen,
+    this.accentLight = AppColors.groceryGreenLight,
+    this.accentDark = AppColors.groceryGreenDark,
   });
+
+  /// Selection / ring colors — grocery green by default, service blue for the
+  /// services rail.
+  final Color accent;
+  final Color accentLight;
+  final Color accentDark;
 
   final String label;
   final bool selected;
@@ -51,7 +61,7 @@ class _VerticalDepartmentTile extends StatelessWidget {
           color: selected ? AppColors.background : Colors.transparent,
           border: Border(
             right: BorderSide(
-              color: selected ? AppColors.groceryGreen : Colors.transparent,
+              color: selected ? accent : Colors.transparent,
               width: 3,
             ),
           ),
@@ -66,10 +76,10 @@ class _VerticalDepartmentTile extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? AppColors.groceryGreen : Colors.transparent,
+                  color: selected ? accent : Colors.transparent,
                   width: 2,
                 ),
-                color: AppColors.groceryGreenLight,
+                color: accentLight,
               ),
               child: ClipOval(
                 child: image != null
@@ -79,7 +89,7 @@ class _VerticalDepartmentTile extends StatelessWidget {
                         fit: BoxFit.cover,
                         semanticIcon: icon,
                       )
-                    : Icon(icon, color: AppColors.groceryGreenDark, size: 24),
+                    : Icon(icon, color: accentDark, size: 24),
               ),
             ),
             const SizedBox(height: 6),
@@ -504,6 +514,57 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     );
   }
 
+  /// Service categories: the subcategories (e.g. Washing Machine, Fridge) as a
+  /// persistent vertical rail on the LEFT — image + name — and the matching
+  /// packages on the RIGHT. Built outside the services `.when` so the rail
+  /// stays put while the right side reloads after a tap. Grocery categories
+  /// (own department rail) and categories with no subcategories are untouched.
+  Widget _withServiceRail(
+    bool isGrocery,
+    List<Subcategory> subs,
+    Widget body,
+  ) {
+    if (isGrocery || subs.isEmpty) return body;
+    const blue = AppColors.serviceBlue;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: 82,
+          color: Colors.white,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              _VerticalDepartmentTile(
+                label: 'All',
+                icon: Icons.grid_view_rounded,
+                accent: blue,
+                accentLight: AppColors.serviceBlueLight,
+                accentDark: AppColors.serviceBlueDark,
+                selected: _selectedSubcategorySlug == null,
+                onTap: () => setState(() => _selectedSubcategorySlug = null),
+              ),
+              for (final sub in subs)
+                _VerticalDepartmentTile(
+                  label: sub.name,
+                  image: sub.image,
+                  icon: Icons.home_repair_service_rounded,
+                  accent: blue,
+                  accentLight: AppColors.serviceBlueLight,
+                  accentDark: AppColors.serviceBlueDark,
+                  selected: _selectedSubcategorySlug == sub.slug,
+                  onTap: () => setState(() => _selectedSubcategorySlug =
+                      _selectedSubcategorySlug == sub.slug ? null : sub.slug),
+                ),
+            ],
+          ),
+        ),
+        const VerticalDivider(width: 1, thickness: 0.8),
+        Expanded(child: body),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
@@ -640,13 +701,14 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         ],
       ),
       Expanded(
-            child: servicesAsync.when(
-        loading: () => ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: 4,
-          itemBuilder: (context, index) => const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: ShimmerCard(height: 140),
+            child: _withServiceRail(isGroceryCategory, subcategories, servicesAsync.when(
+        // Grocery categories show their own rail once loaded, so the skeleton
+        // draws one; service categories get their rail from _withServiceRail
+        // around this body, so the skeleton must not add a second.
+        loading: () => IllustrationThenSkeleton(
+          skeleton: ListingSkeleton(
+            grid: isGroceryCategory,
+            showRail: isGroceryCategory,
           ),
         ),
         error: (err, st) => Padding(
@@ -821,33 +883,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               children: [
-                if (subcategories.isNotEmpty) ...[
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _FilterChip(
-                          label: 'All Services',
-                          selected: _selectedSubcategorySlug == null,
-                          onTap: () => setState(() => _selectedSubcategorySlug = null),
-                        ),
-                        const SizedBox(width: 8),
-                        ...subcategories.map(
-                          (sub) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: _FilterChip(
-                              label: sub.name,
-                              selected: _selectedSubcategorySlug == sub.slug,
-                              onTap: () => setState(() => _selectedSubcategorySlug =
-                                  _selectedSubcategorySlug == sub.slug ? null : sub.slug),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 ...services.map(
                   (service) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -958,7 +993,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             ],
           );
         },
-            ),
+            )),
           ),
           ?cartBar,
         ],

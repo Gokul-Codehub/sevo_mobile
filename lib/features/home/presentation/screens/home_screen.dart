@@ -3963,36 +3963,10 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
               return _PromoBannerSlide(
                 key: ValueKey(banner.imageUrl ?? banner.assetFallback ?? banner.title),
                 banner: banner,
-                blendIntoBackground: widget.mode == HomeFlowMode.groceries,
+                blendIntoBackground: true,
               );
             },
           ),
-        ),
-        // Slide-count dots removed in Groceries (2026-10-09 request).
-        if (widget.mode != HomeFlowMode.groceries) const SizedBox(height: 10),
-        if (widget.mode != HomeFlowMode.groceries)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(effectiveBanners.length > 1 ? effectiveBanners.length : 2, (index) {
-            final isActive = index == _currentPage;
-            // Dark dots on Groceries' yellow container, accent-blue dots on
-            // Services' light-blue one (white would vanish against either).
-            final dotInk = widget.mode == HomeFlowMode.services
-                ? HomeFlowTheme.services.accent
-                : const Color(0xFF1A1A1A);
-            final dotActiveColor = dotInk;
-            final dotInactiveColor = dotInk.withValues(alpha: 0.3);
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: isActive ? 20 : 6,
-              height: 5,
-              decoration: BoxDecoration(
-                color: isActive ? dotActiveColor : dotInactiveColor,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            );
-          }),
         ),
       ],
     );

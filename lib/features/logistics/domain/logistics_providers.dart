@@ -6,6 +6,7 @@ import 'package:location/location.dart' as loc;
 
 import '../../../core/errors/api_error.dart';
 import '../data/logistics_repository.dart';
+import 'gt_models.dart';
 import 'logistics_models.dart';
 
 /// Currently selected booking appointment date.
@@ -148,6 +149,10 @@ class LogisticsQuoteParam {
     required this.pickupLongitude,
     required this.dropLatitude,
     required this.dropLongitude,
+    this.laneId,
+    this.loadingHelp,
+    this.cargo,
+    this.customerGstin,
   });
 
   final int tierId;
@@ -156,6 +161,13 @@ class LogisticsQuoteParam {
   final double pickupLongitude;
   final double dropLatitude;
   final double dropLongitude;
+
+  /// Optional inputs the updated backend quote honours. All part of the
+  /// provider key so a change re-quotes (and re-locks) the fare.
+  final int? laneId;
+  final bool? loadingHelp;
+  final CargoDeclaration? cargo;
+  final String? customerGstin;
 
   @override
   bool operator ==(Object other) =>
@@ -167,11 +179,16 @@ class LogisticsQuoteParam {
           pickupLatitude == other.pickupLatitude &&
           pickupLongitude == other.pickupLongitude &&
           dropLatitude == other.dropLatitude &&
-          dropLongitude == other.dropLongitude;
+          dropLongitude == other.dropLongitude &&
+          laneId == other.laneId &&
+          loadingHelp == other.loadingHelp &&
+          cargo == other.cargo &&
+          customerGstin == other.customerGstin;
 
   @override
   int get hashCode => Object.hash(tierId, serviceCategory, pickupLatitude,
-      pickupLongitude, dropLatitude, dropLongitude);
+      pickupLongitude, dropLatitude, dropLongitude, laneId, loadingHelp, cargo,
+      customerGstin);
 }
 
 /// The live, authoritative fare for the currently selected tier + pickup +
@@ -188,6 +205,10 @@ final logisticsQuoteProvider = FutureProvider.autoDispose
     pickupLongitude: param.pickupLongitude,
     dropLatitude: param.dropLatitude,
     dropLongitude: param.dropLongitude,
+    laneId: param.laneId,
+    loadingHelp: param.loadingHelp,
+    cargo: param.cargo,
+    customerGstin: param.customerGstin,
   );
 
   return switch (result) {

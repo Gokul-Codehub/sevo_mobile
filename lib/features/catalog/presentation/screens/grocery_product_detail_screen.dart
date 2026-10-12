@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -216,6 +218,7 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
     // richer combined description once it arrives, without blocking the
     // instant paint from initialProduct.
     final effectiveDescription = activeSource?.toServiceItem().description ??
+        enrichedProduct?.toServiceItem().description ??
         product.description ??
         product.shortDescription;
 
@@ -431,8 +434,6 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
                   // else as regular/lighter body text.
                   if ((effectiveDescription ?? '').trim().isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    const Text('About this product', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-                    const SizedBox(height: 8),
                     _ProductAboutSection(text: effectiveDescription!.trim()),
                   ],
 
@@ -559,33 +560,156 @@ class _ProductAboutSection extends StatelessWidget {
     'storage temperature',
   };
 
-  bool _isLabelLine(String line) {
+  static bool _isLabelLine(String line) {
     final normalized = line.trim().toLowerCase().replaceAll(RegExp(r':$'), '').trim();
     return _knownLabels.contains(normalized);
+  }
+
+  /// "Wheat-Semolina Vermicelli: The most common type..." — a bold lead-in
+  /// followed by its explanation.
+  static final RegExp _leadIn = RegExp(r'^([A-Za-z][A-Za-z0-9 &/\-]{2,40}):\s+(.+)$');
+  static final RegExp _bullet = RegExp(r'^[-\u2022*]\s+(.+)$');
+
+  /// A short line with no full stop or colon ("Types of Vermicelli") reads as
+  /// a sub-heading.
+  static bool _isSubheading(String line) =>
+      line.length <= 40 &&
+      !line.endsWith('.') &&
+      !line.contains(':') &&
+      line.split(' ').length <= 6;
+
+  static const _body = TextStyle(
+    fontSize: 13.5,
+    fontWeight: FontWeight.w400,
+    color: AppColors.textSecondary,
+    height: 1.5,
+  );
+  static const _strong = TextStyle(
+    fontSize: 13.5,
+    fontWeight: FontWeight.w700,
+    color: AppColors.textPrimary,
+    height: 1.5,
+  );
+
+  Widget _dot(Widget child) => Padding(
+        padding: const EdgeInsets.only(top: 3, bottom: 3, left: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 8, right: 9),
+              child: Icon(Icons.circle, size: 5, color: AppColors.groceryGreen),
+            ),
+            Expanded(child: child),
+          ],
+        ),
+      );
+
+  /// One line of prose: bullet, "Lead-in: text", sub-heading or paragraph.
+  Widget _line(String line, {bool lead = false}) {
+    final b = _bullet.firstMatch(line);
+    if (b != null) return _dot(Text(b.group(1)!, style: _body));
+
+    final m = _leadIn.firstMatch(line);
+    if (m != null) {
+      return _dot(
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(text: '${m.group(1)}: ', style: _strong),
+            TextSpan(text: m.group(2), style: _body),
+          ]),
+        ),
+      );
+    }
+    if (!lead && _isSubheading(line)) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 2),
+        child: Text(line, style: _strong),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Text(line, style: lead ? _strong : _body),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final lines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
 
-    final children = <Widget>[];
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final isLabel = _isLabelLine(line);
-      children.add(
-        Padding(
-          padding: EdgeInsets.only(top: isLabel && i > 0 ? 10 : 2),
-          child: Text(
-            line,
-            style: isLabel
-                ? const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)
-                : const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400, color: AppColors.textSecondary, height: 1.45),
-          ),
-        ),
-      );
+    // Lines before the first known label are free-form description;
+    // everything after a label line belongs to that label.
+    final intro = <String>[];
+    final sections = <({String label, List<String> body})>[];
+    for (final line in lines) {
+      if (_isLabelLine(line)) {
+        sections.add((label: line.replaceAll(RegExp(r':$'), '').trim(), body: <String>[]));
+      } else if (sections.isEmpty) {
+        intro.add(line);
+      } else {
+        sections.last.body.add(line);
+      }
     }
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
+    final children = <Widget>[
+      for (var i = 0; i < intro.length; i++) _line(intro[i], lead: i == 0 && intro.length > 1),
+    ];
+
+    for (final s in sections) {
+      if (s.body.isEmpty) continue;
+      if (children.isNotEmpty) children.add(const SizedBox(height: 10));
+      final shortValue = s.body.length == 1 && s.body.first.length <= 36;
+      if (shortValue) {
+        // "Unit | 1 kg", "Shelf Life | 3 days" — compact two-column row.
+        children.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 118, child: Text(s.label, style: _strong)),
+                Expanded(child: Text(s.body.first, style: _body)),
+              ],
+            ),
+          ),
+        );
+      } else {
+        children.add(Text(s.label, style: _strong));
+        children.add(const SizedBox(height: 2));
+        for (final l in s.body) {
+          children.add(_line(l));
+        }
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, size: 19, color: AppColors.groceryGreen),
+              SizedBox(width: 8),
+              Text(
+                'About this item',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 8),
+          ...children,
+        ],
+      ),
+    );
   }
 }
 
@@ -607,11 +731,26 @@ class _UnitSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final heading = (attributeName ?? '').isNotEmpty ? 'Choose ${attributeName!.toLowerCase()}' : 'Choose unit';
-    return Column(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+      ),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(heading, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        Text(
+          'SELECT PACK ${(attributeName ?? '').isNotEmpty ? attributeName!.toUpperCase() : 'SIZE'} / VARIANT',
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.6,
+            color: AppColors.textSecondary,
+          ),
+        ),
         const SizedBox(height: 10),
         SizedBox(
           height: 74,
@@ -675,6 +814,7 @@ class _UnitSelector extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }
@@ -694,9 +834,44 @@ class _ProductGallery extends StatefulWidget {
 class _ProductGalleryState extends State<_ProductGallery> {
   final PageController _controller = PageController();
   int _page = 0;
+  Timer? _timer;
+
+  /// Photos advance on their own every few seconds; a touch restarts the
+  /// countdown so a customer swiping isn't fought by the timer.
+  static const _interval = Duration(seconds: 4);
+
+  void _startAutoSlide() {
+    _timer?.cancel();
+    if (widget.urls.length <= 1) return;
+    _timer = Timer.periodic(_interval, (_) {
+      if (!mounted || !_controller.hasClients) return;
+      final next = (_page + 1) % widget.urls.length;
+      _controller.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoSlide();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProductGallery oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.urls.length != widget.urls.length) {
+      if (_page >= widget.urls.length) _page = 0;
+      _startAutoSlide();
+    }
+  }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -723,11 +898,14 @@ class _ProductGalleryState extends State<_ProductGallery> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        PageView.builder(
-          controller: _controller,
-          itemCount: urls.length,
-          onPageChanged: (i) => setState(() => _page = i),
-          itemBuilder: (_, i) => _image(urls[i]),
+        Listener(
+          onPointerDown: (_) => _startAutoSlide(),
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: urls.length,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (_, i) => _image(urls[i]),
+          ),
         ),
         Positioned(
           left: 0,
