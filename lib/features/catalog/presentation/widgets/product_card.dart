@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/utils/image_url_helper.dart';
+import 'product_image_slider.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
-import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 
@@ -153,7 +152,7 @@ class ProductCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+        border: Border.all(color: AppColors.divider, width: 1.0),
         boxShadow: [
           BoxShadow(
             color: const Color(0x0C0F172A),
@@ -179,16 +178,8 @@ class ProductCard extends ConsumerWidget {
               children: [
                 Container(
                   color: AppColors.surfaceVariant,
-                  child: AppRemoteImage(
-                    imageUrl: service.imageUrl,
-                    rawPath: service.imageUrl,
-                    title: service.title,
-                    categoryName: service.categoryName,
-                    slug: service.slug,
-                    semanticIcon: ImageUrlHelper.mapCategoryIcon(
-                        service.categoryName, service.slug),
-                    width: double.infinity,
-                    height: double.infinity,
+                  child: ProductImageSlider(
+                    service: service,
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -415,7 +406,7 @@ class ProductCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+        border: Border.all(color: AppColors.divider, width: 1.0),
         boxShadow: [
           BoxShadow(
             color: const Color(0x0C0F172A),
@@ -444,17 +435,9 @@ class ProductCard extends ConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   Container(
-                    color: const Color(0xFFF8FAFC),
-                    child: AppRemoteImage(
-                      imageUrl: service.imageUrl,
-                      rawPath: service.imageUrl,
-                      title: service.title,
-                      categoryName: service.categoryName,
-                      slug: service.slug,
-                      semanticIcon: ImageUrlHelper.mapCategoryIcon(
-                          service.categoryName, service.slug),
-                      width: double.infinity,
-                      height: double.infinity,
+                    color: AppColors.background,
+                    child: ProductImageSlider(
+                      service: service,
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -496,7 +479,7 @@ class ProductCard extends ConsumerWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
+                          color: AppColors.surfaceVariant,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -532,7 +515,7 @@ class ProductCard extends ConsumerWidget {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       if (service.hasDiscount && showDiscount) ...[
@@ -541,7 +524,7 @@ class ProductCard extends ConsumerWidget {
                           '₹${service.price}',
                           style: const TextStyle(
                             fontSize: 10.5,
-                            color: Color(0xFF94A3B8),
+                            color: AppColors.textHint,
                             decoration: TextDecoration.lineThrough,
                           ),
                         ),
@@ -585,25 +568,25 @@ class ProductCard extends ConsumerWidget {
                 // Delivery ETA & Stock
                 Row(
                   children: [
-                    const Icon(Icons.timer_outlined, size: 11, color: Color(0xFF64748B)),
+                    const Icon(Icons.timer_outlined, size: 11, color: AppColors.textSecondary),
                     const SizedBox(width: 3),
                     const Text(
                       '22 mins',
                       style: TextStyle(
                         fontSize: 9.5,
-                        color: Color(0xFF64748B),
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     if (service.maxQuantity <= 5 && service.inStock) ...[
                       const SizedBox(width: 6),
-                      const Icon(Icons.inventory_2_outlined, size: 10, color: Color(0xFF64748B)),
+                      const Icon(Icons.inventory_2_outlined, size: 10, color: AppColors.textSecondary),
                       const SizedBox(width: 2),
                       Text(
                         '${service.maxQuantity} left',
                         style: const TextStyle(
                           fontSize: 9,
-                          color: Color(0xFF64748B),
+                          color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -661,7 +644,7 @@ class QuickAddControl extends ConsumerWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
+          color: AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(5),
         ),
         child: const Text(
@@ -687,14 +670,14 @@ class QuickAddControl extends ConsumerWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFF16A34A), width: 1.2),
+            border: Border.all(color: AppColors.groceryGreen, width: 1.2),
           ),
           child: const Text(
             'ADD',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF16A34A),
+              color: AppColors.groceryGreen,
               letterSpacing: 0.2,
             ),
           ),
@@ -706,7 +689,7 @@ class QuickAddControl extends ConsumerWidget {
     return Container(
       height: 26,
       decoration: BoxDecoration(
-        color: const Color(0xFF16A34A),
+        color: AppColors.groceryGreen,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(

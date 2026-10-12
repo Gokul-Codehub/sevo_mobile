@@ -9,6 +9,7 @@ import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../../shared/widgets/banner_media.dart';
 import '../../../home/data/homepage_repository.dart';
+import '../widgets/animated_splash_art.dart';
 
 /// Screen 1: Splash Screen
 ///
@@ -37,7 +38,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final Animation<double> _fadeAnim;
   Timer? _navTimer;
 
-  static const _splashAsset = 'assets/images/sevo_splash.webp';
   /// The brand splash image always stays up this long (the original 2.2 s) ...
   static const _minDisplay = Duration(milliseconds: 2200);
 
@@ -153,27 +153,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Full-bleed splash image — covers the entire device width and
-            // height, same as the original design.
-            Image.asset(
-              _splashAsset,
-              fit: BoxFit.cover,
-              // If the asset is ever missing (e.g. a build that hasn't
-              // picked up the asset yet), fail safe to a plain white
-              // screen for the same duration rather than crashing — the
-              // timer above still fires and takes the user in.
-              errorBuilder: (context, error, stackTrace) =>
-                  const ColoredBox(color: Colors.white),
-            ),
-            // Loader sits inside the bottom of the image itself, not in a
-            // separate area below it.
+            // The splash is now a living illustration (animated_splash_art.dart)
+            // rather than the old single flat image: logo springs in, service
+            // tiles pop and bounce in turn, a truck drives across the hills.
+            const ColoredBox(color: Colors.white),
+            const AnimatedSplashArt(),
+            // Status line + dots, over the hills at the bottom.
             Positioned(
               left: 0,
               right: 0,
-              bottom: 56,
+              bottom: 96,
               child: SafeArea(
                 top: false,
-                child: Center(child: _ThreeDotLoader()),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SplashStatusLine(),
+                    const SizedBox(height: 14),
+                    _ThreeDotLoader(),
+                  ],
+                ),
               ),
             ),
           ],

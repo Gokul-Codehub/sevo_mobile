@@ -1,5 +1,6 @@
 import 'package:decimal/decimal.dart';
 
+import '../../../config/env.dart';
 import '../domain/catalog_models.dart';
 
 /// Models for the Seller Hub "Basket" (combo-offer) feature.
@@ -43,6 +44,23 @@ Decimal? _parseDecimal(dynamic v) {
   }
 }
 
+/// Absolute URL for a vendor media value. The Seller Hub sends either a full
+/// URL or a path relative to ITS host (not the customer host), so a relative
+/// path is resolved against the vendor origin.
+String _mediaUrl(dynamic raw) {
+  final s = (raw ?? '').toString().trim();
+  if (s.isEmpty) return '';
+  if (s.startsWith('http://') || s.startsWith('https://')) return s;
+  return s.startsWith('/') ? '${Env.groceryHubBaseUrl}$s' : '${Env.groceryHubBaseUrl}/$s';
+}
+
+/// One entry of a vendor `images` list — a plain URL string, or a map with
+/// the URL under `image` / `url` / `path` / `src`.
+String _imageFrom(dynamic v) {
+  if (v is Map) return _mediaUrl(v['image'] ?? v['url'] ?? v['path'] ?? v['src']);
+  return _mediaUrl(v);
+}
+
 /// One selectable product for a multi-option [BasketSlot] (e.g. one of
 /// three rice brands a customer can pick for the "1kg Rice" slot).
 class BasketSlotOption {
@@ -80,6 +98,18 @@ class BasketSlotOption {
   final bool inStock;
   final int availableQuantity;
 
+  /// Every distinct photo of this option, primary first.
+  List<String> get imageUrls {
+    final out = <String>[];
+    for (final u in [primaryImage, ...images.map(_imageFrom)]) {
+      if (u.isNotEmpty && !out.contains(u)) out.add(u);
+    }
+    return out;
+  }
+
+  /// The option's main photo ('' when it has none).
+  String get coverImage => imageUrls.isEmpty ? '' : imageUrls.first;
+
   /// Converts this option to a cart-addable [ServiceItem] at the option's
   /// OWN regular [sellingPrice] — see [MarketplaceBasket]'s doc comment for
   /// why the bundle's combo pricing can't be carried through yet.
@@ -114,7 +144,7 @@ class BasketSlotOption {
       mrp: _parseDecimal(json['mrp']),
       sellingPrice: _parseDecimal(json['selling_price']),
       isDefault: json['is_default'] == true,
-      primaryImage: (json['primary_image'] ?? '').toString(),
+      primaryImage: _mediaUrl(json['primary_image']),
       images: json['images'] is List ? json['images'] as List : const [],
       inStock: json['in_stock'] != false,
       availableQuantity: int.tryParse(json['available_quantity']?.toString() ?? '') ?? 0,
@@ -221,7 +251,7 @@ class BasketItem {
       packSize: (json['pack_size'] ?? '').toString(),
       mrp: _parseDecimal(json['mrp']),
       unitPrice: _parseDecimal(json['unit_price']),
-      primaryImage: (json['primary_image'] ?? '').toString(),
+      primaryImage: _mediaUrl(json['primary_image']),
     );
   }
 }
@@ -276,6 +306,40 @@ class MarketplaceBasket {
 
   bool get hasSavings => savings != null && savings! > Decimal.zero;
 
+  /// Whole-number "22" from the server's `savings_percent` (21.7), or null.
+  int? get savingsPercentRounded {
+    final p = num.tryParse(savingsPercent?.toString() ?? '');
+    return (p == null || p <= 0) ? null : p.round();
+  }
+
+  /// The combo's own photo when the admin set one; otherwise (the usual
+  /// case — `primary_image` is empty on today's combos) a photo of one of the
+  /// products inside it, the same way the website does.
+  String get coverImage {
+    if (primaryImage.isNotEmpty) return primaryImage;
+    final all = galleryImages;
+    return all.isEmpty ? '' : all.first;
+  }
+
+  /// Photos for the combo gallery: the combo's own image, then each slot's
+  /// default product photo(s), then fixed items' photos — de-duplicated.
+  List<String> get galleryImages {
+    final out = <String>[];
+    void add(String u) {
+      if (u.isNotEmpty && !out.contains(u)) out.add(u);
+    }
+
+    add(primaryImage);
+    for (final slot in slots) {
+      final d = slot.defaultOption;
+      if (d != null) d.imageUrls.forEach(add);
+    }
+    for (final item in items) {
+      add(item.primaryImage);
+    }
+    return out;
+  }
+
   factory MarketplaceBasket.fromJson(Map<String, dynamic> json) {
     final slots = (json['slots'] as List? ?? const [])
         .whereType<Map>()
@@ -299,7 +363,7 @@ class MarketplaceBasket {
       savingsPercent: json['savings_percent'],
       availableStock: json['available_stock'],
       inStock: json['in_stock'] != false,
-      primaryImage: (json['primary_image'] ?? '').toString(),
+      primaryImage: _mediaUrl(json['primary_image']),
       slots: slots,
       isMultiOption: json['is_multi_option'] == true || slots.any((s) => s.isMultiOption),
       items: items,

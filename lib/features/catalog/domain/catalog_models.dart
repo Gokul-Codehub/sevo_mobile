@@ -260,6 +260,7 @@ class ServiceItem extends Equatable {
     this.gstRate,
     this.platformFee,
     this.status,
+    this.galleryImages = const [],
   });
 
   final int id;
@@ -372,6 +373,10 @@ class ServiceItem extends Equatable {
   // available, same as [isAvailable]'s default), never as "unavailable" —
   // this must never make an older/legacy payload silently un-bookable.
   final String? status;
+
+  /// Extra product photos (the vendor's gallery) — a product card slides through
+  /// them. Empty for items with a single image.
+  final List<String> galleryImages;
 
   /// Whether this item can currently be booked / added to cart. False only
   /// for an explicit non-ACTIVE status from the backend; unknown/missing
@@ -725,6 +730,7 @@ class ServiceItem extends Equatable {
         gstRate,
         platformFee,
         status,
+        galleryImages,
       ];
 }
 

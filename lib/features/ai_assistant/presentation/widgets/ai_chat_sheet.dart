@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -39,6 +40,15 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
 
+  /// A photo picked with the paperclip, waiting to be sent with the next
+  /// message (the assistant accepts one image of up to 5 MB per message).
+  Uint8List? _attachment;
+  String? _attachmentName;
+  String? _attachmentError;
+
+  static const _maxAttachmentBytes = 5 * 1024 * 1024;
+  static const _allowedExtensions = {'png', 'jpg', 'jpeg', 'webp'};
+
   @override
   void dispose() {
     _inputController.dispose();
@@ -57,11 +67,71 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
     });
   }
 
+  /// Picks a photo from the gallery. (No camera on purpose: the chat only
+  /// needs existing photos, and it keeps the camera permission out of it.)
+  Future<void> _pickAttachment() async {
+    setState(() => _attachmentError = null);
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1800,
+        maxHeight: 1800,
+        imageQuality: 88,
+      );
+      if (picked == null) return;
+      final name = picked.name;
+      final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+      if (!_allowedExtensions.contains(ext)) {
+        setState(
+          () => _attachmentError = 'Please choose a PNG, JPG or WebP image.',
+        );
+        return;
+      }
+      final bytes = await picked.readAsBytes();
+      if (bytes.length > _maxAttachmentBytes) {
+        setState(
+          () => _attachmentError =
+              'That photo is over 5 MB. Please choose a smaller one.',
+        );
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _attachment = bytes;
+        _attachmentName = name;
+      });
+    } catch (_) {
+      if (mounted)
+        setState(
+          () => _attachmentError =
+              "Couldn't open that photo. Please try another.",
+        );
+    }
+  }
+
+  void _clearAttachment() => setState(() {
+    _attachment = null;
+    _attachmentName = null;
+    _attachmentError = null;
+  });
+
   void _send() {
     final text = _inputController.text;
-    if (text.trim().isEmpty) return;
+    final bytes = _attachment;
+    if (text.trim().isEmpty && bytes == null) return;
+    final controller = ref.read(aiChatControllerProvider.notifier);
     _inputController.clear();
-    ref.read(aiChatControllerProvider.notifier).sendMessage(text);
+    if (bytes != null) {
+      final name = _attachmentName ?? 'photo.jpg';
+      _clearAttachment();
+      controller.sendImage(
+        imageBytes: bytes,
+        imageFileName: name,
+        caption: text,
+      );
+    } else {
+      controller.sendMessage(text);
+    }
     _scrollToBottom();
   }
 
@@ -69,6 +139,13 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
   /// deterministic support-intake wizard: taps one of the step's quick-reply
   /// chips (e.g. an order to pick, a return reason, "Talk to a human").
   void _tapOption(AiChatOption option) {
+    // Link chips ("Open AC & Appliance Repair", "View Cancellation Policy")
+    // go to that page; the rest are answers sent back to the assistant.
+    final url = option.url;
+    if (url != null) {
+      openAiAssistantLink(context, ref, url);
+      return;
+    }
     ref.read(aiChatControllerProvider.notifier).sendOption(option);
     _scrollToBottom();
   }
@@ -81,6 +158,19 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
     ref.listen<AiChatState>(aiChatControllerProvider, (previous, next) {
       if (next.messages.length != (previous?.messages.length ?? 0)) {
         _scrollToBottom();
+        // "Taking you directly to ..." replies are deliberate navigation (the
+        // web chat redirects on them too): go there. Other answers that merely
+        // mention a service only get the button under the bubble.
+        final last = next.messages.isEmpty ? null : next.messages.last;
+        final target = last?.navigateTo;
+        if (last != null &&
+            last.sender == AiChatSender.assistant &&
+            target != null &&
+            last.content.startsWith('Taking you directly')) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) openAiAssistantLink(context, ref, target);
+          });
+        }
       }
     });
 
@@ -103,15 +193,20 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
                     ? _buildEmptyState()
                     : ListView.builder(
                         controller: _scrollController,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         itemCount:
-                            chatState.messages.length + (chatState.isSending ? 1 : 0),
+                            chatState.messages.length +
+                            (chatState.isSending ? 1 : 0),
                         itemBuilder: (context, index) {
                           if (index >= chatState.messages.length) {
                             return const _TypingIndicatorBubble();
                           }
-                          return _ChatBubble(message: chatState.messages[index]);
+                          return _ChatBubble(
+                            message: chatState.messages[index],
+                          );
                         },
                       ),
               ),
@@ -119,9 +214,7 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
               // wizard's current step (an order to pick, a return reason,
               // "Talk to support agent" / "I will wait"). Hidden once the
               // conversation has been handed off, since the wizard is done.
-              if (!chatState.handedOff &&
-                  chatState.expects == AiChatExpects.choice &&
-                  chatState.options.isNotEmpty)
+              if (!chatState.handedOff && chatState.options.isNotEmpty)
                 _buildOptionsRow(chatState.options, chatState.isSending),
               _buildInputBar(chatState.isSending, expects: chatState.expects),
             ],
@@ -174,7 +267,10 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+            icon: const Icon(
+              Icons.close_rounded,
+              color: AppColors.textSecondary,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -189,7 +285,11 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome_rounded, size: 40, color: AppColors.primary),
+            const Icon(
+              Icons.auto_awesome_rounded,
+              size: 40,
+              color: AppColors.primary,
+            ),
             const SizedBox(height: 12),
             const Text(
               'Ask me anything about your bookings, services, or groceries',
@@ -248,7 +348,10 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
               borderRadius: BorderRadius.circular(20),
               onTap: isSending ? null : () => _tapOption(option),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
                 child: Text(
                   option.label,
                   style: const TextStyle(
@@ -265,57 +368,152 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
     );
   }
 
-  Widget _buildInputBar(bool isSending, {AiChatExpects expects = AiChatExpects.text}) {
+  Widget _buildInputBar(
+    bool isSending, {
+    AiChatExpects expects = AiChatExpects.text,
+  }) {
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _inputController,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                decoration: InputDecoration(
-                  hintText: 'Message SEVO AI...',
-                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textHint),
-                  filled: true,
-                  fillColor: AppColors.surfaceVariant,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_attachmentError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _attachmentError!,
+                  style: const TextStyle(fontSize: 12, color: AppColors.error),
+                ),
+              ),
+            ),
+          if (_attachment != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        _attachment!,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _attachmentName ?? 'Photo',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                          Text(
+                            '${(_attachment!.length / 1024).round()} KB · ready to send',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove photo',
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: _clearAttachment,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Attach a photo',
+                  icon: const Icon(
+                    Icons.attach_file_rounded,
+                    color: AppColors.textSecondary,
+                  ),
+                  onPressed: isSending ? null : _pickAttachment,
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _inputController,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    decoration: InputDecoration(
+                      hintText: _attachment != null
+                          ? 'Add a message (optional)...'
+                          : (expects == AiChatExpects.image
+                                ? 'Attach a photo with the clip...'
+                                : 'Ask Apta or attach a photo...'),
+                      hintStyle: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textHint,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.surfaceVariant,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Material(
-              color: AppColors.primary,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: isSending ? null : _send,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: isSending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.arrow_upward_rounded,
-                          color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Material(
+                  color: AppColors.primary,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: isSending ? null : _send,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: isSending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.arrow_upward_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -348,7 +546,12 @@ List<InlineSpan> _parseAiMarkdownSpans(
     final label = match.group(1)!.replaceAll('**', '').trim();
     final url = match.group(2)!;
     if (onLink == null) {
-      spans.add(TextSpan(text: label, style: baseStyle.copyWith(fontWeight: FontWeight.w800)));
+      spans.add(
+        TextSpan(
+          text: label,
+          style: baseStyle.copyWith(fontWeight: FontWeight.w800),
+        ),
+      );
     } else {
       spans.add(
         WidgetSpan(
@@ -385,7 +588,9 @@ List<InlineSpan> _boldSpans(String text, TextStyle baseStyle) {
   var lastEnd = 0;
   for (final match in pattern.allMatches(text)) {
     if (match.start > lastEnd) {
-      spans.add(TextSpan(text: text.substring(lastEnd, match.start), style: baseStyle));
+      spans.add(
+        TextSpan(text: text.substring(lastEnd, match.start), style: baseStyle),
+      );
     }
     final boldText = match.group(1);
     if (boldText != null && boldText.isNotEmpty) {
@@ -425,12 +630,14 @@ void openAiAssistantLink(BuildContext context, WidgetRef ref, String rawUrl) {
   }
 
   var path = uri.path;
-  if (path.length > 1 && path.endsWith('/')) path = path.substring(0, path.length - 1);
+  if (path.length > 1 && path.endsWith('/'))
+    path = path.substring(0, path.length - 1);
   final q = uri.queryParameters;
 
   String? route;
   var goHome = false;
-  if ((path == '/booking/services' || path == '/services') && (q['category'] ?? '').isNotEmpty) {
+  if ((path == '/booking/services' || path == '/services') &&
+      (q['category'] ?? '').isNotEmpty) {
     // The web groups some services under combined names the app's catalog
     // doesn't have; use the nearest real category, else the full list.
     const aliases = {
@@ -443,18 +650,27 @@ void openAiAssistantLink(BuildContext context, WidgetRef ref, String rawUrl) {
       final alias = aliases[slug];
       slug = (alias != null && known.any((c) => c.slug == alias)) ? alias : '';
     }
-    route = slug.isEmpty ? '/categories' : '/categories/${Uri.encodeComponent(slug)}';
-  } else if (path == '/booking' || path == '/services' || path == '/categories') {
+    route = slug.isEmpty
+        ? '/categories'
+        : '/categories/${Uri.encodeComponent(slug)}';
+  } else if (path == '/booking' ||
+      path == '/services' ||
+      path == '/categories') {
     route = '/categories';
   } else if (path.startsWith('/trucks')) {
     route = '/goods-transport/booking?category=truck';
-  } else if (path.startsWith('/two-wheelers') || path.startsWith('/two-wheeler')) {
+  } else if (path.startsWith('/two-wheelers') ||
+      path.startsWith('/two-wheeler')) {
     route = '/goods-transport/booking?category=two_wheeler';
   } else if (path.startsWith('/packers')) {
     route = '/goods-transport/booking?category=packers_movers';
-  } else if (path == '/vegetables' || path == '/groceries' || path == '/grocery') {
+  } else if (path == '/vegetables' ||
+      path == '/groceries' ||
+      path == '/grocery') {
     goHome = true;
-  } else if (path == '/bookings' || path == '/my-bookings') {
+  } else if (path == '/bookings' ||
+      path == '/my-bookings' ||
+      path == '/customer/bookings') {
     route = '/bookings';
   } else if (path == '/cart') {
     route = '/cart';
@@ -495,17 +711,20 @@ class _ChatBubble extends ConsumerWidget {
     final bubbleColor = message.isError
         ? AppColors.errorLight
         : isUser
-            ? AppColors.primary
-            : AppColors.surfaceVariant;
-    final textColor = isUser && !message.isError ? Colors.white : AppColors.navy;
+        ? AppColors.primary
+        : AppColors.surfaceVariant;
+    final textColor = isUser && !message.isError
+        ? Colors.white
+        : AppColors.navy;
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
         decoration: BoxDecoration(
           color: bubbleColor,
           borderRadius: BorderRadius.only(
@@ -544,19 +763,64 @@ class _ChatBubble extends ConsumerWidget {
                   ),
                 ),
               ),
+            if (!isUser && message.navigateTo != null) ...[
+              const SizedBox(height: 10),
+              Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () =>
+                      openAiAssistantLink(context, ref, message.navigateTo!),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.serviceBlue),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Go to Service & Booking Page',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.serviceBlue,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 6),
+                        Icon(
+                          Icons.open_in_new_rounded,
+                          size: 14,
+                          color: AppColors.serviceBlue,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
             if (message.sources.isNotEmpty) ...[
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 runSpacing: 4,
                 children: message.sources
-                    .map((s) => Chip(
-                          label: Text(s, style: const TextStyle(fontSize: 10)),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          backgroundColor: Colors.white,
-                          side: const BorderSide(color: AppColors.border),
-                        ))
+                    .map(
+                      (s) => Chip(
+                        label: Text(s, style: const TextStyle(fontSize: 10)),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: AppColors.border),
+                      ),
+                    )
                     .toList(),
               ),
             ],
@@ -577,12 +841,7 @@ class _PhotoThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.memory(
-        bytes,
-        width: 160,
-        height: 160,
-        fit: BoxFit.cover,
-      ),
+      child: Image.memory(bytes, width: 160, height: 160, fit: BoxFit.cover),
     );
   }
 }
@@ -616,8 +875,11 @@ class _AuthenticatedPhotoThumbnail extends ConsumerWidget {
           error: (_, __) => Container(
             color: AppColors.surfaceVariant,
             alignment: Alignment.center,
-            child: const Icon(Icons.broken_image_rounded,
-                color: AppColors.textSecondary, size: 28),
+            child: const Icon(
+              Icons.broken_image_rounded,
+              color: AppColors.textSecondary,
+              size: 28,
+            ),
           ),
         ),
       ),
@@ -647,7 +909,9 @@ class _TypingIndicatorBubble extends StatelessWidget {
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: AppColors.textSecondary),
+                strokeWidth: 2,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ),

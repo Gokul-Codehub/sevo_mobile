@@ -186,7 +186,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(36),
-                      border: Border.all(color: const Color(0xFFF1F5F9), width: 1.0),
+                      border: Border.all(color: AppColors.surfaceVariant, width: 1.0),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.08),

@@ -6,6 +6,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
+import 'capacity_waitlist_banner.dart';
 
 /// Screen 12: Date & Time Slot Picker
 /// Matches reference screen 12 with horizontal day cards and clean time slot selector pills.
@@ -17,6 +18,8 @@ class SlotPickerWidget extends ConsumerWidget {
     final selectedDate = ref.watch(selectedBookingDateProvider);
     final selectedSlot = ref.watch(selectedTimeSlotProvider);
     final slotsAsync = ref.watch(currentSelectedDateSlotsProvider);
+    final day = ref.watch(currentSelectedDayProvider).valueOrNull;
+    final claim = ref.watch(activeCapacityClaimProvider);
 
     final next7Days =
         List.generate(7, (i) => DateTime.now().add(Duration(days: i)));
@@ -120,6 +123,35 @@ class SlotPickerWidget extends ConsumerWidget {
 
         const SizedBox(height: 22),
 
+        // A held "a slot opened up" claim: tell the customer the space is theirs.
+        if (claim != null && !(day?.isFutureFull ?? false)) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF8EF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFA7E0BB)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.verified_rounded, color: AppColors.groceryGreen, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    claim.expiresAt == null
+                        ? 'A place is being held for you. Pick a time and book now.'
+                        : 'A place is being held for you until ${DateFormat('h:mm a').format(claim.expiresAt!)}. Pick a time and book now.',
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.navy),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+
         // ── 2. Time Slot Grid ──
         const Text(
           'Select Time Slot',
@@ -138,6 +170,10 @@ class SlotPickerWidget extends ConsumerWidget {
             onRetry: () => ref.refresh(currentSelectedDateSlotsProvider),
           ),
           data: (slots) {
+            // A future date at its daily limit: offer an availability alert.
+            if (day != null && day.isFutureFull && slots.every((s) => !s.isAvailable)) {
+              return const CapacityWaitlistBanner();
+            }
             if (slots.isEmpty) {
               return const EmptyStateWidget(
                 title: 'No Available Slots',
@@ -169,10 +205,10 @@ class SlotPickerWidget extends ConsumerWidget {
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? const Color(0xFFF0FDF4)
+                            ? AppColors.groceryGreenLight
                             : (isAvailable
                                 ? Colors.white
-                                : const Color(0xFFF1F5F9)),
+                                : AppColors.surfaceVariant),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
                           color: isSelected

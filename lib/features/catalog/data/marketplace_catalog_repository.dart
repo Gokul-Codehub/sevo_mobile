@@ -332,6 +332,7 @@ class MarketplaceProduct {
       // names (e.g. "Oils & Ghee", which wouldn't otherwise match).
       categorySlug: 'seller_hub_groceries',
       imageUrl: primaryImage,
+      galleryImages: galleryImages,
       inStock: inStock,
       maxQuantity: availableStock > 0 ? availableStock.floor().clamp(1, 99) : 0,
       description: _combinedDescription,

@@ -143,7 +143,7 @@ class _Illustration extends StatelessWidget {
           ),
         ),
         floater(Icons.eco_rounded, AppColors.groceryGreen, 0.0, const Offset(-56, -30)),
-        floater(Icons.bolt_rounded, const Color(0xFFF59E0B), 2.1, const Offset(58, -26)),
+        floater(Icons.bolt_rounded, AppColors.warning, 2.1, const Offset(58, -26)),
         floater(Icons.home_repair_service_rounded, AppColors.serviceBlue, 4.2, const Offset(46, 38)),
         Positioned.fill(
           child: Transform.translate(

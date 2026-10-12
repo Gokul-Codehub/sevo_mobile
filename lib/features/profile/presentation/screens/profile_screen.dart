@@ -139,7 +139,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     end: Alignment.bottomRight,
                     colors: [
                       Color(0xFFE8F5EE), // light green tint
-                      Color(0xFFF8FAFC), // near-white
+                      AppColors.background, // near-white
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
@@ -310,7 +310,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     end: Alignment.bottomRight,
                     colors: [
                       Color(0xFFE8F5EE),
-                      Color(0xFFF8FAFC),
+                      AppColors.background,
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
@@ -371,7 +371,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             // ── 2. Account & Bookings Menu ──
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColors.background,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.border, width: 0.8),
               ),
@@ -416,7 +416,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             // ── 3. Legal & App Policies ──
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColors.background,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.borderSubtle, width: 0.8),
                 boxShadow: [

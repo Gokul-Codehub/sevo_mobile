@@ -6,6 +6,7 @@ import 'package:location/location.dart' as loc;
 
 import '../../../core/errors/api_error.dart';
 import '../data/logistics_repository.dart';
+import '../../notifications/domain/capacity_claim.dart';
 import 'gt_models.dart';
 import 'logistics_models.dart';
 
@@ -29,12 +30,16 @@ final selectedTimeSlotProvider = StateProvider<TimeSlot?>((ref) => null);
 /// than failing.
 final selectedBookingServiceIdProvider = StateProvider<String?>((ref) => null);
 
-/// Provider fetching time slots for a given date (YYYY-MM-DD) + service id/slug.
-final timeSlotsProvider = FutureProvider.family<List<TimeSlot>,
-    ({String date, String? serviceId})>((ref, params) async {
+/// One day's slots + day-level facts for a date (YYYY-MM-DD), service id/slug
+/// and (optionally) a held availability claim token.
+final timeSlotDayProvider = FutureProvider.autoDispose.family<TimeSlotDay,
+    ({String date, String? serviceId, String? claimToken})>((ref, params) async {
   final repo = ref.watch(logisticsRepositoryProvider);
-  final result =
-      await repo.getTimeSlots(date: params.date, serviceId: params.serviceId);
+  final result = await repo.getTimeSlotDay(
+    date: params.date,
+    serviceId: params.serviceId,
+    claimToken: params.claimToken,
+  );
 
   return switch (result) {
     Success(:final data) => data,
@@ -42,13 +47,47 @@ final timeSlotsProvider = FutureProvider.family<List<TimeSlot>,
   };
 });
 
-/// Convenience provider for slots of the currently selected date + service.
-final currentSelectedDateSlotsProvider = FutureProvider<List<TimeSlot>>((ref) {
+/// Provider fetching time slots for a given date (YYYY-MM-DD) + service id/slug.
+final timeSlotsProvider = FutureProvider.autoDispose.family<List<TimeSlot>,
+    ({String date, String? serviceId})>((ref, params) async {
+  final day = await ref.watch(timeSlotDayProvider(
+          (date: params.date, serviceId: params.serviceId, claimToken: null))
+      .future);
+  return day.slots;
+});
+
+/// The held availability claim for the service being booked, if it is still
+/// valid ("a slot opened up" — see CapacityClaim).
+final activeCapacityClaimProvider = Provider<CapacityClaim?>((ref) {
+  final claim = ref.watch(capacityClaimProvider);
+  if (claim == null || claim.isExpired) return null;
+  final serviceId = ref.watch(selectedBookingServiceIdProvider);
+  if (claim.serviceSlug != null &&
+      serviceId != null &&
+      claim.serviceSlug!.toLowerCase() != serviceId.toLowerCase()) {
+    // Same booking flow but a different service: the claim isn't for this one.
+    // (Slugs can differ between the sub-service and the package, so only
+    // reject when both are known AND clearly unrelated.)
+    return null;
+  }
+  return claim;
+});
+
+/// The selected date's day (slots + day-level facts) for the service being booked.
+final currentSelectedDayProvider = FutureProvider.autoDispose<TimeSlotDay>((ref) {
   final selectedDate = ref.watch(selectedBookingDateProvider);
   final serviceId = ref.watch(selectedBookingServiceIdProvider);
+  final claim = ref.watch(activeCapacityClaimProvider);
   final dateString = DateFormat('yyyy-MM-dd').format(selectedDate);
-  return ref.watch(
-      timeSlotsProvider((date: dateString, serviceId: serviceId)).future);
+  return ref.watch(timeSlotDayProvider(
+          (date: dateString, serviceId: serviceId, claimToken: claim?.token))
+      .future);
+});
+
+/// Convenience provider for slots of the currently selected date + service.
+final currentSelectedDateSlotsProvider = FutureProvider.autoDispose<List<TimeSlot>>((ref) async {
+  final day = await ref.watch(currentSelectedDayProvider.future);
+  return day.slots;
 });
 
 /// Provider checking serviceability for a pincode, optionally refined with

@@ -269,10 +269,14 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
     super.key,
     required this.categorySlug,
     this.initialCategory,
+    this.initialSubcategorySlug,
   });
 
   final String categorySlug;
   final Category? initialCategory;
+
+  /// Opens with this sub-service already selected ("Explore other" links).
+  final String? initialSubcategorySlug;
 
   @override
   ConsumerState<CategoryDetailScreen> createState() =>
@@ -302,6 +306,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedSubcategorySlug = widget.initialSubcategorySlug;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.invalidate(categoryServicesProvider);
@@ -696,7 +701,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           IconButton(
             tooltip: 'Search services',
             icon: const Icon(Icons.search),
-            onPressed: () => context.push('/search'),
+            onPressed: () => context.push(
+              '/search?mode=${isGroceryCategory ? 'groceries' : 'services'}',
+            ),
           ),
         ],
       ),

@@ -684,6 +684,30 @@ class LogisticsArea extends Equatable {
   List<Object?> get props => [id, name, pincode, isActive];
 }
 
+/// One day's worth of slots plus the day-level facts the picker needs — whether
+/// a FUTURE date has hit its daily booking limit (then the customer can ask to
+/// be told when space opens) and how many places are left.
+class TimeSlotDay {
+  const TimeSlotDay({
+    required this.slots,
+    this.isOpen = true,
+    this.reason,
+    this.futureRemaining,
+    this.futureLimit,
+  });
+
+  final List<TimeSlot> slots;
+  final bool isOpen;
+  final String? reason;
+
+  /// Places left on a future date (null for today / when the server doesn't say).
+  final int? futureRemaining;
+  final int? futureLimit;
+
+  /// A future date whose daily plan is full — eligible for an availability alert.
+  bool get isFutureFull => futureRemaining != null && futureRemaining! <= 0;
+}
+
 /// A bookable appointment time window.
 class TimeSlot extends Equatable {
   const TimeSlot({

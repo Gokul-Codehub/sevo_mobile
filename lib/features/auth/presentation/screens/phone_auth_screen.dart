@@ -152,7 +152,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: AppColors.surfaceVariant,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
@@ -288,7 +288,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                         height: 52,
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: AppColors.background,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: AppColors.border, width: 1),
                         ),

@@ -521,7 +521,7 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
                   onPressed: () => context.go('/cart'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF059669),
-                    side: const BorderSide(color: Color(0xFF059669)),
+                    side: const BorderSide(color: const Color(0xFF059669)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
@@ -688,7 +688,7 @@ class _ProductAboutSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        border: Border.all(color: AppColors.divider, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -704,7 +704,7 @@ class _ProductAboutSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const Divider(height: 1, color: AppColors.divider),
           const SizedBox(height: 8),
           ...children,
         ],
@@ -737,7 +737,7 @@ class _UnitSelector extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        border: Border.all(color: AppColors.divider, width: 1),
       ),
       child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,7 +773,7 @@ class _UnitSelector extends StatelessWidget {
                     color: selected ? AppColors.groceryGreen.withValues(alpha: 0.08) : Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: selected ? AppColors.groceryGreen : const Color(0xFFE2E8F0),
+                      color: selected ? AppColors.groceryGreen : AppColors.divider,
                       width: selected ? 1.6 : 1.1,
                     ),
                   ),

@@ -481,9 +481,9 @@ class BookingStatusChip extends StatelessWidget {
     'follow_up_required': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Follow-up Required'),
     'completed': (Color(0xFFD1FAE5), AppColors.statusCompleted, 'Completed'),
     'closed': (Color(0xFFD1FAE5), AppColors.statusCompleted, 'Closed'),
-    'cancelled': (Color(0xFFFEE2E2), AppColors.statusCancelled, 'Cancelled'),
-    'rejected': (Color(0xFFFEE2E2), AppColors.statusCancelled, 'Rejected'),
-    'refund_requested': (Color(0xFFFEF3C7), AppColors.statusRefundRequested, 'Refund Requested'),
+    'cancelled': (AppColors.errorLight, AppColors.statusCancelled, 'Cancelled'),
+    'rejected': (AppColors.errorLight, AppColors.statusCancelled, 'Rejected'),
+    'refund_requested': (AppColors.warningLight, AppColors.statusRefundRequested, 'Refund Requested'),
   };
 
   @override

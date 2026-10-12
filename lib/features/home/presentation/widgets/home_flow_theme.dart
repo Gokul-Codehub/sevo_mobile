@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/home_flow_mode.dart';
+import '../../../../shared/theme/app_colors.dart';
 
 /// Per-mode color palette + copy for Home's two themed variants.
 ///
@@ -81,7 +82,7 @@ class HomeFlowTheme {
 
   static const groceries = HomeFlowTheme(
     mode: HomeFlowMode.groceries,
-    accent: Color(0xFF15803D),
+    accent: AppColors.groceryGreenDark,
     accentDark: Color(0xFF14532D),
     // Warm golden yellow backdrop (2026-10-09, Blinkit-style Groceries
     // look). The accent stays green so "See all" links, ADD buttons and

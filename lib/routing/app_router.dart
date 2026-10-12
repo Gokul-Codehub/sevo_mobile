@@ -28,6 +28,8 @@ import '../features/catalog/presentation/screens/basket_list_screen.dart';
 import '../features/catalog/presentation/screens/category_detail_screen.dart';
 import '../features/catalog/presentation/screens/grocery_product_detail_screen.dart';
 import '../features/catalog/presentation/screens/search_screen.dart';
+import '../features/catalog/presentation/screens/search_results_screen.dart';
+import '../features/catalog/domain/search_keywords.dart';
 import '../features/catalog/presentation/screens/seller_hub_groceries_screen.dart';
 import '../features/catalog/presentation/screens/seller_hub_vegetables_screen.dart';
 import '../features/catalog/presentation/screens/service_detail_screen.dart';
@@ -41,6 +43,7 @@ import '../features/logistics/domain/logistics_providers.dart'
     show PickedDropLocation;
 import '../features/payment/presentation/screens/payment_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
+import '../features/notifications/presentation/screens/notifications_screen.dart';
 import '../features/support/presentation/screens/support_screen.dart';
 import '../features/tracking/presentation/screens/live_tracking_screen.dart';
 import '../features/work_extension/presentation/screens/work_extension_screen.dart';
@@ -56,6 +59,9 @@ abstract final class AppRoutes {
   static const String home = '/';
   static const String categories = '/categories';
   static const String search = '/search';
+  // Results pages for a submitted search, one per mode (see SearchScreen).
+  static const String searchServices = '/search/services';
+  static const String searchGroceries = '/search/groceries';
   static const String categoryDetail = '/categories/:slug';
   // Added 2026-09-25 — Seller Hub Marketplace grocery department browse
   // (real admin category tree from the vendor's Seller Hub, distinct from
@@ -90,6 +96,7 @@ abstract final class AppRoutes {
   static const String bookingSuccess = '/bookings/success/:id';
   static const String payment = '/checkout/payment';
   static const String support = '/support';
+  static const String notifications = '/notifications';
   static const String profile = '/profile';
   static const String bookingCheckout = '/checkout';
   // Added 2026-09-19 — see CatalogFlowType.logistics for why this route
@@ -169,6 +176,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const GroceryCartScreen(),
           ),
           GoRoute(
+            path: AppRoutes.notifications,
+            name: 'notifications',
+            builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.support,
             name: 'support',
             builder: (context, state) => const SupportScreen(),
@@ -183,7 +195,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.search,
             name: 'search',
-            builder: (context, state) => const SearchScreen(),
+            builder: (context, state) => SearchScreen(
+              mode: SearchModeX.fromWire(state.uri.queryParameters['mode']),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.searchServices,
+            name: 'search-services',
+            builder: (context, state) => ServiceSearchResultsScreen(
+              query: state.uri.queryParameters['q'] ?? '',
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.searchGroceries,
+            name: 'search-groceries',
+            builder: (context, state) => GrocerySearchResultsScreen(
+              query: state.uri.queryParameters['q'] ?? '',
+            ),
           ),
           GoRoute(
             path: AppRoutes.categories,
@@ -199,6 +227,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return CategoryDetailScreen(
                 categorySlug: slug,
                 initialCategory: extra is Category ? extra : null,
+                initialSubcategorySlug: state.uri.queryParameters['sub'],
               );
             },
           ),

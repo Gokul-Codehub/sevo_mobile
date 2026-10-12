@@ -238,8 +238,8 @@ class _SlotChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFFF0FDF4)
-                : (available ? Colors.white : const Color(0xFFF1F5F9)),
+                ? AppColors.groceryGreenLight
+                : (available ? Colors.white : AppColors.surfaceVariant),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: isSelected

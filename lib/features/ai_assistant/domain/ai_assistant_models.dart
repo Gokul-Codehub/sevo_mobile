@@ -25,20 +25,26 @@ enum AiChatSender { user, assistant }
 /// "Damaged", "Wrong item", an order to pick, or "Skip") — [value] is what
 /// gets sent back as the next chat message, [label] is what the chip shows.
 class AiChatOption extends Equatable {
-  const AiChatOption({required this.label, required this.value});
+  const AiChatOption({required this.label, required this.value, this.url});
 
   final String label;
   final String value;
+
+  /// Set on link chips (e.g. "Open AC & Appliance Repair", "View Cancellation
+  /// Policy"): tapping opens this web path in the app instead of sending
+  /// [value] as a message.
+  final String? url;
 
   factory AiChatOption.fromJson(Map<String, dynamic> json) {
     return AiChatOption(
       label: (json['label'] ?? json['value'] ?? '').toString(),
       value: (json['value'] ?? json['label'] ?? '').toString(),
+      url: (json['url'] ?? '').toString().trim().isEmpty ? null : json['url'].toString().trim(),
     );
   }
 
   @override
-  List<Object?> get props => [label, value];
+  List<Object?> get props => [label, value, url];
 }
 
 /// What kind of reply the backend is waiting for after this message —
@@ -66,7 +72,12 @@ class AiChatMessage extends Equatable {
     this.photoUrl,
     this.photoName,
     this.localImageBytes,
+    this.navigateTo,
   });
+
+  /// A web path the assistant says this answer is about (`navigate_to`),
+  /// shown as a "Go to Service & Booking Page" button under the bubble.
+  final String? navigateTo;
 
   final AiChatSender sender;
   final String content;
@@ -111,7 +122,7 @@ class AiChatMessage extends Equatable {
 
   @override
   List<Object?> get props =>
-      [sender, content, sources, isError, photoUrl, photoName, localImageBytes];
+      [sender, content, sources, isError, photoUrl, photoName, localImageBytes, navigateTo];
 }
 
 /// The parsed `data` object from `POST /api/ai/chat/`.
@@ -126,7 +137,17 @@ class AiChatReply {
     this.handedOff = false,
     this.photoUrl,
     this.photoName,
+    this.navigateTo,
+    this.guestSessionToken,
   });
+
+  /// Guests only: the token that proves a conversation is theirs; it must be
+  /// sent back (`X-Guest-Session`) or the next message starts a new chat.
+  final String? guestSessionToken;
+
+  /// `navigate_to` — a web path for the service / page the question was
+  /// about (null when there is none).
+  final String? navigateTo;
 
   final String conversationId;
   final String message;
@@ -175,6 +196,12 @@ class AiChatReply {
       photoName: (json['photo_name'] ?? '').toString().trim().isEmpty
           ? null
           : json['photo_name'].toString().trim(),
+      navigateTo: (json['navigate_to'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['navigate_to'].toString().trim(),
+      guestSessionToken: (json['guest_session_token'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['guest_session_token'].toString().trim(),
     );
   }
 }

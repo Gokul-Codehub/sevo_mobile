@@ -6,6 +6,7 @@ import '../../../core/services/notification_service.dart';
 import '../../addresses/domain/address_notifier.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../../logistics/domain/logistics_models.dart';
+import '../../notifications/domain/capacity_claim.dart';
 import '../data/booking_repository.dart';
 import '../data/quote_repository.dart';
 import 'booking_models.dart';
@@ -87,6 +88,11 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
   AsyncValue<Booking?> build() => const AsyncValue.data(null);
 
   BookingRepository get _repo => ref.read(bookingRepositoryProvider);
+
+  CapacityClaim? get _heldClaim {
+    final c = ref.read(capacityClaimProvider);
+    return (c == null || c.isExpired) ? null : c;
+  }
 
   // ── Place new booking ─────────────────────────────────────────────────────
   Future<({String? error, Booking? booking})> createBooking({
@@ -181,11 +187,17 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       jobType: jobType,
       serviceCategoryOverride: serviceCategoryOverride,
       cartDataOverride: cartDataOverride,
-      extraPayload: extraPayload,
+      // A held "a slot opened up" claim goes with the booking so the backend
+      // counts it as this customer's own place on a full day.
+      extraPayload: {
+        ...?extraPayload,
+        if (_heldClaim != null) 'future_capacity_claim_token': _heldClaim!.token,
+      },
     );
 
     switch (result) {
       case Success(:final data):
+        if (_heldClaim != null) ref.read(capacityClaimProvider.notifier).state = null;
         state = AsyncValue.data(data);
         // Clear grocery cart only if booking was created from grocery cart items
         if (customItems == null) {

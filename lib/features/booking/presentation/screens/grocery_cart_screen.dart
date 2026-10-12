@@ -282,7 +282,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         (cartSummary.subtotal / freeThreshold).toDecimal().toDouble().clamp(0.0, 1.0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -415,7 +415,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     child: const Icon(
                       Icons.location_on_rounded,
                       size: 20,
-                      color: Color(0xFF059669),
+                      color: const Color(0xFF059669),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -492,7 +492,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           const Icon(
                             Icons.auto_awesome,
                             size: 14,
-                            color: Color(0xFF059669),
+                            color: const Color(0xFF059669),
                           ),
                           const SizedBox(width: 6),
                           if (cartSummary.subtotal >= freeThreshold)
@@ -501,7 +501,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF059669),
+                                color: const Color(0xFF059669),
                               ),
                             )
                           else
@@ -517,7 +517,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   TextSpan(
                                     text: '₹$amountForFreeDelivery',
                                     style: const TextStyle(
-                                      color: Color(0xFF059669),
+                                      color: const Color(0xFF059669),
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -525,7 +525,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   const TextSpan(
                                     text: 'FREE delivery',
                                     style: TextStyle(
-                                      color: Color(0xFF059669),
+                                      color: const Color(0xFF059669),
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -551,9 +551,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     child: LinearProgressIndicator(
                       value: progressFraction,
                       minHeight: 4,
-                      backgroundColor: const Color(0xFFF1F5F9),
+                      backgroundColor: AppColors.surfaceVariant,
                       valueColor: const AlwaysStoppedAnimation<Color>(
-                        Color(0xFF059669),
+                        const Color(0xFF059669),
                       ),
                     ),
                   ),
@@ -809,7 +809,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                     child: Icon(
                                       Icons.add,
                                       size: 14,
-                                      color: Color(0xFF059669),
+                                      color: const Color(0xFF059669),
                                     ),
                                   ),
                                 ),
@@ -1211,13 +1211,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         Row(
                           children: [
                             const Icon(Icons.local_offer_outlined,
-                                size: 15, color: Color(0xFF059669)),
+                                size: 15, color: const Color(0xFF059669)),
                             const SizedBox(width: 6),
                             Text(
                               'Coupon Discount ($_appliedCouponCode)',
                               style: const TextStyle(
                                 fontSize: 12.5,
-                                color: Color(0xFF059669),
+                                color: const Color(0xFF059669),
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1228,7 +1228,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF059669),
+                            color: const Color(0xFF059669),
                           ),
                         ),
                       ],
@@ -1401,7 +1401,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColors.background,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.border, width: 0.6),
               ),
@@ -1537,10 +1537,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+          color: isSelected ? AppColors.textPrimary : AppColors.background,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF0F172A) : AppColors.border,
+            color: isSelected ? AppColors.textPrimary : AppColors.border,
             width: 1,
           ),
         ),
@@ -2017,10 +2017,10 @@ class _DeliveryOptionTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+          color: isSelected ? AppColors.textPrimary : AppColors.background,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF0F172A) : AppColors.border,
+            color: isSelected ? AppColors.textPrimary : AppColors.border,
             width: 1,
           ),
         ),
@@ -2093,10 +2093,10 @@ class _SlotChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final background = isDisabled
-        ? const Color(0xFFF1F5F9)
+        ? AppColors.surfaceVariant
         : isSelected
-            ? const Color(0xFF0F172A)
-            : const Color(0xFFF8FAFC);
+            ? AppColors.textPrimary
+            : AppColors.background;
     final foreground = isDisabled
         ? AppColors.textSecondary
         : isSelected
@@ -2111,7 +2111,7 @@ class _SlotChip extends StatelessWidget {
           color: background,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected && !isDisabled ? const Color(0xFF0F172A) : AppColors.border,
+            color: isSelected && !isDisabled ? AppColors.textPrimary : AppColors.border,
             width: 1,
           ),
         ),
@@ -2197,7 +2197,7 @@ class _GroceryPaymentMethodOption extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(Icons.check_circle, size: 16, color: Color(0xFF059669)),
+              const Icon(Icons.check_circle, size: 16, color: const Color(0xFF059669)),
           ],
         ),
       ),

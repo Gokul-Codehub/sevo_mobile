@@ -112,7 +112,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                   width: 90,
                   height: 90,
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF0FDF4),
+                    color: AppColors.groceryGreenLight,
                     shape: BoxShape.circle,
                   ),
                   child: const Center(
@@ -226,7 +226,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: AppColors.background,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.border, width: 0.8),
                   ),
@@ -292,7 +292,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                           size: 44,
                           color: starValue <= _overallRating
                               ? AppColors.star
-                              : const Color(0xFFCBD5E1),
+                              : AppColors.textMuted,
                         ),
                       ),
                     );
@@ -345,7 +345,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? const Color(0xFFF0FDF4)
+                              ? AppColors.groceryGreenLight
                               : Colors.white,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
@@ -398,7 +398,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                       color: AppColors.textHint,
                     ),
                     filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
+                    fillColor: AppColors.background,
                     contentPadding: const EdgeInsets.all(14),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),

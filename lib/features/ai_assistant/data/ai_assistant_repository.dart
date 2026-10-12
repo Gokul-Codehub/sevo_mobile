@@ -34,6 +34,14 @@ class AiAssistantRepository {
 
   final ApiClient api;
 
+  /// A guest's conversation token, learnt from the first reply. The backend
+  /// ties a guest conversation to it; without it every message would open a
+  /// brand-new conversation and the assistant would forget the chat so far.
+  String? _guestToken;
+
+  Options? get _guestOptions =>
+      _guestToken == null ? null : Options(headers: {'X-Guest-Session': _guestToken});
+
   /// POST /api/ai/chat/ — sends one message (optionally with a photo) and
   /// returns the assistant's reply. Pass the previous [conversationId] to
   /// continue that session; omit it (or pass null/empty) to start a new one
@@ -66,9 +74,12 @@ class AiAssistantRepository {
                 if (conversationId != null && conversationId.isNotEmpty)
                   'conversation_id': conversationId,
               },
+        options: _guestOptions,
       );
       return ResponseNormalizer.extract(response, (data) {
-        return AiChatReply.fromJson(Map<String, dynamic>.from(data as Map));
+        final reply = AiChatReply.fromJson(Map<String, dynamic>.from(data as Map));
+        if (reply.guestSessionToken != null) _guestToken = reply.guestSessionToken;
+        return reply;
       });
     } on Exception catch (e) {
       return Failure(_toError(e));
@@ -85,7 +96,10 @@ class AiAssistantRepository {
     try {
       final response = await api.get<List<int>>(
         photoPath,
-        options: Options(responseType: ResponseType.bytes),
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: _guestToken == null ? null : {'X-Guest-Session': _guestToken},
+        ),
       );
       final raw = response.data;
       if (raw == null) return Failure(UnknownError('Empty photo response'));
@@ -102,7 +116,7 @@ class AiAssistantRepository {
     String conversationId,
   ) async {
     try {
-      final response = await api.get('/ai/conversations/$conversationId/');
+      final response = await api.get('/ai/conversations/$conversationId/', options: _guestOptions);
       return ResponseNormalizer.extract(response, (data) {
         final map = Map<String, dynamic>.from(data as Map);
         final messages = (map['messages'] as List? ?? const [])

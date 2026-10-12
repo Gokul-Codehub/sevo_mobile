@@ -194,7 +194,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                     child: Container(
                       height: 50,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: AppColors.background,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: _errorMessage != null
@@ -337,7 +337,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? const Color(0xFFF0FDF4)
+                                  ? AppColors.groceryGreenLight
                                   : Colors.white,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(

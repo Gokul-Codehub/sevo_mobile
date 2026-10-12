@@ -142,6 +142,7 @@ class AiChatController extends StateNotifier<AiChatState> {
               sources: reply.sources,
               photoUrl: reply.photoUrl,
               photoName: reply.photoName,
+              navigateTo: reply.navigateTo,
             ),
           ],
           conversationId:

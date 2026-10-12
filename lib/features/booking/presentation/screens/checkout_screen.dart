@@ -367,7 +367,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.borderSubtle, width: 0.8),
                       boxShadow: const [
@@ -529,7 +529,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.borderSubtle, width: 0.8),
                       boxShadow: const [
@@ -549,7 +549,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.borderSubtle, width: 0.8),
                       boxShadow: const [
@@ -676,8 +676,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
                         color: _appliedCouponCode != null
-                            ? const Color(0xFFF0FDF4)
-                            : const Color(0xFFF8FAFC),
+                            ? AppColors.groceryGreenLight
+                            : AppColors.background,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: _appliedCouponCode != null
@@ -748,7 +748,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.borderSubtle, width: 0.8),
                       boxShadow: const [
@@ -806,7 +806,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.borderSubtle, width: 0.8),
                       boxShadow: const [

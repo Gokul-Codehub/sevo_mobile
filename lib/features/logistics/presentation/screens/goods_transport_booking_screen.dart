@@ -158,7 +158,7 @@ class _GoodsTransportBookingScreenState
                   imageUrl: imageUrl,
                   fit: BoxFit.cover,
                   fallbackWidget: Container(
-                    color: isSelected ? AppColors.serviceBlue : const Color(0xFFE2E8F0),
+                    color: isSelected ? AppColors.serviceBlue : AppColors.divider,
                     child: Center(
                       child: Icon(
                         fallbackIcon,
@@ -170,7 +170,7 @@ class _GoodsTransportBookingScreenState
                 )
               else
                 Container(
-                  color: isSelected ? AppColors.serviceBlue : const Color(0xFFE2E8F0),
+                  color: isSelected ? AppColors.serviceBlue : AppColors.divider,
                   child: Center(
                     child: Icon(
                       fallbackIcon,
@@ -1137,7 +1137,7 @@ class _GoodsTransportBookingScreenState
                             child: Container(
                               height: 78,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF1F5F9),
+                                color: AppColors.surfaceVariant,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
@@ -1230,7 +1230,7 @@ class _GoodsTransportBookingScreenState
                                       width: double.infinity,
                                       color: isSelected
                                           ? Colors.white
-                                          : const Color(0xFFF1F5F9),
+                                          : AppColors.surfaceVariant,
                                       child: tier.imageUrl != null &&
                                               tier.imageUrl!.isNotEmpty
                                           ? AppRemoteImage(
@@ -2304,7 +2304,7 @@ class _SectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppColors.background,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border, width: 0.8),
       ),
@@ -2335,7 +2335,7 @@ class _QtyButton extends StatelessWidget {
         height: 28,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: enabled ? Colors.white : const Color(0xFFF1F5F9),
+          color: enabled ? Colors.white : AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.border, width: 0.8),
         ),

@@ -61,7 +61,7 @@ String _msg(Object err) {
 
 // ── Cargo + fitment ─────────────────────────────────────────────────────────
 
-const _kPanelBg = Color(0xFFF8FAFC);
+const _kPanelBg = AppColors.background;
 
 /// Rounded icon + title + subtitle header used at the top of a card.
 class _CardHeader extends StatelessWidget {
@@ -795,10 +795,10 @@ class _FitmentBanner extends ConsumerWidget {
   Widget _note(String text, {bool error = false, bool ok = false, Widget? footer}) {
     final color = error
         ? AppColors.error
-        : (ok ? const Color(0xFF15803D) : AppColors.textSecondary);
+        : (ok ? AppColors.groceryGreenDark : AppColors.textSecondary);
     final bg = error
         ? const Color(0xFFFEF2F2)
-        : (ok ? const Color(0xFFF0FDF4) : _kPanelBg);
+        : (ok ? AppColors.groceryGreenLight : _kPanelBg);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),

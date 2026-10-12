@@ -157,6 +157,93 @@ String _seeAllRoute(WidgetRef ref, MobileGrocerySection? section) {
   return '$root/seller-hub?category=${first.category.slug}';
 }
 
+/// Blinkit-style "See all products" bar shown under a section's products when
+/// the admin ticked "See All link": a full-width pale pill with three small,
+/// slightly tilted product photos, the label and an arrow. Opens the section's
+/// own category (see [_seeAllRoute]).
+class _SeeAllProductsBar extends ConsumerWidget {
+  const _SeeAllProductsBar({required this.section, required this.items});
+
+  final MobileGrocerySection? section;
+  final List<ServiceItem> items;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = section;
+    if (s == null || !s.showSeeAll || items.isEmpty) return const SizedBox.shrink();
+    final thumbs = items.where((i) => (i.imageUrl ?? '').isNotEmpty).take(3).toList();
+    const tilt = [-0.18, 0.0, 0.18];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => context.push(_seeAllRoute(ref, s)),
+        child: Container(
+          height: 58,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF4F6FB),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE3E7F0), width: 0.8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (thumbs.isNotEmpty) ...[
+                SizedBox(
+                  width: 34.0 + (thumbs.length - 1) * 20,
+                  height: 40,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (var i = 0; i < thumbs.length; i++)
+                        Positioned(
+                          left: i * 20.0,
+                          top: 3,
+                          child: Transform.rotate(
+                            angle: tilt[i],
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFE3E7F0), width: 0.8),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: AppRemoteImage(
+                                imageUrl: thumbs[i].imageUrl,
+                                rawPath: thumbs[i].imageUrl,
+                                title: thumbs[i].title,
+                                width: 34,
+                                height: 34,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              const Text(
+                'See all products',
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.navy,
+                ),
+              ),
+              const SizedBox(width: 2),
+              const Icon(Icons.arrow_right_rounded, size: 26, color: AppColors.navy),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends ConsumerWidget {
   const _SectionTitle(this.title, {this.showSeeAll = false, this.section});
   final String title;
@@ -188,29 +275,6 @@ class _SectionTitle extends ConsumerWidget {
               ),
             ),
           ),
-          if (showSeeAll)
-            InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => context.push(_seeAllRoute(ref, section)),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'See All',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.groceryGreen,
-                      ),
-                    ),
-                    SizedBox(width: 2),
-                    Icon(Icons.chevron_right, size: 16, color: AppColors.groceryGreen),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -303,6 +367,7 @@ class _HorizontalCarouselLayout extends StatelessWidget {
           showDiscount: section?.showProductDiscount ?? true,
           showAddButton: section?.showAddButton ?? true,
         ),
+        _SeeAllProductsBar(section: section, items: items),
       ],
     );
   }
@@ -383,6 +448,7 @@ class _ProductGridLayout extends StatelessWidget {
             },
           ),
         ),
+        _SeeAllProductsBar(section: section, items: items),
       ],
     );
   }
@@ -538,6 +604,7 @@ class _ProductRowList extends StatelessWidget {
             ),
           ),
         ),
+        _SeeAllProductsBar(section: section, items: items),
       ],
     );
   }

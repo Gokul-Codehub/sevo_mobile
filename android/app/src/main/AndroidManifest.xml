@@ -15,6 +15,7 @@
          Android 13+ (API 33+) before any notification can be shown; below
          API 33 this permission is granted automatically at install time. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:label="SEVO"
@@ -74,6 +75,9 @@
     </application>
     <!-- Query intents for Phone Call, WhatsApp, Mail, and Web Deep Links -->
     <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />

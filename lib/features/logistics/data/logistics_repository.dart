@@ -107,6 +107,22 @@ class LogisticsRepository {
   Future<Result<List<TimeSlot>>> getTimeSlots({
     required String date,
     String? serviceId,
+    String? claimToken,
+  }) async {
+    final day = await getTimeSlotDay(date: date, serviceId: serviceId, claimToken: claimToken);
+    return switch (day) {
+      Success(:final data) => Success(data.slots),
+      Failure(:final error) => Failure(error),
+    };
+  }
+
+  /// Like [getTimeSlots] but keeps the day-level facts (closed reason, whether a
+  /// future date is full). [claimToken] is a held availability claim — the
+  /// backend counts it as that customer's own space on a full day.
+  Future<Result<TimeSlotDay>> getTimeSlotDay({
+    required String date,
+    String? serviceId,
+    String? claimToken,
   }) async {
     try {
       final path = (serviceId != null && serviceId.trim().isNotEmpty)
@@ -118,16 +134,25 @@ class LogisticsRepository {
           'date': date,
           if (serviceId != null && serviceId.trim().isNotEmpty)
             'service': serviceId.trim(),
+          if (claimToken != null && claimToken.isNotEmpty) 'claim_token': claimToken,
         },
       );
       return ResponseNormalizer.extract(response, (data) {
         final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
         final isOpen = map['is_open'];
+        final remaining = int.tryParse('${map['future_daily_remaining'] ?? ''}');
+        final limit = int.tryParse('${map['future_daily_limit'] ?? map['future_daily_booking_limit'] ?? ''}');
         if (isOpen == false) {
           // Closed for this date (day off, holiday override, booking
           // disabled) — an empty list renders as "No Available Slots" in
           // SlotPickerWidget, which is the correct customer-facing state.
-          return <TimeSlot>[];
+          return TimeSlotDay(
+            slots: const <TimeSlot>[],
+            isOpen: false,
+            reason: map['reason']?.toString(),
+            futureRemaining: remaining,
+            futureLimit: limit,
+          );
         }
 
         final groups = map['groups'] is Map ? Map<String, dynamic>.from(map['groups']) : const {};
@@ -139,7 +164,7 @@ class LogisticsRepository {
                 ...(groups['evening'] is List ? groups['evening'] as List : const []),
               ];
 
-        return allSlots.whereType<Map>().map((raw) {
+        final slots = allSlots.whereType<Map>().map((raw) {
           final m = Map<String, dynamic>.from(raw);
           final start = (m['start_time'] ?? m['value'] ?? '').toString();
           final end = (m['end_time'] ?? '').toString();
@@ -152,12 +177,18 @@ class LogisticsRepository {
             isAvailable: m['available'] == true,
           );
         }).toList();
+        return TimeSlotDay(
+          slots: slots,
+          reason: map['reason']?.toString(),
+          futureRemaining: remaining,
+          futureLimit: limit,
+        );
       });
     } on Exception catch (_) {
       // Network/parsing failure — fall back to the generic hourly grid
       // rather than leaving the customer with a blank/broken slot picker.
       // This is a true network-error fallback now, not the everyday path.
-      return Success(_generateDefaultSlots(date));
+      return Success(TimeSlotDay(slots: _generateDefaultSlots(date)));
     }
   }
 

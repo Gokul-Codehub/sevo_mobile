@@ -324,6 +324,45 @@ class CatalogRepository {
       (s.description?.toLowerCase().contains(cleanQuery) ?? false) ||
       (s.categoryName?.toLowerCase().contains(cleanQuery) ?? false);
 
+  // ── Full public service list, cached ────────────────────────────────────
+  //
+  // The search results page gets ranked package ids from the server's search
+  // API and needs the full [ServiceItem] (duration, rating, inclusions...) for
+  // each to draw the normal service card. One cached fetch of the whole public
+  // catalog covers every match, instead of one request per package.
+  List<ServiceItem>? _allServicesCache;
+  DateTime? _allServicesFetchedAt;
+
+  Future<List<ServiceItem>> getAllServicesCached() async {
+    final cached = _allServicesCache;
+    final at = _allServicesFetchedAt;
+    if (cached != null && at != null && DateTime.now().difference(at) < const Duration(minutes: 10)) {
+      return cached;
+    }
+    try {
+      final response = await api.get('/catalog/services/');
+      final res = ResponseNormalizer.extract(response, (data) {
+        final list = data is List
+            ? data
+            : (data is Map && data['results'] is List
+                ? data['results'] as List
+                : (data is Map && data['data'] is List ? data['data'] as List : []));
+        return list
+            .whereType<Map>()
+            .map((m) => ServiceItem.fromJson(Map<String, dynamic>.from(m)))
+            .toList();
+      });
+      if (res is Success<List<ServiceItem>>) {
+        _allServicesCache = res.data;
+        _allServicesFetchedAt = DateTime.now();
+        return res.data;
+      }
+    } catch (e) {
+      AppLogger.d('[P0-CATALOG]', 'getAllServicesCached failed: $e');
+    }
+    return cached ?? const [];
+  }
+
   Future<Result<List<ServiceItem>>> searchServices(String query) async {
     final clean = query.trim().toLowerCase();
     if (clean.isEmpty) return const Success([]);

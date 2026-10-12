@@ -18,7 +18,7 @@ import '../widgets/tracking_markers.dart';
 /// Route line color — changed 2026-09-16 from AppColors.primary (the app's
 /// brand green, 0xFF05A357) to a dedicated blue per explicit request, and
 /// matches the technician marker's blue directional pointer.
-const Color _kRouteColor = Color(0xFF2563EB);
+const Color _kRouteColor = AppColors.serviceBlue;
 
 /// Screen 18: Live Tracking Screen
 /// Matches reference screen 18 with GPS route visualizer, technician profile card,
@@ -266,13 +266,13 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: tracking.isLiveWs
-                  ? const Color(0xFFF0FDF4)
-                  : const Color(0xFFFEF3C7),
+                  ? AppColors.groceryGreenLight
+                  : AppColors.warningLight,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: tracking.isLiveWs
                     ? AppColors.primary
-                    : const Color(0xFFF59E0B),
+                    : AppColors.warning,
                 width: 0.8,
               ),
             ),
@@ -285,7 +285,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                   decoration: BoxDecoration(
                     color: tracking.isLiveWs
                         ? AppColors.primary
-                        : const Color(0xFFF59E0B),
+                        : AppColors.warning,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -316,7 +316,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                   // No real position has arrived yet — show an honest
                   // waiting state rather than a fake pin.
                   Container(
-                    color: const Color(0xFFF1F5F9),
+                    color: AppColors.surfaceVariant,
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -534,7 +534,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         hint: 'Share this code with the technician to begin service',
                         otp: tracking.startOtp!,
                         color: const Color(0xFF92400E),
-                        background: const Color(0xFFFEF3C7),
+                        background: AppColors.warningLight,
                         border: const Color(0xFFFDE68A),
                         copied: _startOtpCopied,
                         onCopy: () => _copyOtp(tracking.startOtp!, isPayment: false),
@@ -567,7 +567,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: AppColors.background,
                         borderRadius: BorderRadius.circular(8),
                         border:
                             Border.all(color: AppColors.border, width: 0.8),
@@ -910,7 +910,7 @@ class _TimelineStep extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isCompleted
                     ? AppColors.primary
-                    : (isActive ? AppColors.navy : const Color(0xFFE2E8F0)),
+                    : (isActive ? AppColors.navy : AppColors.divider),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -935,7 +935,7 @@ class _TimelineStep extends StatelessWidget {
                 height: 32,
                 color: isCompleted
                     ? AppColors.primary
-                    : const Color(0xFFE2E8F0),
+                    : AppColors.divider,
               ),
           ],
         ),

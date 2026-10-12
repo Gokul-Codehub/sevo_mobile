@@ -202,7 +202,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
+                          color: AppColors.warningLight,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
@@ -276,7 +276,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppColors.border, width: 0.8),
                     ),
@@ -481,7 +481,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: AppColors.background,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: AppColors.border,
@@ -814,7 +814,7 @@ class _InclusionsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppColors.background,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border, width: 0.8),
       ),

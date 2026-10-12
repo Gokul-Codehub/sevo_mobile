@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../../shared/theme/app_colors.dart';
 
 /// Custom marker bitmaps for the live tracking map.
 ///
@@ -38,8 +39,8 @@ class TrackingMarkers {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, px, px));
     const center = Offset(px / 2, px / 2);
-    const navy = Color(0xFF1E3A5F);
-    const blue = Color(0xFF2563EB);
+    const navy = AppColors.navyLight;
+    const blue = AppColors.serviceBlue;
 
     // Live-tracking halo
     canvas.drawCircle(center, px * 0.46, Paint()..color = blue.withValues(alpha: 0.20));

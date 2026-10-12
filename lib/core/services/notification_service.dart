@@ -95,9 +95,25 @@ class NotificationService {
     }
   }
 
+  /// Set by CustomerNotificationWatcher: opens a web link carried by an inbox
+  /// notification (payload `web:<claimExpiryMillis>|<web path>`).
+  void Function(String webPath, DateTime? claimExpiresAt)? webLinkHandler;
+
   void _onNotificationTapped(NotificationResponse response) {
     final route = response.payload;
     if (route == null || route.isEmpty) return;
+    if (route.startsWith('web:')) {
+      final rest = route.substring(4);
+      final bar = rest.indexOf('|');
+      if (bar > 0) {
+        final ms = int.tryParse(rest.substring(0, bar)) ?? 0;
+        webLinkHandler?.call(
+          rest.substring(bar + 1),
+          ms > 0 ? DateTime.fromMillisecondsSinceEpoch(ms) : null,
+        );
+      }
+      return;
+    }
     final context = rootNavigatorKey.currentContext;
     if (context == null) return;
     GoRouter.of(context).push(route);
