@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../shared/widgets/slow_load_gate.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/marketplace_catalog_repository.dart';
@@ -141,16 +142,19 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
           ),
           Expanded(
             child: treeAsync.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            children: [
-              ShimmerCard(height: 100),
-              SizedBox(height: 12),
-              ShimmerCard(height: 100),
-              SizedBox(height: 12),
-              ShimmerCard(height: 100),
-            ],
+        loading: () => const SlowLoadGate(
+          embedded: true,
+          skeleton: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              children: [
+                ShimmerCard(height: 100),
+                SizedBox(height: 12),
+                ShimmerCard(height: 100),
+                SizedBox(height: 12),
+                ShimmerCard(height: 100),
+              ],
+            ),
           ),
         ),
         error: (err, st) => Center(
@@ -340,14 +344,17 @@ class _DepartmentProductGrid extends ConsumerWidget {
     final pageAsync = ref.watch(marketplaceProductsByCategoryProvider(departmentId));
 
     return pageAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(12),
-        child: Column(
-          children: [
-            ShimmerCard(height: 140),
-            SizedBox(height: 12),
-            ShimmerCard(height: 140),
-          ],
+      loading: () => const SlowLoadGate(
+        embedded: true,
+        skeleton: Padding(
+          padding: EdgeInsets.all(12),
+          child: Column(
+            children: [
+              ShimmerCard(height: 140),
+              SizedBox(height: 12),
+              ShimmerCard(height: 140),
+            ],
+          ),
         ),
       ),
       error: (err, st) => Center(

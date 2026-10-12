@@ -122,10 +122,14 @@ class MobileMediaItem {
     this.enabled = true,
     this.flow,
     this.mediaType = 'image',
+    this.posterUrl,
   });
 
   final String id;
   final String? imageUrl;
+
+  /// Optional still shown while a video loads (admin "poster image").
+  final String? posterUrl;
   final String? link;
   final bool enabled;
 
@@ -169,6 +173,10 @@ class MobileMediaItem {
           ? rawFlow
           : null,
       mediaType: rawMediaType == 'video' ? 'video' : 'image',
+      posterUrl: (() {
+        final p = (json['poster_url'] ?? json['poster'] ?? '').toString().trim();
+        return p.isEmpty ? null : p;
+      })(),
     );
   }
 }

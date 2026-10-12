@@ -8,6 +8,7 @@ import '../../auth/domain/auth_models.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../../catalog/domain/catalog_models.dart';
 import '../../pricing/domain/pricing_providers.dart';
+import '../../pricing/domain/service_fare.dart';
 import 'booking_models.dart';
 
 /// State notifier for customer shopping cart with persistent local storage.
@@ -325,15 +326,14 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
   // this app silently charged a different total than the website for the
   // exact same package. Mirroring web's real formula (not the unused admin
   // page) is what makes the two uniform.
-  const fallbackGstRate = 18.0;
-  final fallbackPlatformFee = Decimal.fromInt(29);
-  final taxes = items.fold<Decimal>(Decimal.zero, (sum, item) {
-    final rate = Decimal.parse((item.service.gstRate ?? fallbackGstRate).toString());
-    return sum + ((item.totalPrice * rate) / Decimal.fromInt(100)).toDecimal();
-  });
-  final serviceFee = items
-      .map((item) => item.service.platformFee ?? fallbackPlatformFee)
-      .reduce((a, b) => a > b ? a : b);
+  // 2026-10-12: shared with checkout_screen.dart via ServiceFare (per-line
+  // GST rounded to whole rupees, one platform fee per booking -- same as
+  // the backend's home_services_pricing.py).
+  final fare = ServiceFare.fromLines(
+    items.map((i) => (service: i.service, lineTotal: i.totalPrice)),
+  );
+  final taxes = fare.gst;
+  final serviceFee = fare.platformFee;
   final total = subtotal + serviceFee + taxes;
 
   // Advance deposit: pricing.minAdvancePercent of total, or the configured

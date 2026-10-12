@@ -37,7 +37,32 @@ class BannerMedia extends StatefulWidget {
     this.title,
     this.semanticIcon,
     this.fit = BoxFit.cover,
+    this.poster,
+    this.quietPlaceholder = false,
   });
+
+  /// Optional still image shown instantly while a video buffers (and kept if
+  /// the video fails). The video fades in over it once its first frame is
+  /// ready.
+  final String? poster;
+
+  /// When true and no [poster] is given, a not-yet-ready video shows nothing
+  /// (the parent's background) instead of a grey shimmer block — used by the
+  /// Home hero, which sits directly on the coloured header.
+  final bool quietPlaceholder;
+
+  /// Starts downloading + initialising [url]'s video in the shared player
+  /// cache so a later [BannerMedia] for the same URL starts instantly.
+  /// Never throws; completes when the video is ready (or has failed).
+  static Future<void> warmUp(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final resolved = ImageUrlHelper.resolve(url);
+    final uri = resolved == null ? null : Uri.tryParse(resolved);
+    if (uri == null) return;
+    try {
+      await _BannerVideoCache.warm(uri);
+    } catch (_) {}
+  }
 
   /// Resolved image or video URL. Null/empty is handled by the caller
   /// (both current call sites only construct this widget once they know
@@ -132,6 +157,17 @@ class _BannerVideoCache {
     entry.refs++;
     entry.lastUsed = ++_tick;
     return entry;
+  }
+
+  /// Initialises (without keeping a reference) so the controller stays cached
+  /// and decoded for the next widget that asks for the same URL.
+  static Future<void> warm(Uri uri) async {
+    final entry = acquire(uri);
+    try {
+      await entry.initFuture;
+    } finally {
+      release(entry);
+    }
   }
 
   static void release(_BannerVideoEntry entry) {
@@ -268,30 +304,63 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  Widget _posterImage(String url) => AppRemoteImage(
+        imageUrl: url,
+        rawPath: url,
+        title: widget.title,
+        semanticIcon: widget.semanticIcon,
+        width: double.infinity,
+        height: double.infinity,
+        fit: widget.fit,
+      );
+
   @override
   Widget build(BuildContext context) {
     if (widget._isVideo && !_failed && widget.url != null && widget.url!.isNotEmpty) {
       final controller = _controller;
-      if (controller != null && controller.value.isInitialized) {
-        return SizedBox.expand(
-          child: FittedBox(
-            fit: widget.fit,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
+      final ready = controller != null && controller.value.isInitialized;
+      final hasPoster = (widget.poster ?? '').isNotEmpty;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Placeholder layer: the poster if the admin gave one, otherwise
+          // the usual shimmer (or nothing, for the quiet Home hero).
+          if (hasPoster)
+            _posterImage(widget.poster!)
+          else if (!widget.quietPlaceholder)
+            const ShimmerBox(
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: 0,
             ),
+          // The video fades in over it once the first frame is decoded.
+          AnimatedOpacity(
+            opacity: ready ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOut,
+            child: ready
+                ? SizedBox.expand(
+                    child: FittedBox(
+                      fit: widget.fit,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: controller!.value.size.width,
+                        height: controller.value.size.height,
+                        child: VideoPlayer(controller),
+                      ),
+                    ),
+                  )
+                : const SizedBox.expand(),
           ),
-        );
-      }
-      // First frame hasn't decoded yet — same loading look AppRemoteImage
-      // shows for a still-loading image, never a blank gap.
-      return const ShimmerBox(
-        width: double.infinity,
-        height: double.infinity,
-        borderRadius: 0,
+        ],
       );
+    }
+
+    // A video that failed to load: keep the poster (or nothing, when quiet)
+    // rather than trying to draw the video URL as an image.
+    if (widget._isVideo) {
+      if ((widget.poster ?? '').isNotEmpty) return _posterImage(widget.poster!);
+      if (widget.quietPlaceholder) return const SizedBox.expand();
     }
 
     return AppRemoteImage(

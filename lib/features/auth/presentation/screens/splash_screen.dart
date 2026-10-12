@@ -7,6 +7,7 @@ import '../../../../core/storage/secure_storage.dart';
 import '../../../../routing/app_router.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
+import '../../../../shared/widgets/banner_media.dart';
 import '../../../home/data/homepage_repository.dart';
 
 /// Screen 1: Splash Screen
@@ -104,6 +105,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           ref.read(categoriesProvider.future),
         ]).timeout(_maxWait - _minDisplay);
       } catch (_) {}
+      if (!mounted) return;
+      // Warm the Home hero video(s) while the splash is still up: Groceries
+      // (the default mode) is awaited for at most 2 s, Services downloads in
+      // the background. If it isn't ready in time Home opens anyway and the
+      // video fades in over its poster later.
+      final cfg = ref.read(homepageConfigProvider).valueOrNull;
+      final heroG = cfg?.heroVideoGroceries;
+      final heroS = cfg?.heroVideoServices;
+      if (heroS != null && heroS.mediaType == 'video') {
+        BannerMedia.warmUp(heroS.imageUrl);
+      }
+      if (heroG != null && heroG.mediaType == 'video') {
+        try {
+          await BannerMedia.warmUp(heroG.imageUrl)
+              .timeout(const Duration(seconds: 2));
+        } catch (_) {}
+      }
       if (!mounted) return;
       // Fixed 2026-09-19 — this used to go straight to Home on every cold
       // start, which meant OnboardingScreen and LocationAccessScreen

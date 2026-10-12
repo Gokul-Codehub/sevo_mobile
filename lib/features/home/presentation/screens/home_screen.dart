@@ -2252,6 +2252,8 @@ class _HomeHeroVideo extends ConsumerWidget {
           mediaType: item.mediaType,
           title: 'Home video',
           fit: BoxFit.cover,
+          poster: item.posterUrl,
+          quietPlaceholder: true,
         ),
       ),
     );

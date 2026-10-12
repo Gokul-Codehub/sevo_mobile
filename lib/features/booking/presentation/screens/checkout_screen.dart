@@ -19,6 +19,7 @@ import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
+import '../../../pricing/domain/service_fare.dart';
 import '../widgets/coupon_bottom_sheet.dart';
 
 /// Screen 14: Booking Summary / Checkout Screen
@@ -254,11 +255,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     // "5%" constants — now read from the admin-configurable PricingConfig
     // (Settings > Pricing in the admin panel), same as cart_notifier.dart's
     // cartSummaryProvider.
-    final pricingForOrder = ref.read(pricingConfigProvider);
-    final Decimal placeOrderServiceFee = pricingForOrder.platformFee;
-    final Decimal placeOrderTaxes = ((placeOrderSubtotal * pricingForOrder.gstPercent) /
-            Decimal.fromInt(100))
-        .toDecimal();
+    // 2026-10-12: services are priced exactly like the web app / backend
+    // (home_services_pricing.py) -- each package's own GST rate, one
+    // platform fee per booking -- see ServiceFare.
+    final orderFare = ServiceFare.fromLines(
+      (_scheduledService != null
+              ? [CartItem(service: _scheduledService!, quantity: _serviceQuantity)]
+              : ref.read(cartProvider))
+          .map((i) => (service: i.service, lineTotal: i.totalPrice)),
+    );
+    final Decimal placeOrderServiceFee = orderFare.platformFee;
+    final Decimal placeOrderTaxes = orderFare.gst;
     final Decimal placeOrderDiscount = Decimal.fromInt(_couponDiscountAmount);
     final Decimal placeOrderRawTotal =
         placeOrderSubtotal + placeOrderServiceFee + placeOrderTaxes - placeOrderDiscount;
@@ -312,10 +319,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     // Fixed 2026-10-01: admin-configurable (Settings > Pricing), see note above.
-    final pricingForDisplay = ref.watch(pricingConfigProvider);
-    final Decimal serviceFee = pricingForDisplay.platformFee;
-    final Decimal taxes =
-        ((subtotal * pricingForDisplay.gstPercent) / Decimal.fromInt(100)).toDecimal();
+    final displayFare = ServiceFare.fromLines(
+      (hasScheduledService
+              ? [CartItem(service: _scheduledService!, quantity: _serviceQuantity)]
+              : cartItems)
+          .map((i) => (service: i.service, lineTotal: i.totalPrice)),
+    );
+    final Decimal serviceFee = displayFare.platformFee;
+    final Decimal taxes = displayFare.gst;
     final Decimal discount = Decimal.fromInt(_couponDiscountAmount);
     final Decimal rawGrandTotal = subtotal + serviceFee + taxes - discount;
     final Decimal grandTotal =
@@ -867,7 +878,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                         const SizedBox(height: 8),
                         _BillRow(
-                          label: 'Taxes (GST ${pricingForDisplay.gstPercent}%)',
+                          label: 'Taxes (GST)',
                           amount: '₹$taxes',
                         ),
                         if (_couponDiscountAmount > 0) ...[
