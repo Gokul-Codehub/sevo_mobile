@@ -24,9 +24,15 @@ class SlowLoadGate extends StatefulWidget {
   const SlowLoadGate({
     super.key,
     required this.skeleton,
-    this.slowThreshold = const Duration(seconds: 3),
+    this.slowThreshold = const Duration(milliseconds: 1500),
     this.tagline,
+    this.embedded = false,
   });
+
+  /// Use inside a screen that already has its own Scaffold/app bar: shows the
+  /// branded illustration without a nested Scaffold (which breaks layout in
+  /// this app's shell routes).
+  final bool embedded;
 
   /// The screen's own normal loading UI (a shimmer/skeleton widget),
   /// shown immediately and for as long as the load stays under
@@ -68,10 +74,18 @@ class _SlowLoadGateState extends State<SlowLoadGate> {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       child: _isSlow
-          ? BrandedLoadingScreen(
-              key: const ValueKey('slow'),
-              tagline: widget.tagline ?? 'Good things, on the way',
-            )
+          ? (widget.embedded
+              ? ColoredBox(
+                  key: const ValueKey('slow'),
+                  color: Colors.white,
+                  child: BrandedLoader(
+                    tagline: widget.tagline ?? BrandedLoader.defaultTagline,
+                  ),
+                )
+              : BrandedLoadingScreen(
+                  key: const ValueKey('slow'),
+                  tagline: widget.tagline ?? 'Everything you need, delivered at your doorstep',
+                ))
           : KeyedSubtree(
               key: const ValueKey('skeleton'),
               child: widget.skeleton,

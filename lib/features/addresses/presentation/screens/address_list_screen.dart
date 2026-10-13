@@ -117,6 +117,7 @@ class AddressListScreen extends ConsumerWidget {
                   }
                 },
                 onDelete: () => _confirmDelete(context, ref, address),
+                onEdit: () => context.push('/addresses/edit', extra: address),
               );
             },
           );
@@ -176,6 +177,7 @@ class _AddressCard extends StatelessWidget {
     required this.onSelect,
     required this.onSetDefault,
     required this.onDelete,
+    required this.onEdit,
   });
 
   final Address address;
@@ -184,6 +186,7 @@ class _AddressCard extends StatelessWidget {
   final VoidCallback onSelect;
   final VoidCallback onSetDefault;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
 
   IconData get _typeIcon => switch (address.addressType) {
         'home' => Icons.home_outlined,
@@ -257,9 +260,20 @@ class _AddressCard extends StatelessWidget {
                     icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
                     onSelected: (val) {
                       if (val == 'default') onSetDefault();
+                      if (val == 'edit') onEdit();
                       if (val == 'delete') onDelete();
                     },
                     itemBuilder: (ctx) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text('Edit'),
+                          ],
+                        ),
+                      ),
                       if (!address.isDefault)
                         const PopupMenuItem(
                           value: 'default',

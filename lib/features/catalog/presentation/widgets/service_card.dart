@@ -344,23 +344,35 @@ class ServiceCard extends ConsumerWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          OutlinedButton(
-                            onPressed: () => _handleAddToCart(context, ref),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.groceryGreen,
-                              side: const BorderSide(
-                                  color: AppColors.groceryGreen, width: 1.2),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 4),
-                              minimumSize: const Size(60, 32),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                          GestureDetector(
+                            onTap: () => _handleAddToCart(context, ref),
+                            child: Container(
+                              height: 32,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Color(0xFF2FA354), Color(0xFF14612F)],
+                                ),
+                                borderRadius: BorderRadius.circular(18),
                               ),
-                            ),
-                            child: const Text(
-                              'ADD',
-                              style: TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w700),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.shopping_cart_outlined,
+                                      size: 14, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Add',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -559,12 +571,33 @@ class ServiceCard extends ConsumerWidget {
                     ),
                   ),
                 ),
+                // Fixed 2026-10-08 (QA CMP04 — "the word 'Unavailable'
+                // does not show for the unavailable packages"): an admin-
+                // deactivated package (`service.isAvailable` false, see
+                // ServiceItem.status) is still returned by the catalog so
+                // the customer can see it was once offered, but nothing
+                // marked it as such — this greys the whole hero image and
+                // adds the same "Unavailable" label CMP01's booking gate
+                // (service_detail_screen.dart) now enforces, so the two
+                // read as one consistent state instead of a silent block.
+                if (!service.isAvailable) ...[
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  const Positioned.fill(
+                    child: Center(
+                      child: _UnavailableBadge(),
+                    ),
+                  ),
+                ],
                 // Added 2026-09-17 per a supplied reference screenshot: a
                 // "Most Booked" badge, driven by the real `isPopular` flag
                 // the backend already sends (CatalogServiceSerializer) —
                 // never shown for a service the admin hasn't actually
                 // marked popular.
-                if (service.isPopular)
+                if (service.badgeLabel != null)
                   Positioned(
                     left: 8,
                     top: 8,
@@ -574,14 +607,14 @@ class ServiceCard extends ConsumerWidget {
                         color: AppColors.primaryDark,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.local_fire_department_rounded, size: 12, color: Colors.white),
-                          SizedBox(width: 3),
+                          const Icon(Icons.star_rounded, size: 12, color: Colors.white),
+                          const SizedBox(width: 3),
                           Text(
-                            'Most Booked',
-                            style: TextStyle(
+                            service.badgeLabel!,
+                            style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
@@ -660,11 +693,11 @@ class ServiceCard extends ConsumerWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        if (service.shortDescription != null && service.shortDescription!.isNotEmpty) ...[
+        if (_cardBlurb(service) != null) ...[
           const SizedBox(height: 3),
           Text(
-            service.shortDescription!,
-            maxLines: 1,
+            _cardBlurb(service)!,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 11.5,
@@ -678,19 +711,36 @@ class ServiceCard extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
+            // Flexible + scaleDown: on a narrow card (e.g. next to the
+            // subcategory rail) the price / MRP / "% OFF" group shrinks to fit
+            // instead of overflowing past the button.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
+                if (service.hasPackageOptions)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Text('From',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary)),
+                  ),
                 Text(
-                  '₹${service.effectivePrice}',
+                  '₹${service.hasPackageOptions ? service.startsAtPrice : service.effectivePrice}',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.navy,
                   ),
                 ),
-                if (service.hasDiscount) ...[
+                if (service.hasDiscount && !service.hasPackageOptions) ...[
                   const SizedBox(width: 6),
                   Text(
                     '₹${service.price}',
@@ -705,7 +755,7 @@ class ServiceCard extends ConsumerWidget {
                 // "X% OFF" pill computed from the real
                 // `ServiceItem.discountPercent` getter (price vs.
                 // discountedPrice) — never a hardcoded percentage.
-                if (service.discountPercent != null) ...[
+                if (service.discountPercent != null && !service.hasPackageOptions) ...[
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -725,20 +775,25 @@ class ServiceCard extends ConsumerWidget {
                 ],
               ],
             ),
+              ),
+            ),
+            const SizedBox(width: 8),
             ElevatedButton(
               onPressed: onTap ?? () => _navigateToDetail(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.serviceBlueLight,
                 foregroundColor: AppColors.serviceBlue,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 minimumSize: const Size(0, 34),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
-              child: const Text(
-                'View Details',
+              child: Text(
+                service.hasPackageOptions
+                    ? '${service.packageOptions.length} options'
+                    : 'View Details',
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
@@ -748,6 +803,44 @@ class ServiceCard extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// One-line summary under a package title: the short description when the
+/// backend sends one, otherwise the first lines of the admin's description
+/// (the list API only fills `description`).
+String? _cardBlurb(ServiceItem s) {
+  final short = s.shortDescription?.trim();
+  if (short != null && short.isNotEmpty) return short;
+  final d = s.description?.trim();
+  if (d == null || d.isEmpty) return null;
+  return d.replaceAll(RegExp(r'\s+'), ' ');
+}
+
+/// Small pill shown over a deactivated package's hero image — see the
+/// "Fixed 2026-10-08 (QA CMP04...)" comment above where this is used.
+class _UnavailableBadge extends StatelessWidget {
+  const _UnavailableBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1),
+      ),
+      child: const Text(
+        'Unavailable',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+          letterSpacing: 0.3,
+        ),
+      ),
     );
   }
 }

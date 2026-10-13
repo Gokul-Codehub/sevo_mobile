@@ -122,10 +122,14 @@ class MobileMediaItem {
     this.enabled = true,
     this.flow,
     this.mediaType = 'image',
+    this.posterUrl,
   });
 
   final String id;
   final String? imageUrl;
+
+  /// Optional still shown while a video loads (admin "poster image").
+  final String? posterUrl;
   final String? link;
   final bool enabled;
 
@@ -169,6 +173,10 @@ class MobileMediaItem {
           ? rawFlow
           : null,
       mediaType: rawMediaType == 'video' ? 'video' : 'image',
+      posterUrl: (() {
+        final p = (json['poster_url'] ?? json['poster'] ?? '').toString().trim();
+        return p.isEmpty ? null : p;
+      })(),
     );
   }
 }
@@ -553,6 +561,8 @@ class HomepageConfig {
     required this.offers,
     this.mobileBanners = const [],
     this.mobileAds = const [],
+    this.heroVideoServices,
+    this.heroVideoGroceries,
     this.topCards = const [],
     this.bestsellers = const [],
     this.grocerySections = const [],
@@ -584,6 +594,12 @@ class HomepageConfig {
   /// Advertisement" tab. Rendered as an extra card on Home only when at
   /// least one enabled item has an image.
   final List<MobileMediaItem> mobileAds;
+
+  /// Dedicated per-mode hero video/image slot (config.mobile.heroVideos
+  /// .services / .groceries, 2026-10-09) — separate from the banner carousel
+  /// so the admin can set one full-bleed looping clip for each Home mode.
+  final MobileMediaItem? heroVideoServices;
+  final MobileMediaItem? heroVideoGroceries;
 
   /// The Home screen's quick-access card row (originally always exactly
   /// "Groceries" + "Services") — now a fully admin-managed list: any
@@ -654,6 +670,17 @@ class HomepageRepository {
         final mobileBanners = parseMediaList(mobileSection['banners']);
         final mobileAds = parseMediaList(mobileSection['ads']);
 
+        MobileMediaItem? parseHeroVideo(dynamic raw) {
+          if (raw is! Map) return null;
+          final item = MobileMediaItem.fromJson(Map<String, dynamic>.from(raw));
+          return (item.enabled && item.imageUrl != null) ? item : null;
+        }
+
+        final rawHero = mobileSection['heroVideos'];
+        final heroMap = rawHero is Map ? Map<String, dynamic>.from(rawHero) : <String, dynamic>{};
+        final heroVideoServices = parseHeroVideo(heroMap['services']);
+        final heroVideoGroceries = parseHeroVideo(heroMap['groceries']);
+
         // Fixed 2026-09-18: topCards is now an admin-managed list (any
         // length, editable labels) rather than a fixed {groceries,
         // services} object. Still accepts that older object shape here —
@@ -707,7 +734,13 @@ class HomepageRepository {
             ? rawGrocerySections
                 .whereType<Map>()
                 .map((m) => MobileGrocerySection.fromJson(Map<String, dynamic>.from(m)))
-                .where((s) => s.enabled && s.title.isNotEmpty && s.categoryIds.isNotEmpty)
+                // A section is usable with categories OR, in "Specific Products"
+                // mode, with picked products and NO categories at all — the
+                // old categories-only check silently dropped those.
+                .where((s) =>
+                    s.enabled &&
+                    s.title.isNotEmpty &&
+                    (s.categoryIds.isNotEmpty || s.productIds.isNotEmpty))
                 .toList()
             : <MobileGrocerySection>[];
 
@@ -725,6 +758,8 @@ class HomepageRepository {
           offers: items,
           mobileBanners: mobileBanners,
           mobileAds: mobileAds,
+          heroVideoServices: heroVideoServices,
+          heroVideoGroceries: heroVideoGroceries,
           topCards: topCards,
           bestsellers: bestsellers,
           grocerySections: grocerySections,

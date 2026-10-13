@@ -37,7 +37,32 @@ class BannerMedia extends StatefulWidget {
     this.title,
     this.semanticIcon,
     this.fit = BoxFit.cover,
+    this.poster,
+    this.quietPlaceholder = false,
   });
+
+  /// Optional still image shown instantly while a video buffers (and kept if
+  /// the video fails). The video fades in over it once its first frame is
+  /// ready.
+  final String? poster;
+
+  /// When true and no [poster] is given, a not-yet-ready video shows nothing
+  /// (the parent's background) instead of a grey shimmer block — used by the
+  /// Home hero, which sits directly on the coloured header.
+  final bool quietPlaceholder;
+
+  /// Starts downloading + initialising [url]'s video in the shared player
+  /// cache so a later [BannerMedia] for the same URL starts instantly.
+  /// Never throws; completes when the video is ready (or has failed).
+  static Future<void> warmUp(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final resolved = ImageUrlHelper.resolve(url);
+    final uri = resolved == null ? null : Uri.tryParse(resolved);
+    if (uri == null) return;
+    try {
+      await _BannerVideoCache.warm(uri);
+    } catch (_) {}
+  }
 
   /// Resolved image or video URL. Null/empty is handled by the caller
   /// (both current call sites only construct this widget once they know
@@ -71,9 +96,110 @@ class BannerMedia extends StatefulWidget {
 // video as paused while this widget is still showing it — since this is a
 // decorative, no-controls autoplay loop, there's never a legitimate
 // "the user meant to pause this" state to respect.
+/// App-wide cache of banner video players, keyed by resolved URL.
+///
+/// Added 2026-10-09 ("the loading of the video in the banner is getting
+/// the API each time of page switching ... make it one time loader"):
+/// every [BannerMedia] used to create and dispose its own
+/// [VideoPlayerController], so each switch between Home / Groceries /
+/// Services (or any rebuild that remounted the banner) re-downloaded and
+/// re-initialised the same video. Controllers now outlive the widgets:
+/// the first mount initialises one controller per URL, later mounts reuse
+/// it instantly (already decoded, no network), and unmounting only pauses
+/// it. A small cap evicts the least recently used unreferenced players.
+class _BannerVideoEntry {
+  _BannerVideoEntry(this.controller);
+
+  final VideoPlayerController controller;
+  int refs = 0;
+  bool failed = false;
+  bool initializing = true;
+  Future<void>? initFuture;
+  int lastUsed = 0;
+}
+
+class _BannerVideoCache {
+  static final Map<String, _BannerVideoEntry> _entries = {};
+  static const int _maxEntries = 4;
+  static int _tick = 0;
+
+  static _BannerVideoEntry acquire(Uri uri) {
+    final key = uri.toString();
+    var entry = _entries[key];
+    if (entry == null || entry.failed) {
+      if (entry != null) {
+        _entries.remove(key);
+        entry.controller.dispose();
+      }
+      // Banner videos are always silent: mixWithOthers stops the player from
+      // taking audio focus, so it can never pause the user's music either.
+      final controller = VideoPlayerController.networkUrl(
+        uri,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+      controller.setLooping(true);
+      controller.setVolume(0);
+      entry = _BannerVideoEntry(controller);
+      final created = entry;
+      created.initFuture = controller.initialize().then((_) {
+        created.initializing = false;
+        controller.setVolume(0);
+      }).catchError((Object error) {
+        created.initializing = false;
+        created.failed = true;
+        if (kDebugMode) {
+          debugPrint('[BANNER-VIDEO] Failed to initialize $uri: $error');
+        }
+      });
+      _entries[key] = created;
+      _evict();
+    }
+    entry.refs++;
+    entry.lastUsed = ++_tick;
+    return entry;
+  }
+
+  /// Initialises (without keeping a reference) so the controller stays cached
+  /// and decoded for the next widget that asks for the same URL.
+  static Future<void> warm(Uri uri) async {
+    final entry = acquire(uri);
+    try {
+      await entry.initFuture;
+    } finally {
+      release(entry);
+    }
+  }
+
+  static void release(_BannerVideoEntry entry) {
+    entry.refs = entry.refs > 0 ? entry.refs - 1 : 0;
+    entry.lastUsed = ++_tick;
+    if (entry.refs == 0 && entry.controller.value.isInitialized) {
+      // Keep it warm for the next mount; just stop decoding while hidden.
+      entry.controller.pause();
+    }
+    if (entry.failed && entry.refs == 0) {
+      _entries.removeWhere((_, e) => identical(e, entry));
+      entry.controller.dispose();
+    }
+  }
+
+  static void _evict() {
+    while (_entries.length > _maxEntries) {
+      final idle = _entries.entries.where((e) => e.value.refs == 0).toList()
+        ..sort((x, y) => x.value.lastUsed.compareTo(y.value.lastUsed));
+      if (idle.isEmpty) return;
+      final victim = idle.first;
+      _entries.remove(victim.key);
+      victim.value.controller.dispose();
+    }
+  }
+}
+
 class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
-  VideoPlayerController? _controller;
+  _BannerVideoEntry? _entry;
   bool _failed = false;
+
+  VideoPlayerController? get _controller => _entry?.controller;
 
   @override
   void initState() {
@@ -93,37 +219,41 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
     if (!controller.value.isPlaying) {
-      controller.play();
+      controller
+        ..setVolume(0)
+        ..play();
     }
   }
 
   void _onControllerValueChanged() {
     // Video is meant to loop forever with no user-facing pause control —
     // if video_player's own state ever drifts to "paused" while this
-    // widget is still mounted and showing it, put it back to playing
-    // rather than leaving a static banner on screen.
+    // widget is still mounted and showing it, put it back to playing.
     if (!mounted) return;
     final controller = _controller;
     if (controller == null) return;
     final value = controller.value;
     if (value.isInitialized && !value.isPlaying && !value.isBuffering) {
-      controller.play();
+      controller
+        ..setVolume(0)
+        ..play();
     }
+  }
+
+  void _detach() {
+    final entry = _entry;
+    if (entry == null) return;
+    entry.controller.removeListener(_onControllerValueChanged);
+    _entry = null;
+    _BannerVideoCache.release(entry);
   }
 
   @override
   void didUpdateWidget(covariant BannerMedia oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A carousel page can be rebuilt with a different banner at the same
-    // widget slot (PageView.builder reuses element positions) — re-init
-    // the player whenever the actual source changes instead of silently
-    // keeping the previous video playing behind new content.
     if (oldWidget.url != widget.url || oldWidget.mediaType != widget.mediaType) {
-      final oldController = _controller;
-      _controller = null;
+      _detach();
       _failed = false;
-      oldController?.removeListener(_onControllerValueChanged);
-      oldController?.dispose();
       _maybeInitVideo();
     }
   }
@@ -132,14 +262,8 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
     if (!widget._isVideo || widget.url == null || widget.url!.isEmpty) {
       return;
     }
-    // Fixed 2026-09-21 — root cause of "video not playing, shows the
-    // default icon": [widget.url] can be a bare Supabase Storage path
-    // (e.g. "homepage/mobile-banners/abc123.mp4") rather than a full
-    // URL — the same raw-path-vs-resolved-URL bug fixed in
-    // homepage_repository.dart's fromJson methods, kept here too as a
-    // second line of defense since [ImageUrlHelper.resolve] is exactly
-    // the same "make this fetchable" step [AppRemoteImage] already runs
-    // for the image branch below; skipping it only for video was the gap.
+    // [widget.url] can be a bare storage path rather than a full URL —
+    // resolve it the same way [AppRemoteImage] does for stills.
     final resolvedUrl = ImageUrlHelper.resolve(widget.url);
     final uri = resolvedUrl == null ? null : Uri.tryParse(resolvedUrl);
     if (uri == null) {
@@ -149,56 +273,94 @@ class _BannerMediaState extends State<BannerMedia> with WidgetsBindingObserver {
       _failed = true;
       return;
     }
-    final controller = VideoPlayerController.networkUrl(uri);
-    _controller = controller;
-    controller.setLooping(true);
-    controller.setVolume(0);
+    final entry = _BannerVideoCache.acquire(uri);
+    _entry = entry;
+    final controller = entry.controller;
     controller.addListener(_onControllerValueChanged);
-    controller.initialize().then((_) {
-      if (!mounted || _controller != controller) return;
-      setState(() {});
-      controller.play();
-    }).catchError((Object error) {
-      if (kDebugMode) {
-        debugPrint('[BANNER-VIDEO] Failed to initialize $uri: $error');
+    if (controller.value.isInitialized) {
+      // Cache hit: already decoded — show immediately and resume.
+      controller
+        ..setVolume(0)
+        ..play();
+      return;
+    }
+    entry.initFuture?.then((_) {
+      if (!mounted || _entry != entry) return;
+      if (entry.failed) {
+        setState(() => _failed = true);
+        return;
       }
-      if (!mounted || _controller != controller) return;
-      setState(() => _failed = true);
+      setState(() {});
+      controller
+        ..setVolume(0)
+        ..play();
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.removeListener(_onControllerValueChanged);
-    _controller?.dispose();
+    _detach();
     super.dispose();
   }
+
+  Widget _posterImage(String url) => AppRemoteImage(
+        imageUrl: url,
+        rawPath: url,
+        title: widget.title,
+        semanticIcon: widget.semanticIcon,
+        width: double.infinity,
+        height: double.infinity,
+        fit: widget.fit,
+      );
 
   @override
   Widget build(BuildContext context) {
     if (widget._isVideo && !_failed && widget.url != null && widget.url!.isNotEmpty) {
       final controller = _controller;
-      if (controller != null && controller.value.isInitialized) {
-        return SizedBox.expand(
-          child: FittedBox(
-            fit: widget.fit,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
+      final ready = controller != null && controller.value.isInitialized;
+      final hasPoster = (widget.poster ?? '').isNotEmpty;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Placeholder layer: the poster if the admin gave one, otherwise
+          // the usual shimmer (or nothing, for the quiet Home hero).
+          if (hasPoster)
+            _posterImage(widget.poster!)
+          else if (!widget.quietPlaceholder)
+            const ShimmerBox(
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: 0,
             ),
+          // The video fades in over it once the first frame is decoded.
+          AnimatedOpacity(
+            opacity: ready ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOut,
+            child: ready
+                ? SizedBox.expand(
+                    child: FittedBox(
+                      fit: widget.fit,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: controller!.value.size.width,
+                        height: controller.value.size.height,
+                        child: VideoPlayer(controller),
+                      ),
+                    ),
+                  )
+                : const SizedBox.expand(),
           ),
-        );
-      }
-      // First frame hasn't decoded yet — same loading look AppRemoteImage
-      // shows for a still-loading image, never a blank gap.
-      return const ShimmerBox(
-        width: double.infinity,
-        height: double.infinity,
-        borderRadius: 0,
+        ],
       );
+    }
+
+    // A video that failed to load: keep the poster (or nothing, when quiet)
+    // rather than trying to draw the video URL as an image.
+    if (widget._isVideo) {
+      if ((widget.poster ?? '').isNotEmpty) return _posterImage(widget.poster!);
+      if (widget.quietPlaceholder) return const SizedBox.expand();
     }
 
     return AppRemoteImage(

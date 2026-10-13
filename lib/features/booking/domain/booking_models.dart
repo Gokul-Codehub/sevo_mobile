@@ -14,11 +14,25 @@ class CartItem extends Equatable {
     required this.service,
     this.quantity = 1,
     this.customNotes,
+    this.comboKey,
+    this.comboTitle,
+    this.comboUnitQty = 1,
   });
 
   final ServiceItem service;
   final int quantity;
   final String? customNotes;
+
+  /// Set when this line is one of the products of a combo offer: every product
+  /// of the same combo + selection shares the key, and the cart shows them
+  /// together under [comboTitle]. [comboUnitQty] is how many of this product
+  /// one combo contains (so the combo count is `quantity / comboUnitQty`).
+  /// The order itself is still placed per product.
+  final String? comboKey;
+  final String? comboTitle;
+  final int comboUnitQty;
+
+  bool get isComboLine => comboKey != null;
 
   Decimal get unitPrice => service.effectivePrice;
   Decimal get totalPrice => unitPrice * Decimal.fromInt(quantity);
@@ -32,6 +46,9 @@ class CartItem extends Equatable {
         service: service ?? this.service,
         quantity: quantity ?? this.quantity,
         customNotes: customNotes ?? this.customNotes,
+        comboKey: comboKey,
+        comboTitle: comboTitle,
+        comboUnitQty: comboUnitQty,
       );
 
   Map<String, dynamic> toJson() => {
@@ -41,6 +58,10 @@ class CartItem extends Equatable {
         'quantity': quantity,
         'unit_price': unitPrice.toString(),
         'total_price': totalPrice.toString(),
+        if (service.selectedOption != null) ...{
+          'option_id': service.selectedOption!.id,
+          'option_name': service.selectedOption!.name,
+        },
         if (customNotes != null) 'notes': customNotes,
       };
 
@@ -48,6 +69,9 @@ class CartItem extends Equatable {
         'service': service.toJson(),
         'quantity': quantity,
         if (customNotes != null) 'custom_notes': customNotes,
+        if (comboKey != null) 'combo_key': comboKey,
+        if (comboTitle != null) 'combo_title': comboTitle,
+        if (comboKey != null) 'combo_unit_qty': comboUnitQty,
       };
 
   factory CartItem.fromStorageJson(Map<String, dynamic> json) {
@@ -68,11 +92,14 @@ class CartItem extends Equatable {
       service: ServiceItem.fromJson(srvMap),
       quantity: parseInt(json['quantity'], fallback: 1),
       customNotes: json['custom_notes']?.toString() ?? json['notes']?.toString(),
+      comboKey: json['combo_key']?.toString(),
+      comboTitle: json['combo_title']?.toString(),
+      comboUnitQty: parseInt(json['combo_unit_qty'], fallback: 1),
     );
   }
 
   @override
-  List<Object?> get props => [service, quantity, customNotes];
+  List<Object?> get props => [service, quantity, customNotes, comboKey, comboTitle, comboUnitQty];
 }
 
 /// Information about assigned service professional.
@@ -560,7 +587,7 @@ class Booking extends Equatable {
                 )
               : null),
       scheduledDate: (json['scheduled_date'] ?? json['date'] ?? json['preferred_date'] ?? '').toString(),
-      scheduledTimeSlot: (json['scheduled_time_slot'] ?? json['time_slot'] ?? json['preferred_time_slot'] ?? json['slot'] ?? '').toString(),
+      scheduledTimeSlot: (json['scheduled_time_slot'] ?? json['time_slot'] ?? json['preferred_time_slot'] ?? json['preferred_time'] ?? json['slot'] ?? '').toString(),
       specialInstructions: json['special_instructions']?.toString() ?? json['notes']?.toString() ?? json['description']?.toString(),
       technician: json['technician'] is Map
           ? TechnicianInfo.fromJson(Map<String, dynamic>.from(json['technician'] as Map))

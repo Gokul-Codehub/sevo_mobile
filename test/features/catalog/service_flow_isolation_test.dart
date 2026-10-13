@@ -48,12 +48,11 @@ void main() {
       container.read(cartProvider.notifier).addService(acRepair);
 
       final summary = container.read(cartSummaryProvider);
-      expect(summary.isGroceryCart, isFalse);
       expect(summary.subtotal, equals(Decimal.parse('899.00')));
-      expect(summary.serviceFee, equals(Decimal.parse('49.00')));
-      expect(summary.taxes, equals(Decimal.parse('44.95'))); // 5% of 899
-      expect(summary.total, equals(Decimal.parse('992.95'))); // 899 + 49 + 44.95
-      expect(summary.advancePayable, equals(Decimal.parse('198.59'))); // 20% of 992.95
+      expect(summary.serviceFee, equals(Decimal.parse('29.00')));
+      expect(summary.taxes, equals(Decimal.parse('161.82'))); // 18% of 899
+      expect(summary.total, equals(Decimal.parse('1089.82'))); // 899 + 29 + 161.82
+      expect(summary.advancePayable, equals(Decimal.parse('217.964'))); // 20% of 1089.82
     });
 
     test('Booking model requires scheduled date and slot for normal service', () {

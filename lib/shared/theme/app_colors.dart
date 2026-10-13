@@ -84,4 +84,19 @@ abstract final class AppColors {
   // ── Shimmer ──
   static const Color shimmerBase = Color(0xFFE2E8F0);
   static const Color shimmerHighlight = Color(0xFFF8FAFC);
+
+  // ── Price display ──
+  /// Bold primary-colored price (₹ amount) — used wherever the final price is shown.
+  static const Color priceColor = Color(0xFF05A357);
+  /// Struck-through MRP (original price before discount).
+  static const Color priceMrp = Color(0xFF94A3B8);
+
+  // ── Discount badge ──
+  static const Color discountBadgeBg = Color(0xFFFFEDE0);
+  static const Color discountBadgeText = Color(0xFFE05D00);
+
+  // ── Elevation / shadow tint ──
+  /// Subtle card shadow color at 8% alpha — use with blurRadius 12–16.
+  static const Color cardShadow = Color(0x14000000); // 8% black
+  static const Color cardShadowStrong = Color(0x1F000000); // 12% black
 }

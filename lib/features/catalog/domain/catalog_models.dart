@@ -73,6 +73,42 @@ enum CatalogFlowType {
 }
 
 /// Service category model.
+/// One tile of a category's admin-configured popup (e.g. "Kitchen Cleaning"
+/// under Cleaning): a title, a picture and the services it opens.
+class CategoryPopupTile extends Equatable {
+  const CategoryPopupTile({
+    required this.id,
+    required this.title,
+    this.image,
+    this.serviceSlugs = const [],
+  });
+
+  final String id;
+  final String title;
+  final String? image;
+  final List<String> serviceSlugs;
+
+  static CategoryPopupTile? fromJson(Map<String, dynamic> json) {
+    final title = (json['title'] ?? '').toString().trim();
+    if (title.isEmpty) return null;
+    final image = (json['image'] ?? '').toString().trim();
+    final slugs = (json['services'] as List? ?? const [])
+        .whereType<Map>()
+        .map((s) => (s['slug'] ?? '').toString().trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return CategoryPopupTile(
+      id: (json['id'] ?? title).toString(),
+      title: title,
+      image: image.isEmpty ? null : image,
+      serviceSlugs: slugs,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, title, image, serviceSlugs];
+}
+
 class Category extends Equatable {
   const Category({
     required this.id,
@@ -84,6 +120,8 @@ class Category extends Equatable {
     this.displayOrder = 0,
     this.isActive = true,
     this.subcategories = const [],
+    this.popupTitle,
+    this.popupTiles = const [],
   });
 
   final int id;
@@ -95,6 +133,11 @@ class Category extends Equatable {
   final int displayOrder;
   final bool isActive;
   final List<Subcategory> subcategories;
+
+  /// Admin-configured popup shown when the category opens (web parity:
+  /// `is_popup_enabled` + `popup_sections[].items[]`). Empty when disabled.
+  final String? popupTitle;
+  final List<CategoryPopupTile> popupTiles;
 
   /// Determines whether this category represents a quick-commerce grocery catalog or scheduled services.
   ///
@@ -169,6 +212,16 @@ class Category extends Equatable {
           .whereType<Map>()
           .map((m) => Subcategory.fromJson(Map<String, dynamic>.from(m)))
           .toList(),
+      popupTitle: (json['popup_title'] ?? '').toString().trim().isEmpty
+          ? null
+          : json['popup_title'].toString().trim(),
+      popupTiles: parseBoolOrDefault(json['is_popup_enabled'], false)
+          ? [
+              for (final sec in (json['popup_sections'] as List? ?? const []).whereType<Map>())
+                for (final item in (sec['items'] as List? ?? const []).whereType<Map>())
+                  ?CategoryPopupTile.fromJson(Map<String, dynamic>.from(item)),
+            ]
+          : const [],
     );
   }
 
@@ -195,6 +248,8 @@ class Category extends Equatable {
         displayOrder,
         isActive,
         subcategories,
+        popupTitle,
+        popupTiles,
       ];
 }
 
@@ -222,6 +277,65 @@ class ServiceFaq extends Equatable {
 
   @override
   List<Object?> get props => [question, answer];
+}
+
+/// One admin-defined option of a package (web: `pkg.options`) - e.g. "1.5 Ton"
+/// / "2 Ton" under an AC service, each with its own price. A package that has
+/// options is never booked at its own price: the customer picks one first.
+class PackageOption extends Equatable {
+  const PackageOption({
+    required this.id,
+    required this.name,
+    required this.basePrice,
+    this.offerPrice,
+    this.duration = '',
+    this.image = '',
+    this.description = '',
+  });
+
+  final int id;
+  final String name;
+  final Decimal basePrice;
+  final Decimal? offerPrice;
+  final String duration;
+  final String image;
+  final String description;
+
+  /// Same rule as the web app: the offer counts only when it is above zero
+  /// and not above the base price.
+  bool get hasOffer =>
+      offerPrice != null &&
+      offerPrice! > Decimal.zero &&
+      (basePrice == Decimal.zero || offerPrice! <= basePrice) &&
+      offerPrice! < basePrice;
+
+  Decimal get effectivePrice => hasOffer ? offerPrice! : basePrice;
+
+  factory PackageOption.fromJson(Map<String, dynamic> json) {
+    final base = parseMoneyOrNull(json['base_price']) ?? parseMoneyOrNull(json['price']) ?? Decimal.zero;
+    return PackageOption(
+      id: parseInt(json['id']),
+      name: (json['name'] ?? '').toString(),
+      basePrice: base,
+      offerPrice: parseMoneyOrNull(json['offer_price']),
+      duration: (json['duration'] ?? '').toString(),
+      image: (json['image'] ?? '').toString(),
+      description: (json['description'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'base_price': basePrice.toString(),
+        if (offerPrice != null) 'offer_price': offerPrice.toString(),
+        'duration': duration,
+        'image': image,
+        'description': description,
+      };
+
+  @override
+  List<Object?> get props => [id, name, basePrice, offerPrice, duration, image, description];
 }
 
 /// Service item model with money parsing and metadata.
@@ -259,6 +373,12 @@ class ServiceItem extends Equatable {
     this.maxQuantity = 99,
     this.gstRate,
     this.platformFee,
+    this.status,
+    this.galleryImages = const [],
+    this.variantOptions = const [],
+    this.tag,
+    this.packageOptions = const [],
+    this.selectedOption,
   });
 
   final int id;
@@ -355,6 +475,116 @@ class ServiceItem extends Equatable {
   final double? gstRate;
   final Decimal? platformFee;
 
+  // ── Admin availability status (added 2026-10-08) ──────────────────────────
+  //
+  // Bug found via QA ("the admin inactivate the service, but it is still
+  // able to book by the customer" / "the word 'Unavailable' does not show
+  // for the unavailable packages"): the backend's CatalogServiceSerializer
+  // already serializes the Package's `status` field (PackageStatus: DRAFT /
+  // ACTIVE / INACTIVE / ARCHIVED — service_requests/models.py) on every
+  // catalog response, and the public catalog listing view already lets an
+  // INACTIVE package through on purpose (DRAFT/ARCHIVED are excluded, but
+  // INACTIVE items stay visible so the customer can see what used to be
+  // offered) — but this model never parsed that field at all, so nothing in
+  // the app could show an "Unavailable" badge or stop a customer from
+  // booking one. Null means the backend didn't send a status (treated as
+  // available, same as [isAvailable]'s default), never as "unavailable" —
+  // this must never make an older/legacy payload silently un-bookable.
+  final String? status;
+
+  /// Extra product photos (the vendor's gallery) — a product card slides through
+  /// them. Empty for items with a single image.
+  final List<String> galleryImages;
+
+  /// Every pack/size of this product (including this one) when it comes in
+  /// several — the card's pack-size picker lists them. Empty for single-pack products.
+  final List<ServiceItem> variantOptions;
+
+  bool get hasVariantOptions => variantOptions.length > 1;
+
+  /// Admin tag shown as a badge on the package (e.g. "Popular", "Best seller").
+  final String? tag;
+
+  /// Options the customer must choose from before booking (see [PackageOption]).
+  final List<PackageOption> packageOptions;
+
+  /// The option currently chosen (set by [withOption]); null until picked.
+  final PackageOption? selectedOption;
+
+  // -- Package options (admin "variants" of a service package) --------------
+
+  bool get hasPackageOptions => packageOptions.isNotEmpty;
+
+  /// Lowest option price ("From Rs X") - never the parent package price.
+  Decimal? get startsAtPrice => packageOptions.isEmpty
+      ? null
+      : packageOptions.map((o) => o.effectivePrice).reduce((a, b) => a < b ? a : b);
+
+  /// Text for the badge on a package card: the admin's own tag, else
+  /// "Popular" for a popular package (web shows both as "star <text>").
+  String? get badgeLabel {
+    final t = (tag ?? '').trim();
+    if (t.isNotEmpty) return t.replaceFirst(RegExp(r'^\u2605\s*'), '');
+    return isPopular ? 'Popular' : null;
+  }
+
+  /// This package with [option] chosen: priced at the option's price, named
+  /// "<package> (<option>)" and carrying [selectedOption] through the cart
+  /// and the booking payload.
+  ServiceItem withOption(PackageOption option) {
+    final minutes = _parseDurationMinutes(option.duration, null);
+    return ServiceItem(
+      id: id,
+      title: '$title (${option.name})',
+      slug: slug,
+      price: option.basePrice,
+      discountedPrice: option.hasOffer ? option.offerPrice : null,
+      unit: unit,
+      shortDescription: shortDescription,
+      description: description,
+      durationMinutes: option.duration.trim().isEmpty ? durationMinutes : minutes,
+      rating: rating,
+      reviewCount: reviewCount,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      categorySlug: categorySlug,
+      subcategoryName: subcategoryName,
+      subcategorySlug: subcategorySlug,
+      imageUrl: option.image.trim().isNotEmpty ? option.image.trim() : imageUrl,
+      isPopular: isPopular,
+      isEssential: isEssential,
+      inclusions: inclusions,
+      exclusions: exclusions,
+      faqs: faqs,
+      readyInstructions: readyInstructions,
+      tools: tools,
+      vegetableCategoryName: vegetableCategoryName,
+      vegetableCategorySlug: vegetableCategorySlug,
+      vegetableCategoryParentName: vegetableCategoryParentName,
+      vegetableCategoryFullPath: vegetableCategoryFullPath,
+      inStock: inStock,
+      maxQuantity: maxQuantity,
+      gstRate: gstRate,
+      platformFee: platformFee,
+      status: status,
+      galleryImages: galleryImages,
+      variantOptions: variantOptions,
+      tag: tag,
+      packageOptions: packageOptions,
+      selectedOption: option,
+    );
+  }
+
+
+  /// Whether this item can currently be booked / added to cart. False only
+  /// for an explicit non-ACTIVE status from the backend; unknown/missing
+  /// status is always treated as available.
+  bool get isAvailable {
+    final s = status?.trim().toUpperCase();
+    if (s == null || s.isEmpty) return true;
+    return s == 'ACTIVE';
+  }
+
   /// Whether this item was filed under a real Vegetable Inventory category
   /// (as opposed to a plain grocery Package with no category tree entry).
   bool get hasVegetableCategory =>
@@ -405,6 +635,9 @@ class ServiceItem extends Equatable {
     return parent;
   }
 
+  // Matches the backend's authoritative booking price (home_services_pricing.py
+  // charges `offer_price` whenever it is above zero), so the amount shown here
+  // is the amount actually billed.
   Decimal get effectivePrice => discountedPrice ?? price;
   bool get hasDiscount => discountedPrice != null && discountedPrice! < price;
   Decimal get mrp => hasDiscount ? price : ((price * Decimal.fromInt(12)) / Decimal.fromInt(10)).toDecimal();
@@ -621,10 +854,24 @@ class ServiceItem extends Equatable {
       maxQuantity: parseInt(json['max_quantity'], fallback: 99),
       gstRate: parseDoubleOrNull(json['gst_rate']),
       platformFee: parseMoneyOrNull(json['platform_fee']),
+      status: json['status']?.toString(),
+      tag: _nonEmpty(json['tag']),
+      packageOptions: (json['options'] as List? ?? const [])
+          .whereType<Map>()
+          .where((o) => o['is_active'] != false)
+          .map((o) => PackageOption.fromJson(Map<String, dynamic>.from(o)))
+          .where((o) => o.id > 0 && o.name.isNotEmpty)
+          .toList(),
+      selectedOption: json['selected_option'] is Map
+          ? PackageOption.fromJson(Map<String, dynamic>.from(json['selected_option'] as Map))
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
+        if (tag != null) 'tag': tag,
+        'options': packageOptions.map((o) => o.toJson()).toList(),
+        if (selectedOption != null) 'selected_option': selectedOption!.toJson(),
         'id': id,
         'title': title,
         'slug': slug,
@@ -660,6 +907,7 @@ class ServiceItem extends Equatable {
         'max_quantity': maxQuantity,
         if (gstRate != null) 'gst_rate': gstRate,
         if (platformFee != null) 'platform_fee': platformFee.toString(),
+        if (status != null) 'status': status,
       };
 
   @override
@@ -695,6 +943,12 @@ class ServiceItem extends Equatable {
         maxQuantity,
         gstRate,
         platformFee,
+        status,
+        galleryImages,
+        variantOptions,
+        tag,
+        packageOptions,
+        selectedOption,
       ];
 }
 

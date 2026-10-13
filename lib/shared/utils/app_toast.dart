@@ -41,6 +41,7 @@ class AppToast {
     BuildContext context,
     String message, {
     AppToastType type = AppToastType.success,
+    Duration? duration,
   }) {
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
@@ -67,12 +68,25 @@ class AppToast {
         break;
     }
 
+    // Fixed 2026-10-13 (QA CME06, "notification disappears in seconds"): the
+    // banner used to vanish after 1.6 s, too fast to read. It now stays long
+    // enough to read the message: ~3 s base, more for longer text, longer
+    // again for errors, capped at 7 s.
+    final holdFor = duration ??
+        Duration(
+          milliseconds: (3000 +
+                  (message.length > 30 ? (message.length - 30) * 45 : 0) +
+                  (type == AppToastType.error ? 1500 : 0))
+              .clamp(3000, 7000),
+        );
+
     late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (_) => _ToastBanner(
         message: message,
         background: background,
         icon: icon,
+        holdFor: holdFor,
         onFinished: () {
           if (_activeEntry == entry) {
             _activeEntry = null;
@@ -107,8 +121,10 @@ class _ToastBanner extends StatefulWidget {
     required this.background,
     required this.icon,
     required this.onFinished,
+    required this.holdFor,
   });
 
+  final Duration holdFor;
   final String message;
   final Color background;
   final IconData icon;
@@ -131,10 +147,7 @@ class _ToastBannerState extends State<_ToastBanner>
       duration: const Duration(milliseconds: 200),
     );
     _controller.forward();
-    _dismissTimer = Timer(
-      const Duration(milliseconds: 1600),
-      widget.onFinished,
-    );
+    _dismissTimer = Timer(widget.holdFor, widget.onFinished);
   }
 
   @override

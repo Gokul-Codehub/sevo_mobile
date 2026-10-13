@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/services/booking_notification_watcher.dart';
+import 'core/services/customer_notification_watcher.dart';
 import 'core/utils/app_logger.dart';
 import 'core/utils/restart_widget.dart';
 import 'routing/app_router.dart';
@@ -111,7 +112,9 @@ class CalServicesApp extends ConsumerWidget {
       // individual screen's API call happens to fail.
       builder: (context, child) => ConnectivityGate(
         child: BookingNotificationWatcher(
-          child: child ?? const SizedBox.shrink(),
+          child: CustomerNotificationWatcher(
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
       ),
     );

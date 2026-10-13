@@ -124,8 +124,8 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
       loading: () => ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: 3,
-        separatorBuilder: (context, index) => const SizedBox(height: 12),
-        itemBuilder: (context, index) => const ShimmerCard(height: 160),
+        separatorBuilder: (context, index) => const SizedBox(height: 14),
+        itemBuilder: (context, index) => const BookingCardSkeleton(),
       ),
       error: (err, stackTrace) => ErrorStateWidget(
         message: err.toString(),
@@ -323,158 +323,208 @@ class _BookingCard extends StatelessWidget {
         ? AppColors.groceryGreen
         : AppColors.serviceBlue;
 
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: flowAccent.withValues(alpha: 0.35), width: 1),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.cardShadow,
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+        border: Border.all(color: AppColors.borderSubtle, width: 0.8),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => context.push('/bookings/${booking.id}', extra: booking),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header: Request ID, Flow tag & Status Chip
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+              // Left flow-accent stripe (Swiggy/Zomato-style)
+              Container(width: 4, color: flowAccent),
+              Expanded(
+                child: InkWell(
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(12),
+                  ),
+                  onTap: () => context.push('/bookings/${booking.id}', extra: booking),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Flexible(
-                          child: Text(
-                            booking.requestId,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: flowAccent,
+                        // Header: Request ID, Flow tag & Status Chip
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      booking.requestId,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: flowAccent,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: flowAccent.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      booking.isGroceryBooking ? 'GROCERY' : 'SERVICE',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: flowAccent,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            BookingStatusChip(status: booking.status),
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: flowAccent.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
+                        const SizedBox(height: 10),
+                        const Divider(height: 1, thickness: 0.8),
+                        const SizedBox(height: 10),
+
+                        // Service Title
+                        Text(
+                          serviceNames,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
-                          child: Text(
-                            booking.isGroceryBooking ? 'GROCERY' : 'SERVICE',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: flowAccent,
-                              letterSpacing: 0.3,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Date & Time
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today_outlined,
+                                size: 13, color: AppColors.textSecondary),
+                            const SizedBox(width: 5),
+                            Text(
+                              booking.scheduledDate,
+                              style: const TextStyle(
+                                  fontSize: 12, color: AppColors.textSecondary),
                             ),
+                            const SizedBox(width: 12),
+                            const Icon(Icons.schedule,
+                                size: 13, color: AppColors.textSecondary),
+                            const SizedBox(width: 5),
+                            Text(
+                              booking.scheduledTimeSlot,
+                              style: const TextStyle(
+                                  fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+
+                        // Technician info if assigned
+                        if (booking.technician != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.person_outline,
+                                  size: 13, color: AppColors.primary),
+                              const SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  'Tech: ${booking.technician!.name}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primaryDark,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
+                        ],
+
+                        const SizedBox(height: 10),
+                        const Divider(height: 1, thickness: 0.8),
+                        const SizedBox(height: 10),
+
+                        // Footer: Price and Available Actions
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '\u20b9${booking.totalAmount}',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.priceColor,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (booking.canTrack) ...[
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      final identifier =
+                                          booking.trackingIdentifier ??
+                                              '${booking.id}';
+                                      context.push(
+                                          '/track/$identifier', extra: booking);
+                                    },
+                                    icon: const Icon(
+                                        Icons.location_on_outlined, size: 13),
+                                    label: const Text('Track',
+                                        style: TextStyle(fontSize: 12)),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 4),
+                                      minimumSize: const Size(0, 30),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                FilledButton.tonal(
+                                  onPressed: () =>
+                                      context.push('/bookings/${booking.id}'),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 4),
+                                    minimumSize: const Size(0, 30),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: const Text('Details',
+                                      style: TextStyle(fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  BookingStatusChip(status: booking.status),
-                ],
-              ),
-              const Divider(height: 16),
-
-              // Service Title
-              Text(
-                serviceNames,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-
-              // Date & Time
-              Row(
-                children: [
-                  const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    booking.scheduledDate,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(width: 14),
-                  const Icon(Icons.schedule, size: 14, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    booking.scheduledTimeSlot,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Technician info if assigned
-              if (booking.technician != null) ...[
-                Row(
-                  children: [
-                    const Icon(Icons.person_outline, size: 14, color: AppColors.primary),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Technician: ${booking.technician!.name}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              const Divider(height: 16),
-
-              // Footer: Price and Available Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '₹${booking.totalAmount}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (booking.canTrack) ...[
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            final identifier = booking.trackingIdentifier ?? '${booking.id}';
-                            context.push('/track/$identifier', extra: booking);
-                          },
-                          icon: const Icon(Icons.location_on_outlined, size: 14),
-                          label: const Text('Track', style: TextStyle(fontSize: 12)),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            minimumSize: const Size(0, 32),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      FilledButton.tonal(
-                        onPressed: () => context.push('/bookings/${booking.id}'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          minimumSize: const Size(0, 32),
-                        ),
-                        child: const Text('Details', style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                ],
               ),
             ],
           ),

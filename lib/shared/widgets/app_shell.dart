@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../features/ai_assistant/presentation/widgets/ai_chat_sheet.dart';
+import '../../features/auth/domain/auth_notifier.dart';
 import '../../features/booking/domain/cart_notifier.dart';
 import '../../routing/app_router.dart';
 import '../providers/bottom_nav_visibility_provider.dart';
@@ -43,7 +45,9 @@ class AppShell extends ConsumerStatefulWidget {
     // only so `_currentIndex` never mis-highlights this tab as active for
     // an unrelated path; it is otherwise unused for this tab.
     _TabItem(
-      label: 'AI Mitra',
+      // Renamed 2026-10-08 per explicit request ("Change the AI bot name
+      // from 'AI Mitra' to 'Ask Apta'").
+      label: 'Ask Apta',
       icon: Icons.auto_awesome_outlined,
       activeIcon: Icons.auto_awesome_rounded,
       route: AppRoutes.support,
@@ -62,6 +66,29 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
+  /// Navigator colour (bar fill + outline).
+  static const _navy = Color(0xFF0B2337);
+
+  /// Navigator palette. Light theme: white bar, navy active pill. Dark theme
+  /// (kept for when dark mode ships): navy bar, white active pill.
+  _NavPalette get _pal => Theme.of(context).brightness == Brightness.dark
+      ? const _NavPalette(
+          bar: _navy,
+          ring: Color(0xFF1F3B54),
+          pill: Colors.white,
+          onPill: _navy,
+          idle: Color(0xFF9FB3C8),
+          outline: _navy,
+        )
+      : const _NavPalette(
+          bar: Colors.white,
+          ring: Color(0xFFE3E8EE),
+          pill: _navy,
+          onPill: Colors.white,
+          idle: Color(0xFF8A97A6),
+          outline: Colors.white,
+        );
+
   // Fixed 2026-09-17 per explicit request ("The app should be closed using
   // back button/gesture from home page with double click back or double
   // back swipe... like Flipkart"): tracks the timestamp of the last back
@@ -112,12 +139,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     _lastHomeBackPressAt = now;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(const SnackBar(
-        content: Text('Press back again to exit'),
-        duration: _exitPromptWindow,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(bottom: 72, left: 16, right: 16),
-      ));
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Press back again to exit'),
+          duration: _exitPromptWindow,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(bottom: 72, left: 16, right: 16),
+        ),
+      );
     return false;
   }
 
@@ -126,8 +155,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     final currentIndex = _currentIndex(context);
     final isHomeTab = currentIndex == 0;
     final cartItems = ref.watch(cartProvider);
-    final totalCartCount =
-        cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
+    final totalCartCount = cartItems.fold<int>(
+      0,
+      (sum, item) => sum + item.quantity,
+    );
     // Added 2026-09-30 per explicit request ("In the Home page of both
     // Groceries and Services only the footer should show otherwise
     // hidden... make it smooth animation"): Home toggles this on its own
@@ -175,125 +206,232 @@ class _AppShellState extends ConsumerState<AppShell> {
                           top: false,
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                            child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(36),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 18,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: List.generate(AppShell._tabs.length, (index) {
-                        final tab = AppShell._tabs[index];
-                        final isSelected = currentIndex == index;
-
-                        Widget iconWidget = Icon(
-                          isSelected ? tab.activeIcon : tab.icon,
-                          size: 24,
-                          color: isSelected
-                              ? AppColors.primary
-                              : const Color(0xFF334155),
-                        );
-
-                        if (tab.isCartTab && totalCartCount > 0) {
-                          iconWidget = Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              iconWidget,
-                              Positioned(
-                                top: -4,
-                                right: -8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 2,
-                                  ),
-                                  constraints: const BoxConstraints(
-                                    minWidth: 16,
-                                    minHeight: 16,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.error,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      '$totalCartCount',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1.0,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            if (tab.isAiTab) {
-                              showAiChatSheet(context);
-                              return;
-                            }
-                            context.go(tab.route);
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeInOut,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isSelected ? 16 : 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primaryLight
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                iconWidget,
-                                const SizedBox(height: 3),
-                                Text(
-                                  tab.label,
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w600,
-                                    color: isSelected
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
+                            child: _buildNavBar(
+                              context,
+                              currentIndex,
+                              totalCartCount,
                             ),
                           ),
-                        );
-                      }),
-                    ),
-                  ),
-                ),
                         ),
                       ),
               ),
+      ),
+    );
+  }
+
+  /// Floating pill navigator: a white bar with a double golden ring, grey
+  /// outline icons, and a black pill that slides to the active tab and shows
+  /// its icon + label (the other tabs stay icon-only).
+  Widget _buildNavBar(BuildContext context, int currentIndex, int cartCount) {
+    const tabs = AppShell._tabs;
+    const barPad = 8.0;
+    const duration = Duration(milliseconds: 320);
+    const curve = Curves.easeOutCubic;
+    final user = ref.watch(currentUserProvider);
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: _pal.bar,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: _pal.outline, width: 1.6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Container(
+        height: 54,
+        padding: const EdgeInsets.symmetric(horizontal: barPad),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(36),
+          border: Border.all(color: _pal.ring, width: 1),
+        ),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final w = c.maxWidth;
+            final activeW = (w * 0.35).clamp(96.0, 128.0);
+            final otherW = (w - activeW) / (tabs.length - 1);
+            double left(int i) => i <= currentIndex
+                ? i * otherW
+                : i * otherW + (activeW - otherW);
+            double widthOf(int i) => i == currentIndex ? activeW : otherW;
+
+            return Stack(
+              alignment: Alignment.centerLeft,
+              children: [
+                // The sliding black pill behind the active tab.
+                AnimatedPositioned(
+                  duration: duration,
+                  curve: curve,
+                  left: left(currentIndex),
+                  top: 6,
+                  bottom: 6,
+                  width: activeW,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _pal.pill,
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                ),
+                for (int i = 0; i < tabs.length; i++)
+                  AnimatedPositioned(
+                    duration: duration,
+                    curve: curve,
+                    left: left(i),
+                    top: 0,
+                    bottom: 0,
+                    width: widthOf(i),
+                    child: _navItem(
+                      context,
+                      tabs[i],
+                      i == currentIndex,
+                      cartCount,
+                      user?.profilePictureUrl,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _navItem(
+    BuildContext context,
+    _TabItem tab,
+    bool selected,
+    int cartCount,
+    String? avatarUrl,
+  ) {
+    final grey = _pal.idle;
+    Widget icon;
+    if (tab.isAiTab) {
+      icon = SizedBox(
+        width: 30,
+        height: 30,
+        child: ClipRect(
+          child: Transform.scale(
+            scale: 1.3,
+            child: Lottie.asset(
+              'assets/animations/ai_mitra_robot.json',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      );
+    } else if (tab.route == AppRoutes.profile &&
+        avatarUrl != null &&
+        avatarUrl.isNotEmpty) {
+      icon = Container(
+        width: 28,
+        height: 28,
+        padding: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFFF2C14E), width: 1.6),
+        ),
+        child: ClipOval(
+          child: Image.network(
+            avatarUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Icon(
+              Icons.person_outline_rounded,
+              size: 18,
+              color: selected ? _pal.onPill : grey,
+            ),
+          ),
+        ),
+      );
+    } else {
+      icon = Icon(
+        selected ? tab.activeIcon : tab.icon,
+        size: 22,
+        color: selected ? _pal.onPill : grey,
+      );
+    }
+
+    if (tab.isCartTab && cartCount > 0) {
+      icon = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          icon,
+          Positioned(
+            top: -6,
+            right: -8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+              constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+              decoration: BoxDecoration(
+                color: AppColors.error,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? _pal.pill : _pal.bar,
+                  width: 1.4,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  '$cartCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        if (tab.isAiTab) {
+          showAiChatSheet(context);
+          return;
+        }
+        context.go(tab.route);
+      },
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              // The label only exists on the active tab; it fades in as the
+              // black pill arrives.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: selected
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 7),
+                        child: Text(
+                          tab.label,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: _pal.onPill,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -319,3 +457,15 @@ class _TabItem {
   final bool isAiTab;
 }
 
+class _NavPalette {
+  const _NavPalette({
+    required this.bar,
+    required this.ring,
+    required this.pill,
+    required this.onPill,
+    required this.idle,
+    required this.outline,
+  });
+
+  final Color bar, ring, pill, onPill, idle, outline;
+}

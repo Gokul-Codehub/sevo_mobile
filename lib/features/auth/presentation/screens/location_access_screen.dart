@@ -124,7 +124,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                         height: 240,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFFF1F5F9),
+                          color: AppColors.surfaceVariant,
                           border: Border.all(
                             color: AppColors.border,
                             width: 1.5,
@@ -277,12 +277,12 @@ class _MapRoadsPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFE2E8F0)
+      ..color = AppColors.divider
       ..strokeWidth = 6
       ..style = PaintingStyle.stroke;
 
     final thinPaint = Paint()
-      ..color = const Color(0xFFE2E8F0)
+      ..color = AppColors.divider
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
 

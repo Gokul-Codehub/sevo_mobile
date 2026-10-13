@@ -17,15 +17,19 @@ import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/booking/domain/booking_models.dart';
 import '../features/booking/presentation/screens/booking_detail_screen.dart';
 import '../features/booking/presentation/screens/booking_success_screen.dart';
-import '../features/booking/domain/cart_notifier.dart';
 import '../features/booking/presentation/screens/checkout_screen.dart';
 import '../features/booking/presentation/screens/grocery_cart_screen.dart';
 import '../features/booking/presentation/screens/my_bookings_screen.dart';
+import '../features/catalog/data/basket_models.dart';
 import '../features/catalog/domain/catalog_models.dart';
 import '../features/catalog/presentation/screens/all_services_screen.dart';
+import '../features/catalog/presentation/screens/basket_detail_screen.dart';
+import '../features/catalog/presentation/screens/basket_list_screen.dart';
 import '../features/catalog/presentation/screens/category_detail_screen.dart';
 import '../features/catalog/presentation/screens/grocery_product_detail_screen.dart';
 import '../features/catalog/presentation/screens/search_screen.dart';
+import '../features/catalog/presentation/screens/search_results_screen.dart';
+import '../features/catalog/domain/search_keywords.dart';
 import '../features/catalog/presentation/screens/seller_hub_groceries_screen.dart';
 import '../features/catalog/presentation/screens/seller_hub_vegetables_screen.dart';
 import '../features/catalog/presentation/screens/service_detail_screen.dart';
@@ -39,6 +43,7 @@ import '../features/logistics/domain/logistics_providers.dart'
     show PickedDropLocation;
 import '../features/payment/presentation/screens/payment_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
+import '../features/notifications/presentation/screens/notifications_screen.dart';
 import '../features/support/presentation/screens/support_screen.dart';
 import '../features/tracking/presentation/screens/live_tracking_screen.dart';
 import '../features/work_extension/presentation/screens/work_extension_screen.dart';
@@ -54,6 +59,9 @@ abstract final class AppRoutes {
   static const String home = '/';
   static const String categories = '/categories';
   static const String search = '/search';
+  // Results pages for a submitted search, one per mode (see SearchScreen).
+  static const String searchServices = '/search/services';
+  static const String searchGroceries = '/search/groceries';
   static const String categoryDetail = '/categories/:slug';
   // Added 2026-09-25 — Seller Hub Marketplace grocery department browse
   // (real admin category tree from the vendor's Seller Hub, distinct from
@@ -72,6 +80,10 @@ abstract final class AppRoutes {
   // GroceryProductDetailScreen's doc comment for why these can't share a
   // screen).
   static const String groceryProductDetail = '/products/:slug';
+  // Added 2026-10-08 — Seller Hub combo/bundle offers ("Baskets"); see
+  // BasketListScreen/BasketDetailScreen's doc comments.
+  static const String baskets = '/baskets';
+  static const String basketDetail = '/baskets/:id';
   static const String cart = '/cart';
   static const String addresses = '/addresses';
   static const String addAddress = '/addresses/add';
@@ -84,6 +96,7 @@ abstract final class AppRoutes {
   static const String bookingSuccess = '/bookings/success/:id';
   static const String payment = '/checkout/payment';
   static const String support = '/support';
+  static const String notifications = '/notifications';
   static const String profile = '/profile';
   static const String bookingCheckout = '/checkout';
   // Added 2026-09-19 — see CatalogFlowType.logistics for why this route
@@ -104,6 +117,10 @@ abstract final class AppRoutes {
 // to a booking's detail screen). Not used for anything else; every normal
 // in-app navigation keeps using its own local `context`.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Navigator inside the bottom-nav shell: sheets shown on it (e.g. Ask Apta)
+/// open above the page but leave the bottom navigator visible.
+final shellNavigatorKey = GlobalKey<NavigatorState>();
 
 // ── Router provider ─────────────────────────────────────────────────────────
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -145,6 +162,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // pre-auth flow (splash/onboarding/login) and tokenized deep links
       // that can be opened without ever seeing app chrome stay outside it.
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(
@@ -160,7 +178,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.cart,
             name: 'cart',
-            builder: (context, state) => const _CartRouteScreen(),
+            builder: (context, state) => const GroceryCartScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.notifications,
+            name: 'notifications',
+            builder: (context, state) => const NotificationsScreen(),
           ),
           GoRoute(
             path: AppRoutes.support,
@@ -177,7 +200,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.search,
             name: 'search',
-            builder: (context, state) => const SearchScreen(),
+            builder: (context, state) => SearchScreen(
+              mode: SearchModeX.fromWire(state.uri.queryParameters['mode']),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.searchServices,
+            name: 'search-services',
+            builder: (context, state) => ServiceSearchResultsScreen(
+              query: state.uri.queryParameters['q'] ?? '',
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.searchGroceries,
+            name: 'search-groceries',
+            builder: (context, state) => GrocerySearchResultsScreen(
+              query: state.uri.queryParameters['q'] ?? '',
+            ),
           ),
           GoRoute(
             path: AppRoutes.categories,
@@ -193,6 +232,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return CategoryDetailScreen(
                 categorySlug: slug,
                 initialCategory: extra is Category ? extra : null,
+                initialSubcategorySlug: state.uri.queryParameters['sub'],
               );
             },
           ),
@@ -240,6 +280,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return GroceryProductDetailScreen(
                 productSlug: slug,
                 initialProduct: extra is ServiceItem ? extra : null,
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.baskets,
+            name: 'baskets',
+            builder: (context, state) => const BasketListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.basketDetail,
+            name: 'basket-detail',
+            builder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+              final extra = state.extra;
+              return BasketDetailScreen(
+                basketId: id,
+                initialBasket: extra is MarketplaceBasket ? extra : null,
               );
             },
           ),
@@ -515,31 +572,5 @@ class _NotFoundScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Added 2026-10-07 ("The cart section is only working for groceries and
-/// vegetables not for the services block"): the bottom-nav Cart tab used to
-/// unconditionally build [GroceryCartScreen], which only ever reads/renders
-/// grocery items and shows its grocery-flavored empty state for anyone else
-/// — so a customer who had added a *service* to the shared [cartProvider]
-/// (see the new Add-to-Cart button on the service detail screen) could never
-/// actually see or check out that item from the Cart tab. [CheckoutScreen]
-/// already falls back to reading the full shared cart whenever it's opened
-/// without a single pinned `initialService` (see its `_handlePlaceOrder`/
-/// `build`), so it's the correct destination for a cart that contains any
-/// non-grocery item. A cart that's empty, or contains only grocery/vegetable
-/// items, keeps going to [GroceryCartScreen] exactly as before.
-class _CartRouteScreen extends ConsumerWidget {
-  const _CartRouteScreen();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final items = ref.watch(cartProvider);
-    final hasServiceItem = items.any((i) => !i.service.isGroceryFlow);
-    if (hasServiceItem) {
-      return const CheckoutScreen();
-    }
-    return const GroceryCartScreen();
   }
 }

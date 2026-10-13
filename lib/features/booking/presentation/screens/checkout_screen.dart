@@ -19,6 +19,7 @@ import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
+import '../../../pricing/domain/service_fare.dart';
 import '../widgets/coupon_bottom_sheet.dart';
 
 /// Screen 14: Booking Summary / Checkout Screen
@@ -46,6 +47,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   int _serviceQuantity = 1;
   String? _appliedCouponCode;
   int _couponDiscountAmount = 0;
+
+  // Fixed 2026-10-08 (QA CME02 — "the payment method (Pay online, pay
+  // after service) is not shown to the customer, but it is showed on the
+  // web"): this screen never had any payment-method UI at all, and
+  // booking_repository.dart's createBooking() never sent a `payment_method`
+  // key in its payload either — so the backend's own
+  // `(request.data.get('payment_method') or 'COD').upper()` fallback
+  // silently defaulted every single mobile booking to Cash on Service,
+  // with no way for the customer to choose to pay online instead (which
+  // the web booking flow already lets them do). 'COD' as the default here
+  // keeps existing behaviour unchanged for anyone who never touches the
+  // selector.
+  String _paymentMethod = 'COD';
 
   @override
   void initState() {
@@ -241,11 +255,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     // "5%" constants — now read from the admin-configurable PricingConfig
     // (Settings > Pricing in the admin panel), same as cart_notifier.dart's
     // cartSummaryProvider.
-    final pricingForOrder = ref.read(pricingConfigProvider);
-    final Decimal placeOrderServiceFee = pricingForOrder.platformFee;
-    final Decimal placeOrderTaxes = ((placeOrderSubtotal * pricingForOrder.gstPercent) /
-            Decimal.fromInt(100))
-        .toDecimal();
+    // 2026-10-12: services are priced exactly like the web app / backend
+    // (home_services_pricing.py) -- each package's own GST rate, one
+    // platform fee per booking -- see ServiceFare.
+    final orderFare = ServiceFare.fromLines(
+      (_scheduledService != null
+              ? [CartItem(service: _scheduledService!, quantity: _serviceQuantity)]
+              : ref.read(cartProvider))
+          .map((i) => (service: i.service, lineTotal: i.totalPrice)),
+    );
+    final Decimal placeOrderServiceFee = orderFare.platformFee;
+    final Decimal placeOrderTaxes = orderFare.gst;
     final Decimal placeOrderDiscount = Decimal.fromInt(_couponDiscountAmount);
     final Decimal placeOrderRawTotal =
         placeOrderSubtotal + placeOrderServiceFee + placeOrderTaxes - placeOrderDiscount;
@@ -263,6 +283,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ? null
               : _notesController.text.trim(),
           contactPhone: contactPhone,
+          paymentMethod: _paymentMethod,
         );
 
     if (!mounted) return;
@@ -298,10 +319,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     // Fixed 2026-10-01: admin-configurable (Settings > Pricing), see note above.
-    final pricingForDisplay = ref.watch(pricingConfigProvider);
-    final Decimal serviceFee = pricingForDisplay.platformFee;
-    final Decimal taxes =
-        ((subtotal * pricingForDisplay.gstPercent) / Decimal.fromInt(100)).toDecimal();
+    final displayFare = ServiceFare.fromLines(
+      (hasScheduledService
+              ? [CartItem(service: _scheduledService!, quantity: _serviceQuantity)]
+              : cartItems)
+          .map((i) => (service: i.service, lineTotal: i.totalPrice)),
+    );
+    final Decimal serviceFee = displayFare.platformFee;
+    final Decimal taxes = displayFare.gst;
     final Decimal discount = Decimal.fromInt(_couponDiscountAmount);
     final Decimal rawGrandTotal = subtotal + serviceFee + taxes - discount;
     final Decimal grandTotal =
@@ -342,9 +367,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border, width: 0.8),
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle, width: 0.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.cardShadow,
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,13 +384,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Selected Service ($totalItemCount)',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.navy,
-                              ),
+                            Row(
+                              children: [
+                                const _StepBadge(step: '1'),
+                                Text(
+                                  'Selected Service ($totalItemCount)',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.navy,
+                                  ),
+                                ),
+                              ],
                             ),
                             GestureDetector(
                               onTap: () => context.push('/search'),
@@ -492,9 +529,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border, width: 0.8),
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle, width: 0.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.cardShadow,
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: const SlotPickerWidget(),
                   ),
@@ -505,9 +549,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border, width: 0.8),
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle, width: 0.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.cardShadow,
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -517,6 +568,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           children: [
                             const Row(
                               children: [
+                                _StepBadge(step: '2'),
                                 Icon(
                                   Icons.location_on_rounded,
                                   color: AppColors.primary,
@@ -624,15 +676,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
                         color: _appliedCouponCode != null
-                            ? const Color(0xFFF0FDF4)
-                            : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(8),
+                            ? AppColors.groceryGreenLight
+                            : AppColors.background,
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: _appliedCouponCode != null
                               ? AppColors.primary
-                              : AppColors.border,
+                              : AppColors.borderSubtle,
                           width: _appliedCouponCode != null ? 1.5 : 0.8,
                         ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: AppColors.cardShadow,
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Row(
                         children: [
@@ -689,9 +748,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border, width: 0.8),
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle, width: 0.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.cardShadow,
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,12 +785,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             fillColor: Colors.white,
                             contentPadding: const EdgeInsets.all(12),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(
                                   color: AppColors.border, width: 0.8),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(10),
                               borderSide: const BorderSide(
                                   color: AppColors.border, width: 0.8),
                             ),
@@ -740,20 +806,65 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border, width: 0.8),
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle, width: 0.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.cardShadow,
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const Row(
+                          children: [
+                            _StepBadge(step: '3'),
+                            Text(
+                              'Payment Summary',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.navy,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
                         const Text(
-                          'Payment Summary',
+                          'Payment Method',
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.navy,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
                           ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _PaymentMethodOption(
+                                label: 'Pay after Service',
+                                subtitle: 'Cash / UPI on completion',
+                                icon: Icons.payments_outlined,
+                                selected: _paymentMethod == 'COD',
+                                onTap: () => setState(() => _paymentMethod = 'COD'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _PaymentMethodOption(
+                                label: 'Pay Online',
+                                subtitle: 'Card / UPI / Wallet now',
+                                icon: Icons.account_balance_wallet_outlined,
+                                selected: _paymentMethod == 'ONLINE',
+                                onTap: () => setState(() => _paymentMethod = 'ONLINE'),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 14),
                         _BillRow(
@@ -767,7 +878,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                         const SizedBox(height: 8),
                         _BillRow(
-                          label: 'Taxes (GST ${pricingForDisplay.gstPercent}%)',
+                          label: 'Taxes (GST)',
                           amount: '₹$taxes',
                         ),
                         if (_couponDiscountAmount > 0) ...[
@@ -846,7 +957,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
-                          color: AppColors.navy,
+                          color: AppColors.priceColor,
                         ),
                       ),
                     ],
@@ -866,7 +977,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               : AppColors.groceryGreen,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           elevation: 0,
                         ),
@@ -925,10 +1036,116 @@ class _BillRow extends StatelessWidget {
           style: TextStyle(
             fontSize: isBold ? 16 : 13,
             fontWeight: isBold ? FontWeight.w900 : FontWeight.w700,
-            color: AppColors.navy,
+            color: isBold ? AppColors.priceColor : AppColors.navy,
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Small circular badge showing the step number in the checkout sequence.
+class _StepBadge extends StatelessWidget {
+  const _StepBadge({required this.step});
+
+  final String step;
+
+  @override
+  Widget build(BuildContext context) {
+    const effectiveColor = AppColors.primary;
+    return Container(
+      width: 22,
+      height: 22,
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: effectiveColor.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          step,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: effectiveColor,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tappable payment-method choice (Pay after Service / Pay Online) in
+/// the Payment Summary card — see the "Fixed 2026-10-08 (QA CME02...)"
+/// comment on `_CheckoutScreenState._paymentMethod` for why this exists.
+class _PaymentMethodOption extends StatelessWidget {
+  const _PaymentMethodOption({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary.withValues(alpha: 0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.borderSubtle,
+            width: selected ? 1.4 : 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: selected ? AppColors.primary : AppColors.navy,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle, size: 16, color: AppColors.primary),
+          ],
+        ),
+      ),
     );
   }
 }

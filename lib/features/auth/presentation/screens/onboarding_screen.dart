@@ -307,7 +307,7 @@ class _TechnicianGraphicWidget extends StatelessWidget {
                 left: 0,
                 child: _FloatingBadge(
                   icon: badges[2].$1,
-                  color: const Color(0xFFF59E0B),
+                  color: AppColors.warning,
                 ),
               ),
 

@@ -129,20 +129,135 @@ class _ProductDrivenSection extends ConsumerWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title, {this.showSeeAll = false});
+/// Where a section's "See All" should go: the browse screen already opened on
+/// that section's own department (its picked categories, or — for a
+/// "Specific Products" section — the categories of its picked products). It
+/// used to always open the general page, which defaults to Grocery & Staples.
+/// Falls back to the general page when nothing can be resolved.
+String _seeAllRoute(WidgetRef ref, MobileGrocerySection? section) {
+  const general = '/groceries/seller-hub';
+  if (section == null) return general;
+  final tree = ref.read(marketplaceCategoryTreeProvider).valueOrNull;
+  if (tree == null) return general;
+
+  var ids = section.categoryIds;
+  if (ids.isEmpty && section.productIds.isNotEmpty) {
+    final products = ref
+        .read(marketplaceProductsByIdsProvider(section.productIds.join(',')))
+        .valueOrNull;
+    ids = [
+      for (final p in products ?? const <MarketplaceProduct>[])
+        if (p.categoryId != null) p.categoryId!,
+    ];
+  }
+  final resolved = _resolveSectionCategories(tree, ids);
+  if (resolved.isEmpty) return general;
+  final first = resolved.first;
+  final root = first.isVegetableRoot ? '/vegetables' : '/groceries';
+  return '$root/seller-hub?category=${first.category.slug}';
+}
+
+/// Blinkit-style "See all products" bar shown under a section's products when
+/// the admin ticked "See All link": a full-width pale pill with three small,
+/// slightly tilted product photos, the label and an arrow. Opens the section's
+/// own category (see [_seeAllRoute]).
+class _SeeAllProductsBar extends ConsumerWidget {
+  const _SeeAllProductsBar({required this.section, required this.items});
+
+  final MobileGrocerySection? section;
+  final List<ServiceItem> items;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = section;
+    if (s == null || !s.showSeeAll || items.isEmpty) return const SizedBox.shrink();
+    final thumbs = items.where((i) => (i.imageUrl ?? '').isNotEmpty).take(3).toList();
+    const tilt = [-0.18, 0.0, 0.18];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => context.push(_seeAllRoute(ref, s)),
+        child: Container(
+          height: 58,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF4F6FB),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE3E7F0), width: 0.8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (thumbs.isNotEmpty) ...[
+                SizedBox(
+                  width: 34.0 + (thumbs.length - 1) * 20,
+                  height: 40,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (var i = 0; i < thumbs.length; i++)
+                        Positioned(
+                          left: i * 20.0,
+                          top: 3,
+                          child: Transform.rotate(
+                            angle: tilt[i],
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFE3E7F0), width: 0.8),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: AppRemoteImage(
+                                imageUrl: thumbs[i].imageUrl,
+                                rawPath: thumbs[i].imageUrl,
+                                title: thumbs[i].title,
+                                width: 34,
+                                height: 34,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              const Text(
+                'See all products',
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.navy,
+                ),
+              ),
+              const SizedBox(width: 2),
+              const Icon(Icons.arrow_right_rounded, size: 26, color: AppColors.navy),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends ConsumerWidget {
+  const _SectionTitle(this.title, {this.showSeeAll = false, this.section});
   final String title;
 
-  // Added 2026-10-05 (Phase B, "See All" display checkbox). Opens the
-  // general Seller Hub Groceries browse screen (the same fallback
-  // `_BannerProductRailLayout`'s CTA already uses) rather than a dead
-  // link — it isn't pre-filtered to this section's own picked categories,
-  // since that browse screen has no route param for an initial category
-  // today; a real general destination beats a non-functional "See All".
+  /// The section this title belongs to — used to point "See All" at that
+  /// section's own department (see [_seeAllRoute]).
+  final MobileGrocerySection? section;
+
+  // "See All" display checkbox (Phase B). Opens the browse screen on this
+  // section's own category, or the general page when that can't be resolved.
   final bool showSeeAll;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -160,29 +275,6 @@ class _SectionTitle extends StatelessWidget {
               ),
             ),
           ),
-          if (showSeeAll)
-            InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => context.push('/groceries/seller-hub'),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'See All',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.groceryGreen,
-                      ),
-                    ),
-                    SizedBox(width: 2),
-                    Icon(Icons.chevron_right, size: 16, color: AppColors.groceryGreen),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -266,7 +358,7 @@ class _HorizontalCarouselLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section?.title ?? title ?? '', showSeeAll: section?.showSeeAll ?? false),
+        _SectionTitle(section?.title ?? title ?? '', showSeeAll: section?.showSeeAll ?? false, section: section),
         const SizedBox(height: 12),
         _ProductCarouselRow(
           items: items,
@@ -275,6 +367,7 @@ class _HorizontalCarouselLayout extends StatelessWidget {
           showDiscount: section?.showProductDiscount ?? true,
           showAddButton: section?.showAddButton ?? true,
         ),
+        _SeeAllProductsBar(section: section, items: items),
       ],
     );
   }
@@ -303,7 +396,7 @@ class _ProductGridLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section.title, showSeeAll: section.showSeeAll),
+        _SectionTitle(section.title, showSeeAll: section.showSeeAll, section: section),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -355,6 +448,7 @@ class _ProductGridLayout extends StatelessWidget {
             },
           ),
         ),
+        _SeeAllProductsBar(section: section, items: items),
       ],
     );
   }
@@ -476,6 +570,7 @@ class _ProductRowList extends StatelessWidget {
     this.showDiscount = true,
     this.showAddButton = true,
     this.showSeeAll = false,
+    this.section,
   });
 
   final String title;
@@ -485,13 +580,14 @@ class _ProductRowList extends StatelessWidget {
   final bool showDiscount;
   final bool showAddButton;
   final bool showSeeAll;
+  final MobileGrocerySection? section;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(title, showSeeAll: showSeeAll),
+        _SectionTitle(title, showSeeAll: showSeeAll, section: section),
         const SizedBox(height: 8),
         ListView.separated(
           shrinkWrap: true,
@@ -508,6 +604,7 @@ class _ProductRowList extends StatelessWidget {
             ),
           ),
         ),
+        _SeeAllProductsBar(section: section, items: items),
       ],
     );
   }
@@ -531,6 +628,7 @@ class _CompactListLayout extends StatelessWidget {
       showDiscount: section.showProductDiscount,
       showAddButton: section.showAddButton,
       showSeeAll: section.showSeeAll,
+      section: section,
     );
   }
 }
@@ -558,6 +656,7 @@ class _QuickAddListLayout extends StatelessWidget {
       showDiscount: section.showProductDiscount,
       showAddButton: section.showAddButton,
       showSeeAll: section.showSeeAll,
+      section: section,
     );
   }
 }
@@ -1306,15 +1405,10 @@ class _CategoryTileGridLayout extends ConsumerWidget {
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(14),
-                          child: AppRemoteImage(
-                            imageUrl: category.image,
-                            rawPath: category.image,
-                            title: category.name,
-                            categoryName: category.name,
-                            slug: category.slug,
+                          child: _CategoryCoverImage(
+                            category: category,
                             width: double.infinity,
                             height: double.infinity,
-                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
@@ -1378,15 +1472,10 @@ class _CircularCategoryRailLayout extends ConsumerWidget {
                     children: [
                       if (section.showCategoryImage)
                         ClipOval(
-                          child: AppRemoteImage(
-                            imageUrl: category.image,
-                            rawPath: category.image,
-                            title: category.name,
-                            categoryName: category.name,
-                            slug: category.slug,
+                          child: _CategoryCoverImage(
+                            category: category,
                             width: 64,
                             height: 64,
-                            fit: BoxFit.cover,
                           ),
                         ),
                       if (section.showCategoryImage) const SizedBox(height: 6),
@@ -1406,6 +1495,39 @@ class _CircularCategoryRailLayout extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A category tile's picture: the admin-uploaded category image when there is
+/// one, otherwise a photo of one of the category's own products (many Seller
+/// Hub categories have no image uploaded, which left empty grey tiles).
+class _CategoryCoverImage extends ConsumerWidget {
+  const _CategoryCoverImage({
+    required this.category,
+    required this.width,
+    required this.height,
+  });
+
+  final MarketplaceCategory category;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final own = category.image;
+    final url = (own != null && own.isNotEmpty)
+        ? own
+        : ref.watch(marketplaceCategoryCoverImagesProvider).valueOrNull?[category.id];
+    return AppRemoteImage(
+      imageUrl: url,
+      rawPath: url,
+      title: category.name,
+      categoryName: category.name,
+      slug: category.slug,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
     );
   }
 }

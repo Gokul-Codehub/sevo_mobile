@@ -138,13 +138,13 @@ void main() {
     });
 
     // ── FLOW-08: Goods & Transport (ID: 12) ──────────────────────────────────
-    test('FLOW-08: Goods & Transport resolves to serviceBooking', () {
+    test('FLOW-08: Goods & Transport resolves to logistics', () {
       const cat = Category(
         id: 12,
         name: 'Goods & Transport',
         slug: 'goods_transport',
       );
-      expect(cat.flowType, equals(CatalogFlowType.serviceBooking));
+      expect(cat.flowType, equals(CatalogFlowType.logistics));
     });
 
     // ── FLOW-09: Grocery item (Beetroot) in ServiceCard ──────────────────────
@@ -357,6 +357,11 @@ void main() {
             child: const MaterialApp(
               home: CategoryDetailScreen(
                 categorySlug: 'vegetables_groceries',
+                initialCategory: Category(
+                  id: 18,
+                  name: 'Farm-Fresh Vegetables & Groceries',
+                  slug: 'vegetables_groceries',
+                ),
               ),
             ),
           ),

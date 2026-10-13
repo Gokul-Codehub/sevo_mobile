@@ -6,6 +6,7 @@ import '../../../core/services/notification_service.dart';
 import '../../addresses/domain/address_notifier.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../../logistics/domain/logistics_models.dart';
+import '../../notifications/domain/capacity_claim.dart';
 import '../data/booking_repository.dart';
 import '../data/quote_repository.dart';
 import 'booking_models.dart';
@@ -88,6 +89,11 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
 
   BookingRepository get _repo => ref.read(bookingRepositoryProvider);
 
+  CapacityClaim? get _heldClaim {
+    final c = ref.read(capacityClaimProvider);
+    return (c == null || c.isExpired) ? null : c;
+  }
+
   // ── Place new booking ─────────────────────────────────────────────────────
   Future<({String? error, Booking? booking})> createBooking({
     List<CartItem>? customItems,
@@ -96,6 +102,13 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
     required Decimal totalAmount,
     String? specialInstructions,
     String? contactPhone,
+    // Fixed 2026-10-08 (QA CME02 — see checkout_screen.dart's
+    // `_paymentMethod` doc comment): forwarded as-is to
+    // BookingRepository.createBooking, which previously never sent any
+    // `payment_method` at all — defaults to 'COD' so every existing caller
+    // (e.g. the grocery cart flow, which doesn't pass this yet) keeps its
+    // current behaviour unchanged.
+    String paymentMethod = 'COD',
     // ── Goods & Transport (logistics) fields ──────────────────────────────
     // Added 2026-09-19 — forwarded as-is to BookingRepository.createBooking;
     // see that method's doc comment for the verified backend field list.
@@ -113,6 +126,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
     String? jobType,
     String? serviceCategoryOverride,
     List<Map<String, dynamic>>? cartDataOverride,
+    Map<String, dynamic>? extraPayload,
   }) async {
     final List<CartItem> items = customItems ?? ref.read(cartProvider);
     final selectedAddress = ref.read(selectedAddressProvider);
@@ -151,6 +165,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       totalAmount: totalAmount,
       specialInstructions: specialInstructions,
       contactPhone: validPhone,
+      paymentMethod: paymentMethod,
       customerName: currentUser?.name ?? 'Customer',
       // Fixed 2026-08-27: forward the selected address's coordinates so the
       // backend's ServiceRequest.latitude/longitude columns are actually
@@ -172,10 +187,17 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       jobType: jobType,
       serviceCategoryOverride: serviceCategoryOverride,
       cartDataOverride: cartDataOverride,
+      // A held "a slot opened up" claim goes with the booking so the backend
+      // counts it as this customer's own place on a full day.
+      extraPayload: {
+        ...?extraPayload,
+        if (_heldClaim != null) 'future_capacity_claim_token': _heldClaim!.token,
+      },
     );
 
     switch (result) {
       case Success(:final data):
+        if (_heldClaim != null) ref.read(capacityClaimProvider.notifier).state = null;
         state = AsyncValue.data(data);
         // Clear grocery cart only if booking was created from grocery cart items
         if (customItems == null) {

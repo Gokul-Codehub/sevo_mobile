@@ -5,10 +5,10 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/slow_load_gate.dart';
-import '../../../../shared/utils/app_toast.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
@@ -44,6 +44,31 @@ class ServiceDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
+  /// The package option the customer picked (packages that have options).
+  int? _chosenOptionId;
+
+  // Fixed 2026-10-08 (QA CME05/CME04 — "the admin removes the image for the
+  // package, it is still shows to the customer" / "the application
+  // automatically refresh/update the latest data"): `serviceDetailProvider`
+  // (catalog_providers.dart) is a `ref.keepAlive()` FutureProvider.family —
+  // once fetched it never asks the backend again for the rest of the app
+  // session, so an admin removing/changing a package's image (or any other
+  // field) never reaches a customer already viewing it, or revisiting it
+  // later in the same session. Invalidating it every time this screen is
+  // entered re-fetches in the background; `AsyncValue.when`/`valueOrNull`
+  // keeps showing the last-known data while that happens
+  // (`skipLoadingOnRefresh` is Riverpod's default), so this reads as a
+  // silent sync rather than a reload flash — see the matching fix on
+  // category_detail_screen.dart's `initState` for the same pattern.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(serviceDetailProvider);
+    });
+  }
+
   Widget _buildHeroImageOrIcon(ServiceItem service) {
     return AppRemoteImage(
       imageUrl: service.imageUrl,
@@ -91,7 +116,13 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
     );
   }
 
-  Widget _buildScaffold(BuildContext context, ServiceItem service) {
+  Widget _buildScaffold(BuildContext context, ServiceItem baseService) {
+    final chosen =
+        baseService.packageOptions.where((o) => o.id == _chosenOptionId).firstOrNull;
+    final service = chosen != null ? baseService.withOption(chosen) : baseService;
+    // Options packages show the lowest option price until one is picked.
+    final awaitingOption = service.hasPackageOptions && service.selectedOption == null;
+    final shownPrice = awaitingOption ? service.startsAtPrice : service.effectivePrice;
     final isGrocery = service.flowType == CatalogFlowType.grocery;
     final cartItems = ref.watch(cartProvider);
     final inCartItem =
@@ -164,7 +195,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                 children: [
                   // Title
                   Text(
-                    service.title,
+                    baseService.title,
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -172,6 +203,31 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       letterSpacing: -0.3,
                     ),
                   ),
+                  if (baseService.badgeLabel != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star_rounded, size: 13, color: Colors.white),
+                          const SizedBox(width: 3),
+                          Text(
+                            baseService.badgeLabel!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
 
                   // Rating & Duration Row
@@ -181,7 +237,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
+                          color: AppColors.warningLight,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
@@ -249,13 +305,22 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     ),
                   ],
 
+                  if (service.hasPackageOptions) ...[
+                    const SizedBox(height: 18),
+                    _PackageOptionPicker(
+                      options: service.packageOptions,
+                      selectedId: _chosenOptionId,
+                      onSelect: (o) => setState(() => _chosenOptionId = o.id),
+                    ),
+                  ],
+
                   const SizedBox(height: 18),
 
                   // Price card
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppColors.border, width: 0.8),
                     ),
@@ -266,15 +331,24 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: [
+                            if (awaitingOption)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Text('From',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textSecondary)),
+                              ),
                             Text(
-                              '₹${service.effectivePrice}',
+                              '₹$shownPrice',
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.navy,
                               ),
                             ),
-                            if (service.hasDiscount) ...[
+                            if (service.hasDiscount && !awaitingOption) ...[
                               const SizedBox(width: 8),
                               Text(
                                 '₹${service.price}',
@@ -460,7 +534,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: AppColors.background,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: AppColors.border,
@@ -613,7 +687,40 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     ],
                   ),
                   const SizedBox(width: 20),
-                  if (quantityInCart == 0)
+                  // Fixed 2026-10-08 ("the admin inactivate the service, but
+                  // it is still able to book by the customer" / QA CMP01):
+                  // `ServiceItem.isAvailable` reflects the backend's
+                  // `status` (PackageStatus — ACTIVE/INACTIVE/DRAFT/
+                  // ARCHIVED). An admin-deactivated item must never reach
+                  // "Add to Cart", so this is checked first, before the
+                  // existing in-cart/not-in-cart branch.
+                  if (!service.isAvailable)
+                    Expanded(
+                      child: SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.textSecondary.withValues(alpha: 0.35),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: AppColors.textSecondary.withValues(alpha: 0.35),
+                            disabledForegroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Unavailable',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (quantityInCart == 0)
                     Expanded(
                       child: SizedBox(
                         height: 52,
@@ -642,29 +749,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       ),
                     )
                   else
-                    Expanded(
-                      child: SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: () => context.push('/cart'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.groceryGreenDark,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            'View Cart',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    const Expanded(child: GoToCartPill(expand: true, push: true)),
                 ],
               )
             : Row(
@@ -682,7 +767,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         ),
                       ),
                       Text(
-                        '₹${service.effectivePrice}',
+                        awaitingOption ? 'From ₹$shownPrice' : '₹$shownPrice',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -691,92 +776,47 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(width: 12),
-                  // Fixed 2026-10-07 ("The cart section is only working for
-                  // groceries and vegetables not for the services block"):
-                  // scheduled/non-grocery services previously had NO way to
-                  // enter the shared `cartProvider` at all — "Book Now" (kept
-                  // below, unchanged, for the one-tap single-service flow)
-                  // pushed straight to /checkout and never called
-                  // `addService()`. This mirrors the grocery branch's
-                  // Add-to-Cart/View-Cart toggle so a service can also be
-                  // added to the real cart, picked up by the Cart tab and by
-                  // `checkout_screen.dart`'s existing shared-cart fallback.
-                  SizedBox(
-                    height: 52,
-                    width: 52,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        if (quantityInCart == 0) {
-                          ref.read(cartProvider.notifier).addService(service);
-                          AppToast.addedToCart(context, service.title);
-                        } else {
-                          context.push('/cart');
-                        }
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        side: const BorderSide(color: AppColors.serviceBlue),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.center,
-                        children: [
-                          const Icon(
-                            Icons.shopping_cart_outlined,
-                            color: AppColors.serviceBlue,
-                            size: 22,
-                          ),
-                          if (quantityInCart > 0)
-                            Positioned(
-                              top: -6,
-                              right: -6,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: AppColors.serviceBlue,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '$quantityInCart',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 24),
+                  // Reverted 2026-10-08 per explicit correction ("Grocery
+                  // and services cannot be the same cart at all - this is
+                  // two different workflow... the service is click package
+                  // enter details choose slots and book the service this
+                  // never to be enter into cart" / "remove the cart button
+                  // beside the book now button"): the Add-to-Cart/View-Cart
+                  // button added here on 2026-10-07 was wrong — services
+                  // never go through the shared cart at all, they always go
+                  // straight to Checkout via "Book Now" below. Removed; see
+                  // app_router.dart's matching revert of the `/cart` route.
+                  // Fixed 2026-10-08 (QA CMP01 — see the matching comment on
+                  // the grocery "Add to Cart" branch above): same gate for
+                  // the service-booking "Book Now" CTA.
                   Expanded(
                     child: SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: () {
-                          context.push(
-                            '/checkout?service=${service.slug}',
-                            extra: service,
-                          );
-                        },
+                        onPressed: service.isAvailable && !awaitingOption
+                            ? () {
+                                context.push(
+                                  '/checkout?service=${service.slug}',
+                                  extra: service,
+                                );
+                              }
+                            : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.serviceBlue,
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor: AppColors.textSecondary.withValues(alpha: 0.35),
+                          disabledForegroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                           elevation: 0,
                         ),
-                        child: const Text(
-                          'Book Now',
-                          style: TextStyle(
+                        child: Text(
+                          !service.isAvailable
+                              ? 'Unavailable'
+                              : (awaitingOption ? 'Select an option' : 'Book Now'),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -787,6 +827,119 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                 ],
               ),
       ),
+    );
+  }
+}
+
+/// "Choose an option" list for a package that has admin-defined options
+/// (web parity: a package with options is booked per option, never at the
+/// parent price).
+class _PackageOptionPicker extends StatelessWidget {
+  const _PackageOptionPicker({
+    required this.options,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  final List<PackageOption> options;
+  final int? selectedId;
+  final ValueChanged<PackageOption> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose an option',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
+        ),
+        const SizedBox(height: 10),
+        for (final o in options)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => onSelect(o),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: o.id == selectedId ? AppColors.serviceBlueLight : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: o.id == selectedId ? AppColors.serviceBlue : AppColors.border,
+                    width: o.id == selectedId ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      o.id == selectedId
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_off_rounded,
+                      color: o.id == selectedId ? AppColors.serviceBlue : AppColors.textHint,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            o.name,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          if (o.duration.trim().isNotEmpty || o.description.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                [o.duration.trim(), o.description.trim()]
+                                    .where((s) => s.isNotEmpty)
+                                    .join(' · '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '₹${o.effectivePrice}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        if (o.hasOffer)
+                          Text(
+                            '₹${o.basePrice}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.textHint,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -807,7 +960,7 @@ class _InclusionsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppColors.background,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border, width: 0.8),
       ),

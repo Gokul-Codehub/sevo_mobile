@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../routing/app_router.dart';
+import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
+import '../../../../shared/widgets/banner_media.dart';
 import '../../../home/data/homepage_repository.dart';
+import '../widgets/animated_splash_art.dart';
 
 /// Screen 1: Splash Screen
 ///
@@ -35,8 +38,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final Animation<double> _fadeAnim;
   Timer? _navTimer;
 
-  static const _splashAsset = 'assets/images/sevo_splash.webp';
-  static const _displayDuration = Duration(milliseconds: 2200);
+  /// The brand splash image always stays up this long (the original 2.2 s) ...
+  static const _minDisplay = Duration(milliseconds: 2200);
+
+  /// ... and, if Home's first data is still loading after that, a little
+  /// longer — never more than this in total — so Home opens filled in.
+  static const _maxWait = Duration(seconds: 6);
 
   @override
   void initState() {
@@ -66,7 +73,55 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // the same provider.
     ref.read(homepageConfigProvider);
     ref.read(categoriesProvider);
-    _navTimer = Timer(_displayDuration, () async {
+    // Fixed 2026-10-08 ("the saved address has cleared automatically...
+    // that should be stored in that account"): the address itself was
+    // never actually lost on the backend — `selectedAddressProvider`
+    // (address_notifier.dart) is a plain in-memory `StateProvider` that
+    // always starts `null` on every cold start, and the ONLY code that
+    // ever re-populates it from the account's saved addresses is
+    // `AddressListNotifier.build()`'s auto-select-default logic — which
+    // only runs once something actually reads/watches `addressListProvider`.
+    // Nothing did that early: Home and Checkout both only ever watched
+    // `selectedAddressProvider` itself, never `addressListProvider`, so
+    // unless the customer happened to open the Addresses list screen
+    // first, the saved default address never got loaded back in for the
+    // rest of the session — reading as "my saved address disappeared"
+    // even though it was sitting untouched in their account the whole
+    // time. Reading it here (same fire-and-forget pattern as
+    // homepageConfigProvider/categoriesProvider just above — a guest
+    // session's `build()` returns `const []` immediately and does nothing
+    // further) starts that fetch-and-auto-select as early as possible on
+    // every cold start, so the account's saved address is back in
+    // `selectedAddressProvider` by the time Home/Checkout need it.
+    ref.read(addressListProvider);
+    _navTimer = Timer(_minDisplay, () async {
+      if (!mounted) return;
+      // Hold the splash until the data Home needs has arrived, so the
+      // customer lands on a filled-in page instead of a wall of skeletons.
+      // Errors/timeouts are ignored here — Home handles those itself.
+      try {
+        await Future.wait<Object?>([
+          ref.read(homepageConfigProvider.future),
+          ref.read(categoriesProvider.future),
+        ]).timeout(_maxWait - _minDisplay);
+      } catch (_) {}
+      if (!mounted) return;
+      // Warm the Home hero video(s) while the splash is still up: Groceries
+      // (the default mode) is awaited for at most 2 s, Services downloads in
+      // the background. If it isn't ready in time Home opens anyway and the
+      // video fades in over its poster later.
+      final cfg = ref.read(homepageConfigProvider).valueOrNull;
+      final heroG = cfg?.heroVideoGroceries;
+      final heroS = cfg?.heroVideoServices;
+      if (heroS != null && heroS.mediaType == 'video') {
+        BannerMedia.warmUp(heroS.imageUrl);
+      }
+      if (heroG != null && heroG.mediaType == 'video') {
+        try {
+          await BannerMedia.warmUp(heroG.imageUrl)
+              .timeout(const Duration(seconds: 2));
+        } catch (_) {}
+      }
       if (!mounted) return;
       // Fixed 2026-09-19 — this used to go straight to Home on every cold
       // start, which meant OnboardingScreen and LocationAccessScreen
@@ -98,27 +153,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Full-bleed splash image — covers the entire device width and
-            // height, same as the original design.
-            Image.asset(
-              _splashAsset,
-              fit: BoxFit.cover,
-              // If the asset is ever missing (e.g. a build that hasn't
-              // picked up the asset yet), fail safe to a plain white
-              // screen for the same duration rather than crashing — the
-              // timer above still fires and takes the user in.
-              errorBuilder: (context, error, stackTrace) =>
-                  const ColoredBox(color: Colors.white),
-            ),
-            // Loader sits inside the bottom of the image itself, not in a
-            // separate area below it.
+            // The splash is now a living illustration (animated_splash_art.dart)
+            // rather than the old single flat image: logo springs in, service
+            // tiles pop and bounce in turn, a truck drives across the hills.
+            const ColoredBox(color: Colors.white),
+            const AnimatedSplashArt(),
+            // Status line + dots, over the hills at the bottom.
             Positioned(
               left: 0,
               right: 0,
-              bottom: 56,
+              bottom: 96,
               child: SafeArea(
                 top: false,
-                child: Center(child: _ThreeDotLoader()),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SplashStatusLine(),
+                    const SizedBox(height: 14),
+                    _ThreeDotLoader(),
+                  ],
+                ),
               ),
             ),
           ],

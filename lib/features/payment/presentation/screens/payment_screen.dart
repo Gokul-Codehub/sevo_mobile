@@ -167,7 +167,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: AppColors.background,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.border, width: 0.8),
                   ),
@@ -238,7 +238,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? const Color(0xFFF0FDF4)
+                            ? AppColors.groceryGreenLight
                             : Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
@@ -255,7 +255,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? AppColors.primaryLight
-                                  : const Color(0xFFF1F5F9),
+                                  : AppColors.surfaceVariant,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Icon(
@@ -313,7 +313,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: AppColors.background,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: AppColors.border, width: 0.8),
                   ),

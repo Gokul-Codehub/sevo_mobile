@@ -153,12 +153,17 @@ class AuthInterceptor extends Interceptor {
       // at all (connectionError/timeout — the request never reached the
       // server) is a connectivity problem, not a session problem, and must
       // not log the user out just because they were briefly offline.
-      if (dioErr.response != null) {
+      // Fixed 2026-10-13 (QA CME08, "automatic logout in mobile"): only an
+      // explicit 400/401 from /auth/refresh/ means the token is invalid. Any
+      // other response (500/502/503 outage, 429 rate limit, a Cloudflare 403
+      // page) says nothing about the session and used to wipe it, logging the
+      // customer out for no reason.
+      if (refreshStatus == 400 || refreshStatus == 401) {
         debugPrint('[AUTH] Refresh explicitly rejected by server ($refreshStatus) — session is genuinely over.');
         await storage.clearAll();
         onAuthFailure?.call();
       } else {
-        debugPrint('[AUTH] Refresh request could not reach the server (network error) — session preserved.');
+        debugPrint('[AUTH] Refresh failed without a verdict on the token (status=$refreshStatus) — session preserved.');
       }
       _refreshCompleter?.complete(null);
       _refreshCompleter = null;

@@ -8,6 +8,7 @@ import '../../auth/domain/auth_models.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../../catalog/domain/catalog_models.dart';
 import '../../pricing/domain/pricing_providers.dart';
+import '../../pricing/domain/service_fare.dart';
 import 'booking_models.dart';
 
 /// State notifier for customer shopping cart with persistent local storage.
@@ -54,7 +55,8 @@ class CartNotifier extends Notifier<List<CartItem>> {
   }
 
   void addService(ServiceItem service, {int quantity = 1, String? notes}) {
-    final existingIndex = state.indexWhere((i) => i.service.id == service.id);
+    // A product bought on its own never merges into a combo's line (and vice versa).
+    final existingIndex = state.indexWhere((i) => i.service.id == service.id && !i.isComboLine);
     if (existingIndex >= 0) {
       final existing = state[existingIndex];
       final updated = existing.copyWith(
@@ -75,13 +77,60 @@ class CartNotifier extends Notifier<List<CartItem>> {
     _persist();
   }
 
+  /// Adds one product of a combo offer. All products of the same combo +
+  /// selection share [comboKey], so the cart can show them as one group under
+  /// [comboTitle]; adding the combo again raises each product's quantity.
+  void addComboItem(
+    ServiceItem service, {
+    required int quantity,
+    required String comboKey,
+    required String comboTitle,
+  }) {
+    final i = state.indexWhere((e) => e.service.id == service.id && e.comboKey == comboKey);
+    if (i >= 0) {
+      final list = [...state];
+      list[i] = list[i].copyWith(quantity: list[i].quantity + quantity);
+      state = list;
+    } else {
+      state = [
+        ...state,
+        CartItem(
+          service: service,
+          quantity: quantity,
+          comboKey: comboKey,
+          comboTitle: comboTitle,
+          comboUnitQty: quantity,
+        ),
+      ];
+    }
+    _persist();
+  }
+
+  /// Sets how many of a combo there are (each product's quantity follows).
+  void setComboCount(String comboKey, int count) {
+    if (count <= 0) {
+      removeCombo(comboKey);
+      return;
+    }
+    state = [
+      for (final item in state)
+        item.comboKey == comboKey ? item.copyWith(quantity: item.comboUnitQty * count) : item,
+    ];
+    _persist();
+  }
+
+  void removeCombo(String comboKey) {
+    state = state.where((item) => item.comboKey != comboKey).toList();
+    _persist();
+  }
+
   void updateQuantity(int serviceId, int newQuantity) {
     if (newQuantity <= 0) {
       removeService(serviceId);
       return;
     }
     state = state.map((item) {
-      if (item.service.id == serviceId) {
+      if (item.service.id == serviceId && !item.isComboLine) {
         return item.copyWith(quantity: newQuantity);
       }
       return item;
@@ -92,7 +141,7 @@ class CartNotifier extends Notifier<List<CartItem>> {
   }
 
   void removeService(int serviceId) {
-    state = state.where((item) => item.service.id != serviceId).toList();
+    state = state.where((item) => item.service.id != serviceId || item.isComboLine).toList();
     AppLogger.d('[P0-CART]',
         'CART_REMOVE: serviceId=$serviceId, cartLength=${state.length}, items=${state.map((i) => "${i.service.title}:${i.service.id}").toList()}');
     _persist();
@@ -325,15 +374,14 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
   // this app silently charged a different total than the website for the
   // exact same package. Mirroring web's real formula (not the unused admin
   // page) is what makes the two uniform.
-  const fallbackGstRate = 18.0;
-  final fallbackPlatformFee = Decimal.fromInt(29);
-  final taxes = items.fold<Decimal>(Decimal.zero, (sum, item) {
-    final rate = Decimal.parse((item.service.gstRate ?? fallbackGstRate).toString());
-    return sum + ((item.totalPrice * rate) / Decimal.fromInt(100)).toDecimal();
-  });
-  final serviceFee = items
-      .map((item) => item.service.platformFee ?? fallbackPlatformFee)
-      .reduce((a, b) => a > b ? a : b);
+  // 2026-10-12: shared with checkout_screen.dart via ServiceFare (per-line
+  // GST rounded to whole rupees, one platform fee per booking -- same as
+  // the backend's home_services_pricing.py).
+  final fare = ServiceFare.fromLines(
+    items.map((i) => (service: i.service, lineTotal: i.totalPrice)),
+  );
+  final taxes = fare.gst;
+  final serviceFee = fare.platformFee;
   final total = subtotal + serviceFee + taxes;
 
   // Advance deposit: pricing.minAdvancePercent of total, or the configured

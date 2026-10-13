@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../shared/widgets/slow_load_gate.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/marketplace_catalog_repository.dart';
@@ -66,6 +68,41 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
   int? _selectedSubcategoryId;
   bool _appliedInitialSlug = false;
 
+  /// Same lookup the body does once on its first build, as a pure function,
+  /// so the AppBar can show the right title on the very first frame.
+  int? _rootIdForSlug(List<MarketplaceCategory> roots, String? rawSlug) {
+    final slug = rawSlug?.trim();
+    if (slug == null || slug.isEmpty) return null;
+    final wanted = slug.replaceAll('-', '_').toLowerCase();
+    for (final root in roots) {
+      if (root.slug.replaceAll('-', '_').toLowerCase() == wanted) return root.id;
+      for (final child in root.children) {
+        if (_subtreeContainsSlug(child, wanted)) return root.id;
+      }
+    }
+    return null;
+  }
+
+  /// The AppBar title: the name of the main category being browsed (e.g.
+  /// "Dairy & Bakery"), not a fixed "Groceries". Falls back to "Groceries"
+  /// while the tree is still loading or empty.
+  String _screenTitle(List<MarketplaceCategory>? tree) {
+    const fallback = 'Groceries';
+    if (tree == null) return fallback;
+    final roots = tree.where((r) => r.hasAnyProducts).toList();
+    if (roots.isEmpty) return fallback;
+    final defaultRoot = roots.firstWhere(
+      (r) => r.name.toLowerCase().contains('grocer') || r.slug.toLowerCase().contains('grocer'),
+      orElse: () => roots.first,
+    );
+    final id = _selectedRootId ??
+        (_appliedInitialSlug ? null : _rootIdForSlug(roots, widget.initialCategorySlug)) ??
+        defaultRoot.id;
+    final root = roots.firstWhere((r) => r.id == id, orElse: () => defaultRoot);
+    final name = root.name.trim();
+    return name.isEmpty ? fallback : name;
+  }
+
   @override
   Widget build(BuildContext context) {
     final treeAsync = ref.watch(marketplaceCategoryTreeProvider);
@@ -85,23 +122,40 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
       child: Column(
         children: [
           AppBar(
-            title: const Text('Groceries'),
+            title: Text(_screenTitle(treeAsync.valueOrNull)),
             backgroundColor: Colors.white,
             foregroundColor: AppColors.textPrimary,
             elevation: 0.5,
+            actions: [
+              // Added 2026-10-08 ("the grocery developer has implemented
+              // another feature something like Basket could you get into
+              // our app?") — the only entry point into the new Seller Hub
+              // combo/bundle offers; see BasketListScreen's doc comment.
+              TextButton.icon(
+                onPressed: () => context.push('/baskets'),
+                icon: const Icon(Icons.card_giftcard_rounded, size: 18, color: AppColors.primary),
+                label: const Text(
+                  'Combos',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
+                ),
+              ),
+            ],
           ),
           Expanded(
             child: treeAsync.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            children: [
-              ShimmerCard(height: 100),
-              SizedBox(height: 12),
-              ShimmerCard(height: 100),
-              SizedBox(height: 12),
-              ShimmerCard(height: 100),
-            ],
+        loading: () => const SlowLoadGate(
+          embedded: true,
+          skeleton: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              children: [
+                ShimmerCard(height: 100),
+                SizedBox(height: 12),
+                ShimmerCard(height: 100),
+                SizedBox(height: 12),
+                ShimmerCard(height: 100),
+              ],
+            ),
           ),
         ),
         error: (err, st) => Center(
@@ -235,49 +289,7 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
     }
     if (itemCount == 0) return null;
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        width: screenWidth,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 80),
-          child: Container(
-            width: screenWidth,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2)),
-              ],
-            ),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '$itemCount ${itemCount == 1 ? "item" : "items"} · ₹$subtotal',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IntrinsicWidth(
-                  child: FilledButton.icon(
-                    onPressed: () => context.go('/cart'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF059669),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                    icon: const Icon(Icons.shopping_cart_checkout, size: 16),
-                    label: const Text('Go to Cart', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    return CartPillBar(itemCount: itemCount, subtotal: subtotal.toString());
   }
 }
 
@@ -291,14 +303,17 @@ class _DepartmentProductGrid extends ConsumerWidget {
     final pageAsync = ref.watch(marketplaceProductsByCategoryProvider(departmentId));
 
     return pageAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(12),
-        child: Column(
-          children: [
-            ShimmerCard(height: 140),
-            SizedBox(height: 12),
-            ShimmerCard(height: 140),
-          ],
+      loading: () => const SlowLoadGate(
+        embedded: true,
+        skeleton: Padding(
+          padding: EdgeInsets.all(12),
+          child: Column(
+            children: [
+              ShimmerCard(height: 140),
+              SizedBox(height: 12),
+              ShimmerCard(height: 140),
+            ],
+          ),
         ),
       ),
       error: (err, st) => Center(

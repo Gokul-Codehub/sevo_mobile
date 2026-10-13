@@ -6,12 +6,15 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../shared/widgets/listing_skeleton.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
+import '../widgets/category_popup_sheet.dart';
 import '../widgets/product_card.dart';
 import '../widgets/service_card.dart';
 
@@ -32,7 +35,16 @@ class _VerticalDepartmentTile extends StatelessWidget {
     required this.onTap,
     this.image,
     this.icon = Icons.eco_rounded,
+    this.accent = AppColors.groceryGreen,
+    this.accentLight = AppColors.groceryGreenLight,
+    this.accentDark = AppColors.groceryGreenDark,
   });
+
+  /// Selection / ring colors — grocery green by default, service blue for the
+  /// services rail.
+  final Color accent;
+  final Color accentLight;
+  final Color accentDark;
 
   final String label;
   final bool selected;
@@ -51,7 +63,7 @@ class _VerticalDepartmentTile extends StatelessWidget {
           color: selected ? AppColors.background : Colors.transparent,
           border: Border(
             right: BorderSide(
-              color: selected ? AppColors.groceryGreen : Colors.transparent,
+              color: selected ? accent : Colors.transparent,
               width: 3,
             ),
           ),
@@ -66,10 +78,10 @@ class _VerticalDepartmentTile extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? AppColors.groceryGreen : Colors.transparent,
+                  color: selected ? accent : Colors.transparent,
                   width: 2,
                 ),
-                color: AppColors.groceryGreenLight,
+                color: accentLight,
               ),
               child: ClipOval(
                 child: image != null
@@ -79,7 +91,7 @@ class _VerticalDepartmentTile extends StatelessWidget {
                         fit: BoxFit.cover,
                         semanticIcon: icon,
                       )
-                    : Icon(icon, color: AppColors.groceryGreenDark, size: 24),
+                    : Icon(icon, color: accentDark, size: 24),
               ),
             ),
             const SizedBox(height: 6),
@@ -259,10 +271,14 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
     super.key,
     required this.categorySlug,
     this.initialCategory,
+    this.initialSubcategorySlug,
   });
 
   final String categorySlug;
   final Category? initialCategory;
+
+  /// Opens with this sub-service already selected ("Explore other" links).
+  final String? initialSubcategorySlug;
 
   @override
   ConsumerState<CategoryDetailScreen> createState() =>
@@ -271,6 +287,58 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
 
 class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   String? _selectedSubcategorySlug;
+
+  /// Set when the admin's category popup tile was chosen: the sub-service
+  /// rail then lists only that tile's services (web: `?group=<tile>`).
+  Set<String>? _popupGroupSlugs;
+  bool _popupShown = false;
+
+  /// Opens the category popup once (admin-enabled, e.g. Cleaning ->
+  /// Kitchen / Bathroom / Bedroom) unless the screen was opened for one
+  /// specific sub-service already.
+  void _maybeShowCategoryPopup(Category? category) {
+    if (_popupShown || category == null) return;
+    if (category.popupTiles.isEmpty || widget.initialSubcategorySlug != null) return;
+    _popupShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final tile = await showCategoryPopupSheet(context, category);
+      if (tile == null || !mounted) return;
+      setState(() {
+        _popupGroupSlugs = tile.serviceSlugs.isEmpty ? null : tile.serviceSlugs.toSet();
+        _selectedSubcategorySlug =
+            tile.serviceSlugs.isEmpty ? null : tile.serviceSlugs.first;
+      });
+    });
+  }
+
+  // Fixed 2026-10-08 (QA CMP02/CMP03/CMP06 — "the page should automatically
+  // refresh/update the latest data without requiring the user to manually
+  // reload" / an admin-deleted package or service still showing): every
+  // catalog provider (catalog_providers.dart) is a plain `ref.keepAlive()`
+  // FutureProvider — correct for making catalog browsing feel instant, but
+  // it means a response fetched once stays cached for as long as the app
+  // process is alive, with nothing to ever ask the backend again. This app
+  // has no catalog push/websocket, so the realistic, testable version of
+  // "auto-refresh" is: ask again every time the customer actually opens
+  // this screen. Invalidating (not refreshing) a FutureProvider.family
+  // with no argument re-fetches every currently-alive instance of it, and
+  // Riverpod's `AsyncValue.when` skips the loading branch on a refresh by
+  // default (`skipLoadingOnRefresh: true`) as long as previous data
+  // exists — so this silently re-syncs in the background and swaps in
+  // fresh data (or quietly drops a since-deleted/deactivated package) the
+  // next time this screen builds, without flashing the shimmer loader seen
+  // on a genuine first-ever load.
+  @override
+  void initState() {
+    super.initState();
+    _selectedSubcategorySlug = widget.initialSubcategorySlug;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(categoryServicesProvider);
+      ref.invalidate(subServicesProvider);
+    });
+  }
 
   // Vegetable Inventory department browse (added 2026-09-23) — independent
   // of [_selectedSubcategorySlug] above (that one filters by the flat
@@ -344,8 +412,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   ) {
     final isGroceryCategory = category.flowType == CatalogFlowType.grocery;
 
-    if (!isGroceryCategory &&
-        !cartItems.any((i) => i.service.flowType == CatalogFlowType.grocery)) {
+    if (!isGroceryCategory) {
       return null;
     }
 
@@ -372,109 +439,64 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     // now impossible for any downstream widget in this bar to ever see
     // an infinite/unbounded width, regardless of what odd constraints the
     // host passes in.
-    final screenWidth = MediaQuery.of(context).size.width;
+    return CartPillBar(itemCount: itemCount, subtotal: subtotal.toString());
+  }
 
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        width: screenWidth,
-        child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 96),
-        child: Container(
-      width: screenWidth,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F766E).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '$itemCount ${itemCount == 1 ? "ITEM" : "ITEMS"}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F766E),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '₹$subtotal',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Continue adding or go to cart',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // The real, confirmed bug (from the crash log, every single
-          // time): FilledButton.icon internally builds a _RenderInputPadding
-          // to enforce its minimum tap-target size, and that widget's own
-          // constraint math produces an invalid TIGHT-infinite width
-          // (min==max==Infinity, not just an unbounded max) whenever it's
-          // given an unbounded width to work with — which is exactly what
-          // a Row always hands a non-Expanded child for its main axis, in
-          // every Flutter app, by design. No amount of forcing a bounded
-          // width on this button's ancestors could fix that (a Row still
-          // hands its own non-flex children unbounded width regardless of
-          // the Row's own width) — the fix has to stop this specific
-          // button from ever seeing that unbounded constraint at all.
-          // IntrinsicWidth measures the child's natural width first and
-          // then lays it out with that concrete, finite number, so
-          // _RenderInputPadding never receives an unbounded constraint in
-          // the first place.
-          IntrinsicWidth(
-            child: FilledButton.icon(
-              onPressed: () => context.go('/cart'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+  /// Service categories: the subcategories (e.g. Washing Machine, Fridge) as a
+  /// persistent vertical rail on the LEFT — image + name — and the matching
+  /// packages on the RIGHT. Built outside the services `.when` so the rail
+  /// stays put while the right side reloads after a tap. Grocery categories
+  /// (own department rail) and categories with no subcategories are untouched.
+  Widget _withServiceRail(
+    bool isGrocery,
+    List<Subcategory> subs,
+    Widget body,
+  ) {
+    final group = _popupGroupSlugs;
+    if (group != null) {
+      subs = subs.where((s) => group.contains(s.slug)).toList();
+    }
+    if (isGrocery || subs.isEmpty) return body;
+    const blue = AppColors.serviceBlue;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: 82,
+          color: Colors.white,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              _VerticalDepartmentTile(
+                label: 'All',
+                icon: Icons.grid_view_rounded,
+                accent: blue,
+                accentLight: AppColors.serviceBlueLight,
+                accentDark: AppColors.serviceBlueDark,
+                selected: _selectedSubcategorySlug == null,
+                onTap: () => setState(() {
+                  _selectedSubcategorySlug = null;
+                  _popupGroupSlugs = null;
+                }),
               ),
-              icon: const Icon(Icons.shopping_cart_checkout, size: 16),
-              label: const Text('Go to Cart', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-            ),
+              for (final sub in subs)
+                _VerticalDepartmentTile(
+                  label: sub.name,
+                  image: sub.image,
+                  icon: Icons.home_repair_service_rounded,
+                  accent: blue,
+                  accentLight: AppColors.serviceBlueLight,
+                  accentDark: AppColors.serviceBlueDark,
+                  selected: _selectedSubcategorySlug == sub.slug,
+                  onTap: () => setState(() => _selectedSubcategorySlug =
+                      _selectedSubcategorySlug == sub.slug ? null : sub.slug),
+                ),
+            ],
           ),
-        ],
-      ),
         ),
-      ),
-      ),
+        const VerticalDivider(width: 1, thickness: 0.8),
+        Expanded(child: body),
+      ],
     );
   }
 
@@ -501,6 +523,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         }).firstOrNull;
 
     _maybeRedirectToLogistics(currentCategory);
+    _maybeShowCategoryPopup(currentCategory);
     if (currentCategory?.flowType == CatalogFlowType.logistics) {
       // Redirect scheduled above for after this frame — show a plain
       // loading state in the meantime rather than flashing the normal
@@ -609,18 +632,21 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           IconButton(
             tooltip: 'Search services',
             icon: const Icon(Icons.search),
-            onPressed: () => context.push('/search'),
+            onPressed: () => context.push(
+              '/search?mode=${isGroceryCategory ? 'groceries' : 'services'}',
+            ),
           ),
         ],
       ),
       Expanded(
-            child: servicesAsync.when(
-        loading: () => ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: 4,
-          itemBuilder: (context, index) => const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: ShimmerCard(height: 140),
+            child: _withServiceRail(isGroceryCategory, subcategories, servicesAsync.when(
+        // Grocery categories show their own rail once loaded, so the skeleton
+        // draws one; service categories get their rail from _withServiceRail
+        // around this body, so the skeleton must not add a second.
+        loading: () => IllustrationThenSkeleton(
+          skeleton: ListingSkeleton(
+            grid: isGroceryCategory,
+            showRail: isGroceryCategory,
           ),
         ),
         error: (err, st) => Padding(
@@ -795,33 +821,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               children: [
-                if (subcategories.isNotEmpty) ...[
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _FilterChip(
-                          label: 'All Services',
-                          selected: _selectedSubcategorySlug == null,
-                          onTap: () => setState(() => _selectedSubcategorySlug = null),
-                        ),
-                        const SizedBox(width: 8),
-                        ...subcategories.map(
-                          (sub) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: _FilterChip(
-                              label: sub.name,
-                              selected: _selectedSubcategorySlug == sub.slug,
-                              onTap: () => setState(() => _selectedSubcategorySlug =
-                                  _selectedSubcategorySlug == sub.slug ? null : sub.slug),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 ...services.map(
                   (service) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -932,7 +931,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             ],
           );
         },
-            ),
+            )),
           ),
           ?cartBar,
         ],
