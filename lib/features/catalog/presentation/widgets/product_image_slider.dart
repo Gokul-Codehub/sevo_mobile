@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/image_url_helper.dart';
@@ -7,24 +5,21 @@ import '../../../../shared/widgets/app_remote_image.dart';
 import '../../domain/catalog_models.dart';
 
 /// A product card's photo. With one image it is just that image; with several
-/// (the vendor's gallery) they slide by themselves every few seconds — the same
-/// pictures the product page carousel shows — and can be swiped, with small
-/// dots underneath.
+/// (the vendor's gallery) the customer swipes through them — the same pictures
+/// the product page carousel shows — with small dots underneath. It never moves
+/// by itself.
 ///
-/// Taps are left to the card around it (a horizontal swipe is the only gesture
-/// this widget claims), and a card's slide timer is offset from its neighbours
-/// so a whole grid doesn't flip in unison.
+/// Taps are left to the card around it: a horizontal swipe is the only gesture
+/// this widget claims.
 class ProductImageSlider extends StatefulWidget {
   const ProductImageSlider({
     super.key,
     required this.service,
     this.fit = BoxFit.cover,
-    this.interval = const Duration(milliseconds: 3600),
   });
 
   final ServiceItem service;
   final BoxFit fit;
-  final Duration interval;
 
   @override
   State<ProductImageSlider> createState() => _ProductImageSliderState();
@@ -32,7 +27,6 @@ class ProductImageSlider extends StatefulWidget {
 
 class _ProductImageSliderState extends State<ProductImageSlider> {
   final _controller = PageController();
-  Timer? _timer;
   int _page = 0;
 
   List<String> get _images {
@@ -47,48 +41,16 @@ class _ProductImageSliderState extends State<ProductImageSlider> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _scheduleStart();
-  }
-
-  @override
   void didUpdateWidget(covariant ProductImageSlider old) {
     super.didUpdateWidget(old);
     if (old.service.id != widget.service.id) {
-      _timer?.cancel();
-      if (_controller.hasClients) _controller.jumpToPage(0);
       _page = 0;
-      _scheduleStart();
-    }
-  }
-
-  void _scheduleStart() {
-    if (_images.length < 2) return;
-    // Offset each card a little so neighbours slide at different moments.
-    final offset = Duration(milliseconds: (widget.service.id.abs() % 5) * 500);
-    _timer = Timer(offset, () {
-      _timer = Timer.periodic(widget.interval, (_) => _next());
-    });
-  }
-
-  void _next() {
-    if (!mounted || !_controller.hasClients) return;
-    final count = _images.length;
-    if (count < 2) return;
-    final target = (_page + 1) % count;
-    if (target == 0) {
-      _controller.animateToPage(0,
-          duration: const Duration(milliseconds: 450), curve: Curves.easeInOut);
-    } else {
-      _controller.animateToPage(target,
-          duration: const Duration(milliseconds: 450), curve: Curves.easeInOut);
+      if (_controller.hasClients) _controller.jumpToPage(0);
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }

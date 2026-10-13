@@ -130,6 +130,44 @@ class AiAssistantRepository {
     }
   }
 
+  /// GET /api/ai/conversations/ — the signed-in customer's saved chats (the
+  /// 20 most recent). Guests have none; the backend answers 401 for them.
+  Future<Result<List<AiConversationSummary>>> listConversations() async {
+    try {
+      final response = await api.get('/ai/conversations/');
+      return ResponseNormalizer.extract(response, (data) {
+        final list = data is List ? data : const [];
+        return list
+            .whereType<Map>()
+            .map((m) => AiConversationSummary.fromJson(Map<String, dynamic>.from(m)))
+            .where((c) => c.id.isNotEmpty)
+            .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// DELETE /api/ai/conversations/<uuid>/ — removes one saved chat.
+  Future<bool> deleteConversation(String conversationId) async {
+    try {
+      await api.delete('/ai/conversations/$conversationId/', options: _guestOptions);
+      return true;
+    } on Exception {
+      return false;
+    }
+  }
+
+  /// DELETE /api/ai/conversations/ — removes every saved chat (signed-in only).
+  Future<bool> deleteAllConversations() async {
+    try {
+      await api.delete('/ai/conversations/');
+      return true;
+    } on Exception {
+      return false;
+    }
+  }
+
   ApiError _toError(Object e) {
     if (e is ApiError) return e;
     if (e is DioException && e.error is ApiError) {

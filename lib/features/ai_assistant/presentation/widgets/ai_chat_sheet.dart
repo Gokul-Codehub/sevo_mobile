@@ -8,6 +8,8 @@ import 'package:lottie/lottie.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../routing/app_router.dart';
+import '../../../auth/domain/auth_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../home/domain/home_flow_mode.dart';
 import '../../domain/ai_assistant_models.dart';
@@ -21,8 +23,12 @@ import '../../domain/ai_assistant_providers.dart';
 /// a 3/4-screen-height modal sheet, its own (x) close button, talking to
 /// the real backend AI Assistant gateway (`/api/ai/chat/`).
 Future<void> showAiChatSheet(BuildContext context) {
+  // Open on the shell's navigator (when available) so the bottom navigator
+  // stays visible under the chat instead of being covered by the sheet.
+  final shellContext = shellNavigatorKey.currentContext;
   return showModalBottomSheet(
-    context: context,
+    context: shellContext ?? context,
+    useRootNavigator: shellContext == null,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) => const _AiChatSheet(),
@@ -39,6 +45,9 @@ class _AiChatSheet extends ConsumerStatefulWidget {
 class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+
+  /// Showing the saved-chats list instead of the live conversation.
+  bool _showHistory = false;
 
   /// A photo picked with the paperclip, waiting to be sent with the next
   /// message (the assistant accepts one image of up to 5 MB per message).
@@ -187,6 +196,9 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
             children: [
               _buildHeader(context),
               const Divider(height: 1, color: AppColors.divider),
+              if (_showHistory)
+                Expanded(child: _buildHistoryPanel())
+              else ...[
               if (chatState.handedOff) _buildHandoffBanner(),
               Expanded(
                 child: chatState.messages.isEmpty
@@ -217,6 +229,7 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
               if (!chatState.handedOff && chatState.options.isNotEmpty)
                 _buildOptionsRow(chatState.options, chatState.isSending),
               _buildInputBar(chatState.isSending, expects: chatState.expects),
+              ],
             ],
           ),
         ),
@@ -267,6 +280,22 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
             ),
           ),
           IconButton(
+            tooltip: 'Chat history',
+            icon: Icon(
+              Icons.history_rounded,
+              color: _showHistory ? AppColors.primary : AppColors.textSecondary,
+            ),
+            onPressed: () => setState(() => _showHistory = !_showHistory),
+          ),
+          IconButton(
+            tooltip: 'Clear chat',
+            icon: const Icon(
+              Icons.delete_sweep_outlined,
+              color: AppColors.textSecondary,
+            ),
+            onPressed: _confirmClearChat,
+          ),
+          IconButton(
             icon: const Icon(
               Icons.close_rounded,
               color: AppColors.textSecondary,
@@ -275,6 +304,168 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _confirmClearChat() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear this chat?'),
+        content: const Text('The conversation will be deleted and a fresh chat started.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    _clearAttachment();
+    await ref.read(aiChatControllerProvider.notifier).clearChat();
+    if (mounted) setState(() => _showHistory = false);
+  }
+
+  Widget _buildHistoryPanel() {
+    final user = ref.watch(currentUserProvider);
+    final signedIn = user != null && !user.isGuest;
+    final controller = ref.read(aiChatControllerProvider.notifier);
+
+    Widget message(IconData icon, String title, String body) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 36, color: AppColors.textHint),
+                const SizedBox(height: 10),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                const SizedBox(height: 6),
+                Text(body,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+        );
+
+    final conversations = signedIn ? ref.watch(aiConversationsProvider) : null;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 12, 6),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text('Past conversations',
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy)),
+              ),
+              if (signedIn && (conversations?.valueOrNull?.isNotEmpty ?? false))
+                TextButton(
+                  onPressed: () async {
+                    await controller.deleteAllConversations();
+                    ref.invalidate(aiConversationsProvider);
+                  },
+                  child: const Text('Clear all'),
+                ),
+              FilledButton.icon(
+                onPressed: () {
+                  _clearAttachment();
+                  controller.reset();
+                  setState(() => _showHistory = false);
+                },
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('New chat'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: !signedIn
+              ? message(Icons.person_outline_rounded, 'Guest session',
+                  'Sign in to keep your chat history across sessions and devices.')
+              : conversations!.when(
+                  loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  error: (_, __) => message(Icons.cloud_off_rounded, "Couldn't load history",
+                      'Please check your connection and try again.'),
+                  data: (list) {
+                    if (list.isEmpty) {
+                      return message(Icons.chat_bubble_outline_rounded, 'No saved conversations',
+                          'Your chats with Apta will appear here.');
+                    }
+                    final currentId = ref.watch(aiChatControllerProvider).conversationId;
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                      itemCount: list.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, i) {
+                        final c = list[i];
+                        final active = c.id == currentId;
+                        final d = c.updatedAt;
+                        final when = d == null
+                            ? ''
+                            : ' · ${d.day}/${d.month} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () async {
+                            final ok = await controller.loadConversation(c.id);
+                            if (!mounted) return;
+                            if (ok) {
+                              setState(() => _showHistory = false);
+                              _scrollToBottom();
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                            decoration: BoxDecoration(
+                              color: active ? AppColors.groceryGreenLight : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: active ? AppColors.groceryGreen : AppColors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.chat_bubble_outline_rounded,
+                                    size: 18, color: AppColors.textSecondary),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(c.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.navy)),
+                                      Text('${c.messageCount} messages$when',
+                                          style: const TextStyle(
+                                              fontSize: 11.5, color: AppColors.textSecondary)),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete',
+                                  icon: const Icon(Icons.delete_outline_rounded,
+                                      size: 20, color: AppColors.textSecondary),
+                                  onPressed: () async {
+                                    await controller.deleteConversation(c.id);
+                                    ref.invalidate(aiConversationsProvider);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 

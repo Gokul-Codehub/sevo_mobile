@@ -53,6 +53,10 @@ class UserProfile extends Equatable {
 
   bool get isProfileComplete => name != null && name!.isNotEmpty;
 
+  /// A real mobile number is on file. [phone] falls back to the email/username
+  /// when the account has no number, so a bare digit check is the reliable test.
+  bool get hasMobileNumber => RegExp(r'^\+?\d[\d\s-]{8,}$').hasMatch(phone.trim());
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     final rawId = json['id'] ?? json['user_id'] ?? json['customer_id'];
     final firstName = json['first_name']?.toString() ?? '';

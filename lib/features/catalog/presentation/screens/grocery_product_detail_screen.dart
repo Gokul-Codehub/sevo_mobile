@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
@@ -515,20 +516,7 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
             // Only shown once this product is actually in the cart.
             if (quantityInCart > 0) ...[
               const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => context.go('/cart'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF059669),
-                    side: const BorderSide(color: const Color(0xFF059669)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  icon: const Icon(Icons.shopping_cart_checkout, size: 16),
-                  label: const Text('Go to Cart', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-                ),
-              ),
+              const GoToCartPill(expand: true),
             ],
           ],
         ),

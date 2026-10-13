@@ -211,21 +211,34 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
       _mapController?.animateCamera(CameraUpdate.newLatLng(techPos));
     }
 
-    final effectiveStatus = tracking.status.isNotEmpty
-        ? tracking.status
-        : (widget.booking?.status ?? 'new_request');
+    final effectiveStatus = (tracking.status.isNotEmpty
+            ? tracking.status
+            : (widget.booking?.status ?? 'new_request'))
+        .toLowerCase();
     final currentStep = switch (effectiveStatus) {
       'draft' ||
       'new_request' ||
       'pending_payment' ||
       'waiting_for_payment' ||
       'unassigned' ||
+      'requested' ||
       'rescheduled' =>
         0,
-      'confirmed' || 'reviewed' => 1,
-      'assigned' || 'received' || 'accepted' => 1,
-      'on_the_way' || 'arrived' || 'en_route' => 2,
+      'confirmed' || 'reviewed' || 'vendor_confirmed' => 1,
+      'assigned' || 'received' || 'accepted' || 'technician_assigned' => 1,
+      'on_the_way' ||
+      'arrived' ||
+      'en_route' ||
+      'technician_on_the_way' ||
+      'technician_arrived' =>
+        2,
       'in_progress' ||
+      'proof_submitted' ||
+      'inspection_in_progress' ||
+      'inspection_completed' ||
+      'quotation_sent' ||
+      'customer_approved' ||
+      'unable_to_complete' ||
       'awaiting_verification' ||
       'verified' ||
       'feedback_pending' ||
@@ -233,7 +246,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
       'rework_requested' ||
       'follow_up_required' =>
         3,
-      'completed' || 'closed' => 4,
+      'completed' || 'closed' || 'estimation_closed' || 'customer_rejected' => 4,
       _ => 0,
     };
 

@@ -20,6 +20,7 @@ class _ProfileCompletionScreenState
     extends ConsumerState<ProfileCompletionScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
@@ -35,10 +36,15 @@ class _ProfileCompletionScreenState
   // for the email side.
   String? _verifiedEmail;
 
+  /// Signed in with an email and no mobile number yet: the number is mandatory.
+  bool _needsMobile = false;
+
   @override
   void initState() {
     super.initState();
-    final currentEmail = ref.read(currentUserProvider)?.email?.trim();
+    final me = ref.read(currentUserProvider);
+    _needsMobile = me != null && !me.hasMobileNumber;
+    final currentEmail = me?.email?.trim();
     if (currentEmail != null && currentEmail.isNotEmpty) {
       _verifiedEmail = currentEmail;
       _emailController.text = currentEmail;
@@ -49,6 +55,7 @@ class _ProfileCompletionScreenState
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -62,6 +69,7 @@ class _ProfileCompletionScreenState
           email: _emailController.text.trim().isEmpty
               ? null
               : _emailController.text.trim(),
+          phone: _needsMobile ? _phoneController.text.trim() : null,
         );
 
     if (!mounted) return;
@@ -210,6 +218,30 @@ class _ProfileCompletionScreenState
                     },
                   ),
 
+                if (_needsMobile) ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile Number *',
+                      hintText: '10-digit mobile number',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      prefixText: '+91 ',
+                      counterText: '',
+                    ),
+                    validator: (val) {
+                      final v = (val ?? '').trim();
+                      if (v.isEmpty) return 'Mobile number is required';
+                      if (!RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
+                        return 'Enter a valid 10-digit mobile number';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+
                 const SizedBox(height: 36),
 
                 FilledButton(
@@ -227,12 +259,13 @@ class _ProfileCompletionScreenState
                 ),
                 const SizedBox(height: 16),
 
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.go(AppRoutes.home),
-                    child: const Text('Skip for now'),
+                if (!_needsMobile)
+                  Center(
+                    child: TextButton(
+                      onPressed: () => context.go(AppRoutes.home),
+                      child: const Text('Skip for now'),
+                    ),
                   ),
-                ),
               ],
             ),
           ),

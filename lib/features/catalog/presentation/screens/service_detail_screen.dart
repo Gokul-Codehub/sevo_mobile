@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/slow_load_gate.dart';
@@ -43,6 +44,9 @@ class ServiceDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
+  /// The package option the customer picked (packages that have options).
+  int? _chosenOptionId;
+
   // Fixed 2026-10-08 (QA CME05/CME04 — "the admin removes the image for the
   // package, it is still shows to the customer" / "the application
   // automatically refresh/update the latest data"): `serviceDetailProvider`
@@ -112,7 +116,13 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
     );
   }
 
-  Widget _buildScaffold(BuildContext context, ServiceItem service) {
+  Widget _buildScaffold(BuildContext context, ServiceItem baseService) {
+    final chosen =
+        baseService.packageOptions.where((o) => o.id == _chosenOptionId).firstOrNull;
+    final service = chosen != null ? baseService.withOption(chosen) : baseService;
+    // Options packages show the lowest option price until one is picked.
+    final awaitingOption = service.hasPackageOptions && service.selectedOption == null;
+    final shownPrice = awaitingOption ? service.startsAtPrice : service.effectivePrice;
     final isGrocery = service.flowType == CatalogFlowType.grocery;
     final cartItems = ref.watch(cartProvider);
     final inCartItem =
@@ -185,7 +195,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                 children: [
                   // Title
                   Text(
-                    service.title,
+                    baseService.title,
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -193,6 +203,31 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       letterSpacing: -0.3,
                     ),
                   ),
+                  if (baseService.badgeLabel != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star_rounded, size: 13, color: Colors.white),
+                          const SizedBox(width: 3),
+                          Text(
+                            baseService.badgeLabel!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
 
                   // Rating & Duration Row
@@ -270,6 +305,15 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     ),
                   ],
 
+                  if (service.hasPackageOptions) ...[
+                    const SizedBox(height: 18),
+                    _PackageOptionPicker(
+                      options: service.packageOptions,
+                      selectedId: _chosenOptionId,
+                      onSelect: (o) => setState(() => _chosenOptionId = o.id),
+                    ),
+                  ],
+
                   const SizedBox(height: 18),
 
                   // Price card
@@ -287,15 +331,24 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: [
+                            if (awaitingOption)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Text('From',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textSecondary)),
+                              ),
                             Text(
-                              '₹${service.effectivePrice}',
+                              '₹$shownPrice',
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.navy,
                               ),
                             ),
-                            if (service.hasDiscount) ...[
+                            if (service.hasDiscount && !awaitingOption) ...[
                               const SizedBox(width: 8),
                               Text(
                                 '₹${service.price}',
@@ -696,29 +749,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       ),
                     )
                   else
-                    Expanded(
-                      child: SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: () => context.push('/cart'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.groceryGreenDark,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            'View Cart',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    const Expanded(child: GoToCartPill(expand: true, push: true)),
                 ],
               )
             : Row(
@@ -736,7 +767,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         ),
                       ),
                       Text(
-                        '₹${service.effectivePrice}',
+                        awaitingOption ? 'From ₹$shownPrice' : '₹$shownPrice',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -763,7 +794,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     child: SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: service.isAvailable
+                        onPressed: service.isAvailable && !awaitingOption
                             ? () {
                                 context.push(
                                   '/checkout?service=${service.slug}',
@@ -782,7 +813,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           elevation: 0,
                         ),
                         child: Text(
-                          service.isAvailable ? 'Book Now' : 'Unavailable',
+                          !service.isAvailable
+                              ? 'Unavailable'
+                              : (awaitingOption ? 'Select an option' : 'Book Now'),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -794,6 +827,119 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                 ],
               ),
       ),
+    );
+  }
+}
+
+/// "Choose an option" list for a package that has admin-defined options
+/// (web parity: a package with options is booked per option, never at the
+/// parent price).
+class _PackageOptionPicker extends StatelessWidget {
+  const _PackageOptionPicker({
+    required this.options,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  final List<PackageOption> options;
+  final int? selectedId;
+  final ValueChanged<PackageOption> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose an option',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
+        ),
+        const SizedBox(height: 10),
+        for (final o in options)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => onSelect(o),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: o.id == selectedId ? AppColors.serviceBlueLight : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: o.id == selectedId ? AppColors.serviceBlue : AppColors.border,
+                    width: o.id == selectedId ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      o.id == selectedId
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_off_rounded,
+                      color: o.id == selectedId ? AppColors.serviceBlue : AppColors.textHint,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            o.name,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          if (o.duration.trim().isNotEmpty || o.description.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                [o.duration.trim(), o.description.trim()]
+                                    .where((s) => s.isNotEmpty)
+                                    .join(' · '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '₹${o.effectivePrice}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        if (o.hasOffer)
+                          Text(
+                            '₹${o.basePrice}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.textHint,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

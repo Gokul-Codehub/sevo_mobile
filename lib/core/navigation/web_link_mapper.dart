@@ -27,6 +27,7 @@ class AppLink {
 ///   /trucks.. /two-wheelers.. /packers.. -> Goods & Transport
 ///   /vegetables /groceries            -> Groceries home
 ///   /bookings /customer/bookings      -> My bookings
+///   /marketplace/combo/<id>, /combos  -> the combo offer (or the combo list)
 ///   /cart /profile /support           -> the matching screen
 ///   anything else                     -> the website
 ///
@@ -84,6 +85,13 @@ AppLink resolveWebLink(String rawUrl, {Set<String>? knownCategorySlugs}) {
   }
   if (path == '/bookings' || path == '/my-bookings' || path == '/customer/bookings') {
     return const AppLink(route: '/bookings');
+  }
+  // Combo offers: the website's /marketplace/combo/<id> (and /combos) -> the
+  // app's combo screens.
+  final combo = RegExp(r'^/(?:marketplace/)?(?:combo|combos|baskets?)(?:/(\d+))?$').firstMatch(path);
+  if (combo != null) {
+    final id = combo.group(1);
+    return AppLink(route: id == null ? '/baskets' : '/baskets/$id');
   }
   if (path == '/cart') return const AppLink(route: '/cart');
   if (path == '/profile') return const AppLink(route: '/profile');

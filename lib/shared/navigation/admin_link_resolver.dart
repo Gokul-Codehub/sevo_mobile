@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/navigation/web_link_mapper.dart';
+import '../../features/home/domain/home_flow_mode.dart';
 
 /// Shared interpreter for every admin-configured "link" field across the
 /// Home screen's admin-authored content (Bestsellers tiles, Quick Access
@@ -29,26 +33,51 @@ import 'package:url_launcher/url_launcher.dart';
 ///      reused verbatim, not a new pattern).
 ///   3. Starts with `/` — pushed as an in-app route path.
 ///   4. Anything else (empty, unrecognized) — falls back to [fallbackPath].
-String resolveAdminCategoryLinkRoute(String link, String slug) {
-  return link.contains('/marketplace')
-      ? '/groceries/seller-hub?category=$slug'
-      : '/categories/$slug';
+/// A category slug that belongs to the OLD vegetable-inventory grocery category
+/// ("vegetables_groceries", "farm-fresh…"). That page is empty now — Groceries
+/// live in the Seller Hub marketplace — so links to it are sent there instead.
+bool _isLegacyGrocerySlug(String slug) {
+  final s = slug.toLowerCase().replaceAll('-', '_');
+  return s.contains('vegetable') || s.contains('grocer') || s.contains('farm_fresh');
 }
 
+String resolveAdminCategoryLinkRoute(String link, String slug) {
+  if (link.contains('/marketplace')) return '/groceries/seller-hub?category=$slug';
+  if (_isLegacyGrocerySlug(slug)) return '/groceries/seller-hub';
+  return '/categories/$slug';
+}
+
+/// Opens an admin-configured link. Besides the shapes listed at the top of this
+/// file it understands the website's own paths (via [resolveWebLink]):
+/// `/vegetables`, `/marketplace/combo/<id>`, `/booking/services?category=…`,
+/// `/trucks/…`, `/bookings` and so on. `#`, empty and unknown values go to
+/// [fallbackPath].
 void handleAdminLinkTap(BuildContext context, String? rawLink, {required String fallbackPath}) {
-  final link = rawLink?.trim() ?? '';
+  var link = rawLink?.trim() ?? '';
+  if (link == '#') link = '';
   if (link.isNotEmpty) {
     final categoryMatch = RegExp(r'category=([\w-]+)').firstMatch(link);
     if (categoryMatch != null) {
       context.push(resolveAdminCategoryLinkRoute(link, categoryMatch.group(1)!));
       return;
     }
+
+    // Website paths (and sevo.co.in URLs) map onto app screens.
+    final web = resolveWebLink(link);
+    if (web.groceriesHome) {
+      ProviderScope.containerOf(context).read(homeFlowModeProvider.notifier).state =
+          HomeFlowMode.groceries;
+      context.go('/');
+      return;
+    }
+    if (web.route != null) {
+      context.push(web.route!);
+      return;
+    }
+
     if (link.startsWith('http://') || link.startsWith('https://')) {
       final uri = Uri.tryParse(link);
       if (uri != null) {
-        // Fire-and-forget, matching the existing url_launcher call sites in
-        // this app (e.g. support_screen.dart) — onTap handlers here are
-        // synchronous VoidCallbacks, not awaited.
         launchUrl(uri, mode: LaunchMode.externalApplication);
         return;
       }

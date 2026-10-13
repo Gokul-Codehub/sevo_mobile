@@ -173,11 +173,58 @@ class AiChatController extends StateNotifier<AiChatState> {
   void reset() {
     state = const AiChatState();
   }
+
+  /// Re-opens a saved session from the history list.
+  Future<bool> loadConversation(String conversationId) async {
+    final result = await _repository.getConversationHistory(conversationId);
+    return result.when(
+      success: (messages) {
+        state = AiChatState(messages: messages, conversationId: conversationId);
+        return true;
+      },
+      failure: (_) => false,
+    );
+  }
+
+  /// "Clear chat": deletes the current session on the server (when it has
+  /// been saved) and starts over with an empty transcript.
+  Future<void> clearChat() async {
+    final id = state.conversationId;
+    state = const AiChatState();
+    if (id != null && id.isNotEmpty) {
+      await _repository.deleteConversation(id);
+    }
+  }
+
+  /// Deletes one saved session; resets the open chat when it was that one.
+  Future<bool> deleteConversation(String id) async {
+    final ok = await _repository.deleteConversation(id);
+    if (ok && state.conversationId == id) state = const AiChatState();
+    return ok;
+  }
+
+  /// Deletes every saved session and resets the open chat.
+  Future<bool> deleteAllConversations() async {
+    final ok = await _repository.deleteAllConversations();
+    if (ok) state = const AiChatState();
+    return ok;
+  }
 }
 
 final aiChatControllerProvider =
     StateNotifierProvider<AiChatController, AiChatState>((ref) {
   return AiChatController(ref.watch(aiAssistantRepositoryProvider));
+});
+
+/// The signed-in customer's saved chats, newest first (the "history" view).
+final aiConversationsProvider =
+    FutureProvider.autoDispose<List<AiConversationSummary>>((ref) async {
+  final repository = ref.watch(aiAssistantRepositoryProvider);
+  final result = await repository.listConversations();
+  return result.when(
+    success: (list) => list,
+    failure: (error) => throw error,
+  );
 });
 
 /// Fetches one authenticated support-intake photo's bytes for display with

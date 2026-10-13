@@ -1378,14 +1378,7 @@ void _handleQuickAccessTap(
 
   final key = '${card.id} ${card.label}'.toLowerCase();
   if (key.contains('grocer') || key.contains('vegetable') || key.contains('fruit')) {
-    final match = liveCategories.where((c) => c.flowType == CatalogFlowType.grocery).firstOrNull;
-    if (match != null) {
-      context.push('/categories/${match.slug}', extra: match);
-      return;
-    }
-    // No matching Vegetable Inventory category is live — the Seller Hub
-    // Marketplace catalog is a real grocery surface too, and a better
-    // fallback than a guaranteed-empty guessed slug.
+    // Groceries live in the Seller Hub; the old Farm-Fresh category page is empty.
     context.push('/groceries/seller-hub');
     return;
   }
@@ -1689,12 +1682,23 @@ class _UnifiedActiveBackgroundPainter extends CustomPainter {
     // bottom.
     final outline = Path()..moveTo(0, tabHeight + rBodyL);
     traceTabEdge(outline);
+    // Thin line whose two outer ends fade away, so it dissolves into the page
+    // at the left and right edges instead of stopping abruptly.
+    final lineColor = Color.lerp(servicesOutline, groceriesOutline, t)!;
     canvas.drawPath(
       outline,
       Paint()
-        ..color = Color.lerp(servicesOutline, groceriesOutline, t)!
+        ..shader = LinearGradient(
+          colors: [
+            lineColor.withValues(alpha: 0.0),
+            lineColor,
+            lineColor,
+            lineColor.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 0.14, 0.86, 1.0],
+        ).createShader(Rect.fromLTWH(0, 0, w, h))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
+        ..strokeWidth = 1.2
         ..strokeJoin = StrokeJoin.round
         ..strokeCap = StrokeCap.round,
     );
@@ -3743,7 +3747,13 @@ class _PromoBanner {
     this.imageUrl,
     this.mediaType = 'image',
     this.assetFallback,
+    this.link,
   });
+
+  /// The click-through link the admin set on this banner (Mobile App ▸ App
+  /// Banners ▸ Link). When present it decides where a tap goes; the keyword
+  /// guess in [_PromoBannerSlide._handleTap] is only the fallback.
+  final String? link;
 
   final String eyebrow;
   final String title;
@@ -3936,6 +3946,7 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
         accentColor: template.accentColor,
         imageUrl: offer.imageUrl,
         mediaType: offer.mediaType,
+        link: offer.link,
       );
     });
   }
@@ -4728,18 +4739,15 @@ class _MobileAdCard extends ConsumerWidget {
           // services grid otherwise. Still never a guessed/dead slug: it
           // reads the real, currently-active category list, same as
           // _PromoBannerSlide._handleTap above.
-          if (wantsGrocery) {
-            final liveCategories =
-                ref.read(categoriesProvider).valueOrNull ?? const [];
-            final groceryCategory = liveCategories
-                .where((c) => c.isActive && c.flowType == CatalogFlowType.grocery)
-                .firstOrNull;
-            if (groceryCategory != null) {
-              context.push('/categories/${groceryCategory.slug}', extra: groceryCategory);
-              return;
-            }
-          }
-          context.push('/categories');
+          // 2026-10-13: the ad's own admin link (Mobile App ▸ Advertisement ▸
+          // Link) now decides where it goes; before, it was ignored and every
+          // Groceries ad opened the old Farm-Fresh category page, which is
+          // empty. No link -> the Seller Hub groceries / the Services grid.
+          _handleAdminLinkTap(
+            context,
+            ad.link,
+            fallbackPath: wantsGrocery ? '/groceries/seller-hub' : '/categories',
+          );
         },
         child: AspectRatio(
           aspectRatio: 16 / 9,
@@ -4820,11 +4828,27 @@ class _PromoBannerSlide extends ConsumerWidget {
   // -active category matches, e.g. the admin hasn't created that category
   // yet or has since removed/renamed it.
   void _handleTap(BuildContext context, List<Category> liveCategories) {
+    // The admin's own link wins. Accepted shapes (see admin_link_resolver.dart
+    // and web_link_mapper.dart): `?category=<slug>`, `/marketplace?category=<slug>`,
+    // an app path such as `/baskets` or `/groceries/seller-hub`, a website path
+    // such as `/vegetables` or `/booking/services?category=<slug>`, or a full
+    // https:// URL (opens in the browser).
+    final link = (banner.link ?? '').trim();
+    if (link.isNotEmpty && link != '#') {
+      _handleAdminLinkTap(context, link, fallbackPath: '/categories');
+      return;
+    }
     for (final category in liveCategories) {
       if (!category.isActive) continue;
       final haystack = '${category.slug} ${category.name}'.toLowerCase();
       if (banner.routeKeywords.any((k) => haystack.contains(k))) {
-        context.push('/categories/${category.slug}', extra: category);
+        // The old Farm-Fresh grocery category page is empty; Groceries live in
+        // the Seller Hub.
+        if (category.flowType == CatalogFlowType.grocery) {
+          context.push('/groceries/seller-hub');
+        } else {
+          context.push('/categories/${category.slug}', extra: category);
+        }
         return;
       }
     }

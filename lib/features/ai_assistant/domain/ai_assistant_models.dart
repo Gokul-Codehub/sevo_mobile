@@ -125,6 +125,34 @@ class AiChatMessage extends Equatable {
       [sender, content, sources, isError, photoUrl, photoName, localImageBytes, navigateTo];
 }
 
+/// One saved chat session in `GET /api/ai/conversations/` (signed-in only).
+class AiConversationSummary extends Equatable {
+  const AiConversationSummary({
+    required this.id,
+    required this.title,
+    required this.messageCount,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String title;
+  final int messageCount;
+  final DateTime? updatedAt;
+
+  factory AiConversationSummary.fromJson(Map<String, dynamic> json) {
+    final title = (json['title'] ?? '').toString().trim();
+    return AiConversationSummary(
+      id: json['id']?.toString() ?? '',
+      title: title.isEmpty ? 'Home Services Chat' : title,
+      messageCount: int.tryParse('${json['message_count'] ?? 0}') ?? 0,
+      updatedAt: DateTime.tryParse('${json['updated_at'] ?? ''}')?.toLocal(),
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, title, messageCount, updatedAt];
+}
+
 /// The parsed `data` object from `POST /api/ai/chat/`.
 class AiChatReply {
   const AiChatReply({

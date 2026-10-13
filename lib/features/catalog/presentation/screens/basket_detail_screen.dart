@@ -8,6 +8,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../booking/domain/cart_notifier.dart';
+import '../../data/basket_cart.dart';
 import '../../data/basket_models.dart';
 import '../../data/marketplace_catalog_repository.dart';
 
@@ -76,23 +77,8 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
   }
 
   void _addToCart(MarketplaceBasket basket) {
-    final cart = ref.read(cartProvider.notifier);
-    var addedCount = 0;
-
-    for (final slot in basket.slots) {
-      final item = _selectedOption(slot)?.toServiceItem();
-      if (item != null) {
-        cart.addService(item, quantity: slot.quantity);
-        addedCount++;
-      }
-    }
-    for (final basketItem in basket.items) {
-      final item = basketItem.toServiceItem();
-      if (item != null) {
-        cart.addService(item, quantity: basketItem.quantity);
-        addedCount++;
-      }
-    }
+    final addedCount =
+        addComboToCart(ref.read(cartProvider.notifier), basket, _selectedOption);
 
     if (!mounted) return;
     if (addedCount > 0) {
@@ -261,6 +247,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                       basket: basket,
                       itemCount: itemCount,
                       selectedKeyOf: (slot) => slot.id != null ? _selections[slot.id] : null,
+                      selectedOptionOf: _selectedOption,
                       onSelect: (index, slot, key) => setState(() {
                         if (slot.id != null) _selections[slot.id!] = key;
                         _focusPage = index + (basket.primaryImage.isNotEmpty ? 1 : 0);
@@ -643,12 +630,14 @@ class _WhatsInside extends StatelessWidget {
     required this.basket,
     required this.itemCount,
     required this.selectedKeyOf,
+    required this.selectedOptionOf,
     required this.onSelect,
   });
 
   final MarketplaceBasket basket;
   final int itemCount;
   final int? Function(BasketSlot slot) selectedKeyOf;
+  final BasketSlotOption? Function(BasketSlot slot) selectedOptionOf;
   final void Function(int index, BasketSlot slot, int key) onSelect;
 
   @override
@@ -700,10 +689,54 @@ class _WhatsInside extends StatelessWidget {
               selectedKey: selectedKeyOf(visibleSlots[i]),
               onSelect: (key) => onSelect(i, visibleSlots[i], key),
             ),
-          for (final item in basket.items) _FixedItemCard(item: item),
+          // The confirmed list: what the customer has actually picked for each
+          // slot (it changes as they choose), plus any extra fixed product.
+          ..._confirmedItems(visibleSlots),
         ],
       ),
     );
+  }
+
+  List<Widget> _confirmedItems(List<BasketSlot> visibleSlots) {
+    final items = <BasketItem>[];
+    final slotDefaultTitles = <String>{};
+    for (final slot in basket.slots) {
+      final d = slot.defaultOption?.title;
+      if (d != null) slotDefaultTitles.add(d);
+      final o = selectedOptionOf(slot);
+      if (o == null) continue;
+      items.add(BasketItem(
+        productId: o.productId ?? o.id,
+        productTitle: o.title,
+        quantity: slot.quantity,
+        unit: o.unit,
+        packSize: o.packSize,
+        mrp: o.mrp,
+        unitPrice: o.sellingPrice,
+        primaryImage: o.coverImage,
+      ));
+    }
+    for (final fixed in basket.items) {
+      if (!slotDefaultTitles.contains(fixed.productTitle)) items.add(fixed);
+    }
+    if (items.isEmpty) return const [];
+    return [
+      const SizedBox(height: 6),
+      Row(
+        children: [
+          const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.groceryGreen),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Your combo \u00b7 ${items.length} ${items.length == 1 ? 'item' : 'items'} confirmed',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      for (final item in items) _FixedItemCard(item: item),
+    ];
   }
 }
 

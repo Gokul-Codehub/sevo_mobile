@@ -164,7 +164,10 @@ class TrackingUpdate extends Equatable {
     final techLng = _asDouble(techLoc['longitude'] ?? tech['longitude']);
 
     return TrackingUpdate(
-      status: (json['status'] ?? 'new_request').toString(),
+      // No status in the payload => '' (the screen then falls back to the
+      // booking's own status) rather than a fake 'new_request', which pushed a
+      // completed booking's tracker back to the first step.
+      status: (json['status'] ?? '').toString(),
       freshness: (json['freshness'] ?? '').toString(),
       isAccepted: json['is_accepted'] == true || json['technician_accepted'] == true,
       technicianAssigned: json['technician_assigned'] == true || tech.isNotEmpty,
@@ -193,7 +196,7 @@ class TrackingUpdate extends Equatable {
   }
 
   factory TrackingUpdate.initial([String? name]) => TrackingUpdate(
-        status: 'new_request',
+        status: '',
         freshness: '',
         isAccepted: false,
         technicianAssigned: false,

@@ -15,6 +15,7 @@ import '../../../addresses/domain/address_notifier.dart';
 import '../../../auth/domain/auth_notifier.dart';
 import '../../../logistics/domain/logistics_models.dart';
 import '../../../home/domain/home_flow_mode.dart';
+import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
@@ -59,6 +60,22 @@ class GroceryCartScreen extends ConsumerStatefulWidget {
 }
 
 class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
+  /// The cart as the list shows it: loose products one by one, and each combo's
+  /// products collapsed into ONE entry (at the position of its first product).
+  static List<({int? index, String? comboKey})> _cartEntries(List<CartItem> items) {
+    final out = <({int? index, String? comboKey})>[];
+    final seen = <String>{};
+    for (var i = 0; i < items.length; i++) {
+      final key = items[i].comboKey;
+      if (key == null) {
+        out.add((index: i, comboKey: null));
+      } else if (seen.add(key)) {
+        out.add((index: null, comboKey: key));
+      }
+    }
+    return out;
+  }
+
   Address? _selectedAddress;
   bool _isSubmitting = false;
   String? _errorMessage;
@@ -582,11 +599,17 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(14),
-                    itemCount: cartItems.length,
+                    itemCount: _cartEntries(cartItems).length,
                     separatorBuilder: (context, index) =>
                         const Divider(height: 20, color: AppColors.border),
                     itemBuilder: (context, index) {
-                      final item = cartItems[index];
+                      final entry = _cartEntries(cartItems)[index];
+                      if (entry.comboKey != null) {
+                        return _ComboCartGroup(
+                          members: cartItems.where((c) => c.comboKey == entry.comboKey).toList(),
+                        );
+                      }
+                      final item = cartItems[entry.index!];
                       final effectivePrice = item.service.effectivePrice;
                       final mrp = item.service.mrp;
 
@@ -2200,6 +2223,189 @@ class _GroceryPaymentMethodOption extends StatelessWidget {
               const Icon(Icons.check_circle, size: 16, color: const Color(0xFF059669)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One combo offer in the cart: its name, then the products it contains, with a
+/// stepper for the whole combo and its total. (The order is still placed per
+/// product — each at its own price.)
+class _ComboCartGroup extends ConsumerWidget {
+  const _ComboCartGroup({required this.members});
+
+  final List<CartItem> members;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (members.isEmpty) return const SizedBox.shrink();
+    final first = members.first;
+    final cart = ref.read(cartProvider.notifier);
+    final count = (first.quantity / first.comboUnitQty).round().clamp(1, 99);
+    final total = members.fold<Decimal>(Decimal.zero, (sum, m) => sum + m.totalPrice);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.groceryGreenLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.groceryGreenTint),
+      ),
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: const Icon(Icons.redeem_rounded, size: 19, color: AppColors.groceryGreenDark),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      first.comboTitle ?? 'Combo offer',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.navy),
+                    ),
+                    Text(
+                      'Combo \u00b7 ${members.length} ${members.length == 1 ? 'item' : 'items'}',
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove combo',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.textSecondary),
+                onPressed: () => cart.removeCombo(first.comboKey!),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Column(
+              children: [
+                for (var i = 0; i < members.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, color: AppColors.border),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceVariant,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: AppRemoteImage(
+                            imageUrl: members[i].service.imageUrl,
+                            rawPath: members[i].service.imageUrl,
+                            title: members[i].service.title,
+                            categoryName: members[i].service.categorySlug,
+                            slug: members[i].service.categorySlug,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                members[i].service.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary),
+                              ),
+                              Text(
+                                [
+                                  if ((members[i].service.unit ?? '').trim().isNotEmpty)
+                                    members[i].service.unit!.trim(),
+                                  '\u00d7 ${members[i].quantity}',
+                                ].join(' \u00b7 '),
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '\u20b9${members[i].totalPrice}',
+                          style: const TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () => cart.setComboCount(first.comboKey!, count - 1),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.remove, size: 18, color: AppColors.groceryGreenDark),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 26,
+                      child: Text('$count',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                    ),
+                    InkWell(
+                      onTap: () => cart.setComboCount(first.comboKey!, count + 1),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.add, size: 18, color: AppColors.groceryGreenDark),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              const Text('Combo total  ',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              Text(
+                '\u20b9$total',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

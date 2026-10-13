@@ -118,10 +118,11 @@ class AuthNotifier extends Notifier<AuthState> {
   /// routes through that phone-agnostic endpoint instead, so entering a
   /// name here actually sticks instead of silently failing and leaving the
   /// screen showing the auto-generated `cust_...` username.
-  Future<String?> completeProfile({required String name, String? email}) async {
+  Future<String?> completeProfile({required String name, String? email, String? phone}) async {
     final result = await _repo.updateProfile(
       name: name,
       email: email,
+      phone: phone,
     );
     switch (result) {
       case Success(:final data):

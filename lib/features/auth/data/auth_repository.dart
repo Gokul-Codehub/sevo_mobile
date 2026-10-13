@@ -171,6 +171,7 @@ class AuthRepository {
   Future<Result<UserProfile>> updateProfile({
     required String name,
     String? email,
+    String? phone,
   }) async {
     try {
       final parts = name.trim().split(RegExp(r'\s+'));
@@ -183,6 +184,7 @@ class AuthRepository {
           'first_name': firstName,
           'last_name': lastName,
           if (email != null && email.isNotEmpty) 'email': email,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
         },
       );
       final result = ResponseNormalizer.extract(

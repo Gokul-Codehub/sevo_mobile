@@ -118,6 +118,10 @@ abstract final class AppRoutes {
 // in-app navigation keeps using its own local `context`.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// Navigator inside the bottom-nav shell: sheets shown on it (e.g. Ask Apta)
+/// open above the page but leave the bottom navigator visible.
+final shellNavigatorKey = GlobalKey<NavigatorState>();
+
 // ── Router provider ─────────────────────────────────────────────────────────
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -158,6 +162,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // pre-auth flow (splash/onboarding/login) and tokenized deep links
       // that can be opened without ever seeing app chrome stay outside it.
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(

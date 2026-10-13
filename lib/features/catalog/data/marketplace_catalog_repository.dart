@@ -333,6 +333,14 @@ class MarketplaceProduct {
       categorySlug: 'seller_hub_groceries',
       imageUrl: primaryImage,
       galleryImages: galleryImages,
+      variantOptions: hasSelectableVariants
+          ? [
+              for (final v in variants)
+                // Sibling payloads are sparser: borrow the category context and
+                // photo from this product when they lack their own.
+                v.toServiceItem()._withFallback(categoryName: categoryName, imageUrl: primaryImage),
+            ]
+          : const [],
       inStock: inStock,
       maxQuantity: availableStock > 0 ? availableStock.floor().clamp(1, 99) : 0,
       description: _combinedDescription,
@@ -1055,3 +1063,29 @@ final marketplaceBasketDetailProvider =
       return null;
   }
 });
+
+extension _ServiceItemFallback on ServiceItem {
+  /// Same item, filling in a missing category name / photo from the product it
+  /// is a size of.
+  ServiceItem _withFallback({String? categoryName, String? imageUrl}) {
+    final hasImage = (this.imageUrl ?? '').isNotEmpty;
+    return ServiceItem(
+      id: id,
+      title: title,
+      slug: slug,
+      price: price,
+      discountedPrice: discountedPrice,
+      unit: unit,
+      rating: rating,
+      reviewCount: reviewCount,
+      categoryId: categoryId,
+      categoryName: this.categoryName ?? categoryName,
+      categorySlug: categorySlug,
+      imageUrl: hasImage ? this.imageUrl : imageUrl,
+      galleryImages: galleryImages,
+      inStock: inStock,
+      maxQuantity: maxQuantity,
+      description: description,
+    );
+  }
+}

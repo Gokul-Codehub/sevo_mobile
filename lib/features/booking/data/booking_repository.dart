@@ -227,6 +227,11 @@ class BookingRepository {
                       'price': i.unitPrice.toDouble(),
                       'quantity': i.quantity,
                       'categoryName': i.service.categoryName ?? '',
+                      if (i.service.selectedOption != null) ...{
+                        'package_id': i.service.id,
+                        'option_id': i.service.selectedOption!.id,
+                        'option_name': i.service.selectedOption!.name,
+                      },
                     })
                 .toList(),
       };

@@ -344,23 +344,35 @@ class ServiceCard extends ConsumerWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          OutlinedButton(
-                            onPressed: () => _handleAddToCart(context, ref),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.groceryGreen,
-                              side: const BorderSide(
-                                  color: AppColors.groceryGreen, width: 1.2),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 4),
-                              minimumSize: const Size(60, 32),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                          GestureDetector(
+                            onTap: () => _handleAddToCart(context, ref),
+                            child: Container(
+                              height: 32,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Color(0xFF2FA354), Color(0xFF14612F)],
+                                ),
+                                borderRadius: BorderRadius.circular(18),
                               ),
-                            ),
-                            child: const Text(
-                              'ADD',
-                              style: TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w700),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.shopping_cart_outlined,
+                                      size: 14, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Add',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -585,7 +597,7 @@ class ServiceCard extends ConsumerWidget {
                 // the backend already sends (CatalogServiceSerializer) —
                 // never shown for a service the admin hasn't actually
                 // marked popular.
-                if (service.isPopular)
+                if (service.badgeLabel != null)
                   Positioned(
                     left: 8,
                     top: 8,
@@ -595,14 +607,14 @@ class ServiceCard extends ConsumerWidget {
                         color: AppColors.primaryDark,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.local_fire_department_rounded, size: 12, color: Colors.white),
-                          SizedBox(width: 3),
+                          const Icon(Icons.star_rounded, size: 12, color: Colors.white),
+                          const SizedBox(width: 3),
                           Text(
-                            'Most Booked',
-                            style: TextStyle(
+                            service.badgeLabel!,
+                            style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
@@ -681,11 +693,11 @@ class ServiceCard extends ConsumerWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        if (service.shortDescription != null && service.shortDescription!.isNotEmpty) ...[
+        if (_cardBlurb(service) != null) ...[
           const SizedBox(height: 3),
           Text(
-            service.shortDescription!,
-            maxLines: 1,
+            _cardBlurb(service)!,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 11.5,
@@ -711,15 +723,24 @@ class ServiceCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
+                if (service.hasPackageOptions)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Text('From',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary)),
+                  ),
                 Text(
-                  '₹${service.effectivePrice}',
+                  '₹${service.hasPackageOptions ? service.startsAtPrice : service.effectivePrice}',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.navy,
                   ),
                 ),
-                if (service.hasDiscount) ...[
+                if (service.hasDiscount && !service.hasPackageOptions) ...[
                   const SizedBox(width: 6),
                   Text(
                     '₹${service.price}',
@@ -734,7 +755,7 @@ class ServiceCard extends ConsumerWidget {
                 // "X% OFF" pill computed from the real
                 // `ServiceItem.discountPercent` getter (price vs.
                 // discountedPrice) — never a hardcoded percentage.
-                if (service.discountPercent != null) ...[
+                if (service.discountPercent != null && !service.hasPackageOptions) ...[
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -769,8 +790,10 @@ class ServiceCard extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
-              child: const Text(
-                'View Details',
+              child: Text(
+                service.hasPackageOptions
+                    ? '${service.packageOptions.length} options'
+                    : 'View Details',
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
@@ -782,6 +805,17 @@ class ServiceCard extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// One-line summary under a package title: the short description when the
+/// backend sends one, otherwise the first lines of the admin's description
+/// (the list API only fills `description`).
+String? _cardBlurb(ServiceItem s) {
+  final short = s.shortDescription?.trim();
+  if (short != null && short.isNotEmpty) return short;
+  final d = s.description?.trim();
+  if (d == null || d.isEmpty) return null;
+  return d.replaceAll(RegExp(r'\s+'), ' ');
 }
 
 /// Small pill shown over a deactivated package's hero image — see the

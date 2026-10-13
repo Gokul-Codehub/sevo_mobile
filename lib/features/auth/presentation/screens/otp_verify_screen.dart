@@ -214,7 +214,10 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       );
     } else {
       final user = ref.read(currentUserProvider);
-      if (result.isNewUser || (user != null && !user.isProfileComplete)) {
+      // Email sign-ins must also give a mobile number (QA CME07 - same rule as
+      // the web app's sign-in flow), so they go through profile completion too.
+      if (result.isNewUser ||
+          (user != null && (!user.isProfileComplete || !user.hasMobileNumber))) {
         context.go(AppRoutes.profileComplete);
       } else {
         final pendingAction = ref.read(pendingActionProvider);

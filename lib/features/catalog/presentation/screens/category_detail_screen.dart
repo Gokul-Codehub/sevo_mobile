@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/listing_skeleton.dart';
@@ -13,6 +14,7 @@ import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
+import '../widgets/category_popup_sheet.dart';
 import '../widgets/product_card.dart';
 import '../widgets/service_card.dart';
 
@@ -286,6 +288,30 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
 class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   String? _selectedSubcategorySlug;
 
+  /// Set when the admin's category popup tile was chosen: the sub-service
+  /// rail then lists only that tile's services (web: `?group=<tile>`).
+  Set<String>? _popupGroupSlugs;
+  bool _popupShown = false;
+
+  /// Opens the category popup once (admin-enabled, e.g. Cleaning ->
+  /// Kitchen / Bathroom / Bedroom) unless the screen was opened for one
+  /// specific sub-service already.
+  void _maybeShowCategoryPopup(Category? category) {
+    if (_popupShown || category == null) return;
+    if (category.popupTiles.isEmpty || widget.initialSubcategorySlug != null) return;
+    _popupShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final tile = await showCategoryPopupSheet(context, category);
+      if (tile == null || !mounted) return;
+      setState(() {
+        _popupGroupSlugs = tile.serviceSlugs.isEmpty ? null : tile.serviceSlugs.toSet();
+        _selectedSubcategorySlug =
+            tile.serviceSlugs.isEmpty ? null : tile.serviceSlugs.first;
+      });
+    });
+  }
+
   // Fixed 2026-10-08 (QA CMP02/CMP03/CMP06 — "the page should automatically
   // refresh/update the latest data without requiring the user to manually
   // reload" / an admin-deleted package or service still showing): every
@@ -413,110 +439,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     // now impossible for any downstream widget in this bar to ever see
     // an infinite/unbounded width, regardless of what odd constraints the
     // host passes in.
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        width: screenWidth,
-        child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 96),
-        child: Container(
-      width: screenWidth,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F766E).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '$itemCount ${itemCount == 1 ? "ITEM" : "ITEMS"}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F766E),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '₹$subtotal',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Continue adding or go to cart',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // The real, confirmed bug (from the crash log, every single
-          // time): FilledButton.icon internally builds a _RenderInputPadding
-          // to enforce its minimum tap-target size, and that widget's own
-          // constraint math produces an invalid TIGHT-infinite width
-          // (min==max==Infinity, not just an unbounded max) whenever it's
-          // given an unbounded width to work with — which is exactly what
-          // a Row always hands a non-Expanded child for its main axis, in
-          // every Flutter app, by design. No amount of forcing a bounded
-          // width on this button's ancestors could fix that (a Row still
-          // hands its own non-flex children unbounded width regardless of
-          // the Row's own width) — the fix has to stop this specific
-          // button from ever seeing that unbounded constraint at all.
-          // IntrinsicWidth measures the child's natural width first and
-          // then lays it out with that concrete, finite number, so
-          // _RenderInputPadding never receives an unbounded constraint in
-          // the first place.
-          IntrinsicWidth(
-            child: FilledButton.icon(
-              onPressed: () => context.go('/cart'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              ),
-              icon: const Icon(Icons.shopping_cart_checkout, size: 16),
-              label: const Text('Go to Cart', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-            ),
-          ),
-        ],
-      ),
-        ),
-      ),
-      ),
-    );
+    return CartPillBar(itemCount: itemCount, subtotal: subtotal.toString());
   }
 
   /// Service categories: the subcategories (e.g. Washing Machine, Fridge) as a
@@ -529,6 +452,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     List<Subcategory> subs,
     Widget body,
   ) {
+    final group = _popupGroupSlugs;
+    if (group != null) {
+      subs = subs.where((s) => group.contains(s.slug)).toList();
+    }
     if (isGrocery || subs.isEmpty) return body;
     const blue = AppColors.serviceBlue;
     return Row(
@@ -547,7 +474,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 accentLight: AppColors.serviceBlueLight,
                 accentDark: AppColors.serviceBlueDark,
                 selected: _selectedSubcategorySlug == null,
-                onTap: () => setState(() => _selectedSubcategorySlug = null),
+                onTap: () => setState(() {
+                  _selectedSubcategorySlug = null;
+                  _popupGroupSlugs = null;
+                }),
               ),
               for (final sub in subs)
                 _VerticalDepartmentTile(
@@ -593,6 +523,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         }).firstOrNull;
 
     _maybeRedirectToLogistics(currentCategory);
+    _maybeShowCategoryPopup(currentCategory);
     if (currentCategory?.flowType == CatalogFlowType.logistics) {
       // Redirect scheduled above for after this frame — show a plain
       // loading state in the meantime rather than flashing the normal

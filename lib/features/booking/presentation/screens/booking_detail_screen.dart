@@ -796,12 +796,23 @@ class _TimelineTracker extends StatelessWidget {
       'pending_payment' ||
       'waiting_for_payment' ||
       'rescheduled' ||
+      'requested' ||
       'unassigned' =>
         0,
-      'confirmed' || 'reviewed' => 1,
-      'assigned' || 'received' || 'accepted' => 2,
-      'on_the_way' || 'arrived' => 3,
+      'confirmed' || 'reviewed' || 'vendor_confirmed' => 1,
+      'assigned' || 'received' || 'accepted' || 'technician_assigned' => 2,
+      'on_the_way' ||
+      'arrived' ||
+      'technician_on_the_way' ||
+      'technician_arrived' =>
+        3,
       'in_progress' ||
+      'proof_submitted' ||
+      'inspection_in_progress' ||
+      'inspection_completed' ||
+      'quotation_sent' ||
+      'customer_approved' ||
+      'unable_to_complete' ||
       'awaiting_verification' ||
       'verified' ||
       'feedback_pending' ||
@@ -809,7 +820,7 @@ class _TimelineTracker extends StatelessWidget {
       'rework_requested' ||
       'follow_up_required' =>
         4,
-      'completed' || 'closed' => 5,
+      'completed' || 'closed' || 'estimation_closed' || 'customer_rejected' => 5,
       'cancelled' || 'refund_requested' || 'rejected' => -1,
       _ => 0,
     };

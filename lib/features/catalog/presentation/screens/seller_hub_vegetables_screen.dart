@@ -1,9 +1,9 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/booking_models.dart';
@@ -236,49 +236,7 @@ class _SellerHubVegetablesScreenState extends ConsumerState<SellerHubVegetablesS
     }
     if (itemCount == 0) return null;
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        width: screenWidth,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 80),
-          child: Container(
-            width: screenWidth,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2)),
-              ],
-            ),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '$itemCount ${itemCount == 1 ? "item" : "items"} · ₹$subtotal',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IntrinsicWidth(
-                  child: FilledButton.icon(
-                    onPressed: () => context.go('/cart'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF059669),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                    icon: const Icon(Icons.shopping_cart_checkout, size: 16),
-                    label: const Text('Go to Cart', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    return CartPillBar(itemCount: itemCount, subtotal: subtotal.toString());
   }
 }
 
