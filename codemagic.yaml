@@ -15,6 +15,6 @@ workflows:
       - name: Build Unsigned iOS App
         script: |
           find . -name "Podfile" -execdir pod install \;
-          flutter build ios --debug --no-codesign
+          flutter build ios --simulator --debug
     artifacts:
-      - build/ios/iphoneos/*.app
+      - build/ios/iphonesimulator/*.app
