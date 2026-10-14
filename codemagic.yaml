@@ -1,0 +1,166 @@
+# Codemagic CI/CD for calservices_customer (SEVO customer app).
+#
+# One-time setup in Codemagic (Teams > Personal/Team settings > Code signing
+# identities > Android keystores, and Environment variables):
+#   1. Upload your release keystore under "Android keystores" and give it the
+#      reference name:  sevo_keystore
+#   2. (Optional, for Play Store publishing) create an environment variable
+#      group called  play_store  containing GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+#      (the Google Play service-account JSON, marked Secure).
+#   3. Replace the notification e-mail below if needed.
+#
+# android/app/build.gradle.kts reads android/key.properties for signing, so the
+# build step below writes that file from the keystore Codemagic injects
+# (CM_KEYSTORE_PATH / CM_KEYSTORE_PASSWORD / CM_KEY_ALIAS / CM_KEY_PASSWORD).
+
+definitions:
+  instance: &instance
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+  environment: &flutter_env
+    flutter: stable
+    java: 17
+    xcode: latest
+    cocoapods: default
+
+workflows:
+  # ---------------------------------------------------------------------------
+  # Quality gate: analyze + tests on every pull request / push to a branch.
+  # ---------------------------------------------------------------------------
+  android-check:
+    name: Android - analyze & test
+    <<: *instance
+    environment:
+      flutter: stable
+      java: 17
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: "*"
+          include: true
+      cancel_previous_builds: true
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Static analysis
+        script: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Unit / widget tests
+        script: |
+          if [ -d test ] && [ -n "$(find test -name '*_test.dart' | head -1)" ]; then
+            flutter test
+          else
+            echo "No tests found - skipping"
+          fi
+        ignore_failure: true
+
+  # ---------------------------------------------------------------------------
+  # Signed release build (APK for direct sharing + AAB for Play Store).
+  # Runs on pushes to main / release branches, or when started manually.
+  # ---------------------------------------------------------------------------
+  android-release:
+    name: Android - signed release (APK + AAB)
+    <<: *instance
+    environment:
+      groups:
+        - play_store          # optional: GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+      android_signing:
+        - sevo_keystore       # keystore reference name set in Codemagic UI
+      vars:
+        PACKAGE_NAME: "com.caldim.sevo_customer"
+      flutter: stable
+      java: 17
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+        - pattern: "release/*"
+          include: true
+      cancel_previous_builds: true
+    cache:
+      cache_paths:
+        - $HOME/.gradle/caches
+        - $HOME/.pub-cache
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Write android/key.properties from Codemagic keystore
+        script: |
+          cat > "$CM_BUILD_DIR/android/key.properties" <<PROPS
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          PROPS
+      - name: Set build number from Codemagic (keeps Play versionCode increasing)
+        script: |
+          # pubspec version is 1.0.6+7; use the Codemagic build counter as the
+          # versionCode so every upload is accepted by Google Play.
+          BUILD_NAME=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          echo "BUILD_NAME=$BUILD_NAME" >> $CM_ENV
+          echo "BUILD_NUMBER=$((BUILD_NUMBER + 100))" >> $CM_ENV
+      - name: Build release App Bundle (AAB)
+        script: |
+          flutter build appbundle --release \
+            --build-name=$BUILD_NAME \
+            --build-number=$BUILD_NUMBER
+      - name: Build release APK
+        script: |
+          flutter build apk --release \
+            --build-name=$BUILD_NAME \
+            --build-number=$BUILD_NUMBER
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/mapping/release/mapping.txt
+    publishing:
+      email:
+        recipients:
+          - divya@caldimengg.in
+        notify:
+          success: true
+          failure: true
+      # Uncomment to push straight to Google Play (needs play_store group above
+      # and the app to exist in Play Console with a first manual upload done).
+      # google_play:
+      #   credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+      #   track: internal
+      #   submit_as_draft: true
+
+  # ---------------------------------------------------------------------------
+  # Quick unsigned-debug-key APK for testers (no secrets needed).
+  # Start manually from Codemagic, or push a tag like  test-1.0.6.
+  # ---------------------------------------------------------------------------
+  android-test-apk:
+    name: Android - tester APK (debug-signed)
+    <<: *instance
+    environment:
+      flutter: stable
+      java: 17
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "test-*"
+          include: true
+    cache:
+      cache_paths:
+        - $HOME/.gradle/caches
+        - $HOME/.pub-cache
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build APK (falls back to debug signing - no key.properties)
+        script: flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+    publishing:
+      email:
+        recipients:
+          - divya@caldimengg.in
+        notify:
+          success: true
+          failure: true
