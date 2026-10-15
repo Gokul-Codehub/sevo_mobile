@@ -12,6 +12,7 @@ import '../../../../shared/widgets/slow_load_gate.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// Service Details screen.
 ///
@@ -139,6 +140,19 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
           )))
         : null;
 
+    // Service / package pages use the redesigned layout (2026-10-14);
+    // grocery items keep the original one below.
+    if (!isGrocery) {
+      return _buildServiceScaffold(
+        context,
+        baseService: baseService,
+        service: service,
+        awaitingOption: awaitingOption,
+        shownPrice: shownPrice,
+        relatedAsync: relatedAsync,
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
@@ -159,7 +173,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                 child: const Icon(Icons.arrow_back_rounded,
                     color: Colors.white, size: 20),
               ),
-              onPressed: () => context.pop(),
+              onPressed: () => context.goBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: _buildHeroImageOrIcon(service),
@@ -197,7 +211,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                   Text(
                     baseService.title,
                     style: const TextStyle(
-                      fontSize: 22,
+                      fontSize: 19.5,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                       letterSpacing: -0.3,
@@ -249,7 +263,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                             Text(
                               service.rating.toStringAsFixed(1),
                               style: const TextStyle(
-                                fontSize: 13,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: Color(0xFF92400E),
                               ),
@@ -262,7 +276,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         Text(
                           '(${service.reviewCount} reviews)',
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                           ),
                         ),
@@ -271,7 +285,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         const SizedBox(width: 12),
                         const Text('•',
                             style: TextStyle(
-                                color: AppColors.textHint, fontSize: 14)),
+                                color: AppColors.textHint, fontSize: 13)),
                         const SizedBox(width: 12),
                         const Icon(Icons.schedule_rounded,
                             size: 15, color: AppColors.textSecondary),
@@ -279,7 +293,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         Text(
                           '${service.durationMinutes} mins',
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
@@ -298,7 +312,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     Text(
                       service.description!.trim(),
                       style: const TextStyle(
-                        fontSize: 13.5,
+                        fontSize: 12.5,
                         color: AppColors.textSecondary,
                         height: 1.45,
                       ),
@@ -336,14 +350,14 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                 padding: EdgeInsets.only(right: 6),
                                 child: Text('From',
                                     style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.textSecondary)),
                               ),
                             Text(
                               '₹$shownPrice',
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 21,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.navy,
                               ),
@@ -353,7 +367,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                               Text(
                                 '₹${service.price}',
                                 style: const TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   color: AppColors.textHint,
                                   decoration: TextDecoration.lineThrough,
                                 ),
@@ -476,7 +490,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                 const Text(
                                   'What you need to get ready',
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF92400E),
                                   ),
@@ -506,7 +520,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                           child: Text(
                                             item,
                                             style: const TextStyle(
-                                              fontSize: 12.5,
+                                              fontSize: 12,
                                               color: AppColors.textPrimary,
                                               height: 1.4,
                                             ),
@@ -555,7 +569,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                               Text(
                                 'Tools & products we use',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.navy,
                                 ),
@@ -579,7 +593,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                     child: Text(
                                       tool,
                                       style: const TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11.5,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.textPrimary,
                                       ),
@@ -598,7 +612,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                   const Text(
                     'How it works',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -671,7 +685,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       Text(
                         service.displayUnit,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary,
                         ),
@@ -679,7 +693,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       Text(
                         '₹${service.effectivePrice}',
                         style: const TextStyle(
-                          fontSize: 22,
+                          fontSize: 19.5,
                           fontWeight: FontWeight.w900,
                           color: AppColors.navy,
                         ),
@@ -713,7 +727,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           child: const Text(
                             'Unavailable',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -741,7 +755,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           child: const Text(
                             'Add to Cart',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -769,7 +783,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       Text(
                         awaitingOption ? 'From ₹$shownPrice' : '₹$shownPrice',
                         style: const TextStyle(
-                          fontSize: 22,
+                          fontSize: 19.5,
                           fontWeight: FontWeight.w900,
                           color: AppColors.navy,
                         ),
@@ -817,7 +831,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                               ? 'Unavailable'
                               : (awaitingOption ? 'Select an option' : 'Book Now'),
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -827,6 +841,835 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                 ],
               ),
       ),
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Redesigned service / package detail layout (2026-10-14, per the UI
+  // requirement image): rounded curved hero with back + discount pill +
+  // duration pill, floating title card, price card, What's Included,
+  // How it works (connected steps) and a floating Book Now bar.
+  // Services never use the shared cart, so there is no qty stepper / "Add".
+  // ───────────────────────────────────────────────────────────────────────
+  static const Color _pageBg = Color(0xFFF8F4EF);
+  static const Color _okGreen = AppColors.navy;
+  static const Color _mint = Color(0xFFE8EDF7);
+  static const Color _mintText = Color(0xFF1E3A8A);
+
+  Widget _modernCard({required Widget child, EdgeInsets? padding}) {
+    return Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _discountPill(int percent, {double fontSize = 12}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: fontSize > 13 ? 8 : 4),
+      decoration: BoxDecoration(
+        color: _mint,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '$percent% OFF',
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w800,
+          color: _mintText,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServiceScaffold(
+    BuildContext context, {
+    required ServiceItem baseService,
+    required ServiceItem service,
+    required bool awaitingOption,
+    required Object? shownPrice,
+    required AsyncValue<List<ServiceItem>>? relatedAsync,
+  }) {
+    final topPad = MediaQuery.of(context).padding.top;
+    final showDiscount = service.hasDiscount &&
+        !awaitingOption &&
+        service.discountPercent != null;
+    final discountPercent = service.discountPercent ?? 0;
+
+    final inclusions = service.inclusions.isNotEmpty
+        ? service.inclusions
+        : const [
+            'Complete system diagnostic check',
+            'Essential cleaning and sealing solutions',
+            'Repair/replacement as needed',
+            '30-Day service repair warranty',
+          ];
+
+    return Scaffold(
+      backgroundColor: _pageBg,
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // ── Hero ──
+          Padding(
+            padding: EdgeInsets.fromLTRB(12, topPad + 8, 12, 0),
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+              child: ClipPath(
+                clipper: _HeroCurveClipper(),
+                child: SizedBox(
+                  height: 300,
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildHeroImageOrIcon(service),
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: GestureDetector(
+                          onTap: () => context.goBack(),
+                          child: Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.arrow_back_rounded,
+                                color: AppColors.navy, size: 24),
+                          ),
+                        ),
+                      ),
+                      if (showDiscount)
+                        Positioned(
+                          top: 16,
+                          right: 16,
+                          child: _discountPill(discountPercent, fontSize: 14),
+                        ),
+                      if (service.durationMinutes > 0)
+                        Positioned(
+                          left: 16,
+                          bottom: 40,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${service.durationMinutes} mins',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 110),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Title card ──
+                _modernCard(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              baseService.title,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.navy,
+                                height: 1.15,
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                            if (baseService.badgeLabel != null &&
+                                baseService.badgeLabel!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.navy,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.star_rounded,
+                                        size: 13, color: Colors.white),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      baseService.badgeLabel!,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                const Icon(Icons.star_rounded,
+                                    size: 22, color: AppColors.star),
+                                const SizedBox(width: 4),
+                                Text(
+                                  service.rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.navy,
+                                  ),
+                                ),
+                                if (service.reviewCount > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '(${service.reviewCount})',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                                if (service.durationMinutes > 0) ...[
+                                  const SizedBox(width: 12),
+                                  Container(
+                                      width: 1,
+                                      height: 16,
+                                      color: AppColors.border),
+                                  const SizedBox(width: 12),
+                                  const Icon(Icons.schedule_rounded,
+                                      size: 19,
+                                      color: AppColors.textSecondary),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    '${service.durationMinutes} mins',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (service.description != null &&
+                                service.description!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                service.description!.trim(),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () {
+                          Share.share(
+                            'Check out ${service.title} on CalServices: https://sevo.co.in/services/${service.slug}',
+                          );
+                        },
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: const BoxDecoration(
+                            color: _pageBg,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.share_outlined,
+                              size: 18, color: AppColors.navy),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Package options (only for packages that have them) ──
+                if (service.hasPackageOptions) ...[
+                  const SizedBox(height: 12),
+                  _modernCard(
+                    child: _PackageOptionPicker(
+                      options: service.packageOptions,
+                      selectedId: _chosenOptionId,
+                      onSelect: (o) => setState(() => _chosenOptionId = o.id),
+                    ),
+                  ),
+                ],
+
+                // ── Price card ──
+                const SizedBox(height: 12),
+                _modernCard(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  if (awaitingOption)
+                                    const Padding(
+                                      padding: EdgeInsets.only(right: 6),
+                                      child: Text('From',
+                                          style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.textSecondary)),
+                                    ),
+                                  Text(
+                                    '₹$shownPrice',
+                                    style: const TextStyle(
+                                      fontSize: 30,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.navy,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  if (service.hasDiscount &&
+                                      !awaitingOption) ...[
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      '₹${service.price}',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        color: AppColors.textHint,
+                                        decoration: TextDecoration.lineThrough,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (showDiscount) ...[
+                              const SizedBox(height: 6),
+                              _discountPill(discountPercent, fontSize: 13),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _mint,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Fixed Upfront\nPrice',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.25,
+                            fontWeight: FontWeight.w700,
+                            color: _mintText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── What's Included ──
+                const SizedBox(height: 12),
+                _modernCard(
+                  child: _ModernChecklist(
+                    title: "What's Included",
+                    items: inclusions,
+                    included: true,
+                  ),
+                ),
+                if (service.exclusions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _modernCard(
+                    child: _ModernChecklist(
+                      title: "What's Excluded",
+                      items: service.exclusions,
+                      included: false,
+                    ),
+                  ),
+                ],
+
+                // ── What you need to get ready ──
+                if (service.readyInstructions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                          color: const Color(0xFFFDE68A), width: 0.8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'What you need to get ready',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        ...service.readyInstructions.map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 6),
+                                  child: Icon(Icons.circle,
+                                      size: 5, color: Color(0xFF92400E)),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    item,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textPrimary,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // ── Tools & products we use ──
+                if (service.tools.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _modernCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Tools & products we use',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: service.tools
+                              .map(
+                                (tool) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: _pageBg,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    tool,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // ── How it works ──
+                const SizedBox(height: 12),
+                _modernCard(
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'How it works',
+                        style: TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.navy,
+                        ),
+                      ),
+                      SizedBox(height: 14),
+                      _ModernStep(
+                        number: '1',
+                        title: 'Select Slot & Address',
+                        subtitle: 'Choose your preferred date and time.',
+                      ),
+                      _ModernStep(
+                        number: '2',
+                        title: 'Expert Arrives',
+                        subtitle:
+                            'Verified professional comes to your location.',
+                      ),
+                      _ModernStep(
+                        number: '3',
+                        title: 'Service Completed',
+                        subtitle: 'Issue fixed with quality check.',
+                        isLast: true,
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (relatedAsync != null) ...[
+                  const SizedBox(height: 20),
+                  _RelatedItemsStrip(
+                    relatedAsync: relatedAsync,
+                    excludeId: service.id,
+                    title: 'Related Services',
+                    accent: AppColors.navy,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+
+      // ── Floating bottom bar ──
+      bottomNavigationBar: Container(
+        color: Colors.transparent,
+        padding: EdgeInsets.fromLTRB(
+            12, 6, 12, 12 + MediaQuery.of(context).padding.bottom * 0.5),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+                blurRadius: 22,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 150),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!showDiscount)
+                      const Text(
+                        'Total Price',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            awaitingOption
+                                ? 'From ₹$shownPrice'
+                                : '₹$shownPrice',
+                            style: const TextStyle(
+                              fontSize: 23,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                          if (service.hasDiscount && !awaitingOption) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '₹${service.price}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textHint,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (showDiscount) ...[
+                      const SizedBox(height: 3),
+                      _discountPill(discountPercent, fontSize: 11.5),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: service.isAvailable && !awaitingOption
+                        ? () {
+                            context.push(
+                              '/checkout?service=${service.slug}',
+                              extra: service,
+                            );
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.navy,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor:
+                          AppColors.textSecondary.withValues(alpha: 0.35),
+                      disabledForegroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      !service.isAvailable
+                          ? 'Unavailable'
+                          : (awaitingOption ? 'Select an option' : 'Book Now'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Hero image clip: the bottom edge curves up toward the right, like the UI
+/// requirement image.
+class _HeroCurveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final w = size.width;
+    final h = size.height;
+    return Path()
+      ..moveTo(0, 0)
+      ..lineTo(w, 0)
+      ..lineTo(w, h - 56)
+      ..quadraticBezierTo(w * 0.62, h + 6, w * 0.28, h - 4)
+      ..quadraticBezierTo(w * 0.1, h - 8, 0, h - 28)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+/// Card section with a title and green-tick (or red-cross) rows.
+class _ModernChecklist extends StatelessWidget {
+  const _ModernChecklist({
+    required this.title,
+    required this.items,
+    required this.included,
+  });
+
+  final String title;
+  final List<String> items;
+  final bool included;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16.5,
+            fontWeight: FontWeight.w900,
+            color: AppColors.navy,
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final item in items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 11),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  included ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                  size: 24,
+                  color: included
+                      ? _ServiceDetailScreenState._okGreen
+                      : AppColors.error,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// "How it works" step with a mint number disc and a dashed connector.
+class _ModernStep extends StatelessWidget {
+  const _ModernStep({
+    required this.number,
+    required this.title,
+    required this.subtitle,
+    this.isLast = false,
+  });
+
+  final String number;
+  final String title;
+  final String subtitle;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: _ServiceDetailScreenState._mint,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  number,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: _ServiceDetailScreenState._okGreen,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (!isLast)
+          Padding(
+            padding: const EdgeInsets.only(left: 19, top: 3, bottom: 3),
+            child: Column(
+              children: List.generate(
+                3,
+                (_) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 1.5),
+                  child: Container(
+                    width: 1.5,
+                    height: 3,
+                    color: AppColors.border,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -852,7 +1695,7 @@ class _PackageOptionPicker extends StatelessWidget {
       children: [
         const Text(
           'Choose an option',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
         ),
         const SizedBox(height: 10),
         for (final o in options)
@@ -864,10 +1707,10 @@ class _PackageOptionPicker extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: o.id == selectedId ? AppColors.serviceBlueLight : Colors.white,
+                  color: o.id == selectedId ? Color(0xFFE8EDF7) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: o.id == selectedId ? AppColors.serviceBlue : AppColors.border,
+                    color: o.id == selectedId ? AppColors.navy : AppColors.border,
                     width: o.id == selectedId ? 1.5 : 1,
                   ),
                 ),
@@ -877,7 +1720,7 @@ class _PackageOptionPicker extends StatelessWidget {
                       o.id == selectedId
                           ? Icons.radio_button_checked_rounded
                           : Icons.radio_button_off_rounded,
-                      color: o.id == selectedId ? AppColors.serviceBlue : AppColors.textHint,
+                      color: o.id == selectedId ? AppColors.navy : AppColors.textHint,
                       size: 22,
                     ),
                     const SizedBox(width: 10),
@@ -888,7 +1731,7 @@ class _PackageOptionPicker extends StatelessWidget {
                           Text(
                             o.name,
                             style: const TextStyle(
-                              fontSize: 14.5,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.textPrimary,
                             ),
@@ -903,7 +1746,7 @@ class _PackageOptionPicker extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
@@ -918,7 +1761,7 @@ class _PackageOptionPicker extends StatelessWidget {
                         Text(
                           '₹${o.effectivePrice}',
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w900,
                             color: AppColors.navy,
                           ),
@@ -927,7 +1770,7 @@ class _PackageOptionPicker extends StatelessWidget {
                           Text(
                             '₹${o.basePrice}',
                             style: const TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 11,
                               color: AppColors.textHint,
                               decoration: TextDecoration.lineThrough,
                             ),
@@ -970,7 +1813,7 @@ class _InclusionsCard extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w800,
               color: AppColors.navy,
             ),
@@ -987,14 +1830,14 @@ class _InclusionsCard extends StatelessWidget {
                         ? Icons.check_circle_rounded
                         : Icons.cancel_rounded,
                     size: 16,
-                    color: isIncluded ? AppColors.primary : AppColors.error,
+                    color: isIncluded ? AppColors.navy : AppColors.error,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       item,
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         color: AppColors.textPrimary,
                         height: 1.3,
                       ),
@@ -1029,16 +1872,16 @@ class _StepTile extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: const BoxDecoration(
-            color: AppColors.primaryLight,
+            color: Color(0xFFE8EDF7),
             shape: BoxShape.circle,
           ),
           child: Center(
             child: Text(
               number,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: AppColors.primary,
+                color: AppColors.navy,
               ),
             ),
           ),
@@ -1051,7 +1894,7 @@ class _StepTile extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: AppColors.navy,
                 ),
@@ -1059,7 +1902,7 @@ class _StepTile extends StatelessWidget {
               Text(
                 subtitle,
                 style: const TextStyle(
-                  fontSize: 11.5,
+                  fontSize: 11,
                   color: AppColors.textSecondary,
                 ),
               ),
@@ -1113,7 +1956,7 @@ class _RelatedItemsStrip extends ConsumerWidget {
             Text(
               title,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -1167,7 +2010,7 @@ class _RelatedItemsStrip extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 11.5,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.navy,
                               ),
@@ -1176,7 +2019,7 @@ class _RelatedItemsStrip extends ConsumerWidget {
                             Text(
                               '₹${item.effectivePrice}',
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: accent,
                               ),
@@ -1202,7 +2045,7 @@ class _ServiceDetailSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F4EF),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

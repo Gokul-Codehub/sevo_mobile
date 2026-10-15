@@ -5,9 +5,11 @@ import '../../../core/errors/api_error.dart';
 import '../../../core/network/api_client.dart';
 import '../domain/notification_models.dart';
 
-/// The customer's in-app inbox (backend `accounts` app):
-///   GET  /api/accounts/notifications/?limit=30   -> {success, data: [...], meta: {unread_count}}
-///   POST /api/accounts/notifications/<id>/read/  -> {success}
+/// The customer's in-app inbox (backend `accounts` app, which the project
+/// mounts at `/api/auth/` -- NOT `/api/accounts/`; the old path 404'd, so the
+/// inbox was always empty/"couldn't load"):
+///   GET  /api/auth/notifications/?limit=30   -> {success, data: [...], meta: {unread_count}}
+///   POST /api/auth/notifications/<id>/read/  -> {success}
 /// Both are scoped to the signed-in customer by the server.
 class NotificationRepository {
   NotificationRepository({required this.api});
@@ -17,7 +19,7 @@ class NotificationRepository {
   Future<Result<NotificationPage>> getNotifications({int limit = 50}) async {
     try {
       final response = await api.get(
-        '/accounts/notifications/',
+        '/auth/notifications/',
         queryParameters: {'limit': limit},
       );
       final body = response.data;
@@ -40,7 +42,7 @@ class NotificationRepository {
 
   Future<Result<void>> markRead(int id) async {
     try {
-      await api.post('/accounts/notifications/$id/read/');
+      await api.post('/auth/notifications/$id/read/');
       return const Success(null);
     } on Exception catch (e) {
       return Failure(_toError(e));

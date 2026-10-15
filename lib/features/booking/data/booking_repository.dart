@@ -227,6 +227,9 @@ class BookingRepository {
                       'price': i.unitPrice.toDouble(),
                       'quantity': i.quantity,
                       'categoryName': i.service.categoryName ?? '',
+                      // Kept so booking details can show the package picture.
+                      if ((i.service.imageUrl ?? '').trim().isNotEmpty)
+                        'image': i.service.imageUrl,
                       if (i.service.selectedOption != null) ...{
                         'package_id': i.service.id,
                         'option_id': i.service.selectedOption!.id,
@@ -442,31 +445,53 @@ class BookingRepository {
     }
   }
 
+  // ── Cancellation preview ──────────────────────────────────────────────────
+  /// GET /booking/<id>/cancel-preview/ — read-only: the cancellation fee and
+  /// refund the customer will actually get if they cancel now (same numbers
+  /// the real cancel uses). Returns null when it can't be fetched so the
+  /// cancel dialog simply falls back to its generic wording.
+  Future<CancellationPreview?> getCancellationPreview(int id) async {
+    try {
+      final response = await api.get('/booking/$id/cancel-preview/');
+      final result = ResponseNormalizer.extract(response, (data) {
+        final m = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+        return CancellationPreview.fromJson(m);
+      });
+      return switch (result) {
+        Success(:final data) => data,
+        _ => null,
+      };
+    } on Exception {
+      return null;
+    }
+  }
+
   // ── Reschedule booking ────────────────────────────────────────────────────
-  Future<Result<Booking>> rescheduleBooking({
+  // Fixed 2026-10-15 ("Service Reschedule is not working in the mobile app
+  // but works on web"): this used to send `preferred_date` / `preferred_slot`,
+  // but CustomerRescheduleRequestCreateView only reads `new_date` /
+  // `new_time_slot` (same keys the web app sends), so it always answered
+  // 400 "booking_id and new_date are required." The endpoint also returns a
+  // RescheduleRequest (it needs admin approval), NOT a Booking, so the old
+  // Booking.fromJson(...) on the response was wrong too -- success is now
+  // just "request submitted" and callers refetch the booking.
+  Future<Result<String>> rescheduleBooking({
     required int id,
     required String date,
     required String slot,
+    String reason = 'schedule_conflict',
   }) async {
     try {
       final response = await api.post(
         '/customer/reschedules/create/',
         data: {
           'booking_id': id,
-          'preferred_date': date,
-          'preferred_slot': slot,
+          'new_date': date,
+          'new_time_slot': slot,
+          'reason': reason,
         },
       );
-      return ResponseNormalizer.extract(
-        response,
-        (data) {
-          final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
-          final inner = map['booking'] is Map
-              ? Map<String, dynamic>.from(map['booking'] as Map)
-              : (map['data'] is Map ? Map<String, dynamic>.from(map['data'] as Map) : map);
-          return Booking.fromJson(inner);
-        },
-      );
+      return ResponseNormalizer.extract(response, (data) => 'submitted');
     } on Exception catch (e) {
       return Failure(_toError(e));
     }
@@ -527,6 +552,42 @@ class BookingRepository {
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────────
+/// What cancelling a booking right now would cost / refund
+/// (`GET /booking/<id>/cancel-preview/`).
+class CancellationPreview {
+  const CancellationPreview({
+    required this.fee,
+    required this.refund,
+    required this.total,
+    required this.isPaid,
+    required this.locked,
+    this.message,
+  });
+
+  final double fee;
+  final double refund;
+  final double total;
+  final bool isPaid;
+
+  /// True once the customer's start OTP has been verified — the backend then
+  /// refuses cancellation.
+  final bool locked;
+  final String? message;
+
+  factory CancellationPreview.fromJson(Map<String, dynamic> j) {
+    double num_(dynamic v) => double.tryParse('${v ?? 0}') ?? 0;
+    final msg = (j['message'] ?? '').toString().trim();
+    return CancellationPreview(
+      fee: num_(j['cancellation_fee']),
+      refund: num_(j['refund_amount']),
+      total: num_(j['total_amount']),
+      isPaid: j['is_paid'] == true,
+      locked: j['cancellation_locked'] == true,
+      message: msg.isEmpty ? null : msg,
+    );
+  }
+}
+
 final bookingRepositoryProvider = Provider<BookingRepository>((ref) {
   return BookingRepository(api: ref.watch(apiClientProvider));
 });

@@ -7,6 +7,7 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/booking_providers.dart';
 import '../../domain/payment_controller.dart';
 import '../../domain/payment_models.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// Screen 16: Payment Options Screen
 /// Matches reference screen 16 with amount payable banner, selectable payment methods,
@@ -74,7 +75,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   'Payment Successful',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    fontSize: 18,
+                    fontSize: 16,
                     color: AppColors.navy,
                   ),
                 ),
@@ -82,7 +83,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             ),
             content: Text(
               'Your payment has been received successfully.\n\nTransaction ID: ${next.paymentId}',
-              style: const TextStyle(fontSize: 13, height: 1.4),
+              style: const TextStyle(fontSize: 12, height: 1.4),
             ),
             actions: [
               SizedBox(
@@ -122,14 +123,14 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           style: TextStyle(
             color: AppColors.navy,
             fontWeight: FontWeight.w800,
-            fontSize: 18,
+            fontSize: 16,
           ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.pop(),
+          onPressed: () => context.goBack(),
         ),
       ),
       body: bookingAsync.when(
@@ -178,7 +179,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                             ? 'Advance Deposit Payable'
                             : 'Total Amount Payable',
                         style: const TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
@@ -187,7 +188,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       Text(
                         '₹$amount',
                         style: const TextStyle(
-                          fontSize: 32,
+                          fontSize: 28,
                           fontWeight: FontWeight.w900,
                           color: AppColors.navy,
                         ),
@@ -219,7 +220,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 const Text(
                   'Select Payment Method',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: AppColors.navy,
                   ),
@@ -274,7 +275,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                                 Text(
                                   method.title,
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     color: isSelected
                                         ? AppColors.navy
@@ -285,7 +286,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                                 Text(
                                   method.subtitle,
                                   style: const TextStyle(
-                                    fontSize: 11.5,
+                                    fontSize: 11,
                                     color: AppColors.textSecondary,
                                   ),
                                 ),
@@ -329,7 +330,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       Text(
                         '100% Safe & Secure 256-Bit Encrypted Payment',
                         style: TextStyle(
-                          fontSize: 11.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navy,
                         ),
@@ -404,7 +405,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 : const Text(
                     'Proceed to Pay',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

@@ -301,7 +301,7 @@ class ProductCard extends ConsumerWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.navy,
                     height: 1.2,
@@ -331,7 +331,7 @@ class ProductCard extends ConsumerWidget {
                           Text(
                             '₹${service.effectivePrice}',
                             style: const TextStyle(
-                              fontSize: 14.5,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w900,
                               color: AppColors.navy,
                             ),
@@ -554,7 +554,7 @@ class ProductCard extends ConsumerWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF0F172A),
                               height: 1.2,
@@ -578,7 +578,7 @@ class ProductCard extends ConsumerWidget {
                                     Text(
                                       '₹${service.effectivePrice}',
                                       style: const TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w900,
                                         color: AppColors.groceryGreenDark,
                                       ),
@@ -849,7 +849,7 @@ class QuickAddControl extends ConsumerWidget {
               Text(
                 'Add',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
@@ -887,7 +887,7 @@ class QuickAddControl extends ConsumerWidget {
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
-              fontSize: 12,
+              fontSize: 11.5,
             ),
           ),
           InkWell(
@@ -1031,7 +1031,7 @@ class _NotchAddButton extends ConsumerWidget {
                 Text(
                   'Add',
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
@@ -1074,7 +1074,7 @@ class _NotchAddButton extends ConsumerWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
-                  fontSize: 12,
+                  fontSize: 11.5,
                 ),
               ),
               btn(

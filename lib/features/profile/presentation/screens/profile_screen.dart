@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/env.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../auth/domain/auth_models.dart';
 import '../../../auth/domain/auth_notifier.dart';
 
 /// Screen 20: Profile & Account Management
@@ -44,7 +46,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Text(
                 'Update Profile Photo',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: AppColors.navy,
                 ),
@@ -108,395 +110,304 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.watch(currentUserProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Profile',
-          style: TextStyle(
-            color: AppColors.navy,
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      backgroundColor: const Color(0xFFF4F6FA),
+      body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
-            // ── 1. Profile Header Card ──
-            if (user != null) ...[
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFE8F5EE), // light green tint
-                      AppColors.background, // near-white
-                    ],
+            // ── Title ──
+            // Row layout (back button | centred title | same-width spacer) so
+            // the arrow can never sit on top of the title, unlike the old
+            // Stack + Positioned version.
+            SizedBox(
+              height: 52,
+              child: Row(
+                children: [
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 48,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
+                      onPressed: () =>
+                          context.canPop() ? context.pop() : context.go('/'),
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.cardShadow,
-                      blurRadius: 12,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: _uploadingAvatar
-                          ? null
-                          : () => _pickAndUploadAvatar(context),
-                      child: Stack(
-                        children: [
-                          ClipOval(
-                            child: user.profilePictureUrl != null &&
-                                    user.profilePictureUrl!.isNotEmpty
-                                ? CachedNetworkImage(
-                                    imageUrl: user.profilePictureUrl!,
-                                    width: 64,
-                                    height: 64,
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) => Container(
-                                      width: 64,
-                                      height: 64,
-                                      color: AppColors.primary,
-                                      child: const Center(
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    errorWidget: (context, url, error) =>
-                                        _buildAvatarFallback(user.name),
-                                  )
-                                : _buildAvatarFallback(user.name),
-                          ),
-                          if (_uploadingAvatar)
-                            Positioned.fill(
-                              child: ClipOval(
-                                child: Container(
-                                  color: Colors.black.withValues(alpha: 0.45),
-                                  child: const Center(
-                                    child: SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                _uploadingAvatar
-                                    ? Icons.check_rounded
-                                    : Icons.camera_alt_rounded,
-                                size: 12,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  (user.name != null && user.name!.isNotEmpty)
-                                      ? user.name!
-                                      : 'Valued Customer',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.navy,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryLight,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'VERIFIED',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user.phone,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (user.email != null &&
-                              user.email!.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              user.email!,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textHint,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: AppColors.border, width: 0.8),
-                        ),
-                        child: const Icon(Icons.edit_rounded,
-                            size: 16, color: AppColors.navy),
-                      ),
-                      onPressed: () => _showEditProfileModal(context, ref),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFE8F5EE),
-                      AppColors.background,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.cardShadow,
-                      blurRadius: 12,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const CircleAvatar(
-                      radius: 28,
-                      backgroundColor: AppColors.primaryLight,
-                      child: Icon(Icons.person_rounded,
-                          size: 32, color: AppColors.primary),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Welcome to SEVO',
+                  const Expanded(
+                    child: Text(
+                      'Profile',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontWeight: FontWeight.w800,
                         fontSize: 16,
+                        fontWeight: FontWeight.w800,
                         color: AppColors.navy,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Sign in to sync your bookings, saved addresses, and payments.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () => context.push('/login'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                  ),
+                  const SizedBox(width: 52),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 6, 14, 110),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (user != null) _buildHeaderCard(user) else _buildGuestCard(),
+
+                    const _SectionLabel('Account'),
+                    _MenuCard(children: [
+                      if (user != null)
+                        _MenuRow(
+                          icon: Icons.person_outline_rounded,
+                          label: 'Manage Profile',
+                          onTap: () => _showEditProfileModal(context, ref),
                         ),
-                        child: const Text('Login / Sign Up'),
+                      _MenuRow(
+                        icon: Icons.calendar_month_outlined,
+                        label: 'My Bookings',
+                        onTap: () => context.push('/bookings'),
+                      ),
+                      _MenuRow(
+                        icon: Icons.location_on_outlined,
+                        label: 'Saved Addresses',
+                        onTap: () => context.push('/addresses'),
+                      ),
+                      _MenuRow(
+                        icon: Icons.notifications_none_rounded,
+                        label: 'Notifications',
+                        onTap: () => context.push('/notifications'),
+                      ),
+                    ]),
+
+                    const _SectionLabel('Preferences'),
+                    _MenuCard(children: [
+                      _MenuRow(
+                        icon: Icons.language_rounded,
+                        label: 'Language',
+                        value: 'English',
+                        onTap: () => AppToast.show(
+                            context, 'English is the only language available right now.',
+                            type: AppToastType.info),
+                      ),
+                      _MenuRow(
+                        icon: Icons.palette_outlined,
+                        label: 'Theme',
+                        value: 'Light',
+                        onTap: () => AppToast.show(
+                            context, 'Light is the only theme available right now.',
+                            type: AppToastType.info),
+                      ),
+                      _MenuRow(
+                        icon: Icons.verified_user_outlined,
+                        label: '30-Day Service Guarantee',
+                        onTap: () => _showGuaranteeDialog(context),
+                      ),
+                    ]),
+
+                    const _SectionLabel('Support'),
+                    _MenuCard(children: [
+                      _MenuRow(
+                        icon: Icons.help_outline_rounded,
+                        label: 'Help Center',
+                        onTap: () => context.push('/support'),
+                      ),
+                      _MenuRow(
+                        icon: Icons.article_outlined,
+                        label: 'Privacy Policy',
+                        onTap: () => _showPrivacyDialog(context),
+                      ),
+                      _MenuRow(
+                        icon: Icons.description_outlined,
+                        label: 'Terms of Service',
+                        onTap: () => _showTermsDialog(context),
+                      ),
+                      if (user != null)
+                        _MenuRow(
+                          icon: Icons.delete_outline_rounded,
+                          label: 'Delete Account',
+                          onTap: () => _showDeleteAccountDialog(context, ref),
+                        ),
+                    ]),
+
+                    if (user != null) ...[
+                      const SizedBox(height: 14),
+                      _MenuCard(children: [
+                        _MenuRow(
+                          icon: Icons.logout_rounded,
+                          label: 'Log out',
+                          danger: true,
+                          onTap: () => _showLogoutDialog(context, ref),
+                        ),
+                      ]),
+                    ],
+
+                    const SizedBox(height: 18),
+                    Center(
+                      child: Text(
+                        '${Env.appName} v${Env.appVersion}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textHint,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-
-            const SizedBox(height: 20),
-
-            // ── 2. Account & Bookings Menu ──
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.8),
-              ),
-              child: Column(
-                children: [
-                  _MenuTile(
-                    icon: Icons.receipt_long_rounded,
-                    title: 'My Bookings',
-                    subtitle: 'Active bookings & past service history',
-                    onTap: () => context.go('/bookings'),
-                  ),
-                  const Divider(
-                      height: 1, indent: 56, color: AppColors.border),
-                  _MenuTile(
-                    icon: Icons.location_on_rounded,
-                    title: 'Saved Addresses',
-                    subtitle: 'Manage home, work & other addresses',
-                    onTap: () => context.push('/addresses'),
-                  ),
-                  const Divider(
-                      height: 1, indent: 56, color: AppColors.border),
-                  _MenuTile(
-                    icon: Icons.verified_rounded,
-                    title: '30-Day Service Guarantee',
-                    subtitle: 'SEVO rework warranty & assurance',
-                    onTap: () => _showGuaranteeDialog(context),
-                  ),
-                  const Divider(
-                      height: 1, indent: 56, color: AppColors.border),
-                  _MenuTile(
-                    icon: Icons.headset_mic_rounded,
-                    title: 'Help & Customer Care',
-                    subtitle: 'WhatsApp & call support (24/7)',
-                    onTap: () => context.go('/support'),
-                  ),
-                ],
-              ),
             ),
-
-            const SizedBox(height: 16),
-
-            // ── 3. Legal & App Policies ──
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.borderSubtle, width: 0.8),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.cardShadow,
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  _MenuTile(
-                    icon: Icons.description_rounded,
-                    title: 'Terms of Service',
-                    onTap: () => _showTermsDialog(context),
-                  ),
-                  const Divider(
-                      height: 1, indent: 56, color: AppColors.border),
-                  _MenuTile(
-                    icon: Icons.privacy_tip_rounded,
-                    title: 'Privacy Policy',
-                    onTap: () => _showPrivacyDialog(context),
-                  ),
-                  if (user != null) ...[
-                    const Divider(
-                        height: 1, indent: 56, color: AppColors.border),
-                    _MenuTile(
-                      icon: Icons.person_remove_rounded,
-                      title: 'Delete Account',
-                      subtitle: 'Permanently remove account & personal data',
-                      onTap: () => _showDeleteAccountDialog(context, ref),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── 4. Sign Out Button ──
-            if (user != null) ...[
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(
-                        color: Color(0xFFFCA5A5), width: 1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () => _showLogoutDialog(context, ref),
-                  icon: const Icon(Icons.logout_rounded, size: 18),
-                  label: const Text(
-                    'Log Out',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-
-            // ── 5. App Version Footer ──
-            Text(
-              '${Env.appName} v${Env.appVersion} • Built with ❤️ for Hosur',
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textHint,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderCard(UserProfile user) {
+    final name = (user.name != null && user.name!.isNotEmpty)
+        ? user.name!
+        : 'Valued Customer';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: _uploadingAvatar ? null : () => _pickAndUploadAvatar(context),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                ClipOval(
+                  child: user.profilePictureUrl != null &&
+                          user.profilePictureUrl!.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: user.profilePictureUrl!,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            width: 80,
+                            height: 80,
+                            color: AppColors.surfaceVariant,
+                            child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) =>
+                              _buildAvatarFallback(user.name),
+                        )
+                      : _buildAvatarFallback(user.name),
+                ),
+                if (_uploadingAvatar)
+                  Positioned.fill(
+                    child: ClipOval(
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: AppColors.navy,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(Icons.photo_camera_rounded,
+                        size: 11, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                  ),
+                ),
+                if (user.email != null && user.email!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    user.email!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7788)),
+                  ),
+                ],
+                const SizedBox(height: 2),
+                Text(
+                  user.phone,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7788)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          const CircleAvatar(
+            radius: 30,
+            backgroundColor: AppColors.surfaceVariant,
+            child: Icon(Icons.person_outline_rounded, size: 32, color: AppColors.navy),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Welcome to SEVO',
+            style: TextStyle(
+                fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.navy),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Sign in to sync your bookings, saved addresses, and payments.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton(
+              onPressed: () => context.push('/login'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('Login / Sign Up'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -527,7 +438,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const Text(
               'Edit Profile',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -606,7 +517,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         content: const Text(
           'Are you sure you want to sign out of SEVO?',
-          style: TextStyle(fontSize: 13),
+          style: TextStyle(fontSize: 12),
         ),
         actions: [
           TextButton(
@@ -645,14 +556,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
-                fontSize: 18,
+                fontSize: 16,
               ),
             ),
           ],
         ),
         content: const Text(
           'Every service performed by SEVO professionals comes with our 30-Day Service Assurance Guarantee.\n\nIf the same issue recurs within 30 days of completion, we will send a technician for a complimentary inspection and rework at no extra service charge.',
-          style: TextStyle(fontSize: 13, height: 1.4),
+          style: TextStyle(fontSize: 12, height: 1.4),
         ),
         actions: [
           ElevatedButton(
@@ -684,7 +595,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         content: const SingleChildScrollView(
           child: Text(
             '1. Acceptance of Terms: By booking services through SEVO, you agree to abide by our service standards and cancellation rules.\n\n2. Pricing & Payments: All prices shown include applicable taxes and service fees. An advance deposit of 20% is required to secure your booking.\n\n3. Rescheduling & Cancellation: You may reschedule or cancel your booking without penalty up to 2 hours prior to the scheduled slot.\n\n4. Verified Professionals: All technicians are vetted and background-verified.',
-            style: TextStyle(fontSize: 12, height: 1.4),
+            style: TextStyle(fontSize: 11.5, height: 1.4),
           ),
         ),
         actions: [
@@ -717,7 +628,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         content: const SingleChildScrollView(
           child: Text(
             'SEVO is committed to protecting your personal data.\n\n1. Data Collection: We collect your phone number, name, email, and service addresses solely for booking fulfillment and technician dispatch.\n\n2. Encryption: All communications are encrypted using TLS 1.3. Sensitive tokens are stored securely in Android Keystore / EncryptedSharedPreferences.\n\n3. Payment Security: Payment details are handled exclusively by RBI-authorized payment aggregator Razorpay and never stored on our servers.\n\n4. Your Rights: You have the right to access, rectify, or request permanent deletion of your account and personal data at any time.',
-            style: TextStyle(fontSize: 12, height: 1.4),
+            style: TextStyle(fontSize: 11.5, height: 1.4),
           ),
         ),
         actions: [
@@ -763,7 +674,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
-                fontSize: 18,
+                fontSize: 16,
               ),
             ),
           ],
@@ -778,7 +689,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 '• This action is permanent and cannot be undone.\n'
                 '• Your profile, saved addresses, active bookings, and order history will be permanently deleted from our servers.\n'
                 '• Any active loyalty points or coupon discounts will be forfeited.\n',
-                style: TextStyle(fontSize: 12.5, height: 1.4),
+                style: TextStyle(fontSize: 12, height: 1.4),
               ),
               InkWell(
                 onTap: () => launchUrl(
@@ -796,7 +707,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         child: Text(
                           'Web Deletion Request Portal',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                             color: AppColors.primary,
                             decoration: TextDecoration.underline,
@@ -855,54 +766,106 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
-class _MenuTile extends StatelessWidget {
-  const _MenuTile({
+
+BoxDecoration _cardDecoration() => BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1E3A8A).withValues(alpha: 0.05),
+          blurRadius: 14,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    );
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(6, 18, 0, 8),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF6B7788),
+          ),
+        ),
+      );
+}
+
+/// White rounded card holding [_MenuRow]s separated by indented hairlines.
+class _MenuCard extends StatelessWidget {
+  const _MenuCard({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) {
+        rows.add(const Divider(
+            height: 1, thickness: 0.6, indent: 54, endIndent: 14, color: Color(0xFFECEFF4)));
+      }
+      rows.add(children[i]);
+    }
+    return Container(
+      decoration: _cardDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: rows),
+    );
+  }
+}
+
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({
     required this.icon,
-    required this.title,
-    this.subtitle,
+    required this.label,
     required this.onTap,
+    this.value,
+    this.danger = false,
   });
 
   final IconData icon;
-  final String title;
-  final String? subtitle;
+  final String label;
+  final String? value;
+  final bool danger;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppColors.primaryLight,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: AppColors.primary, size: 20),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: AppColors.navy,
-        ),
-      ),
-      subtitle: subtitle != null
-          ? Text(
-              subtitle!,
-              style: const TextStyle(
-                fontSize: 11.5,
-                color: AppColors.textSecondary,
-              ),
-            )
-          : null,
-      trailing: const Icon(
-        Icons.chevron_right_rounded,
-        size: 20,
-        color: AppColors.textHint,
-      ),
+    final color = danger ? AppColors.error : AppColors.navy;
+    return InkWell(
       onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 21, color: color),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+              ),
+            ),
+            if (value != null) ...[
+              Text(value!,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7788))),
+              const SizedBox(width: 4),
+            ],
+            Icon(Icons.chevron_right_rounded,
+                size: 20, color: danger ? AppColors.error : const Color(0xFF5B6678)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -912,14 +875,14 @@ Widget _buildAvatarFallback(String? name) {
       ? name.trim()[0].toUpperCase()
       : 'U';
   return Container(
-    width: 64,
-    height: 64,
+    width: 80,
+    height: 80,
     color: AppColors.navy,
     child: Center(
       child: Text(
         initial,
         style: const TextStyle(
-          fontSize: 24,
+          fontSize: 28,
           fontWeight: FontWeight.w800,
           color: Colors.white,
         ),

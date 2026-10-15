@@ -267,7 +267,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       : "Search for 'AC service'..."),
               hintMaxLines: 1,
               hintStyle: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: _voiceHint == null ? FontWeight.w400 : FontWeight.w700,
                 color: _voiceHint == null
                     ? AppColors.textHint
@@ -367,7 +367,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                 ],
               ),
-              style: const TextStyle(fontSize: 14.5, color: AppColors.navy),
+              style: const TextStyle(fontSize: 13.5, color: AppColors.navy),
             ),
             onTap: () => _submit(live),
           ),
@@ -412,7 +412,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.history_rounded, size: 20, color: AppColors.textSecondary),
-              title: Text(r, style: const TextStyle(fontSize: 14.5, color: AppColors.navy)),
+              title: Text(r, style: const TextStyle(fontSize: 13.5, color: AppColors.navy)),
               trailing: IconButton(
                 icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textHint),
                 onPressed: () => ref.read(recentSearchesProvider(_mode).notifier).remove(r),
@@ -477,7 +477,7 @@ class _SectionHeader extends StatelessWidget {
             child: Text(
               title,
               style: const TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -491,7 +491,7 @@ class _SectionHeader extends StatelessWidget {
                 minimumSize: const Size(0, 30),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: Text(action!, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+              child: Text(action!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             ),
         ],
       ),
@@ -516,8 +516,8 @@ class _KeywordTile extends StatelessWidget {
   final VoidCallback onFill;
 
   List<InlineSpan> _spans() {
-    const regular = TextStyle(fontSize: 15, color: AppColors.navy, fontWeight: FontWeight.w400);
-    const bold = TextStyle(fontSize: 15, color: AppColors.navy, fontWeight: FontWeight.w800);
+    const regular = TextStyle(fontSize: 14, color: AppColors.navy, fontWeight: FontWeight.w400);
+    const bold = TextStyle(fontSize: 14, color: AppColors.navy, fontWeight: FontWeight.w800);
     final q = query.trim().toLowerCase();
     final i = q.isEmpty ? -1 : keyword.indexOf(q);
     if (i < 0) return [TextSpan(text: keyword, style: bold)];

@@ -213,7 +213,7 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
                         Expanded(
                           child: Text(
                             'Move the map to place the pin on your drop-off location',
-                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -261,14 +261,14 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
                         child: _isResolvingAddress || _isMapMoving
                             ? const Text(
                                 'Pinning location...',
-                                style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                               )
                             : Text(
                                 _address.isEmpty
                                     ? '${_lat.toStringAsFixed(5)}, ${_lng.toStringAsFixed(5)}'
                                     : _address,
                                 style: const TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.navy,
                                 ),
@@ -291,7 +291,7 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
                         elevation: 0,
                       ),
                       child: const Text('Confirm Drop-off Location',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ],

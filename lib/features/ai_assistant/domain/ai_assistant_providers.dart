@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,6 +67,77 @@ class AiChatController extends StateNotifier<AiChatState> {
 
   final AiAssistantRepository _repository;
 
+  // While a chat is handed off to a human agent, the agent's replies are only
+  // ever stored on the server (nothing pushes them to the app), so poll for
+  // them — the web widget does the same every ~3.5 s.
+  Timer? _handoffTimer;
+  bool _polling = false;
+
+  @override
+  set state(AiChatState value) {
+    super.state = value;
+    _syncHandoffPolling();
+  }
+
+  void _syncHandoffPolling() {
+    final shouldPoll = state.handedOff &&
+        (state.conversationId ?? '').isNotEmpty;
+    if (shouldPoll && _handoffTimer == null) {
+      _handoffTimer = Timer.periodic(
+        const Duration(seconds: 4),
+        (_) => _pollHandoff(),
+      );
+    } else if (!shouldPoll && _handoffTimer != null) {
+      _handoffTimer!.cancel();
+      _handoffTimer = null;
+    }
+  }
+
+  Future<void> _pollHandoff() async {
+    final id = state.conversationId;
+    if (_polling || state.isSending || id == null || id.isEmpty) return;
+    _polling = true;
+    try {
+      final result = await _repository.getConversationHistory(id);
+      // The chat may have been reset / switched while the request was out.
+      if (!mounted || state.conversationId != id) return;
+      result.when(
+        success: (server) {
+          // Count how often each assistant line is already on screen, then
+          // append only the server lines that aren't (i.e. new agent replies).
+          final shown = <String, int>{};
+          for (final m in state.messages) {
+            if (m.sender == AiChatSender.assistant && !m.isError) {
+              shown[m.content] = (shown[m.content] ?? 0) + 1;
+            }
+          }
+          final fresh = <AiChatMessage>[];
+          for (final m in server) {
+            if (m.sender != AiChatSender.assistant) continue;
+            final left = shown[m.content] ?? 0;
+            if (left > 0) {
+              shown[m.content] = left - 1;
+            } else {
+              fresh.add(m);
+            }
+          }
+          if (fresh.isNotEmpty) {
+            state = state.copyWith(messages: [...state.messages, ...fresh]);
+          }
+        },
+        failure: (_) {},
+      );
+    } finally {
+      _polling = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _handoffTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> sendMessage(String text, {String? displayText}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.isSending) return;
@@ -112,8 +184,12 @@ class AiChatController extends StateNotifier<AiChatState> {
         ...state.messages,
         AiChatMessage(
           sender: AiChatSender.user,
-          content: caption.trim().isEmpty ? 'Photo' : caption.trim(),
-          localImageBytes: imageBytes,
+          content: caption.trim().isEmpty
+              ? (_isImageFileName(imageFileName) ? 'Photo' : '')
+              : caption.trim(),
+          // Only images can be drawn from memory; documents show a file chip.
+          localImageBytes: _isImageFileName(imageFileName) ? imageBytes : null,
+          photoName: imageFileName,
         ),
       ],
       isSending: true,
@@ -179,7 +255,11 @@ class AiChatController extends StateNotifier<AiChatState> {
     final result = await _repository.getConversationHistory(conversationId);
     return result.when(
       success: (messages) {
-        state = AiChatState(messages: messages, conversationId: conversationId);
+        state = AiChatState(
+          messages: messages,
+          conversationId: conversationId,
+          handedOff: messages.any((m) => m.handedOff),
+        );
         return true;
       },
       failure: (_) => false,
@@ -209,6 +289,12 @@ class AiChatController extends StateNotifier<AiChatState> {
     if (ok) state = const AiChatState();
     return ok;
   }
+}
+
+bool _isImageFileName(String name) {
+  final i = name.lastIndexOf('.');
+  final ext = i < 0 ? '' : name.substring(i + 1).toLowerCase();
+  return const {'png', 'jpg', 'jpeg', 'webp', 'gif', 'heic'}.contains(ext);
 }
 
 final aiChatControllerProvider =

@@ -13,7 +13,9 @@ import '../../../booking/domain/booking_providers.dart';
 import '../../data/routing_service.dart';
 import '../../data/tracking_service.dart';
 import '../../domain/tracking_models.dart';
+import '../widgets/gt_trip_cards.dart';
 import '../widgets/tracking_markers.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// Route line color — changed 2026-09-16 from AppColors.primary (the app's
 /// brand green, 0xFF05A357) to a dedicated blue per explicit request, and
@@ -46,6 +48,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   GoogleMapController? _mapController;
   bool _startOtpCopied = false;
   bool _paymentOtpCopied = false;
+  bool _deliveryOtpCopied = false;
 
   // Real road-network route (see routing_service.dart) — replaces the old
   // straight line between technician and destination. Re-fetched whenever
@@ -257,21 +260,23 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
     final canCancel = widget.booking != null && widget.booking!.canCancel;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F4EF),
       appBar: AppBar(
+        centerTitle: false,
         title: const Text(
           'Live Tracking',
           style: TextStyle(
             color: AppColors.navy,
             fontWeight: FontWeight.w800,
-            fontSize: 18,
+            fontSize: 16,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF8F4EF),
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.pop(),
+          onPressed: () => context.goBack(),
         ),
         actions: [
           Container(
@@ -279,12 +284,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: tracking.isLiveWs
-                  ? AppColors.groceryGreenLight
+                  ? const Color(0xFFE8EDF7)
                   : AppColors.warningLight,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: tracking.isLiveWs
-                    ? AppColors.primary
+                    ? AppColors.navy.withValues(alpha: 0.25)
                     : AppColors.warning,
                 width: 0.8,
               ),
@@ -297,7 +302,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                   height: 7,
                   decoration: BoxDecoration(
                     color: tracking.isLiveWs
-                        ? AppColors.primary
+                        ? AppColors.navy
                         : AppColors.warning,
                     shape: BoxShape.circle,
                   ),
@@ -309,7 +314,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     color: tracking.isLiveWs
-                        ? AppColors.primary
+                        ? AppColors.navy
                         : const Color(0xFF92400E),
                   ),
                 ),
@@ -342,7 +347,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                               tracking.statusMessage,
                               textAlign: TextAlign.center,
                               style: const TextStyle(
-                                fontSize: 13,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textSecondary,
                               ),
@@ -391,7 +396,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           // generic teardrop pin.
                           icon: _lollipopIcon ??
                               BitmapDescriptor.defaultMarkerWithHue(
-                                BitmapDescriptor.hueGreen,
+                                BitmapDescriptor.hueAzure,
                               ),
                           anchor: const Offset(0.5, 0.9),
                           infoWindow: const InfoWindow(
@@ -455,11 +460,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 12,
+                            color: const Color(0xFF1E3A8A)
+                                .withValues(alpha: 0.12),
+                            blurRadius: 16,
                             offset: const Offset(0, 4),
                           ),
                         ],
@@ -470,7 +476,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color: _kRouteColor.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Icon(
                               Icons.schedule_rounded,
@@ -499,7 +505,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                       '${_roadRouteEtaMinutes ?? tracking.etaMinutes} mins away',
                                   ].join(' · '),
                                   style: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w900,
                                     color: AppColors.navy,
                                   ),
@@ -520,11 +526,11 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             flex: 6,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: Color(0xFFF8F4EF),
                 borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(10)),
+                    BorderRadius.vertical(top: Radius.circular(24)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black12,
@@ -562,13 +568,47 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         label: 'CASH PAYMENT OTP',
                         hint: 'Share with technician to confirm cash collection',
                         otp: tracking.paymentConfirmationOtp!,
-                        color: const Color(0xFF065F46),
-                        background: const Color(0xFFECFDF5),
-                        border: const Color(0xFF10B981),
+                        color: AppColors.navy,
+                        background: const Color(0xFFE8EDF7),
+                        border: const Color(0xFFD5DCE8),
                         copied: _paymentOtpCopied,
                         onCopy: () => _copyOtp(tracking.paymentConfirmationOtp!, isPayment: true),
                       ),
                       const SizedBox(height: 12),
+                    ],
+
+                    // Goods Transport / Packers & Movers items (server-driven;
+                    // each card hides itself when the payload has nothing).
+                    if (!tracking.isTerminal) ...[
+                      if ((tracking.bookingId ?? widget.booking?.id) != null)
+                        PmSurveyDecisionCard(
+                          bookingId: (tracking.bookingId ?? widget.booking?.id)!,
+                          trackingToken: widget.booking?.trackingIdentifier,
+                        ),
+                      if (tracking.balanceDue != null &&
+                          (tracking.bookingId ?? widget.booking?.id) != null)
+                        GtBalanceDueCard(
+                          bookingId: (tracking.bookingId ?? widget.booking?.id)!,
+                          amount: tracking.balanceDue!,
+                        ),
+                      if (tracking.extraCharges.isNotEmpty)
+                        GtExtraChargesCard(charges: tracking.extraCharges),
+                      if (tracking.deliveryException != null)
+                        GtDeliveryExceptionCard(exception: tracking.deliveryException!),
+                      if (tracking.deliveryOtp != null) ...[
+                        _OtpCard(
+                          label: 'DELIVERY OTP',
+                          hint:
+                              'Share this code with the driver only after your goods have been delivered',
+                          otp: tracking.deliveryOtp!,
+                          color: AppColors.navy,
+                          background: const Color(0xFFE8EDF7),
+                          border: const Color(0xFFD5DCE8),
+                          copied: _deliveryOtpCopied,
+                          onCopy: () => _copyDeliveryOtp(tracking.deliveryOtp!),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                     ],
 
                     if (tracking.startOtp == null && tracking.paymentConfirmationOtp == null)
@@ -580,10 +620,16 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(8),
-                        border:
-                            Border.all(color: AppColors.border, width: 0.8),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1E3A8A)
+                                .withValues(alpha: 0.06),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: Row(
                         children: [
@@ -610,7 +656,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                   technicianName ?? 'Technician not yet assigned',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 14.5,
+                                    fontSize: 13.5,
                                     color: AppColors.navy,
                                   ),
                                 ),
@@ -628,7 +674,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                             ? '${technicianRating.toStringAsFixed(1)} ($technicianJobsCount+ services)'
                                             : technicianRating.toStringAsFixed(1),
                                         style: const TextStyle(
-                                          fontSize: 11.5,
+                                          fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                           color: AppColors.textSecondary,
                                         ),
@@ -649,7 +695,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                               icon: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: const BoxDecoration(
-                                  color: AppColors.primary,
+                                  color: AppColors.navy,
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(Icons.call_rounded,
@@ -660,18 +706,36 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 14),
 
-                    // Progress Timeline
+                    // Progress Timeline (card)
+                    Container(
+                     width: double.infinity,
+                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                     decoration: BoxDecoration(
+                       color: Colors.white,
+                       borderRadius: BorderRadius.circular(18),
+                       boxShadow: [
+                         BoxShadow(
+                           color: const Color(0xFF1E3A8A)
+                               .withValues(alpha: 0.06),
+                           blurRadius: 16,
+                           offset: const Offset(0, 4),
+                         ),
+                       ],
+                     ),
+                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                     const Text(
                       'Service Status',
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
                         color: AppColors.navy,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
                     _TimelineStep(
                       title: 'Booking Confirmed',
@@ -702,7 +766,10 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       subtitle: 'Service finished & final invoice',
                       isCompleted: currentStep >= 4,
                       isActive: currentStep == 4,
-                      isLast: !canCancel,
+                      isLast: true,
+                    ),
+                      ],
+                     ),
                     ),
 
                     if (canCancel) ...[
@@ -712,8 +779,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.error,
+                            backgroundColor: Colors.white,
                             side: const BorderSide(color: AppColors.errorLight),
                             padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
                           onPressed: () => _showCancelDialog(context, ref, widget.booking!),
                           icon: const Icon(Icons.cancel_outlined),
@@ -752,6 +823,14 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
     });
   }
 
+  void _copyDeliveryOtp(String otp) {
+    Clipboard.setData(ClipboardData(text: otp));
+    setState(() => _deliveryOtpCopied = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _deliveryOtpCopied = false);
+    });
+  }
+
   // Mirrors booking_detail_screen.dart's _showCancelDialog exactly — same
   // controller, same endpoint (`POST /booking/<id>/cancel/`), same
   // confirmation copy, so cancelling from the tracking screen behaves
@@ -769,7 +848,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
           children: [
             const Text(
               'Are you sure you want to cancel this booking? If advance was paid, refund will be initiated.',
-              style: TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -806,7 +885,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Booking cancelled.')),
                 );
-                context.pop();
+                context.goBack();
               }
             },
             child: const Text('Confirm Cancel'),
@@ -845,7 +924,7 @@ class _OtpCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: border, width: 0.8),
       ),
       child: Row(
@@ -874,7 +953,7 @@ class _OtpCard extends StatelessWidget {
                 Text(
                   otp,
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 17.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 4,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -921,9 +1000,9 @@ class _TimelineStep extends StatelessWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: isCompleted
-                    ? AppColors.primary
-                    : (isActive ? AppColors.navy : AppColors.divider),
+                color: (isCompleted || isActive)
+                    ? AppColors.navy
+                    : AppColors.divider,
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -947,7 +1026,7 @@ class _TimelineStep extends StatelessWidget {
                 width: 2,
                 height: 32,
                 color: isCompleted
-                    ? AppColors.primary
+                    ? AppColors.navy
                     : AppColors.divider,
               ),
           ],
@@ -960,7 +1039,7 @@ class _TimelineStep extends StatelessWidget {
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   color: isCompleted || isActive
                       ? AppColors.navy
@@ -970,7 +1049,7 @@ class _TimelineStep extends StatelessWidget {
               Text(
                 subtitle,
                 style: const TextStyle(
-                  fontSize: 11.5,
+                  fontSize: 11,
                   color: AppColors.textSecondary,
                 ),
               ),
@@ -1002,7 +1081,7 @@ class _TechAvatarFallback extends StatelessWidget {
           initial,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.w800,
           ),
         ),

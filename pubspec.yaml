@@ -36,6 +36,11 @@ dependencies:
   # shared/widgets/app_shell.dart.
   lottie: ^3.6.1
 
+  # --- SVG rendering ---
+  # Added 2026-10-15 for the "Combo Offer" ribbon (assets/images/combo_offer.svg)
+  # shown at the top right of the grocery category screen.
+  flutter_svg: ^2.0.10+1
+
   # --- Maps ---
   google_maps_flutter: ^2.9.0
 

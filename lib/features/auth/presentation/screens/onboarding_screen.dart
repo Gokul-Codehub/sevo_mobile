@@ -105,7 +105,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     child: Text(
                       'Skip',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary,
                       ),
@@ -124,7 +124,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     slide.title,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 28,
+                      fontSize: 24.5,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                       height: 1.25,
@@ -136,7 +136,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     slide.subtitle,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w400,
                       color: AppColors.textSecondary,
                       height: 1.4,
@@ -204,7 +204,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             ? 'Get Started'
                             : 'Next',
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),
                       ),

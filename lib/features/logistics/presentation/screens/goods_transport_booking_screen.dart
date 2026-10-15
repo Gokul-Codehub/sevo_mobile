@@ -27,6 +27,7 @@ import '../widgets/gt_extras_section.dart';
 import '../widgets/gt_slot_picker.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// Added 2026-09-19, REWRITTEN 2026-09-20 per explicit feedback after the
 /// first version shipped:
@@ -99,6 +100,8 @@ class _GoodsTransportBookingScreenState
   final _consigneeRelationshipController = TextEditingController();
 
   bool _isLoading = false;
+  // 0 Cargo · 1 Locations · 2 Schedule · 3 Fare
+  int _step = 0;
   bool _inventorySectionExpanded = true;
 
   LogisticsVehicleCategory _resolveVehicleCategory(Subcategory sub) {
@@ -127,15 +130,15 @@ class _GoodsTransportBookingScreenState
           duration: const Duration(milliseconds: 200),
           height: 76,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? AppColors.serviceBlue : AppColors.border,
+              color: isSelected ? AppColors.navy : AppColors.border,
               width: isSelected ? 2.0 : 0.8,
             ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: AppColors.serviceBlue.withValues(alpha: 0.35),
+                      color: AppColors.navy.withValues(alpha: 0.35),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -158,7 +161,7 @@ class _GoodsTransportBookingScreenState
                   imageUrl: imageUrl,
                   fit: BoxFit.cover,
                   fallbackWidget: Container(
-                    color: isSelected ? AppColors.serviceBlue : AppColors.divider,
+                    color: isSelected ? AppColors.navy : AppColors.divider,
                     child: Center(
                       child: Icon(
                         fallbackIcon,
@@ -170,7 +173,7 @@ class _GoodsTransportBookingScreenState
                 )
               else
                 Container(
-                  color: isSelected ? AppColors.serviceBlue : AppColors.divider,
+                  color: isSelected ? AppColors.navy : AppColors.divider,
                   child: Center(
                     child: Icon(
                       fallbackIcon,
@@ -200,7 +203,7 @@ class _GoodsTransportBookingScreenState
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: AppColors.serviceBlue.withValues(alpha: 0.28),
+                      color: AppColors.navy.withValues(alpha: 0.28),
                     ),
                   ),
                 ),
@@ -214,7 +217,7 @@ class _GoodsTransportBookingScreenState
                     width: 17,
                     height: 17,
                     decoration: const BoxDecoration(
-                      color: AppColors.serviceBlue,
+                      color: AppColors.navy,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -1061,38 +1064,68 @@ class _GoodsTransportBookingScreenState
       }
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _step > 0) setState(() => _step = _step - 1);
+      },
+      child: Scaffold(
+      backgroundColor: const Color(0xFFF8F4EF),
       appBar: AppBar(
-        title: Text(
-          widget.category?.name ?? 'Goods & Transport',
-          style: const TextStyle(
-            color: AppColors.navy,
-            fontWeight: FontWeight.w800,
-            fontSize: 17,
-          ),
+        centerTitle: false,
+        scrolledUnderElevation: 0,
+        titleSpacing: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.category?.name ?? 'Goods & Transport',
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontWeight: FontWeight.w900,
+                fontSize: 16.5,
+              ),
+            ),
+            const Text(
+              'Complete your booking in a few steps',
+              style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+            ),
+          ],
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF8F4EF),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (_step > 0) {
+              setState(() => _step = _step - 1);
+            } else {
+              context.goBack();
+            }
+          },
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: Column(
+        children: [
+          _buildStepper(),
+          Expanded(
+            child: SingleChildScrollView(
+              key: ValueKey(_step),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+            if (_step == 0) ...[
             // ── Vehicle category tabs (Truck / 2-Wheeler) ──
             _SectionCard(
+              label: 'Vehicle type',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Transportation Category',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -1151,16 +1184,16 @@ class _GoodsTransportBookingScreenState
               ),
             ),
             const SizedBox(height: 18),
-
             // ── Vehicle tier / package picker ──
             _SectionCard(
+              label: 'Package',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     "Select Available Package's",
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -1172,7 +1205,7 @@ class _GoodsTransportBookingScreenState
                         return const Text(
                           'No vehicles are configured for this category right now. Please try the other category or check back later.',
                           style: TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                             height: 1.4,
                           ),
@@ -1200,19 +1233,19 @@ class _GoodsTransportBookingScreenState
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? AppColors.serviceBlueLight
+                                    ? Color(0xFFE8EDF7)
                                     : Colors.white,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isSelected
-                                      ? AppColors.serviceBlue
+                                      ? AppColors.navy
                                       : AppColors.border,
                                   width: isSelected ? 1.5 : 0.8,
                                 ),
                                 boxShadow: isSelected
                                     ? [
                                         BoxShadow(
-                                          color: AppColors.serviceBlue
+                                          color: AppColors.navy
                                               .withValues(alpha: 0.15),
                                           blurRadius: 4,
                                           offset: const Offset(0, 2),
@@ -1253,7 +1286,7 @@ class _GoodsTransportBookingScreenState
                                                             .inventory_2_rounded),
                                                 size: 32,
                                                 color: isSelected
-                                                    ? AppColors.serviceBlue
+                                                    ? AppColors.navy
                                                     : AppColors.textSecondary,
                                               ),
                                             ),
@@ -1266,9 +1299,9 @@ class _GoodsTransportBookingScreenState
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
-                                      fontSize: 12,
+                                      fontSize: 11.5,
                                       color: isSelected
-                                          ? AppColors.serviceBlue
+                                          ? AppColors.navy
                                           : AppColors.navy,
                                       height: 1.2,
                                     ),
@@ -1291,9 +1324,9 @@ class _GoodsTransportBookingScreenState
                                     Text(
                                       'from ₹${tier.startingPrice!.toStringAsFixed(0)}',
                                       style: const TextStyle(
-                                        fontSize: 12.5,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w800,
-                                        color: AppColors.serviceBlue,
+                                        color: AppColors.navy,
                                       ),
                                     ),
                                   ],
@@ -1328,7 +1361,7 @@ class _GoodsTransportBookingScreenState
                     error: (_, _) => const Text(
                       'Could not load vehicle options. Please pull to refresh or try again shortly.',
                       style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         color: AppColors.error,
                         height: 1.4,
                       ),
@@ -1338,13 +1371,13 @@ class _GoodsTransportBookingScreenState
               ),
             ),
             const SizedBox(height: 18),
-
             // ── Packers & Movers: inventory builder + move details ──
             // Added 2026-09-20 — this is the genuinely separate part of
             // this flow; see [PackersMoversQuote]'s doc comment in
             // logistics_models.dart. Only ever shown for this category.
             if (isPackersMovers) ...[
               _SectionCard(
+                label: 'Items to move',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1366,7 +1399,7 @@ class _GoodsTransportBookingScreenState
                                   const Text(
                                     'What are you moving?',
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w800,
                                       color: AppColors.navy,
                                     ),
@@ -1377,7 +1410,7 @@ class _GoodsTransportBookingScreenState
                                         ? 'Pick a room on the left, then add its items on the right.'
                                         : 'Tap to unshrink moving inventory list.',
                                     style: const TextStyle(
-                                      fontSize: 11.5,
+                                      fontSize: 11,
                                       color: AppColors.textSecondary,
                                     ),
                                   ),
@@ -1403,7 +1436,7 @@ class _GoodsTransportBookingScreenState
                             return const Text(
                               'The moving inventory catalog is not configured yet. Please check back later.',
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 color: AppColors.textSecondary,
                                 height: 1.4,
                               ),
@@ -1427,7 +1460,7 @@ class _GoodsTransportBookingScreenState
                       error: (_, _) => const Text(
                         'Could not load the moving inventory. Please pull to refresh or try again shortly.',
                         style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           color: AppColors.error,
                           height: 1.4,
                         ),
@@ -1439,13 +1472,14 @@ class _GoodsTransportBookingScreenState
             ),
               const SizedBox(height: 18),
               _SectionCard(
+                label: 'Move details',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       'Move Details',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: AppColors.navy,
                       ),
@@ -1454,7 +1488,7 @@ class _GoodsTransportBookingScreenState
                     const Text(
                       'Packing',
                       style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: AppColors.navy,
                       ),
@@ -1486,7 +1520,7 @@ class _GoodsTransportBookingScreenState
                     const Text(
                       'Relocation Type',
                       style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: AppColors.navy,
                       ),
@@ -1516,7 +1550,7 @@ class _GoodsTransportBookingScreenState
                       title: const Text(
                         'Dismantle furniture that needs it',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navy,
                         ),
@@ -1534,7 +1568,7 @@ class _GoodsTransportBookingScreenState
                       title: const Text(
                         'Unpack at the drop-off',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navy,
                         ),
@@ -1575,7 +1609,7 @@ class _GoodsTransportBookingScreenState
                       title: const Text(
                         'Pickup building has a lift',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navy,
                         ),
@@ -1590,7 +1624,7 @@ class _GoodsTransportBookingScreenState
                       title: const Text(
                         'Drop-off building has a lift',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navy,
                         ),
@@ -1604,11 +1638,80 @@ class _GoodsTransportBookingScreenState
               ),
               const SizedBox(height: 18),
             ],
-
+            // ── Part Truck Load (truck only) + cargo details / fitment ──
+            if (!isPackersMovers) ...[
+              if (vehicleCategory == LogisticsVehicleCategory.truck) ...[
+                GtPtlSection(
+                  city: selectedTier?.city ?? 'Hosur',
+                  tier: selectedTier,
+                  pickupLatitude: selectedAddress?.latitude,
+                  pickupLongitude: selectedAddress?.longitude,
+                  dropLatitude: dropLocation?.latitude,
+                  dropLongitude: dropLocation?.longitude,
+                ),
+                const SizedBox(height: 18),
+              ],
+              if (!ptlMode) ...[
+                GtCargoSection(city: selectedTier?.city ?? 'Hosur'),
+                const SizedBox(height: 18),
+              ],
+            ],
+            // ── Declared value / consignee relationship ──
+            _SectionCard(
+              label: 'Declared value',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Declared Value of Goods (Optional)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Helps us handle high-value consignments with extra care.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _declaredValueController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    decoration: _fieldDecoration('e.g. 15000'),
+                  ),
+                  if (_isHighValue) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _consigneeRelationshipController,
+                      decoration: _fieldDecoration(
+                        'Your relationship to the consignee (required for high-value goods)',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            // ── Loading help, insurance, GST / e-way bill ──
+            if (!isPackersMovers) ...[
+              GtOptionsSection(declaredValue: _declaredValue?.toDouble()),
+              const SizedBox(height: 18),
+            ],
+            ],
+            if (_step == 1) ...[
             // ── Pickup address (reuses the app's existing saved-address
             // picker — real coordinates are required here for the fare
             // engine, same as the drop-off pin below). ──
             _SectionCard(
+              label: 'Pickup address',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1619,14 +1722,14 @@ class _GoodsTransportBookingScreenState
                         children: [
                           Icon(
                             Icons.location_on_rounded,
-                            color: AppColors.primary,
+                            color: AppColors.navy,
                             size: 18,
                           ),
                           SizedBox(width: 6),
                           Text(
                             'Pickup Address',
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: AppColors.navy,
                             ),
@@ -1638,9 +1741,9 @@ class _GoodsTransportBookingScreenState
                         child: Text(
                           selectedAddress != null ? 'Change' : '+ Add New',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
+                            color: AppColors.navy,
                           ),
                         ),
                       ),
@@ -1651,7 +1754,7 @@ class _GoodsTransportBookingScreenState
                     Text(
                       selectedAddress.formattedAddress,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         color: AppColors.textPrimary,
                         height: 1.4,
                       ),
@@ -1662,7 +1765,7 @@ class _GoodsTransportBookingScreenState
                       const Text(
                         'This address has no pinned map location — edit it to add one before booking.',
                         style: TextStyle(
-                          fontSize: 11.5,
+                          fontSize: 11,
                           color: AppColors.error,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1685,7 +1788,7 @@ class _GoodsTransportBookingScreenState
                           children: [
                             Icon(
                               Icons.add_location_alt_outlined,
-                              color: AppColors.primary,
+                              color: AppColors.navy,
                               size: 20,
                             ),
                             SizedBox(width: 10),
@@ -1693,7 +1796,7 @@ class _GoodsTransportBookingScreenState
                               'Tap to select your pickup address',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                                fontSize: 12,
                                 color: AppColors.navy,
                               ),
                             ),
@@ -1704,11 +1807,18 @@ class _GoodsTransportBookingScreenState
                 ],
               ),
             ),
+            if (selectedAddress != null)
+              _ServiceAreaBanner(
+                label: 'Pickup',
+                pincode: selectedAddress.postalCode,
+                lat: selectedAddress.latitude,
+                lng: selectedAddress.longitude,
+              ),
             const SizedBox(height: 18),
-
             // ── Drop-off location (map pick — required; see file-level
             // note on why free text alone can't work here). ──
             _SectionCard(
+              label: 'Drop-off location',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1719,14 +1829,14 @@ class _GoodsTransportBookingScreenState
                         children: [
                           Icon(
                             Icons.flag_rounded,
-                            color: AppColors.serviceBlue,
+                            color: AppColors.navy,
                             size: 18,
                           ),
                           SizedBox(width: 6),
                           Text(
                             'Drop-off Location',
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: AppColors.navy,
                             ),
@@ -1738,9 +1848,9 @@ class _GoodsTransportBookingScreenState
                         child: Text(
                           dropLocation != null ? 'Change' : 'Choose on Map',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
+                            color: AppColors.navy,
                           ),
                         ),
                       ),
@@ -1751,7 +1861,7 @@ class _GoodsTransportBookingScreenState
                     Text(
                       dropLocation.address,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         color: AppColors.textPrimary,
                         height: 1.4,
                       ),
@@ -1773,7 +1883,7 @@ class _GoodsTransportBookingScreenState
                           children: [
                             Icon(
                               Icons.map_outlined,
-                              color: AppColors.serviceBlue,
+                              color: AppColors.navy,
                               size: 20,
                             ),
                             SizedBox(width: 10),
@@ -1781,7 +1891,7 @@ class _GoodsTransportBookingScreenState
                               'Tap to pin the drop-off location',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                                fontSize: 12,
                                 color: AppColors.navy,
                               ),
                             ),
@@ -1822,11 +1932,31 @@ class _GoodsTransportBookingScreenState
                 ],
               ),
             ),
+            if (dropLocation != null)
+              _ServiceAreaBanner(
+                label: 'Drop-off',
+                pincode: '',
+                lat: dropLocation.latitude,
+                lng: dropLocation.longitude,
+              ),
             const SizedBox(height: 18),
-
+            ],
+            if (_step == 2) ...[
+            // ── Pickup date & time (server-driven slots) ──
+            _SectionCard(
+              label: 'Select date & slot',
+              child: GtSlotPicker(
+                category: ptlMode ? 'ptl' : vehicleCategory.serviceCategoryValue,
+                city: selectedTier?.city,
+              ),
+            ),
+            const SizedBox(height: 18),
+            ],
+            if (_step == 3) ...[
             // ── Live fare — "the frontend never determines the fare, it
             // renders what [the server] returns" (backend's own words). ──
             _SectionCard(
+              label: 'Fare details',
               child: isPackersMovers
                   ? (pmQuoteParam == null
                         ? const Row(
@@ -1841,7 +1971,7 @@ class _GoodsTransportBookingScreenState
                                 child: Text(
                                   'Select a vehicle, pickup, drop-off, and at least one item to see the fare.',
                                   style: TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     color: AppColors.textSecondary,
                                   ),
                                 ),
@@ -1870,7 +2000,7 @@ class _GoodsTransportBookingScreenState
                                       ? _friendlyQuoteError(err)
                                       : 'Could not calculate the fare.',
                                   style: const TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     color: AppColors.error,
                                     height: 1.4,
                                   ),
@@ -1884,7 +2014,7 @@ class _GoodsTransportBookingScreenState
                             ? const Text(
                                 'The Part Truck Load fare is shown in the Part Truck Load section.',
                                 style: TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   color: AppColors.textSecondary,
                                 ),
                               )
@@ -1900,7 +2030,7 @@ class _GoodsTransportBookingScreenState
                                 child: Text(
                                   'Select a vehicle, pickup and drop-off to see the fare.',
                                   style: TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     color: AppColors.textSecondary,
                                   ),
                                 ),
@@ -1929,7 +2059,7 @@ class _GoodsTransportBookingScreenState
                                       ? _friendlyQuoteError(err)
                                       : 'Could not calculate the fare.',
                                   style: const TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     color: AppColors.error,
                                     height: 1.4,
                                   ),
@@ -1946,119 +2076,45 @@ class _GoodsTransportBookingScreenState
                           )),
             ),
             const SizedBox(height: 18),
-
-            // ── Part Truck Load (truck only) + cargo details / fitment ──
-            if (!isPackersMovers) ...[
-              if (vehicleCategory == LogisticsVehicleCategory.truck) ...[
-                GtPtlSection(
-                  city: selectedTier?.city ?? 'Hosur',
-                  tier: selectedTier,
-                  pickupLatitude: selectedAddress?.latitude,
-                  pickupLongitude: selectedAddress?.longitude,
-                  dropLatitude: dropLocation?.latitude,
-                  dropLongitude: dropLocation?.longitude,
-                ),
-                const SizedBox(height: 18),
-              ],
-              if (!ptlMode) ...[
-                GtCargoSection(city: selectedTier?.city ?? 'Hosur'),
-                const SizedBox(height: 18),
-              ],
-            ],
-
-            // ── Declared value / consignee relationship ──
-            _SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Declared Value of Goods (Optional)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Helps us handle high-value consignments with extra care.',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _declaredValueController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    decoration: _fieldDecoration('e.g. 15000'),
-                  ),
-                  if (_isHighValue) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _consigneeRelationshipController,
-                      decoration: _fieldDecoration(
-                        'Your relationship to the consignee (required for high-value goods)',
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // ── Loading help, insurance, GST / e-way bill ──
-            if (!isPackersMovers) ...[
-              GtOptionsSection(declaredValue: _declaredValue?.toDouble()),
-              const SizedBox(height: 18),
-            ],
-
-            // ── Pickup date & time (server-driven slots) ──
-            _SectionCard(
-              child: GtSlotPicker(
-                category: ptlMode ? 'ptl' : vehicleCategory.serviceCategoryValue,
-                city: selectedTier?.city,
-              ),
-            ),
-            const SizedBox(height: 18),
-
             GtPoliciesSection(
               serviceCategory: vehicleCategory.serviceCategoryValue,
               faqCategory: vehicleCategory.tierCategoryValue,
               city: selectedTier?.city,
             ),
+            ],
             const SizedBox(height: 120),
-          ],
-        ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        margin: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: const Border(
-            top: BorderSide(color: AppColors.border, width: 0.8),
-          ),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
+              color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+              blurRadius: 22,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         child: SizedBox(
-          height: 52,
+          height: 54,
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _isLoading ? null : _handleSubmit,
+            onPressed: _isLoading
+                ? null
+                : (_step < 3 ? _goNext : _handleSubmit),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.serviceBlue,
+              backgroundColor: AppColors.navy,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(16),
               ),
               elevation: 0,
             ),
@@ -2071,12 +2127,153 @@ class _GoodsTransportBookingScreenState
                       color: Colors.white,
                     ),
                   )
-                : const Text(
-                    'Confirm Booking',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                : Text(
+                    _step < 3 ? 'Continue' : 'Confirm Booking',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                   ),
           ),
         ),
+      ),
+    ));
+  }
+
+  /// Validates the current step (same rules / messages as [_handleSubmit],
+  /// which still re-checks everything on the final step) and moves on.
+  void _goNext() {
+    final vehicleCategory = ref.read(selectedVehicleCategoryProvider);
+    if (_step == 0) {
+      if (ref.read(selectedLogisticsTierProvider) == null) {
+        _warn('Please select a vehicle.');
+        return;
+      }
+      if (_buildCargoDescription(vehicleCategory) == null) {
+        _warn(
+          vehicleCategory == LogisticsVehicleCategory.packersMovers
+              ? 'Please add at least one item to move.'
+              : (ref.read(ptlModeProvider) &&
+                      vehicleCategory == LogisticsVehicleCategory.truck)
+                  ? 'Enter the cargo weight in kg for Part Truck Load.'
+                  : 'Please add your cargo details (type of goods, items or weight).',
+        );
+        return;
+      }
+      if (_isHighValue && _consigneeRelationshipController.text.trim().isEmpty) {
+        _warn(
+          'For high-value consignments, please describe your relationship to the consignee.',
+        );
+        return;
+      }
+    } else if (_step == 1) {
+      final address = ref.read(selectedAddressProvider);
+      if (address == null) {
+        _warn('Please select a pickup address.');
+        context.push('/addresses?select=true');
+        return;
+      }
+      if (address.latitude == null || address.longitude == null) {
+        _warn(
+          'Your pickup address is missing a map location. Please edit it and pin it on the map before booking.',
+        );
+        return;
+      }
+      final drop = ref.read(dropLocationProvider);
+      if (drop == null) {
+        _warn('Please choose the drop-off location on the map.');
+        return;
+      }
+      // Service-area check (shown live under each card in step 2).
+      final pickupArea = ref
+          .read(serviceabilityProvider((
+            pincode: address.postalCode,
+            lat: address.latitude,
+            lng: address.longitude,
+          )))
+          .valueOrNull;
+      if (pickupArea != null && !pickupArea.isServiceable) {
+        _warn('Your pickup location is outside our service area.');
+        return;
+      }
+      final dropArea = ref
+          .read(serviceabilityProvider((
+            pincode: '',
+            lat: drop.latitude,
+            lng: drop.longitude,
+          )))
+          .valueOrNull;
+      if (dropArea != null && !dropArea.isServiceable) {
+        _warn('Your drop-off location is outside our service area.');
+        return;
+      }
+    } else if (_step == 2) {
+      if (ref.read(selectedTimeSlotProvider) == null) {
+        _warn('Please select a pickup time slot.');
+        return;
+      }
+    }
+    setState(() => _step = _step + 1);
+  }
+
+  Widget _buildStepper() {
+    const labels = ['Cargo', 'Locations', 'Schedule', 'Fare'];
+    Widget node(int i) {
+      final done = i < _step;
+      final active = i == _step;
+      final reached = done || active;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: reached ? AppColors.navy : Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: reached ? AppColors.navy : const Color(0xFFCBD5E1),
+                  width: 1.5),
+            ),
+            child: Center(
+              child: done
+                  ? const Icon(Icons.check_rounded, size: 18, color: Colors.white)
+                  : Text('${i + 1}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: reached ? Colors.white : AppColors.textHint)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(labels[i],
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: reached ? FontWeight.w800 : FontWeight.w500,
+                  color: reached ? AppColors.navy : AppColors.textSecondary)),
+        ],
+      );
+    }
+
+    Widget line(bool filled) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: Container(
+                height: 2,
+                color: filled ? AppColors.navy : const Color(0xFFE2E8F0)),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          node(0),
+          line(_step > 0),
+          node(1),
+          line(_step > 1),
+          node(2),
+          line(_step > 2),
+          node(3),
+        ],
       ),
     );
   }
@@ -2096,17 +2293,17 @@ class _GoodsTransportBookingScreenState
 
   InputDecoration _fieldDecoration(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(fontSize: 13, color: AppColors.textHint),
+    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textHint),
     filled: true,
     fillColor: Colors.white,
     contentPadding: const EdgeInsets.all(12),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(6),
-      borderSide: const BorderSide(color: AppColors.border, width: 0.8),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFFE3E8F0), width: 1),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(6),
-      borderSide: const BorderSide(color: AppColors.border, width: 0.8),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFFE3E8F0), width: 1),
     ),
   );
 
@@ -2165,7 +2362,7 @@ class _FareQuoteView extends StatelessWidget {
             const Text(
               'Estimated Fare',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -2173,9 +2370,9 @@ class _FareQuoteView extends StatelessWidget {
             Text(
               '₹${quote.total.toStringAsFixed(0)}',
               style: const TextStyle(
-                fontSize: 20,
+                fontSize: 17.5,
                 fontWeight: FontWeight.w900,
-                color: AppColors.serviceBlue,
+                color: AppColors.navy,
               ),
             ),
           ],
@@ -2185,7 +2382,7 @@ class _FareQuoteView extends StatelessWidget {
           Text(
             quote.estimateNotice!,
             style: const TextStyle(
-              fontSize: 11.5,
+              fontSize: 11,
               color: AppColors.warning,
               fontWeight: FontWeight.w600,
             ),
@@ -2219,14 +2416,14 @@ class _FareQuoteView extends StatelessWidget {
                   const Text(
                     'Surge',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       color: AppColors.textSecondary,
                     ),
                   ),
                   Text(
                     '${surgeMultiplier.toStringAsFixed(2)}×',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: AppColors.navy,
                     ),
@@ -2274,7 +2471,7 @@ class _FareRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 11.5,
                 color: AppColors.textSecondary,
               ),
             ),
@@ -2282,7 +2479,7 @@ class _FareRow extends StatelessWidget {
           Text(
             '₹${amount.toStringAsFixed(2)}',
             style: const TextStyle(
-              fontSize: 12,
+              fontSize: 11.5,
               fontWeight: FontWeight.w700,
               color: AppColors.navy,
             ),
@@ -2294,19 +2491,65 @@ class _FareRow extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.child});
+  const _SectionCard({required this.child, this.label});
 
   final Widget child;
 
+  /// Small step caption shown above the card, like the numbered steps of the
+  /// service booking flow ("STEP 2 · Package").
+  final String? label;
+
   @override
   Widget build(BuildContext context) {
+    final card = _card();
+    if (label == null) return card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppColors.navy,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label!.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                  color: AppColors.navy,
+                ),
+              ),
+            ],
+          ),
+        ),
+        card,
+      ],
+    );
+  }
+
+  Widget _card() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border, width: 0.8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: child,
     );
@@ -2367,17 +2610,17 @@ class _PmChoiceChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AppColors.serviceBlue : Colors.white,
+          color: selected ? AppColors.navy : Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.serviceBlue : AppColors.border,
+            color: selected ? AppColors.navy : AppColors.border,
             width: selected ? 1.5 : 0.8,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 11.5,
             fontWeight: FontWeight.w700,
             color: selected ? Colors.white : AppColors.navy,
           ),
@@ -2406,7 +2649,7 @@ class _PmFloorStepper extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            fontSize: 12,
+            fontSize: 11.5,
             fontWeight: FontWeight.w700,
             color: AppColors.navy,
           ),
@@ -2424,7 +2667,7 @@ class _PmFloorStepper extends StatelessWidget {
                 '$value',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w800,
                   color: AppColors.navy,
                 ),
@@ -2476,7 +2719,7 @@ class _PmFareQuoteView extends StatelessWidget {
                 child: Text(
                   'This move needs a quick review before we can confirm an instant price',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.navy,
                   ),
@@ -2488,7 +2731,7 @@ class _PmFareQuoteView extends StatelessWidget {
           Text(
             quote.estimateNotice ?? quote.reviewReason ?? 'Some of the selected items need a closer look. Our team will contact you to finalize the price before this can be confirmed as an instant booking.',
             style: const TextStyle(
-              fontSize: 12,
+              fontSize: 11.5,
               color: AppColors.textSecondary,
               height: 1.4,
             ),
@@ -2498,7 +2741,7 @@ class _PmFareQuoteView extends StatelessWidget {
             Text(
               'Needs review: ${quote.unrecognizedItems.join(', ')}',
               style: const TextStyle(
-                fontSize: 11.5,
+                fontSize: 11,
                 color: AppColors.warning,
                 fontWeight: FontWeight.w600,
               ),
@@ -2517,7 +2760,7 @@ class _PmFareQuoteView extends StatelessWidget {
             const Text(
               'Estimated Fare',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -2525,9 +2768,9 @@ class _PmFareQuoteView extends StatelessWidget {
             Text(
               '₹${quote.total!.toStringAsFixed(0)}',
               style: const TextStyle(
-                fontSize: 20,
+                fontSize: 17.5,
                 fontWeight: FontWeight.w900,
-                color: AppColors.serviceBlue,
+                color: AppColors.navy,
               ),
             ),
           ],
@@ -2541,6 +2784,97 @@ class _PmFareQuoteView extends StatelessWidget {
           style: TextStyle(fontSize: 11, color: AppColors.textHint),
         ),
       ],
+    );
+  }
+}
+
+/// Live "is this location inside our service area?" notice shown right under
+/// the pickup / drop-off cards. Uses the same server zone check as the
+/// address screen ([serviceabilityProvider]).
+class _ServiceAreaBanner extends ConsumerWidget {
+  const _ServiceAreaBanner({
+    required this.label,
+    required this.pincode,
+    required this.lat,
+    required this.lng,
+  });
+
+  final String label;
+  final String pincode;
+  final double? lat;
+  final double? lng;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(
+      serviceabilityProvider((pincode: pincode, lat: lat, lng: lng)),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: async.when(
+        loading: () => const Row(
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Text('Checking service area…', style: TextStyle(fontSize: 11.5)),
+          ],
+        ),
+        error: (_, __) => const SizedBox.shrink(),
+        data: (result) {
+          final ok = result.isServiceable;
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: ok ? const Color(0xFFE8EDF7) : AppColors.errorLight,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  ok ? Icons.verified_rounded : Icons.error_outline_rounded,
+                  size: 18,
+                  color: ok ? AppColors.navy : AppColors.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ok
+                            ? '$label is within our service area'
+                            : '$label location is outside our service area',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: ok ? AppColors.navy : AppColors.error,
+                        ),
+                      ),
+                      if (!ok && result.message.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          result.message,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            height: 1.35,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

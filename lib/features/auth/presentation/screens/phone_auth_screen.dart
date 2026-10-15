@@ -130,7 +130,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                 const Text(
                   'Welcome back!',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 21,
                     fontWeight: FontWeight.w800,
                     color: AppColors.navy,
                     letterSpacing: -0.3,
@@ -140,7 +140,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                 const Text(
                   'Login or create an account',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w400,
                   ),
@@ -196,7 +196,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                                 Text(
                                   'Mobile Number',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     fontWeight: _channel == 'phone'
                                         ? FontWeight.w700
                                         : FontWeight.w500,
@@ -249,7 +249,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                                 Text(
                                   'Email Address',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     fontWeight: _channel == 'email'
                                         ? FontWeight.w700
                                         : FontWeight.w500,
@@ -274,7 +274,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                   const Text(
                     'Mobile Number',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppColors.navy,
                     ),
@@ -295,11 +295,11 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                         child: const Center(
                           child: Row(
                             children: [
-                              Text('🇮🇳 ', style: TextStyle(fontSize: 16)),
+                              Text('🇮🇳 ', style: TextStyle(fontSize: 14)),
                               Text(
                                 '+91',
                                 style: TextStyle(
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.navy,
                                 ),
@@ -323,14 +323,14 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                           ],
                           textInputAction: TextInputAction.done,
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: AppColors.navy,
                           ),
                           decoration: InputDecoration(
                             hintText: 'Enter mobile number',
                             hintStyle: TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               color: AppColors.textHint,
                               fontWeight: FontWeight.w400,
                             ),
@@ -357,7 +357,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                   const Text(
                     'Email Address',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppColors.navy,
                     ),
@@ -371,14 +371,14 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                     autofillHints: const [AutofillHints.email],
                     textInputAction: TextInputAction.done,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppColors.navy,
                     ),
                     decoration: InputDecoration(
                       hintText: 'name@example.com',
                       hintStyle: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         color: AppColors.textHint,
                         fontWeight: FontWeight.w400,
                       ),
@@ -429,7 +429,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                         : const Text(
                             'Continue',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -463,7 +463,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                     child: const Text(
                       'Continue as Guest',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.primary,
                       ),
@@ -541,7 +541,7 @@ class _TrustBadge extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            fontSize: 12,
+            fontSize: 11.5,
             fontWeight: FontWeight.w500,
             color: AppColors.textSecondary,
           ),

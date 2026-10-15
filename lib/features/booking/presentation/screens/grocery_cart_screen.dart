@@ -228,20 +228,20 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   width: 90,
                   height: 90,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F766E).withValues(alpha: 0.1),
+                    color: AppColors.navy.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.shopping_basket_outlined,
                     size: 48,
-                    color: Color(0xFF0F766E),
+                    color: AppColors.navy,
                   ),
                 ),
                 const SizedBox(height: 20),
                 const Text(
                   'Your grocery cart is empty',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 17.5,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
@@ -251,7 +251,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   'Add farm-fresh vegetables and daily essentials to get instant 10-15 min delivery.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     color: AppColors.textSecondary,
                     height: 1.4,
                   ),
@@ -260,7 +260,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 FilledButton.icon(
                   onPressed: _goShopGroceries,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F766E),
+                    backgroundColor: AppColors.navy,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 28,
                       vertical: 14,
@@ -273,7 +273,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   label: const Text(
                     'Explore Farm-Fresh Produce',
                     style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold),
+                        fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -299,9 +299,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         (cartSummary.subtotal / freeThreshold).toDecimal().toDouble().clamp(0.0, 1.0);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF8F4EF),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF8F4EF),
         elevation: 0,
         scrolledUnderElevation: 0.5,
         leading: IconButton(
@@ -320,7 +320,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             Text(
               'My Cart',
               style: TextStyle(
-                fontSize: 17,
+                fontSize: 15,
                 fontWeight: FontWeight.w900,
                 color: AppColors.textPrimary,
               ),
@@ -359,10 +359,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   minimumSize: const Size(0, 32),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-                icon: const Icon(Icons.shopping_cart_outlined, size: 14),
+                icon: const Icon(Icons.share_outlined, size: 14),
                 label: const Text(
                   'Share Cart',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
@@ -395,7 +395,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         _errorMessage!,
                         style: TextStyle(
                           color: Colors.red.shade900,
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -410,29 +410,28 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.6),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(10),
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8EDF7),
+                      shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.location_on_rounded,
                       size: 20,
-                      color: const Color(0xFF059669),
+                      color: AppColors.navy,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -443,7 +442,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         Text(
                           'Delivering to ${activeAddress != null ? activeAddress.addressType : "Home"}',
                           style: const TextStyle(
-                            fontSize: 13.5,
+                            fontSize: 12.5,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
                           ),
@@ -452,7 +451,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         Text(
                           activeAddress?.formattedAddress ?? 'Hosur, Tamil Nadu',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             color: AppColors.textSecondary,
                             height: 1.3,
                           ),
@@ -466,17 +465,18 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   OutlinedButton(
                     onPressed: () => _openAddressSheet(context, addresses),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                      minimumSize: const Size(0, 32),
+                      foregroundColor: AppColors.navy,
+                      backgroundColor: const Color(0xFFEEF1F7),
+                      side: const BorderSide(color: Color(0xFFDDE3ED)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                      minimumSize: const Size(0, 34),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                     ),
                     child: const Text(
                       'Change',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -489,13 +489,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.6),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -509,23 +508,23 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           const Icon(
                             Icons.auto_awesome,
                             size: 14,
-                            color: const Color(0xFF059669),
+                            color: AppColors.navy,
                           ),
                           const SizedBox(width: 6),
                           if (cartSummary.subtotal >= freeThreshold)
                             const Text(
-                              '🎉 You unlocked FREE delivery!',
+                              'You unlocked FREE delivery!',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w800,
-                                color: const Color(0xFF059669),
+                                color: AppColors.navy,
                               ),
                             )
                           else
                             RichText(
                               text: TextSpan(
                                 style: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                   color: AppColors.textPrimary,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -534,7 +533,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   TextSpan(
                                     text: '₹$amountForFreeDelivery',
                                     style: const TextStyle(
-                                      color: const Color(0xFF059669),
+                                      color: AppColors.navy,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -542,7 +541,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   const TextSpan(
                                     text: 'FREE delivery',
                                     style: TextStyle(
-                                      color: const Color(0xFF059669),
+                                      color: AppColors.navy,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -564,13 +563,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   ),
                   const SizedBox(height: 8),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(10),
                     child: LinearProgressIndicator(
                       value: progressFraction,
-                      minHeight: 4,
+                      minHeight: 7,
                       backgroundColor: AppColors.surfaceVariant,
                       valueColor: const AlwaysStoppedAnimation<Color>(
-                        const Color(0xFF059669),
+                        AppColors.navy,
                       ),
                     ),
                   ),
@@ -579,30 +578,67 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             ),
             const SizedBox(height: 14),
 
-            // ── Cart Items List Card ─────────────────────────────────────────
+            // ── Cart Items List (template: one card per item) ────────────────
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.6),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
               child: Column(
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 12, 0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.shopping_basket_outlined,
+                            size: 18, color: AppColors.navy),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Cart Items (${cartSummary.itemCount})',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _goShopGroceries,
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.navy,
+                            backgroundColor: const Color(0xFFEEF1F7),
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add More',
+                              style: TextStyle(
+                                  fontSize: 11.5, fontWeight: FontWeight.w800)),
+                        ),
+                      ],
+                    ),
+                  ),
                   ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
                     itemCount: _cartEntries(cartItems).length,
                     separatorBuilder: (context, index) =>
-                        const Divider(height: 20, color: AppColors.border),
-                    itemBuilder: (context, index) {
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) => Container(
+                     padding: const EdgeInsets.all(12),
+                     decoration: BoxDecoration(
+                       color: Colors.white,
+                       borderRadius: BorderRadius.circular(16),
+                       boxShadow: [
+                         BoxShadow(
+                           color: const Color(0xFF1E3A8A).withValues(alpha: 0.05),
+                           blurRadius: 14,
+                           offset: const Offset(0, 4),
+                         ),
+                       ],
+                     ),
+                     child: Builder(builder: (context) {
                       final entry = _cartEntries(cartItems)[index];
                       if (entry.comboKey != null) {
                         return _ComboCartGroup(
@@ -637,11 +673,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                 children: [
                           // Thumbnail
                           Container(
-                            width: 58,
-                            height: 58,
+                            width: 68,
+                            height: 68,
                             decoration: BoxDecoration(
                               color: AppColors.surfaceVariant,
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                             clipBehavior: Clip.antiAlias,
                             // Fixed 2026-10-07 ("Images are not showing
@@ -677,8 +713,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                               slug: item.service.categorySlug,
                               semanticIcon: ImageUrlHelper.mapCategoryIcon(
                                   item.service.categorySlug, item.service.categorySlug),
-                              width: 58,
-                              height: 58,
+                              width: 68,
+                              height: 68,
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -693,7 +729,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   item.service.title,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 13.5,
+                                    fontSize: 12.5,
                                     color: AppColors.textPrimary,
                                   ),
                                   maxLines: 2,
@@ -708,7 +744,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                     '₹${effectivePrice.toStringAsFixed(2)}',
                                   ].join(' • '),
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w600,
                                     color: AppColors.textSecondary,
                                   ),
@@ -717,7 +753,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                 const Text(
                                   'Seller: SevoGrocery',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.textPrimary,
                                   ),
@@ -729,7 +765,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                     Text(
                                       '₹${item.totalPrice}',
                                       style: const TextStyle(
-                                        fontSize: 14.5,
+                                        fontSize: 13.5,
                                         fontWeight: FontWeight.w900,
                                         color: AppColors.textPrimary,
                                       ),
@@ -739,7 +775,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                       Text(
                                         '₹${mrp * Decimal.fromInt(item.quantity)}',
                                         style: const TextStyle(
-                                          fontSize: 11.5,
+                                          fontSize: 11,
                                           color: AppColors.textSecondary,
                                           decoration: TextDecoration.lineThrough,
                                         ),
@@ -759,10 +795,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           // Quantity Stepper matching Web
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(6),
+                              color: const Color(0xFFF3F5F9),
+                              borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: AppColors.border,
+                                color: const Color(0xFFE3E8F0),
                                 width: 1,
                               ),
                             ),
@@ -779,7 +815,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                         );
                                   },
                                   borderRadius: const BorderRadius.horizontal(
-                                    left: Radius.circular(6),
+                                    left: Radius.circular(20),
                                   ),
                                   child: const Padding(
                                     padding: EdgeInsets.symmetric(
@@ -789,7 +825,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                     child: Icon(
                                       Icons.remove,
                                       size: 14,
-                                      color: AppColors.textSecondary,
+                                      color: AppColors.navy,
                                     ),
                                   ),
                                 ),
@@ -822,7 +858,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                         context, item.service.title);
                                   },
                                   borderRadius: const BorderRadius.horizontal(
-                                    right: Radius.circular(6),
+                                    right: Radius.circular(20),
                                   ),
                                   child: const Padding(
                                     padding: EdgeInsets.symmetric(
@@ -832,7 +868,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                     child: Icon(
                                       Icons.add,
                                       size: 14,
-                                      color: const Color(0xFF059669),
+                                      color: AppColors.navy,
                                     ),
                                   ),
                                 ),
@@ -841,31 +877,31 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           ),
                         ],
                       );
-                    },
+                    }),
+                    ),
                   ),
 
-                  const Divider(height: 1, color: AppColors.border),
                   InkWell(
                     onTap: () {
                       // Back to the Groceries home to keep shopping.
                       _goShopGroceries();
                     },
                     borderRadius: const BorderRadius.vertical(
-                        bottom: Radius.circular(8)),
+                        bottom: Radius.circular(18)),
                     child: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 13),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_circle_outline_rounded,
-                              size: 16, color: Color(0xFF0F766E)),
+                          Icon(Icons.eco_rounded,
+                              size: 16, color: AppColors.navy),
                           SizedBox(width: 6),
                           Text(
                             'Add More Farm Produce',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F766E),
+                              color: AppColors.navy,
                             ),
                           ),
                         ],
@@ -886,13 +922,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.6),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -905,11 +940,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           size: 18, color: AppColors.textPrimary),
                       SizedBox(width: 8),
                       Text(
-                        'Payment method',
+                        'Payment Method',
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.navy,
                         ),
                       ),
                     ],
@@ -948,13 +983,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.6),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -965,8 +999,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     'Bill Details',
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.navy,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -983,7 +1017,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           const Text(
                             'Items total',
                             style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 12,
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
@@ -996,10 +1030,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                 vertical: 1.5,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFECFDF5),
+                                color: const Color(0xFFEEF1F7),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                  color: const Color(0xFFA7F3D0),
+                                  color: const Color(0xFFDDE3ED),
                                   width: 0.8,
                                 ),
                               ),
@@ -1008,7 +1042,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                 style: const TextStyle(
                                   fontSize: 9.5,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF047857),
+                                  color: Color(0xFF1E3A8A),
                                 ),
                               ),
                             ),
@@ -1021,7 +1055,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                             Text(
                               '₹${cartSummary.originalTotal}',
                               style: const TextStyle(
-                                fontSize: 11.5,
+                                fontSize: 11,
                                 color: AppColors.textSecondary,
                                 decoration: TextDecoration.lineThrough,
                               ),
@@ -1031,7 +1065,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           Text(
                             '₹${cartSummary.subtotal}',
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: AppColors.textPrimary,
                             ),
@@ -1054,7 +1088,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           Text(
                             'Delivery charge',
                             style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 12,
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1069,10 +1103,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                             ? 'FREE'
                             : '₹${cartSummary.deliveryFee}',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: cartSummary.deliveryFee == Decimal.zero
-                              ? const Color(0xFF059669)
+                              ? AppColors.navy
                               : AppColors.textPrimary,
                         ),
                       ),
@@ -1092,7 +1126,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           Text(
                             'Handling & packaging',
                             style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 12,
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1105,7 +1139,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                       Text(
                         '₹${cartSummary.handlingFee}',
                         style: const TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
                         ),
@@ -1127,7 +1161,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                             Text(
                               'Small cart fee',
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1140,7 +1174,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         Text(
                           '₹${cartSummary.smallCartFee}',
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
                           ),
@@ -1162,7 +1196,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                             Text(
                               'Rider Tip',
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1172,7 +1206,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         Text(
                           '₹$selectedTip',
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
                           ),
@@ -1199,7 +1233,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                               Icons.discount_outlined,
                               size: 15,
                               color: _appliedCouponCode != null
-                                  ? AppColors.primary
+                                  ? AppColors.navy
                                   : AppColors.textSecondary,
                             ),
                             const SizedBox(width: 6),
@@ -1208,9 +1242,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   ? 'Coupon: $_appliedCouponCode'
                                   : 'Apply Coupon / Promo Code',
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 color: _appliedCouponCode != null
-                                    ? AppColors.primary
+                                    ? AppColors.navy
                                     : AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1234,13 +1268,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         Row(
                           children: [
                             const Icon(Icons.local_offer_outlined,
-                                size: 15, color: const Color(0xFF059669)),
+                                size: 15, color: AppColors.navy),
                             const SizedBox(width: 6),
                             Text(
                               'Coupon Discount ($_appliedCouponCode)',
                               style: const TextStyle(
-                                fontSize: 12.5,
-                                color: const Color(0xFF059669),
+                                fontSize: 12,
+                                color: AppColors.navy,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1249,9 +1283,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         Text(
                           '-₹$_couponDiscountAmount',
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFF059669),
+                            color: AppColors.navy,
                           ),
                         ),
                       ],
@@ -1267,7 +1301,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                       const Text(
                         'Grand Total',
                         style: TextStyle(
-                          fontSize: 14.5,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
                         ),
@@ -1275,9 +1309,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                       Text(
                         '₹${_effectiveGrandTotal(cartSummary)}',
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 16,
                           fontWeight: FontWeight.w900,
-                          color: AppColors.textPrimary,
+                          color: AppColors.priceColor,
                         ),
                       ),
                     ],
@@ -1292,13 +1326,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.6),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -1308,16 +1341,16 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   const Text(
                     'Support your delivery partner',
                     style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.navy,
                     ),
                   ),
                   const SizedBox(height: 2),
                   const Text(
                     'Add a tip to show appreciation. 100% of the tip goes directly to your rider.',
                     style: TextStyle(
-                      fontSize: 11.5,
+                      fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
                   ),
@@ -1398,7 +1431,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
                         hintText: 'Enter custom tip amount (₹)',
-                        hintStyle: const TextStyle(fontSize: 12),
+                        hintStyle: const TextStyle(fontSize: 11.5),
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -1424,9 +1457,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 0.6),
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.border, width: 1),
               ),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1434,7 +1467,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   Text(
                     'Cancellation Policy',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w800,
                       color: AppColors.textPrimary,
                     ),
@@ -1457,39 +1490,39 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
       // ── Fixed Bottom Bar Matching Uploaded Reference ────────────────────────
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        margin: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: const Border(
-            top: BorderSide(color: AppColors.divider, width: 0.5),
-          ),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -3),
+              color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+              blurRadius: 22,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         child: SafeArea(
+          top: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               // Big Green Proceed To Pay Button
               SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 54,
                 child: FilledButton(
                   onPressed: _isSubmitting
                       ? null
                       : () => _onProceedToPayTapped(context, activeAddress),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF059669),
+                    backgroundColor: AppColors.navy,
                     disabledBackgroundColor:
-                        const Color(0xFF059669).withValues(alpha: 0.5),
+                        AppColors.navy.withValues(alpha: 0.5),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   child: Row(
@@ -1502,7 +1535,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           Text(
                             '₹${_effectiveGrandTotal(cartSummary)}',
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontSize: 16,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
                               height: 1.1,
@@ -1524,14 +1557,14 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           Text(
                             _isSubmitting ? 'Placing Order...' : 'Proceed to Pay',
                             style: const TextStyle(
-                              fontSize: 14.5,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w800,
                               color: Colors.white,
                             ),
                           ),
                           const SizedBox(width: 4),
                           const Icon(
-                            Icons.chevron_right,
+                            Icons.arrow_forward_rounded,
                             color: Colors.white,
                             size: 20,
                           ),
@@ -1540,6 +1573,18 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 6),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_outline_rounded,
+                      size: 12, color: AppColors.textHint),
+                  SizedBox(width: 4),
+                  Text('Your payment is 100% secure',
+                      style: TextStyle(
+                          fontSize: 10.5, color: AppColors.textSecondary)),
+                ],
               ),
             ],
           ),
@@ -1572,7 +1617,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: isSelected ? Colors.white : AppColors.textPrimary,
               ),
@@ -1616,29 +1661,19 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               const Text(
                 'Select Delivery Address',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 12),
-              if (addresses.isEmpty)
-                ListTile(
-                  leading: const Icon(Icons.add_location_alt_rounded),
-                  title: const Text('Add New Address'),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    context.push('/addresses/add');
-                  },
-                )
-              else
                 ...addresses.map(
                   (addr) => ListTile(
                     leading: Icon(
                       addr.addressType.toLowerCase().contains('work')
                           ? Icons.work_outline
                           : Icons.home_outlined,
-                      color: const Color(0xFF0F766E),
+                      color: AppColors.navy,
                     ),
                     title: Text(
                       addr.addressType.toUpperCase(),
@@ -1651,6 +1686,24 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     },
                   ),
                 ),
+              if (addresses.isNotEmpty) const Divider(height: 8),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: const Icon(Icons.add_location_alt_rounded, color: AppColors.navy),
+                title: const Text(
+                  'Add New Address',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.navy),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await context.push('/addresses/add');
+                  // The add screen selects the address it just saved; use it
+                  // here too instead of the one picked earlier.
+                  if (!mounted) return;
+                  final added = ref.read(selectedAddressProvider);
+                  if (added != null) setState(() => _selectedAddress = added);
+                },
+              ),
             ],
           ),
         ),
@@ -1671,7 +1724,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
     Widget label(String t) => Text(
           t,
-          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textSecondary),
         );
 
     Widget retry(String date) => Row(
@@ -1679,12 +1732,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             const Expanded(
               child: Text(
                 'Could not load delivery slots.',
-                style: TextStyle(fontSize: 11.5, color: AppColors.error),
+                style: TextStyle(fontSize: 11, color: AppColors.error),
               ),
             ),
             TextButton(
               onPressed: () => ref.invalidate(marketplaceDeliverySlotsForDateProvider(date)),
-              child: const Text('Retry', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+              child: const Text('Retry', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
             ),
           ],
         );
@@ -1708,10 +1761,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border, width: 0.6),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 2)),
+          BoxShadow(color: const Color(0xFF1E3A8A).withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -1723,7 +1775,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               SizedBox(width: 8),
               Text(
                 'Delivery slot',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
             ],
           ),
@@ -1780,31 +1832,45 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               if (visible.isEmpty) {
                 return const Text(
                   'No delivery slots available for this date.',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 );
               }
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: visible.map((slot) {
-                  final selected = _deliveryOption == _DeliveryOption.scheduled &&
-                      _selectedSlotDate == pickedStr &&
-                      _selectedSlot?.id == slot.id;
-                  return _SlotChip(
-                    label: slot.label.isNotEmpty
-                        ? '${slot.label} · ${_slotTimeRangeLabel(slot)}'
-                        : _slotTimeRangeLabel(slot),
-                    isSelected: selected,
-                    isDisabled: !slot.isAvailable,
-                    onTap: slot.isAvailable
-                        ? () => setState(() {
-                              _deliveryOption = _DeliveryOption.scheduled;
-                              _selectedSlot = slot;
-                              _selectedSlotDate = pickedStr;
-                            })
-                        : null,
-                  );
-                }).toList(),
+              Widget slotTile(DeliverySlotOption slot) {
+                final selected = _deliveryOption == _DeliveryOption.scheduled &&
+                    _selectedSlotDate == pickedStr &&
+                    _selectedSlot?.id == slot.id;
+                return _SlotTile(
+                  label: _slotTimeRangeLabel(slot),
+                  isSelected: selected,
+                  isDisabled: !slot.isAvailable,
+                  onTap: slot.isAvailable
+                      ? () => setState(() {
+                            _deliveryOption = _DeliveryOption.scheduled;
+                            _selectedSlot = slot;
+                            _selectedSlotDate = pickedStr;
+                          })
+                      : null,
+                );
+              }
+
+              // Two-column grid: each row holds two slots side by side.
+              return Column(
+                children: [
+                  for (var i = 0; i < visible.length; i += 2) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: slotTile(visible[i])),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: i + 1 < visible.length
+                              ? slotTile(visible[i + 1])
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               );
             },
             loading: () => const Padding(
@@ -2036,12 +2102,12 @@ class _DeliveryOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.textPrimary : AppColors.background,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? AppColors.textPrimary : AppColors.border,
             width: 1,
@@ -2062,7 +2128,7 @@ class _DeliveryOptionTile extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                       color: isSelected ? Colors.white : AppColors.textPrimary,
                     ),
@@ -2118,8 +2184,8 @@ class _SlotChip extends StatelessWidget {
     final background = isDisabled
         ? AppColors.surfaceVariant
         : isSelected
-            ? AppColors.textPrimary
-            : AppColors.background;
+            ? AppColors.navy
+            : Colors.white;
     final foreground = isDisabled
         ? AppColors.textSecondary
         : isSelected
@@ -2127,12 +2193,12 @@ class _SlotChip extends StatelessWidget {
             : AppColors.textPrimary;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: isSelected && !isDisabled ? AppColors.textPrimary : AppColors.border,
             width: 1,
@@ -2141,11 +2207,88 @@ class _SlotChip extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
             color: foreground,
             decoration: isDisabled ? TextDecoration.lineThrough : null,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One time-slot tile in the delivery slot grid: centred range label, green
+/// tint + check mark when selected, struck through when unavailable.
+class _SlotTile extends StatelessWidget {
+  const _SlotTile({
+    required this.label,
+    required this.isSelected,
+    this.isDisabled = false,
+    this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final bool isDisabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDisabled
+        ? AppColors.surfaceVariant
+        : isSelected
+            ? const Color(0xFFEEF1F7)
+            : const Color(0xFFF5F8FF);
+    final border = isSelected && !isDisabled
+        ? AppColors.navy
+        : const Color(0xFFDCE4F2);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: border, width: isSelected ? 1.4 : 1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDisabled
+                        ? AppColors.textSecondary
+                        : isSelected
+                            ? const Color(0xFF1E3A8A)
+                            : AppColors.navy,
+                    decoration: isDisabled ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+            ),
+            if (isSelected && !isDisabled) ...[
+              const SizedBox(width: 6),
+              Container(
+                width: 18,
+                height: 18,
+                decoration: const BoxDecoration(
+                  color: AppColors.navy,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, size: 12, color: Colors.white),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -2179,10 +2322,10 @@ class _GroceryPaymentMethodOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF059669).withValues(alpha: 0.08) : Colors.white,
+          color: selected ? AppColors.navy.withValues(alpha: 0.08) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? const Color(0xFF059669) : AppColors.border,
+            color: selected ? AppColors.navy : AppColors.border,
             width: selected ? 1.4 : 0.8,
           ),
         ),
@@ -2191,7 +2334,7 @@ class _GroceryPaymentMethodOption extends StatelessWidget {
             Icon(
               icon,
               size: 18,
-              color: selected ? const Color(0xFF059669) : AppColors.textSecondary,
+              color: selected ? AppColors.navy : AppColors.textSecondary,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -2202,9 +2345,9 @@ class _GroceryPaymentMethodOption extends StatelessWidget {
                   Text(
                     label,
                     style: TextStyle(
-                      fontSize: 12.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: selected ? const Color(0xFF059669) : AppColors.textPrimary,
+                      color: selected ? AppColors.navy : AppColors.textPrimary,
                     ),
                   ),
                   Text(
@@ -2220,7 +2363,7 @@ class _GroceryPaymentMethodOption extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(Icons.check_circle, size: 16, color: const Color(0xFF059669)),
+              const Icon(Icons.check_circle, size: 16, color: AppColors.navy),
           ],
         ),
       ),
@@ -2246,9 +2389,9 @@ class _ComboCartGroup extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.groceryGreenLight,
+        color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.groceryGreenTint),
+        border: Border.all(color: AppColors.surfaceVariant),
       ),
       padding: const EdgeInsets.all(10),
       child: Column(
@@ -2260,7 +2403,7 @@ class _ComboCartGroup extends ConsumerWidget {
                 width: 34,
                 height: 34,
                 decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                child: const Icon(Icons.redeem_rounded, size: 19, color: AppColors.groceryGreenDark),
+                child: const Icon(Icons.redeem_rounded, size: 19, color: AppColors.navy),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -2272,11 +2415,11 @@ class _ComboCartGroup extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.navy),
+                          fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy),
                     ),
                     Text(
                       'Combo \u00b7 ${members.length} ${members.length == 1 ? 'item' : 'items'}',
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -2333,7 +2476,7 @@ class _ComboCartGroup extends ConsumerWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.textPrimary),
                               ),
@@ -2351,7 +2494,7 @@ class _ComboCartGroup extends ConsumerWidget {
                         Text(
                           '\u20b9${members[i].totalPrice}',
                           style: const TextStyle(
-                              fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                              fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                         ),
                       ],
                     ),
@@ -2376,20 +2519,20 @@ class _ComboCartGroup extends ConsumerWidget {
                       onTap: () => cart.setComboCount(first.comboKey!, count - 1),
                       child: const Padding(
                         padding: EdgeInsets.all(6),
-                        child: Icon(Icons.remove, size: 18, color: AppColors.groceryGreenDark),
+                        child: Icon(Icons.remove, size: 18, color: AppColors.navy),
                       ),
                     ),
                     SizedBox(
                       width: 26,
                       child: Text('$count',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
                     ),
                     InkWell(
                       onTap: () => cart.setComboCount(first.comboKey!, count + 1),
                       child: const Padding(
                         padding: EdgeInsets.all(6),
-                        child: Icon(Icons.add, size: 18, color: AppColors.groceryGreenDark),
+                        child: Icon(Icons.add, size: 18, color: AppColors.navy),
                       ),
                     ),
                   ],
@@ -2397,11 +2540,11 @@ class _ComboCartGroup extends ConsumerWidget {
               ),
               const Spacer(),
               const Text('Combo total  ',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
               Text(
                 '\u20b9$total',
                 style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                    fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
               ),
             ],
           ),

@@ -36,7 +36,7 @@ class GoToCartPill extends StatelessWidget {
           Text(
             'Go to Cart',
             style: TextStyle(
-              fontSize: 14.5,
+              fontSize: 13.5,
               fontWeight: FontWeight.w700,
               color: Colors.white,
             ),
@@ -86,7 +86,7 @@ class CartPillBar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: AppColors.navy,
                   ),

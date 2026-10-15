@@ -36,7 +36,7 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
                       child: Text(
                         title.isEmpty ? 'Select a service' : title,
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 15,
                           fontWeight: FontWeight.w900,
                           color: AppColors.navy,
                         ),
@@ -87,7 +87,7 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
                                       child: Text(
                                         tile.title.characters.first.toUpperCase(),
                                         style: const TextStyle(
-                                          fontSize: 26,
+                                          fontSize: 23,
                                           fontWeight: FontWeight.w900,
                                           color: AppColors.serviceBlue,
                                         ),
@@ -102,7 +102,7 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.textPrimary,
                               height: 1.15,

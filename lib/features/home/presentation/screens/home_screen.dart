@@ -568,7 +568,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ? displayLocation
                                     : 'Select delivery address',
                                 style: const TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.navy,
                                   height: 1.15,
@@ -765,7 +765,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'Book Again',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: AppColors.navy,
                           ),
@@ -774,7 +774,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'From your recent orders',
                           style: TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
@@ -861,7 +861,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const Text(
                     'Recommended Services',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                       letterSpacing: -0.3,
@@ -884,7 +884,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Text(
                         'See all',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           color: theme.accent,
                         ),
@@ -1009,7 +1009,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'Book Again',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: AppColors.navy,
                           ),
@@ -1018,7 +1018,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'From your recent orders',
                           style: TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1117,12 +1117,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       //                 children: [
       //                   Text(
       //                     'Browse Groceries by Category',
-      //                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
+      //                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy),
       //                   ),
       //                   SizedBox(height: 2),
       //                   Text(
       //                     'Oils, dairy, pantry & more — shop by department',
-      //                     style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+      //                     style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
       //                   ),
       //                 ],
       //               ),
@@ -1161,7 +1161,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Text(
               'Bestsellers',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -1206,7 +1206,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Text(
               'Bestsellers',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -1538,7 +1538,7 @@ class _MarketplaceDepartmentCarousel extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -1549,7 +1549,7 @@ class _MarketplaceDepartmentCarousel extends ConsumerWidget {
             child: Text(
               'See all',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: HomeFlowTheme.groceries.accent,
               ),
@@ -1788,7 +1788,7 @@ class _AnimatedSearchHintsState extends State<_AnimatedSearchHints> {
         currentText,
         key: ValueKey<String>(currentText),
         style: const TextStyle(
-          fontSize: 13.5,
+          fontSize: 12.5,
           color: AppColors.textHint,
           fontWeight: FontWeight.w400,
         ),
@@ -2267,7 +2267,7 @@ class _StickyHomeHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                     color: ink,
                   ),
@@ -2345,7 +2345,7 @@ class _StickyHomeHeader extends StatelessWidget {
                           flowTheme.searchPlaceholder,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13.5, color: AppColors.textHint),
+                          style: const TextStyle(fontSize: 12.5, color: AppColors.textHint),
                         ),
                       ),
                     ],
@@ -2401,7 +2401,7 @@ class _StickyHomeHeader extends StatelessWidget {
                             Text(
                               tile.label,
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: ink,
                               ),
@@ -2482,7 +2482,7 @@ class _HomeFooter extends StatelessWidget {
             tagline,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: AppColors.navy,
             ),
@@ -2697,7 +2697,7 @@ class _RotatingHeroGreetingState extends State<_RotatingHeroGreeting> {
           Text(
             "IT'S TIME TO",
             style: GoogleFonts.poppins(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: widget.textColor.withValues(alpha: 0.85),
               letterSpacing: 2.2,
@@ -2741,7 +2741,7 @@ class _RotatingHeroGreetingState extends State<_RotatingHeroGreeting> {
               key: ValueKey(_index),
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.baloo2(
-                fontSize: 28,
+                fontSize: 24.5,
                 fontWeight: FontWeight.w800,
                 color: widget.textColor,
                 height: 1.05,
@@ -3028,7 +3028,7 @@ class _QuickAccessPillTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: isSelected ? accent : AppColors.navy,
                   ),
@@ -3284,7 +3284,7 @@ class _GroceryHubBestsellerTile extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.navy,
               height: 1.2,
@@ -3399,7 +3399,7 @@ class _AdminBestsellerTile extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.navy,
               height: 1.2,
@@ -3631,7 +3631,7 @@ class _BookAgainTile extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 11.5,
+                fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: AppColors.navy,
                 height: 1.2,
@@ -4313,7 +4313,7 @@ class _GoodsTransportCard extends StatelessWidget {
                       const Text(
                         'Goods & Transport',
                         style: TextStyle(
-                          fontSize: 19,
+                          fontSize: 16.5,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
                           letterSpacing: -0.4,
@@ -4323,7 +4323,7 @@ class _GoodsTransportCard extends StatelessWidget {
                       const Text(
                         'For all your moving needs',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF475569),
                         ),
@@ -4350,7 +4350,7 @@ class _GoodsTransportCard extends StatelessWidget {
                         Text(
                           'Book now',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
@@ -4467,7 +4467,7 @@ class _FreshProduceCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 13.5,
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
                           height: 1.15,
@@ -4624,7 +4624,7 @@ class _GroceriesCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
                           letterSpacing: -0.3,
@@ -4997,7 +4997,7 @@ class _PromoBannerSlide extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: banner.accentColor,
                     letterSpacing: 0.5,
@@ -5009,7 +5009,7 @@ class _PromoBannerSlide extends ConsumerWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                     height: 1.2,
@@ -5030,7 +5030,7 @@ class _PromoBannerSlide extends ConsumerWidget {
                         Text(
                           banner.ctaLabel,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: AppColors.navy,
                           ),

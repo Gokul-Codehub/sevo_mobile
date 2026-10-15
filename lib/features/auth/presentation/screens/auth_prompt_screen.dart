@@ -40,7 +40,7 @@ class AuthPromptScreen extends ConsumerWidget {
                   child: const Text(
                     'Skip',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textSecondary,
                     ),
@@ -66,7 +66,7 @@ class AuthPromptScreen extends ConsumerWidget {
                 'Sign in for a faster\nbooking experience',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 21,
                   fontWeight: FontWeight.w800,
                   color: AppColors.navy,
                   height: 1.25,
@@ -78,7 +78,7 @@ class AuthPromptScreen extends ConsumerWidget {
                 "Save addresses, track bookings, and check out\nfaster next time. You can still browse without an\naccount — you'll just need to sign in when you're\nready to book.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w400,
                   color: AppColors.textSecondary,
                   height: 1.4,
@@ -100,7 +100,7 @@ class AuthPromptScreen extends ConsumerWidget {
                   ),
                   child: const Text(
                     'Sign In',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -119,7 +119,7 @@ class AuthPromptScreen extends ConsumerWidget {
                   child: const Text(
                     'Continue as Guest',
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppColors.navy,
                     ),

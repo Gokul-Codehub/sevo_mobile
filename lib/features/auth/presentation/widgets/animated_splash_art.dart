@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/sevo_logo.dart';
 
 /// The SEVO splash as a living illustration instead of one flat picture.
 ///
@@ -100,7 +101,14 @@ class _AnimatedSplashArtState extends State<AnimatedSplashArt> with TickerProvid
                 Positioned.fill(
                   top: h * 0.2,
                   bottom: h * 0.2,
-                  child: Column(
+                  // FittedBox(scaleDown): on short/tall-aspect screens the content
+                  // shrinks to fit the band instead of overflowing it.
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: w,
+                      child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Transform.scale(
@@ -160,6 +168,8 @@ class _AnimatedSplashArtState extends State<AnimatedSplashArt> with TickerProvid
                         child: _ScriptLine(progress: scriptIn.value),
                       ),
                     ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -191,15 +201,9 @@ class _GlintLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sweep = (glint * 2).clamp(0.0, 1.0); // moves, then rests
-    final image = Image.asset(
-      'assets/images/sevo_logo.png',
-      width: width,
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => const Text(
-        'SEVO',
-        style: TextStyle(fontSize: 64, fontWeight: FontWeight.w900, color: Color(0xFF1668E3)),
-      ),
-    );
+    // The SEVO wordmark (S-E-V-O), same artwork the Home/login headers use.
+    // assets/images/sevo_logo.png is now just the single "S" app mark.
+    final image = SevoLogo(width: width);
     return ShaderMask(
       blendMode: BlendMode.srcATop,
       shaderCallback: (rect) {

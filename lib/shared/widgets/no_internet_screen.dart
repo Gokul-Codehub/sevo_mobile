@@ -53,7 +53,7 @@ class NoInternetScreen extends ConsumerWidget {
                   "Check your Wi-Fi or mobile data and try again.",
                   style: TextStyle(
                     color: AppColors.textSecondary,
-                    fontSize: 14,
+                    fontSize: 13,
                     height: 1.5,
                   ),
                   textAlign: TextAlign.center,
@@ -81,7 +81,7 @@ class NoInternetScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     textStyle: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

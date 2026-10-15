@@ -172,7 +172,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                   const Text(
                     'Apply Coupon',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -211,7 +211,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                         decoration: const InputDecoration(
                           hintText: 'Enter coupon code',
                           hintStyle: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: AppColors.textHint,
                           ),
                           border: InputBorder.none,
@@ -262,7 +262,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                             : const Text(
                                 'Apply',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -277,7 +277,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                 Text(
                   _errorMessage!,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     color: AppColors.error,
                     fontWeight: FontWeight.w500,
                   ),
@@ -290,7 +290,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
               const Text(
                 'Available Coupons',
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: AppColors.navy,
                 ),
@@ -313,7 +313,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Text(
                       'Could not load coupons right now. You can still enter a code above.',
-                      style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
                   ),
                   data: (coupons) {
@@ -322,7 +322,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Text(
                           'No coupons available right now.',
-                          style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                         ),
                       );
                     }
@@ -369,7 +369,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                                       child: Text(
                                         coupon.code,
                                         style: const TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 11.5,
                                           fontWeight: FontWeight.w800,
                                           color: AppColors.primary,
                                           letterSpacing: 0.5,
@@ -383,7 +383,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                                       child: Text(
                                         isSelected ? 'APPLIED' : 'APPLY',
                                         style: TextStyle(
-                                          fontSize: 13,
+                                          fontSize: 12,
                                           fontWeight: FontWeight.w800,
                                           color: isSelected
                                               ? AppColors.primary
@@ -397,7 +397,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                                 Text(
                                   coupon.title,
                                   style: const TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.navy,
                                   ),
@@ -407,7 +407,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                                   Text(
                                     coupon.description,
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11.5,
                                       color: AppColors.textSecondary,
                                     ),
                                   ),

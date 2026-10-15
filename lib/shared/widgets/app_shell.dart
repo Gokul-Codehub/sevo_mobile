@@ -171,9 +171,18 @@ class _AppShellState extends ConsumerState<AppShell> {
       // only Home needs the double-back-to-exit interception; every other
       // tab keeps its normal back behavior (e.g. popping a pushed detail
       // screen) untouched.
-      canPop: !isHomeTab,
+      // Updated 2026-10-14: other tabs reached with `context.go` (bottom bar,
+      // Profile links) have nothing left to pop, so the system back used to
+      // close the app. They now fall back to Home first; Home keeps the
+      // double-back-to-exit. Pushed detail screens still pop normally
+      // because their own navigator handles back before this one.
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop || !isHomeTab) return;
+        if (didPop) return;
+        if (!isHomeTab) {
+          context.go(AppRoutes.home);
+          return;
+        }
         if (_handleHomeBackPress()) {
           SystemNavigator.pop();
         }
@@ -190,6 +199,11 @@ class _AppShellState extends ConsumerState<AppShell> {
         // under _FloatingActionButtonTransition. This app never uses a FAB
         // here, so removing the animation removes the race entirely.
         floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
+        // Page content runs behind the floating pill, so the strip around
+        // it no longer shows a blank band while scrolling. The body's bottom
+        // inset grows by the nav height, so lists get end padding and
+        // screen action bars (SafeArea) stay above the pill.
+        extendBody: true,
         body: widget.child,
         bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0
             ? const SizedBox.shrink()
@@ -206,10 +220,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                           top: false,
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                            child: _buildNavBar(
-                              context,
-                              currentIndex,
-                              totalCartCount,
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable: aiChatOpen,
+                              builder: (context, aiOpen, _) {
+                                final aiIndex = AppShell._tabs
+                                    .indexWhere((t) => t.isAiTab);
+                                return _buildNavBar(
+                                  context,
+                                  aiOpen && aiIndex >= 0 ? aiIndex : currentIndex,
+                                  totalCartCount,
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -422,7 +443,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                           maxLines: 1,
                           style: TextStyle(
                             color: _pal.onPill,
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),

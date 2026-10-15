@@ -7,6 +7,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../data/feedback_repository.dart';
 import '../../domain/feedback_models.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// Screen 19: Completed & Rating Screen
 /// Matches reference screen 19 with celebration banner, 5-star rating selector,
@@ -127,7 +128,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 const Text(
                   'Thank You for Your Feedback!',
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 19.5,
                     fontWeight: FontWeight.w800,
                     color: AppColors.navy,
                   ),
@@ -138,7 +139,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textSecondary,
-                    fontSize: 13.5,
+                    fontSize: 12.5,
                     height: 1.4,
                   ),
                 ),
@@ -172,14 +173,14 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
           style: TextStyle(
             color: AppColors.navy,
             fontWeight: FontWeight.w800,
-            fontSize: 18,
+            fontSize: 16,
           ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.pop(),
+          onPressed: () => context.goBack(),
         ),
       ),
       body: feedbackAsync.when(
@@ -235,7 +236,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                       Text(
                         data.serviceTitle,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w800,
                           color: AppColors.navy,
                         ),
@@ -246,7 +247,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                         Text(
                           'Serviced by ${data.technicianName}',
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
@@ -270,7 +271,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 const Text(
                   'How was your overall service?',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: AppColors.navy,
                   ),
@@ -302,7 +303,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 Text(
                   _ratingLabels[_overallRating],
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: _overallRating >= 4
                         ? AppColors.primary
@@ -318,7 +319,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                   child: Text(
                     'What went well?',
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -358,7 +359,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                         child: Text(
                           tag,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: isSelected
                                 ? FontWeight.w700
                                 : FontWeight.w500,
@@ -380,7 +381,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                   child: Text(
                     'Additional Feedback (Optional)',
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -394,7 +395,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     hintText:
                         'Tell us what you liked or how we can improve...',
                     hintStyle: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       color: AppColors.textHint,
                     ),
                     filled: true,
@@ -441,7 +442,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                         : const Text(
                             'Submit Review',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
                           ),

@@ -102,7 +102,10 @@ class _CustomerNotificationWatcherState extends ConsumerState<CustomerNotificati
       if (maxId > baseline) _remember(maxId);
       return;
     }
+    final inbox = ref.read(notificationsControllerProvider.notifier);
     for (final n in fresh.take(3)) {
+      // Already alerted by the booking-status watcher a moment ago.
+      if (inbox.hasRecent(n.title, localOnly: true)) continue;
       NotificationService.instance.show(
         title: n.title,
         body: n.body.isEmpty ? 'Tap to open' : n.body,

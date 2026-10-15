@@ -229,7 +229,7 @@ class _SeeAllProductsBar extends ConsumerWidget {
               const Text(
                 'See all products',
                 style: TextStyle(
-                  fontSize: 14.5,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w700,
                   color: AppColors.navy,
                 ),
@@ -269,7 +269,7 @@ class _SectionTitle extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -510,7 +510,7 @@ class _ProductRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: AppColors.navy,
                     ),
@@ -543,7 +543,7 @@ class _ProductRow extends StatelessWidget {
                   Text(
                     '₹${service.effectivePrice}',
                     style: const TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -750,7 +750,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        fontSize: 15,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w800,
                                         color: Colors.white,
                                       ),
@@ -760,7 +760,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                       section.bannerSubtitle,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                                      style: const TextStyle(fontSize: 11.5, color: Colors.white70),
                                     ),
                                   if (section.bannerCtaText.isNotEmpty) ...[
                                     const SizedBox(height: 6),
@@ -811,7 +811,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.navy,
                                 ),
@@ -820,7 +820,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                 const SizedBox(height: 3),
                                 Text(
                                   service.displayUnit,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textHint),
+                                  style: const TextStyle(fontSize: 11.5, color: AppColors.textHint),
                                 ),
                               ],
                               const SizedBox(height: 6),
@@ -830,7 +830,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                     Text(
                                       '₹${service.price}',
                                       style: const TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11.5,
                                         color: AppColors.textHint,
                                         decoration: TextDecoration.lineThrough,
                                       ),
@@ -840,7 +840,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                   Text(
                                     '₹${service.effectivePrice}',
                                     style: const TextStyle(
-                                      fontSize: 17,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w900,
                                       color: AppColors.navy,
                                     ),
@@ -1034,7 +1034,7 @@ class _BannerProductRailLayout extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 17.5,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
                             ),
@@ -1046,7 +1046,7 @@ class _BannerProductRailLayout extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
                             ),
@@ -1063,7 +1063,7 @@ class _BannerProductRailLayout extends StatelessWidget {
                             child: Text(
                               section.bannerCtaText,
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.groceryGreenDark,
                               ),
@@ -1418,7 +1418,7 @@ class _CategoryTileGridLayout extends ConsumerWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.navy),
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.navy),
                     ),
                     if (section.showCategoryProductCount)
                       Text(

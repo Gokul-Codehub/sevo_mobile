@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error.dart';
@@ -43,6 +44,10 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/'),
+        ),
         title: const Text('Help & Support'),
       ),
       body: SingleChildScrollView(
@@ -60,7 +65,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
             const SizedBox(height: 4),
             const Text(
               'Our customer care team is available 7 days a week from 8:00 AM to 9:00 PM.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+              style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.4),
             ),
             const SizedBox(height: 16),
 
@@ -134,7 +139,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
-                      label: Text(cat, style: const TextStyle(fontSize: 12)),
+                      label: Text(cat, style: const TextStyle(fontSize: 11.5)),
                       selected: isSelected,
                       onSelected: (val) {
                         if (val) setState(() => _selectedCategory = cat);
@@ -162,7 +167,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                 alignment: Alignment.center,
                 child: const Column(
                   children: [
-                    Text('🔍', style: TextStyle(fontSize: 36)),
+                    Text('🔍', style: TextStyle(fontSize: 31.5)),
                     SizedBox(height: 8),
                     Text(
                       'No matching questions found',
@@ -198,7 +203,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         title: Text(
                           faq.question,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -208,7 +213,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                             child: Text(
                               faq.answer,
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 color: AppColors.textSecondary,
                                 height: 1.4,
                               ),
@@ -254,7 +259,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                           'Still have questions?',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                            fontSize: 12,
                             color: AppColors.primaryDark,
                           ),
                         ),
@@ -356,7 +361,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                 const SizedBox(height: 8),
                 Text(
                   errorMessage!,
-                  style: const TextStyle(color: AppColors.error, fontSize: 13),
+                  style: const TextStyle(color: AppColors.error, fontSize: 12),
                 ),
               ],
               const SizedBox(height: 24),
@@ -462,7 +467,7 @@ class _ContactCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   label,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
                 ),
                 const SizedBox(height: 2),
                 Text(

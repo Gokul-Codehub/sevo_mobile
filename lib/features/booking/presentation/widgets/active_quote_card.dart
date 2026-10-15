@@ -50,7 +50,7 @@ class ActiveQuoteCard extends ConsumerWidget {
                     quote.quoteNumber != null
                         ? 'Quotation ${quote.quoteNumber}${quote.quoteVersion != null ? " (v${quote.quoteVersion})" : ""}'
                         : 'Your Quotation',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textPrimary),
                   ),
                 ),
                 _StatusPill(quote: quote),
@@ -60,7 +60,7 @@ class ActiveQuoteCard extends ConsumerWidget {
               const SizedBox(height: 6),
               Text(
                 'Valid until ${DateFormat('d MMM, y').format(quote.validUntil!)}',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
               ),
             ],
             const SizedBox(height: 12),
@@ -75,12 +75,12 @@ class ActiveQuoteCard extends ConsumerWidget {
                         flex: 3,
                         child: Text(
                           '${item.description}${item.quantity != 1 ? " × ${item.quantity}" : ""}',
-                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                          style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
                         ),
                       ),
                       Text(
                         item.amount != null ? '₹${item.amount}' : '—',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -230,7 +230,7 @@ class ActiveQuoteCard extends ConsumerWidget {
                     (r) => RadioListTile<String>(
                       value: r,
                       groupValue: selectedReason,
-                      title: Text(r, style: const TextStyle(fontSize: 14)),
+                      title: Text(r, style: const TextStyle(fontSize: 13)),
                       contentPadding: EdgeInsets.zero,
                       onChanged: (v) => setState(() => selectedReason = v),
                     ),
@@ -238,7 +238,7 @@ class ActiveQuoteCard extends ConsumerWidget {
                   RadioListTile<String>(
                     value: 'Other',
                     groupValue: selectedReason,
-                    title: const Text('Other', style: TextStyle(fontSize: 14)),
+                    title: const Text('Other', style: TextStyle(fontSize: 13)),
                     contentPadding: EdgeInsets.zero,
                     onChanged: (v) => setState(() => selectedReason = v),
                   ),
@@ -410,7 +410,7 @@ class _InfoBanner extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: TextStyle(fontSize: 12.5, color: color, fontWeight: FontWeight.w600))),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600))),
         ],
       ),
     );

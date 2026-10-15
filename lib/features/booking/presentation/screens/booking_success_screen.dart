@@ -46,7 +46,7 @@ class BookingSuccessScreen extends ConsumerWidget {
                 'Booking Confirmed!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 21,
                   fontWeight: FontWeight.w900,
                   color: AppColors.navy,
                   letterSpacing: -0.3,
@@ -57,7 +57,7 @@ class BookingSuccessScreen extends ConsumerWidget {
                 'Your service request has been scheduled successfully. Our verified technician will arrive during your chosen time slot.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 12.5,
                   color: AppColors.textSecondary,
                   height: 1.45,
                 ),
@@ -149,7 +149,7 @@ class BookingSuccessScreen extends ConsumerWidget {
                   label: const Text(
                     'Track Service',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -172,7 +172,7 @@ class BookingSuccessScreen extends ConsumerWidget {
                   child: const Text(
                     'Back to Home',
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -210,7 +210,7 @@ class _SummaryRow extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             color: AppColors.textSecondary,
             fontWeight: FontWeight.w500,
           ),

@@ -10,6 +10,7 @@ import '../../../booking/domain/cart_notifier.dart';
 import '../../data/basket_cart.dart';
 import '../../data/basket_models.dart';
 import '../../data/marketplace_catalog_repository.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// Lists Seller Hub combo/bundle offers ("Baskets") as a two-column grid.
 ///
@@ -32,12 +33,12 @@ class BasketListScreen extends ConsumerWidget {
         elevation: 0.5,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.pop(),
+          onPressed: () => context.goBack(),
         ),
         title: const Text(
           'Combo Offers',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w800,
             color: AppColors.navy,
           ),
@@ -80,7 +81,7 @@ class BasketListScreen extends ConsumerWidget {
         error: (_, __) => const Center(
           child: Text(
             "Couldn't load combo offers",
-            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
         ),
       ),
@@ -180,7 +181,7 @@ class _ComboCardState extends ConsumerState<_ComboCard> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.navy,
                               ),
@@ -326,7 +327,7 @@ class _ComboCardState extends ConsumerState<_ComboCard> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 13.5,
+                          fontSize: 12.5,
                           height: 1.2,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF0B0B0B),
@@ -348,7 +349,7 @@ class _ComboCardState extends ConsumerState<_ComboCard> {
                                 child: Text(
                                   '₹${basket.bundlePrice}',
                                   style: const TextStyle(
-                                    fontSize: 17,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF0B0B0B),
                                   ),
@@ -397,7 +398,7 @@ class _ComboCardState extends ConsumerState<_ComboCard> {
                                     child: Text(
                                       'Add to cart',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11.5,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white,
                                       ),

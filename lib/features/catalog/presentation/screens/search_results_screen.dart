@@ -9,6 +9,7 @@ import '../../domain/catalog_models.dart';
 import '../../domain/search_keywords.dart';
 import '../widgets/product_card.dart';
 import '../widgets/service_card.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// The search-box "pill" at the top of a results page: shows what was
 /// searched; tapping it goes back to the suggestions page to refine it.
@@ -18,7 +19,7 @@ PreferredSizeWidget _resultsAppBar(BuildContext context, String query) {
     backgroundColor: Colors.white,
     elevation: 0.5,
     title: GestureDetector(
-      onTap: () => context.pop(),
+      onTap: () => context.goBack(),
       child: Container(
         height: 44,
         margin: const EdgeInsets.only(right: 16),
@@ -38,7 +39,7 @@ PreferredSizeWidget _resultsAppBar(BuildContext context, String query) {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppColors.navy,
                 ),
@@ -61,12 +62,12 @@ Widget _resultsHeader(int shown, int total, String query, String noun) => Paddin
               text: total > shown
                   ? '$shown of $total ${noun}s for '
                   : '$shown $noun${shown == 1 ? '' : 's'} for ',
-              style: const TextStyle(fontSize: 13.5, color: AppColors.textSecondary),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
             ),
             TextSpan(
               text: '"$query"',
               style: const TextStyle(
-                fontSize: 13.5,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -108,7 +109,7 @@ class _RefineBar extends ConsumerWidget {
             showCheckmark: false,
             onSelected: (_) => onTap(),
             labelStyle: TextStyle(
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: on ? Colors.white : AppColors.navy,
             ),
@@ -172,7 +173,7 @@ class _RefineBar extends ConsumerWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text('Sort by',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy)),
               ),
             ),
             for (final s in SearchSort.values)
@@ -217,7 +218,7 @@ class _RefineBar extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 16, bottom: 6),
                 child: Text(t,
                     style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                        fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy)),
               );
 
           Widget multi(List<String> options, Set<String> selected, void Function(Set<String>) set) =>
@@ -256,7 +257,7 @@ class _RefineBar extends ConsumerWidget {
                       children: [
                         const Text('Filter',
                             style: TextStyle(
-                                fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                                fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy)),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('In stock only'),
@@ -394,7 +395,7 @@ class _ExploreOtherSection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Explore other',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy)),
             SizedBox(height: 14),
             ShimmerCard(height: 150),
           ],
@@ -418,13 +419,13 @@ class _ExploreOtherSection extends ConsumerWidget {
                 children: [
                   const TextSpan(
                     text: 'Explore other',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy),
                   ),
                   if (data.parent != null)
                     TextSpan(
                       text: '  in ${data.parent}',
                       style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                          fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
                     ),
                 ],
               ),
@@ -441,7 +442,7 @@ class _ExploreOtherSection extends ConsumerWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy),
+                          fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
                     ),
                   ),
                   TextButton(
@@ -511,21 +512,21 @@ class _DidYouMean extends ConsumerWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           const Text('Did you mean ',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
           GestureDetector(
             onTap: () => context.pushReplacement(
                 '/search/${mode.wire}?q=${Uri.encodeQueryComponent(suggestion)}'),
             child: Text(
               suggestion,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: AppColors.primary,
                 decoration: TextDecoration.underline,
               ),
             ),
           ),
-          const Text(' ?', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+          const Text(' ?', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
         ],
       ),
     );
@@ -536,10 +537,10 @@ Widget _noMatchAfterFilter(VoidCallback onClear) => Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
-          const Text('🔎', style: TextStyle(fontSize: 34)),
+          const Text('🔎', style: TextStyle(fontSize: 30)),
           const SizedBox(height: 8),
           const Text('No results match these filters',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.navy)),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.navy)),
           const SizedBox(height: 10),
           OutlinedButton(onPressed: onClear, child: const Text('Clear filters')),
         ],
@@ -627,7 +628,7 @@ class _ServiceSearchResultsState extends ConsumerState<ServiceSearchResultsScree
                       'Nothing matched "$q". Try a shorter word like "AC", "cleaning" or "wiring".',
                   emoji: '🔍',
                   actionLabel: 'Search again',
-                  action: () => context.pop(),
+                  action: () => context.goBack(),
                 ),
               ),
             ],
@@ -657,7 +658,7 @@ class _ServiceSearchResultsState extends ConsumerState<ServiceSearchResultsScree
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 12, 16, 6),
                 child: Text('Related',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy)),
               ),
               SizedBox(
                 height: 42,
@@ -769,7 +770,7 @@ class _GrocerySearchResultsState extends ConsumerState<GrocerySearchResultsScree
                       'Nothing matched "$q". Try a simpler word like "milk", "atta" or "banana".',
                   emoji: '🛒',
                   actionLabel: 'Search again',
-                  action: () => context.pop(),
+                  action: () => context.goBack(),
                 ),
               ),
             ],

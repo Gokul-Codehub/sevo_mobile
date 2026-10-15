@@ -10,6 +10,8 @@ import '../../../core/navigation/web_link_mapper.dart';
 import '../../booking/domain/cart_notifier.dart';
 import '../../catalog/domain/catalog_providers.dart';
 import '../../home/domain/home_flow_mode.dart';
+import '../../auth/domain/auth_notifier.dart';
+import '../data/local_inbox_store.dart';
 import '../data/notification_repository.dart';
 import 'capacity_claim.dart';
 import 'notification_models.dart';
@@ -48,31 +50,114 @@ class NotificationsState {
 }
 
 class NotificationsController extends StateNotifier<NotificationsState> {
-  NotificationsController(this._repo, {required this.signedIn}) : super(const NotificationsState()) {
-    if (signedIn) refresh();
+  NotificationsController(
+    this._repo, {
+    required this.signedIn,
+    this.userId,
+    LocalInboxStore store = const LocalInboxStore(),
+  })  : _store = store,
+        super(const NotificationsState()) {
+    if (signedIn) {
+      _loadLocal().then((_) => refresh());
+    }
   }
 
   final NotificationRepository _repo;
+  final LocalInboxStore _store;
   final bool signedIn;
+  final int? userId;
+
+  /// Rows the server returned (the source of truth) ...
+  List<CustomerNotification> _server = const [];
+  int _serverUnread = 0;
+
+  /// ... and alerts this phone showed itself (kept as a fallback history).
+  List<CustomerNotification> _local = const [];
+
+  /// A local row and a server row with the same title this close in time are
+  /// the same event, so only one is shown.
+  static const _sameEventWindow = Duration(minutes: 20);
+
+  bool _dupOfServer(CustomerNotification l) => _server.any(
+        (s) => s.title == l.title && s.createdAt.difference(l.createdAt).abs() < _sameEventWindow,
+      );
+
+  void _publish({bool? isLoading, bool? loadedOnce, String? error, bool clearError = false}) {
+    if (!mounted) return;
+    final visibleLocal = _local.where((l) => !_dupOfServer(l)).toList();
+    final items = [..._server, ...visibleLocal]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final unread = _serverUnread + visibleLocal.where((n) => !n.isRead).length;
+    state = state.copyWith(
+      items: items,
+      unreadCount: unread,
+      isLoading: isLoading,
+      loadedOnce: loadedOnce,
+      error: error,
+      clearError: clearError,
+    );
+  }
+
+  Future<void> _loadLocal() async {
+    final uid = userId;
+    if (uid == null) return;
+    final saved = await _store.load(uid);
+    if (!mounted) return;
+    _local = saved;
+    if (_local.isNotEmpty) _publish();
+  }
+
+  void _saveLocal() {
+    final uid = userId;
+    if (uid != null) _store.save(uid, _local);
+  }
+
+  /// True when an alert with this [title] was already recorded recently --
+  /// by this phone ([localOnly]) or by the server too. Lets the two alert
+  /// watchers avoid showing the same event twice.
+  bool hasRecent(String title, {bool localOnly = false}) {
+    final now = DateTime.now();
+    bool match(CustomerNotification n) =>
+        n.title == title && now.difference(n.createdAt).abs() < _sameEventWindow;
+    return _local.any(match) || (!localOnly && _server.any(match));
+  }
+
+  /// Records an alert this phone just showed, so it stays in the inbox.
+  void addLocal({required String title, required String body, String category = 'BOOKING'}) {
+    if (!signedIn || userId == null || !mounted) return;
+    final now = DateTime.now();
+    final entry = CustomerNotification(
+      id: -(now.millisecondsSinceEpoch),
+      eventKey: 'local:${now.millisecondsSinceEpoch}',
+      category: category,
+      level: title.contains('Cancel') ? 'WARNING' : 'INFO',
+      title: title,
+      body: body,
+      deepLink: '/bookings',
+      actionLabel: '',
+      actionUrl: '',
+      isRead: false,
+      requiresAction: false,
+      createdAt: now,
+    );
+    _local = [entry, ..._local].take(LocalInboxStore.maxItems).toList();
+    _saveLocal();
+    _publish();
+  }
 
   /// Re-reads the inbox. [silent] keeps the current list on screen (no spinner)
-  /// — used by the background poll.
+  /// -- used by the background poll.
   Future<void> refresh({bool silent = false}) async {
     if (!signedIn || !mounted) return;
-    if (!silent) state = state.copyWith(isLoading: true, clearError: true);
+    if (!silent) _publish(isLoading: true, clearError: true);
     final result = await _repo.getNotifications();
     if (!mounted) return;
     switch (result) {
       case Success(:final data):
-        state = state.copyWith(
-          items: data.items,
-          unreadCount: data.unreadCount,
-          isLoading: false,
-          loadedOnce: true,
-          clearError: true,
-        );
+        _server = data.items;
+        _serverUnread = data.unreadCount;
+        _publish(isLoading: false, loadedOnce: true, clearError: true);
       case Failure(:final error):
-        state = state.copyWith(
+        _publish(
           isLoading: false,
           loadedOnce: true,
           error: silent && state.items.isNotEmpty ? null : error.message,
@@ -81,25 +166,34 @@ class NotificationsController extends StateNotifier<NotificationsState> {
   }
 
   /// Marks one read right away on screen, then tells the server (rolled back
-  /// by the next refresh if that fails).
+  /// by the next refresh if that fails). Rows kept only on this phone (negative
+  /// id) are updated locally.
   Future<void> markRead(int id) async {
-    final target = state.items.where((n) => n.id == id).firstOrNull;
+    if (id < 0) {
+      _local = [for (final n in _local) n.id == id ? n.copyWith(isRead: true) : n];
+      _saveLocal();
+      _publish();
+      return;
+    }
+    final target = _server.where((n) => n.id == id).firstOrNull;
     if (target == null || target.isRead) return;
-    state = state.copyWith(
-      items: [for (final n in state.items) n.id == id ? n.copyWith(isRead: true) : n],
-      unreadCount: (state.unreadCount - 1).clamp(0, 1 << 30),
-    );
+    _server = [for (final n in _server) n.id == id ? n.copyWith(isRead: true) : n];
+    _serverUnread = (_serverUnread - 1).clamp(0, 1 << 30);
+    _publish();
     final result = await _repo.markRead(id);
     if (result is Failure) refresh(silent: true);
   }
 
   Future<void> markAllRead() async {
-    final unread = state.items.where((n) => !n.isRead).map((n) => n.id).toList();
+    final unread = _server.where((n) => !n.isRead).map((n) => n.id).toList();
+    final hadLocalUnread = _local.any((n) => !n.isRead);
+    if (unread.isEmpty && !hadLocalUnread) return;
+    _server = [for (final n in _server) n.copyWith(isRead: true)];
+    _serverUnread = 0;
+    _local = [for (final n in _local) n.copyWith(isRead: true)];
+    _saveLocal();
+    _publish();
     if (unread.isEmpty) return;
-    state = state.copyWith(
-      items: [for (final n in state.items) n.copyWith(isRead: true)],
-      unreadCount: 0,
-    );
     // There is no bulk endpoint; the inbox is small (<= 50), so mark each.
     await Future.wait(unread.map(_repo.markRead));
     refresh(silent: true);
@@ -111,7 +205,12 @@ class NotificationsController extends StateNotifier<NotificationsState> {
 final notificationsControllerProvider =
     StateNotifierProvider<NotificationsController, NotificationsState>((ref) {
   final signedIn = ref.watch(isUserAuthenticatedProvider);
-  return NotificationsController(ref.watch(notificationRepositoryProvider), signedIn: signedIn);
+  final userId = ref.watch(currentUserProvider)?.id;
+  return NotificationsController(
+    ref.watch(notificationRepositoryProvider),
+    signedIn: signedIn,
+    userId: userId,
+  );
 });
 
 final unreadNotificationCountProvider =

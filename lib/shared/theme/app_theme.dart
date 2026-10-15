@@ -49,69 +49,69 @@ abstract final class AppTheme {
   static TextTheme get _textTheme => GoogleFonts.interTextTheme(
         const TextTheme(
           displayLarge: TextStyle(
-            fontSize: 32,
+            fontSize: 28,
             fontWeight: FontWeight.w800,
             color: AppColors.textPrimary,
             letterSpacing: -0.5,
           ),
           displayMedium: TextStyle(
-            fontSize: 26,
+            fontSize: 23,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
           ),
           headlineLarge: TextStyle(
-            fontSize: 22,
+            fontSize: 19.5,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
           ),
           headlineMedium: TextStyle(
-            fontSize: 20,
+            fontSize: 17.5,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
           ),
           headlineSmall: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-          titleLarge: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
           ),
+          titleLarge: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
           titleMedium: TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
           ),
           titleSmall: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
           ),
           bodyLarge: TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w400,
             color: AppColors.textPrimary,
           ),
           bodyMedium: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w400,
             color: AppColors.textSecondary,
           ),
           bodySmall: TextStyle(
-            fontSize: 12,
+            fontSize: 11.5,
             fontWeight: FontWeight.w400,
             color: AppColors.textSecondary,
           ),
           labelLarge: TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.textOnPrimary,
             letterSpacing: 0.1,
           ),
           labelMedium: TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w500,
             color: AppColors.textSecondary,
           ),
@@ -131,7 +131,7 @@ abstract final class AppTheme {
     scrolledUnderElevation: 0.5,
     centerTitle: false,
     titleTextStyle: TextStyle(
-      fontSize: 18,
+      fontSize: 16,
       fontWeight: FontWeight.w700,
       color: AppColors.textPrimary,
     ),
@@ -149,7 +149,7 @@ abstract final class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
           elevation: 0,
@@ -166,7 +166,7 @@ abstract final class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
           elevation: 0,
@@ -183,7 +183,7 @@ abstract final class AppTheme {
           ),
           side: const BorderSide(color: AppColors.primary, width: 1.5),
           textStyle: const TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -193,7 +193,7 @@ abstract final class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
           textStyle: const TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -227,9 +227,9 @@ abstract final class AppTheme {
     ),
     hintStyle: TextStyle(
       color: AppColors.textHint,
-      fontSize: 14,
+      fontSize: 13,
     ),
-    errorStyle: TextStyle(color: AppColors.error, fontSize: 12),
+    errorStyle: TextStyle(color: AppColors.error, fontSize: 11.5),
   );
 
   // ── Cards ───────────────────────────────────────────────────────────────────
@@ -251,12 +251,12 @@ abstract final class AppTheme {
     selectedColor: AppColors.primaryLight,
     disabledColor: AppColors.divider,
     labelStyle: const TextStyle(
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: FontWeight.w500,
       color: AppColors.textPrimary,
     ),
     secondaryLabelStyle: const TextStyle(
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: FontWeight.w600,
       color: AppColors.primaryDark,
     ),

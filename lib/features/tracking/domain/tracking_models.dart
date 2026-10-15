@@ -70,6 +70,10 @@ class TrackingUpdate extends Equatable {
     this.startOtp,
     this.paymentConfirmationOtp,
     this.paymentStatus,
+    this.balanceDue,
+    this.extraCharges = const [],
+    this.deliveryException,
+    this.deliveryOtp,
     this.requestId,
     this.bookingId,
     required this.updatedAt,
@@ -107,6 +111,12 @@ class TrackingUpdate extends Equatable {
   /// `_build_tracking_payload`).
   final String? paymentConfirmationOtp;
   final String? paymentStatus;
+
+  /// Goods-transport money items (server-computed, display only).
+  final String? balanceDue;
+  final List<TrackingExtraCharge> extraCharges;
+  final TrackingDeliveryException? deliveryException;
+  final String? deliveryOtp;
 
   final String? requestId;
   final int? bookingId;
@@ -188,6 +198,18 @@ class TrackingUpdate extends Equatable {
       startOtp: _asNonEmptyString(json['start_otp']),
       paymentConfirmationOtp: _asNonEmptyString(json['payment_confirmation_otp']),
       paymentStatus: _asNonEmptyString(json['payment_status']),
+      balanceDue: _parseBalanceDue(json['balance_due']),
+      extraCharges: json['extra_charges'] is List
+          ? (json['extra_charges'] as List)
+              .whereType<Map>()
+              .map((e) => TrackingExtraCharge.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      deliveryException: json['delivery_exception'] is Map
+          ? TrackingDeliveryException.fromJson(
+              Map<String, dynamic>.from(json['delivery_exception'] as Map))
+          : null,
+      deliveryOtp: _asNonEmptyString(json['delivery_otp']),
       requestId: _asNonEmptyString(json['request_id']),
       bookingId: _asInt(json['booking_id'] ?? json['job_id']),
       updatedAt: DateTime.now(),
@@ -227,6 +249,10 @@ class TrackingUpdate extends Equatable {
         startOtp: startOtp,
         paymentConfirmationOtp: paymentConfirmationOtp,
         paymentStatus: paymentStatus,
+        balanceDue: balanceDue,
+        extraCharges: extraCharges,
+        deliveryException: deliveryException,
+        deliveryOtp: deliveryOtp,
         requestId: requestId,
         bookingId: bookingId,
         updatedAt: updatedAt,
@@ -256,6 +282,10 @@ class TrackingUpdate extends Equatable {
         startOtp,
         paymentConfirmationOtp,
         paymentStatus,
+        balanceDue,
+        extraCharges,
+        deliveryException,
+        deliveryOtp,
         requestId,
         bookingId,
         updatedAt,
@@ -277,4 +307,57 @@ class TrackingArgs extends Equatable {
 
   @override
   List<Object?> get props => [identifier, trackingToken];
+}
+
+/// Balance due is only meaningful when positive; the server sends a decimal
+/// string (or null).
+String? _parseBalanceDue(dynamic v) {
+  final s = v?.toString().trim();
+  if (s == null || s.isEmpty) return null;
+  final n = double.tryParse(s);
+  return (n != null && n > 0) ? s : null;
+}
+
+/// A toll / parking charge the driver added with a receipt (status APPLIED).
+class TrackingExtraCharge extends Equatable {
+  const TrackingExtraCharge({
+    required this.id,
+    required this.label,
+    required this.amount,
+    this.receiptUrl,
+  });
+
+  factory TrackingExtraCharge.fromJson(Map<String, dynamic> j) => TrackingExtraCharge(
+        id: (j['charge_id'] ?? j['id'] ?? '').toString(),
+        label: (j['label'] ?? 'Extra charge').toString(),
+        amount: (j['amount'] ?? '0').toString(),
+        receiptUrl: _asNonEmptyString(j['receipt_photo_url']),
+      );
+
+  final String id;
+  final String label;
+  final String amount;
+  final String? receiptUrl;
+
+  @override
+  List<Object?> get props => [id, label, amount, receiptUrl];
+}
+
+/// An OPEN delivery exception reported by the driver (e.g. consignee absent).
+class TrackingDeliveryException extends Equatable {
+  const TrackingDeliveryException({required this.label, this.leg, this.status});
+
+  factory TrackingDeliveryException.fromJson(Map<String, dynamic> j) =>
+      TrackingDeliveryException(
+        label: (j['label'] ?? 'Delivery issue reported').toString(),
+        leg: _asNonEmptyString(j['leg']),
+        status: _asNonEmptyString(j['status']),
+      );
+
+  final String label;
+  final String? leg;
+  final String? status;
+
+  @override
+  List<Object?> get props => [label, leg, status];
 }

@@ -26,9 +26,20 @@ class AllServicesScreen extends ConsumerWidget {
     final categoriesAsync = ref.watch(categoriesProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF8F4EF),
       appBar: AppBar(
-        title: const Text('Services'),
+        backgroundColor: const Color(0xFFF8F4EF),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        title: const Text(
+          'Services',
+          style: TextStyle(
+            color: AppColors.navy,
+            fontWeight: FontWeight.w900,
+            fontSize: 17,
+          ),
+        ),
       ),
       // Fixed 2026-10-06 ("remove the white space at every card"): every
       // tile used one hardcoded `childAspectRatio: 0.62` regardless of how
@@ -152,7 +163,7 @@ _CategoryStyle _styleFor(String slug, String name) {
   if (s.contains('good') || s.contains('transport') || s.contains('truck')) {
     return const _CategoryStyle(
       icon: Icons.local_shipping_rounded,
-      color: AppColors.groceryGreen,
+      color: Color(0xFF0D253A),
       subtitle: 'Home Shifting • Office Moving • Delivery',
       tagline: 'Safe • Fast • Reliable',
     );
@@ -191,7 +202,7 @@ _CategoryStyle _styleFor(String slug, String name) {
   }
   return const _CategoryStyle(
     icon: Icons.home_repair_service_rounded,
-    color: AppColors.primary,
+    color: AppColors.navy,
     subtitle: 'Trusted Professionals',
     tagline: 'Quality You Can Trust',
   );
@@ -249,12 +260,12 @@ class _ServiceCategoryTile extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -266,7 +277,7 @@ class _ServiceCategoryTile extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                   child: AspectRatio(
                     aspectRatio: 16 / 11,
                     child: AppRemoteImage(
@@ -321,7 +332,7 @@ class _ServiceCategoryTile extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.navy,
                                 height: 1.2,
@@ -401,8 +412,8 @@ class _NeedHelpTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.groceryGreenLight,
-          borderRadius: BorderRadius.circular(8),
+          color: const Color(0xFFE8EDF7),
+          borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,7 +422,7 @@ class _NeedHelpTile extends StatelessWidget {
             const Text(
               'Need Help Choosing a Service?',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
                 height: 1.25,
@@ -430,8 +441,8 @@ class _NeedHelpTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.primaryDark,
-                borderRadius: BorderRadius.circular(8),
+                color: AppColors.navy,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

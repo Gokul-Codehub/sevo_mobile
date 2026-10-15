@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/booking/domain/booking_models.dart';
 import '../../features/booking/domain/booking_providers.dart';
+import '../../features/notifications/domain/notification_providers.dart';
 import 'notification_service.dart';
 
 /// Mounted once at the app root (see main.dart) — watches the customer's
@@ -156,9 +157,16 @@ class _BookingNotificationWatcherState
         if (previousStatus == booking.status) continue;
         if (!_notifiableStatuses.contains(booking.status)) continue;
 
+        final title = _titleFor(booking.status);
+        final body = _bodyFor(booking, booking.status);
+        final inbox = ref.read(notificationsControllerProvider.notifier);
+        // The server now records these events in the inbox too; if it (or an
+        // earlier pass) already did, don't alert a second time.
+        if (inbox.hasRecent(title)) continue;
+        inbox.addLocal(title: title, body: body);
         NotificationService.instance.show(
-          title: _titleFor(booking.status),
-          body: _bodyFor(booking, booking.status),
+          title: title,
+          body: body,
           routePayload: '/bookings/${booking.id}',
         );
       }

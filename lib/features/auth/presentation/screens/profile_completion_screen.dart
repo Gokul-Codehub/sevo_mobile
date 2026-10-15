@@ -129,7 +129,7 @@ class _ProfileCompletionScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                Text('Almost there! 🎉', style: theme.textTheme.headlineMedium),
+                Text('Almost there!', style: theme.textTheme.headlineMedium),
                 const SizedBox(height: 8),
                 Text(
                   'Please provide your name so our service professionals know who they are assisting.',
@@ -179,7 +179,7 @@ class _ProfileCompletionScreenState
                           child: Text(
                             _verifiedEmail!,
                             style: const TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: AppColors.navy,
                             ),
@@ -188,7 +188,7 @@ class _ProfileCompletionScreenState
                         const Text(
                           'Verified',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                             color: AppColors.success,
                           ),
