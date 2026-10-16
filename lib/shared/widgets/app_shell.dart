@@ -165,6 +165,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     // scroll direction (see home_screen.dart); every other tab ignores it
     // and always shows the nav bar, exactly as before.
     final navVisible = !isHomeTab || ref.watch(bottomNavVisibleProvider);
+    // Only the Home screen itself (whose nav bar hides on scroll) lets content
+    // run behind the floating pill. Every other screen — including the pages
+    // opened from Home (categories, products, recipes …) — is laid out ABOVE
+    // the pill, so the last row of a list and its Add buttons can always be
+    // scrolled clear of the footer.
 
     return PopScope(
       // Only Home is this shell's root with nowhere left to pop to, so
@@ -199,10 +204,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         // under _FloatingActionButtonTransition. This app never uses a FAB
         // here, so removing the animation removes the race entirely.
         floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
-        // Page content runs behind the floating pill, so the strip around
-        // it no longer shows a blank band while scrolling. The body's bottom
-        // inset grows by the nav height, so lists get end padding and
-        // screen action bars (SafeArea) stay above the pill.
+        // Home: page content runs behind the floating pill (no blank band
+        // while scrolling, and the pill hides/shows without a layout jump).
+        // Page content paints behind the floating pill; scroll views add the nav inset as bottom padding.
         extendBody: true,
         body: widget.child,
         bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0

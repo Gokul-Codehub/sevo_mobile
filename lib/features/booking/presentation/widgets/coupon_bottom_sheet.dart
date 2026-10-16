@@ -51,6 +51,7 @@ class CouponBottomSheet extends ConsumerStatefulWidget {
     String? currentCode,
   }) {
     return showModalBottomSheet<AppliedCoupon>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

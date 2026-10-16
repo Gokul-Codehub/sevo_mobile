@@ -56,6 +56,14 @@ import '../widgets/home_flow_theme.dart';
 /// item", used below.
 const int _bookAgainMarketplaceIdOffset = 800000000;
 
+/// Sevo Home Studio owns everything BELOW the wave banner. When true, the old
+/// homepage-builder sections (grocery sections, bestsellers, popular services,
+/// book-again rows …) are never rendered or loaded there. Only the legacy
+/// "Mobile app banners" (hero video + promo banners) and "Mobile Quick Access
+/// Cards" (mode switcher + top cards) above it still come from the old config.
+/// Set to false to restore the old fallback sections.
+const bool _kHomeContentFromStudioOnly = true;
+
 /// Fixed 2026-10-07 per explicit bug report (a grocery reorder — "Yellaki
 /// Banana" etc. — showing up in Services mode's "Book Again", opening the
 /// wrong [service detail] page instead of the product page, and missing its
@@ -645,7 +653,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     flowMode == HomeFlowMode.groceries ? 'grocery_home' : 'services_home',
                     footer: _HomeFooter(mode: flowMode, theme: flowTheme),
                   ) ??
-                (flowMode == HomeFlowMode.groceries
+                (_kHomeContentFromStudioOnly
+                ? <Widget>[
+                    SliverToBoxAdapter(child: _HomeFooter(mode: flowMode, theme: flowTheme)),
+                  ]
+                : flowMode == HomeFlowMode.groceries
                 ? _buildGroceriesContentSlivers(
                     context: context,
                     groceryCategory: groceryCategoryForShopByCategory,
@@ -2476,7 +2488,9 @@ class _HomeFooter extends StatelessWidget {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.fromLTRB(20, 26, 20, 130),
+      // Clearance for the floating nav pill only (Scaffold.extendBody lets the
+      // page run behind it) — not a fixed 130px blank band.
+      padding: EdgeInsets.fromLTRB(20, 26, 20, 16 + MediaQuery.paddingOf(context).bottom),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,

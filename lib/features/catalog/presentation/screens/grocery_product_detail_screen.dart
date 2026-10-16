@@ -12,6 +12,7 @@ import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/marketplace_catalog_repository.dart';
+import '../../data/recipe_models.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
 import '../widgets/product_card.dart';
@@ -479,6 +480,13 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
                         if ((effectiveDescription ?? '').trim().isNotEmpty) ...[
                           const SizedBox(height: 22),
                           _ProductAboutSection(text: effectiveDescription!.trim()),
+                        ],
+
+                        // Recipes & Meal Ideas — only when the seller enabled it
+                        // for this product and recipes actually exist.
+                        if (enrichedProduct != null && enrichedProduct.showRecipes && enrichedProduct.recipes.isNotEmpty) ...[
+                          const SizedBox(height: 26),
+                          _RecipesRail(productTitle: product.title, recipes: enrichedProduct.recipes),
                         ],
 
                         if (relatedAsync != null) ...[
@@ -1304,6 +1312,180 @@ class _StepButton extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         child: Icon(icon, size: 20, color: filled ? Colors.white : _gpGreen),
+      ),
+    );
+  }
+}
+
+/// "Recipes & Meal Ideas" strip on a product page: curated recipes that use
+/// this product. Tapping one opens the recipe page, where every ingredient
+/// can be added to the cart.
+class _RecipesRail extends StatelessWidget {
+  const _RecipesRail({required this.productTitle, required this.recipes});
+
+  final String productTitle;
+  final List<RecipeSummary> recipes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.restaurant_menu_rounded, size: 19, color: _gpGreen),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Recipes & Meal Ideas',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)),
+              child: Text(
+                '${recipes.length} ${recipes.length == 1 ? 'recipe' : 'recipes'}',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _gpGrey),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Cook something delicious with fresh $productTitle',
+          style: const TextStyle(fontSize: 12.5, color: _gpGrey, height: 1.35),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 218,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: recipes.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) => _RecipeCard(recipe: recipes[i]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecipeCard extends StatelessWidget {
+  const _RecipeCard({required this.recipe});
+
+  final RecipeSummary recipe;
+
+  @override
+  Widget build(BuildContext context) {
+    final dietColor = switch (recipe.diet) {
+      RecipeDiet.veg => const Color(0xFF059669),
+      RecipeDiet.nonVeg => const Color(0xFFE11D48),
+      RecipeDiet.egg => const Color(0xFFB45309),
+    };
+    return GestureDetector(
+      onTap: () => context.push('/recipes/${Uri.encodeComponent(recipe.key)}'),
+      child: Container(
+        width: 168,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 112,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: const Color(0xFFF1F5F9),
+                    child: AppRemoteImage(imageUrl: recipe.coverImage, title: recipe.title, fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: dietColor, width: 1.4),
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(color: dietColor, shape: BoxShape.circle),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (recipe.cookTimeMinutes > 0)
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.schedule_rounded, size: 11, color: Colors.white),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${recipe.cookTimeMinutes} mins',
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 9, 10, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recipe.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, height: 1.25, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 3),
+                    if (recipe.kcal > 0)
+                      Text(
+                        '${recipe.kcal} kcal',
+                        style: const TextStyle(fontSize: 11, color: _gpGrey, fontWeight: FontWeight.w600),
+                      ),
+                    const Spacer(),
+                    const Row(
+                      children: [
+                        Text('View Recipe', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _gpGreen)),
+                        SizedBox(width: 2),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: _gpGreen),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -230,7 +230,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     return bookingsAsync.when(
       loading: () => ListView.separated(
         physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
         itemCount: 4,
         separatorBuilder: (context, index) => const SizedBox(height: 14),
         itemBuilder: (context, index) => const _BookingCardSkeleton(),
@@ -442,7 +442,7 @@ class _BookingListView extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
         itemCount: bookings.length,
         separatorBuilder: (context, index) => const SizedBox(height: 14),
         itemBuilder: (context, index) {

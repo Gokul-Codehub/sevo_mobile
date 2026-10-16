@@ -233,7 +233,7 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
                             width: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.my_location_rounded, color: AppColors.primary),
+                        : const Icon(Icons.my_location_rounded, color: AppColors.navy),
                   ),
                 ),
               ],

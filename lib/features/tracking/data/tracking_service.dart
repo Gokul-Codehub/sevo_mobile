@@ -46,10 +46,18 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
   int _reconnectAttempts = 0;
   bool _isDisposed = false;
 
+  /// Last time any WebSocket frame arrived. While frames are flowing the REST
+  /// safety net backs off (it only needs to run at full speed when the socket
+  /// is quiet or down).
+  DateTime? _lastWsFrame;
+  int _pollTick = 0;
+
   @override
   TrackingUpdate build(TrackingArgs arg) {
     _isDisposed = false;
     _reconnectAttempts = 0;
+    _lastWsFrame = null;
+    _pollTick = 0;
 
     ref.onDispose(() {
       _isDisposed = true;
@@ -69,7 +77,8 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
 
   // ── 1. WebSocket Connection ───────────────────────────────────────────────
   void _connectWebSocket(TrackingArgs arg) {
-    if (_isDisposed) return;
+    if (_isDisposed || state.isTerminal) return;
+    _cleanupWs();
 
     final token = (arg.trackingToken ?? '').trim();
     final query = token.isNotEmpty ? '?token=${Uri.encodeQueryComponent(token)}' : '';
@@ -83,6 +92,7 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
       _channelSub = _channel!.stream.listen(
         (message) {
           _reconnectAttempts = 0; // Reset on successful message
+          _lastWsFrame = DateTime.now();
           _handleWsMessage(message);
         },
         onError: (error) {
@@ -143,23 +153,20 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
   void _scheduleReconnect(TrackingArgs arg) {
     if (_isDisposed) return;
     if (state.isTerminal) return; // booking is finished — nothing left to track
+    // onError and onDone usually both fire for one drop: only plan one retry.
+    if (_reconnectTimer?.isActive ?? false) return;
     _cleanupWs();
 
     _reconnectAttempts++;
-    if (_reconnectAttempts > 3) {
-      // REST polling is already running unconditionally (see build()) — WS
-      // just goes quiet rather than being retried forever.
-      debugPrint('[Tracking WS] Giving up on WS after 3 failures — REST polling continues.');
-      return;
-    }
+    // 1, 2, 4, 8, 16, 30 s (capped) plus up to 1 s of jitter so many phones
+    // don't hammer the server in lock-step after an outage. Never gives up:
+    // a rider's trip can outlast a long tunnel or a network switch.
+    final base = (1 << (_reconnectAttempts - 1).clamp(0, 5)).clamp(1, 30);
+    final jitterMs = DateTime.now().millisecond; // 0–999
+    final delay = Duration(seconds: base) + Duration(milliseconds: jitterMs);
+    debugPrint('[Tracking WS] Reconnecting in ${delay.inMilliseconds}ms (attempt $_reconnectAttempts)...');
 
-    final delaySeconds = (1 << (_reconnectAttempts - 1)).clamp(1, 8);
-    debugPrint('[Tracking WS] Reconnecting in ${delaySeconds}s (attempt $_reconnectAttempts)...');
-
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
-      _connectWebSocket(arg);
-    });
+    _reconnectTimer = Timer(delay, () => _connectWebSocket(arg));
   }
 
   // ── 3. REST Polling Safety Net ─────────────────────────────────────────────
@@ -172,6 +179,12 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
         _pollingTimer?.cancel();
         return;
       }
+      // Socket is healthy (a frame in the last 20 s) → poll only every 4th
+      // tick (~20 s) as a consistency check; otherwise poll every tick.
+      final last = _lastWsFrame;
+      final wsHealthy = last != null && DateTime.now().difference(last) < const Duration(seconds: 20);
+      _pollTick++;
+      if (wsHealthy && _pollTick % 4 != 0) return;
       _pollOnce(arg);
     });
   }
@@ -197,6 +210,7 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
 
   void _cleanupWs() {
     _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     _channelSub?.cancel();
     _channel?.sink.close();
     _channel = null;

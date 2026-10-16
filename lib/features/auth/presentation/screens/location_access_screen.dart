@@ -131,7 +131,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.08),
+                              color: AppColors.navy.withValues(alpha: 0.08),
                               blurRadius: 30,
                               spreadRadius: 10,
                             ),
@@ -150,7 +150,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                         height: 90,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primary.withValues(alpha: 0.15),
+                          color: AppColors.navy.withValues(alpha: 0.15),
                         ),
                       ),
 
@@ -160,7 +160,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                         height: 54,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primary,
+                          color: AppColors.navy,
                           boxShadow: [
                             BoxShadow(
                               color: Color(0x3305A357),
@@ -206,7 +206,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.navy,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),

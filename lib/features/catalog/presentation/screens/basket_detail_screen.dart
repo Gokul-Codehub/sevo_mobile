@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,16 +8,20 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
+import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/basket_cart.dart';
 import '../../data/basket_models.dart';
 import '../../data/marketplace_catalog_repository.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../routing/app_router.dart';
 
 // Combo page palette — same as the grocery product page.
 const Color _cbGreen = Color(0xFF157038);
 const Color _cbHero = Color(0xFFF4F6F4);
-const Color _cbCream = Color(0xFFF4F6F4);
+const Color _cbCream = Colors.white;
+/// Light page tint behind the whole screen (neutral light grey; cards stay white).
+const Color _cbPage = Color(0xFFF5F6F8);
 const Color _cbOfferYellow = Color(0xFFF9C93A);
 const Color _cbOfferOrange = Color(0xFFF59E0B);
 
@@ -45,6 +50,9 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
 
   /// Gallery page to bring forward after the customer picks an option.
   int? _focusPage;
+
+  /// How many of this combo to add (stepper beside the Add to Cart pill).
+  int _qty = 1;
 
   static int? _keyOf(BasketSlotOption? o) => o?.productId ?? o?.id ?? o?.optionId;
 
@@ -85,8 +93,10 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
   }
 
   void _addToCart(MarketplaceBasket basket) {
-    final addedCount =
-        addComboToCart(ref.read(cartProvider.notifier), basket, _selectedOption);
+    var addedCount = 0;
+    for (var n = 0; n < _qty; n++) {
+      addedCount += addComboToCart(ref.read(cartProvider.notifier), basket, _selectedOption);
+    }
 
     if (!mounted) return;
     if (addedCount > 0) {
@@ -103,7 +113,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
     final detailAsync = ref.watch(marketplaceBasketDetailProvider(widget.basketId));
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _cbPage,
       body: detailAsync.when(
         data: (fetched) {
           final basket = fetched ?? widget.initialBasket;
@@ -119,7 +129,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
             _ensureDefaultSelections(basket);
             return _buildBody(context, basket);
           }
-          return const Center(child: CircularProgressIndicator());
+          return const _BasketDetailSkeleton();
         },
         error: (_, __) {
           final basket = widget.initialBasket;
@@ -185,9 +195,10 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                 savePercent: pct,
                 focusPage: _focusPage,
                 onBack: () => context.goBack(),
+                onCart: () => context.push(AppRoutes.cart),
               ),
               Container(
-                color: Colors.white,
+                color: _cbPage,
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,14 +230,42 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      basket.title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        height: 1.25,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            basket.title,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              height: 1.25,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (basket.bundlePrice != null) ...[
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '\u20b9${basket.bundlePrice}',
+                                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _cbGreen),
+                              ),
+                              if (basket.hasSavings && basket.mrpTotal != null)
+                                Text(
+                                  '\u20b9${basket.mrpTotal}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textHint,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                     if (meta.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -249,8 +288,6 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                         ],
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    _PriceCard(basket: basket, savePercent: pct),
                     const SizedBox(height: 16),
                     _StatStrip(cells: statCells),
                     if (basket.description.isNotEmpty) ...[
@@ -310,29 +347,77 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
 
   Widget _buildBottomBar(BuildContext context, MarketplaceBasket basket) {
     final price = basket.bundlePrice;
+    Widget round(IconData icon, VoidCallback? onTap) => GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: onTap == null ? const Color(0xFF9DB8A8) : const Color(0xFF0F5C31),
+            ),
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
+        );
     return SafeArea(
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, -4))],
+          color: _cbPage,
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 14, offset: const Offset(0, -4))],
         ),
-        child: FilledButton.icon(
-          onPressed: basket.inStock ? () => _addToCart(basket) : null,
-          icon: const Icon(Icons.shopping_bag_outlined, size: 20),
-          style: FilledButton.styleFrom(
-            backgroundColor: _cbGreen,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 54),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
-          ),
-          label: Text(
-            basket.inStock
-                ? 'Add Combo to Cart${price != null ? '  •  ₹$price' : ''}'
-                : 'Out of Stock',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-          ),
+        child: Row(
+          children: [
+            round(Icons.remove_rounded, _qty > 1 ? () => setState(() => _qty--) : null),
+            SizedBox(
+              width: 38,
+              child: Text(
+                '$_qty',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              ),
+            ),
+            round(Icons.add_rounded, _qty < 10 ? () => setState(() => _qty++) : null),
+            const SizedBox(width: 14),
+            Expanded(
+              child: GestureDetector(
+                onTap: basket.inStock ? () => _addToCart(basket) : null,
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: basket.inStock
+                          ? const [Color(0xFF1E8A4C), Color(0xFF0B5A2C)]
+                          : const [Color(0xFF9CA3AF), Color(0xFF6B7280)],
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.shopping_bag_outlined, size: 18, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            basket.inStock
+                                ? 'Add to Cart${price != null ? '  \u2022  \u20b9${price * Decimal.fromInt(_qty)}' : ''}'
+                                : 'Out of Stock',
+                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -350,6 +435,7 @@ class _ComboGallery extends StatefulWidget {
     required this.urls,
     required this.title,
     required this.onBack,
+    required this.onCart,
     this.savePercent,
     this.focusPage,
   });
@@ -357,6 +443,7 @@ class _ComboGallery extends StatefulWidget {
   final List<String> urls;
   final String title;
   final VoidCallback onBack;
+  final VoidCallback onCart;
   final int? savePercent;
   final int? focusPage;
 
@@ -425,156 +512,94 @@ class _ComboGalleryState extends State<_ComboGallery> {
   Widget build(BuildContext context) {
     final urls = widget.urls;
     final top = MediaQuery.of(context).padding.top;
+    Widget circleBtn(IconData icon, VoidCallback onTap) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 10, offset: const Offset(0, 3))],
+            ),
+            child: Icon(icon, size: 20, color: _cbGreen),
+          ),
+        );
     return Container(
-      color: Colors.white,
+      color: _cbPage,
       child: Column(
         children: [
-          SizedBox(
-            height: 340 + top,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Container(color: _cbHero),
-                // Photo fills the whole hero, behind the sheet's rounded corners.
-                urls.length <= 1
-                    ? _image(urls.isEmpty ? null : urls.first)
-                    : Listener(
-                        onPointerDown: (_) => _start(),
-                        child: PageView.builder(
-                          controller: _controller,
-                          itemCount: urls.length,
-                          onPageChanged: (i) => setState(() => _page = i),
-                          itemBuilder: (_, i) => _image(urls[i]),
+          // Full-bleed photo with large rounded bottom corners.
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(34)),
+            child: SizedBox(
+              height: 330 + top,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(color: Colors.white),
+                  urls.length <= 1
+                      ? _image(urls.isEmpty ? null : urls.first, pad: 8, fit: BoxFit.contain)
+                      : Listener(
+                          onPointerDown: (_) => _start(),
+                          child: PageView.builder(
+                            controller: _controller,
+                            itemCount: urls.length,
+                            onPageChanged: (i) => setState(() => _page = i),
+                            itemBuilder: (_, i) => _image(urls[i], pad: 8, fit: BoxFit.contain),
+                          ),
+                        ),
+                  if (widget.savePercent != null)
+                    Positioned(
+                      left: 0,
+                      bottom: 18,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(14, 7, 20, 7),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(colors: [_cbOfferYellow, _cbOfferOrange]),
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(22),
+                            bottomRight: Radius.circular(22),
+                          ),
+                        ),
+                        child: Text(
+                          'SAVE ${widget.savePercent}%',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
                         ),
                       ),
-                if (urls.length > 1)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 34,
-                    child: Row(
+                    ),
+                  Positioned(left: 16, top: top + 8, child: circleBtn(Icons.arrow_back_rounded, widget.onBack)),
+                  Positioned(right: 16, top: top + 8, child: circleBtn(Icons.shopping_bag_outlined, widget.onCart)),
+                ],
+              ),
+            ),
+          ),
+          // Page dots under the photo.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: SizedBox(
+              height: 8,
+              child: urls.length > 1
+                  ? Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: List.generate(urls.length, (i) {
                         final active = i == _page;
                         return AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: active ? 18 : 6,
-                          height: 6,
+                          width: active ? 18 : 7,
+                          height: 7,
                           decoration: BoxDecoration(
                             color: active ? _cbGreen : Colors.black26,
-                            borderRadius: BorderRadius.circular(3),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                         );
                       }),
-                    ),
-                  ),
-                if (widget.savePercent != null)
-                  Positioned(
-                    left: 0,
-                    bottom: 28,
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(14, 8, 22, 8),
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(colors: [_cbOfferYellow, _cbOfferOrange]),
-                        borderRadius: BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          bottomRight: Radius.circular(22),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: const BoxDecoration(color: Color(0xFF1F2937), shape: BoxShape.circle),
-                            child: const Icon(Icons.percent_rounded, size: 14, color: _cbOfferYellow),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'SAVE ${widget.savePercent}%',
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                // The rounded white sheet rising over the photo.
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 16,
-                  top: top + 8,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: widget.onBack,
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 10, offset: const Offset(0, 3))],
-                      ),
-                      child: const Icon(Icons.arrow_back_rounded, size: 21, color: _cbGreen),
-                    ),
-                  ),
-                ),
-              ],
+                    )
+                  : null,
             ),
           ),
-          if (urls.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: SizedBox(
-                height: 54,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: urls.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final selected = i == _page;
-                    return GestureDetector(
-                      onTap: () {
-                        _controller.animateToPage(
-                          i,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOut,
-                        );
-                        _start();
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: selected ? _cbGreen : AppColors.border,
-                            width: selected ? 2 : 1,
-                          ),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: _image(urls[i], pad: 4, fit: BoxFit.contain),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -607,78 +632,6 @@ class _Pill extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PriceCard extends StatelessWidget {
-  const _PriceCard({required this.basket, required this.savePercent});
-
-  final MarketplaceBasket basket;
-  final int? savePercent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'FIXED COMBO PRICE',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.7,
-            color: _cbGreen,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            if (basket.bundlePrice != null)
-              Text(
-                '₹${basket.bundlePrice}',
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: _cbGreen),
-              ),
-            if (basket.hasSavings && basket.mrpTotal != null) ...[
-              const SizedBox(width: 10),
-              Text(
-                'MRP ₹${basket.mrpTotal}',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textHint,
-                  decoration: TextDecoration.lineThrough,
-                ),
-              ),
-            ],
-          ],
-        ),
-        if (basket.hasSavings) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.warningLight,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFFCD34D)),
-            ),
-            child: Text(
-              'You save ₹${basket.savings}${savePercent != null ? ' ($savePercent%)' : ''}',
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF92400E),
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 6),
-        const Text(
-          'Inclusive of all taxes',
-          style: TextStyle(fontSize: 11.5, color: AppColors.textHint),
-        ),
-      ],
     );
   }
 }
@@ -1141,6 +1094,41 @@ class _FixedItemCard extends StatelessWidget {
           _MiniChip(text: 'Qty: ${item.quantity}', bg: Colors.white, fg: AppColors.textPrimary, border: true),
         ],
       ),
+    );
+  }
+}
+
+
+/// Placeholder shown while a combo's detail is loading and no list data is
+/// available to paint from: hero photo, title/price rows and item cards.
+class _BasketDetailSkeleton extends StatelessWidget {
+  const _BasketDetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      children: const [
+        ShimmerBox(height: 300, borderRadius: 0),
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ShimmerLine(width: 220, height: 20),
+              SizedBox(height: 10),
+              ShimmerLine(width: 120, height: 16),
+              SizedBox(height: 18),
+              ShimmerCard(height: 88),
+              SizedBox(height: 12),
+              ShimmerCard(height: 88),
+              SizedBox(height: 12),
+              ShimmerCard(height: 88),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

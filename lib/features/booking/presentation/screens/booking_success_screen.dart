@@ -33,7 +33,7 @@ class BookingSuccessScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: EdgeInsets.fromLTRB(24, 12, 24, 12 + MediaQuery.paddingOf(context).bottom),
           child: Column(
             children: [
               const SizedBox(height: 10),

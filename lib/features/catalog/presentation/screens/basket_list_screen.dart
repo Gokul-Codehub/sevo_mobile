@@ -3,11 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
-import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
-import '../../../booking/domain/cart_notifier.dart';
-import '../../data/basket_cart.dart';
 import '../../data/basket_models.dart';
 import '../../data/marketplace_catalog_repository.dart';
 import '../../../../core/navigation/safe_back.dart';
@@ -15,10 +12,9 @@ import '../../../../core/navigation/safe_back.dart';
 /// Lists Seller Hub combo/bundle offers ("Baskets") as a two-column grid.
 ///
 /// Reached from Home's "Combo Offers" section ("See all") and directly via
-/// [AppRoutes.baskets]. Each offer is a card: a lime-green header with the
+/// [AppRoutes.baskets]. Each offer is a card: a dark green photo frame with the
 /// saving, a rounded photo carousel (swipe through the photos of what is in the
-/// combo, "1 / 3"), a tag, the title, a dashed rule, and the price above a black
-/// "Add to cart" button.
+/// combo), the title and price; tapping opens the combo to choose items.
 class BasketListScreen extends ConsumerWidget {
   const BasketListScreen({super.key});
 
@@ -27,7 +23,7 @@ class BasketListScreen extends ConsumerWidget {
     final basketsAsync = ref.watch(marketplaceBasketsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFE8F4EC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -60,8 +56,7 @@ class BasketListScreen extends ConsumerWidget {
               final cellWidth = (constraints.maxWidth - pad * 2 - gap) / 2;
               // Fixed row height built from the card's parts (header + photo +
               // info panel) so it can never overflow.
-              final photoHeight = (cellWidth - 14) / 1.25;
-              final cellHeight = 34 + photoHeight + 8 + 150;
+              final cellHeight = cellWidth + 140;
               return GridView.builder(
                 padding: const EdgeInsets.fromLTRB(pad, 12, pad, 110),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -108,306 +103,190 @@ class _ComboCardState extends ConsumerState<_ComboCard> {
     super.dispose();
   }
 
-  /// Puts the combo's default picks (and its fixed items) in the cart.
-  void _addToCart() {
-    final basket = widget.basket;
-    final added = addComboToCart(
-      ref.read(cartProvider.notifier),
-      basket,
-      (slot) => slot.defaultOption,
-    );
-    if (!mounted) return;
-    if (added > 0) {
-      AppToast.addedToCart(context, basket.title);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("This combo's items aren't available right now"),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final basket = widget.basket;
     final pct = basket.savingsPercentRounded;
     final photos = basket.galleryImages;
     final count = photos.isEmpty ? 1 : photos.length;
-    // Fresh lime-green band from the reference card (bright at the top, softer below).
-    const tintGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xFFB2F596), Color(0xFFD8FCCA)],
-    );
+    final desc = basket.description.trim().isNotEmpty
+        ? basket.description.trim()
+        : (basket.isMultiOption ? 'Customizable combo \u2014 pick your favourites' : 'Fixed combo \u2014 everything you need in one pack');
+    const mint = Color(0xFFDDF0E4);
+
+    Widget chip(Widget child, {required Color bg}) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9)),
+          child: child,
+        );
 
     return GestureDetector(
       onTap: () => context.push('/baskets/${basket.id}', extra: basket),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
           boxShadow: const [
-            BoxShadow(
-              color: Color(0x1A0F172A),
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
+            BoxShadow(color: Color(0x240F172A), blurRadius: 16, offset: Offset(0, 6)),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Lime header + photo carousel ──
-              Container(
-                decoration: const BoxDecoration(gradient: tintGradient),
-                padding: const EdgeInsets.fromLTRB(7, 7, 7, 0),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(3, 0, 3, 6),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.verified_rounded,
-                            size: 14,
-                            color: AppColors.navy,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              pct != null ? '$pct% off' : 'Combo',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.navy,
+              // ── Photo with big rounded bottom corners ──
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+                child: AspectRatio(
+                  aspectRatio: 1.0,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const ColoredBox(color: mint),
+                      // Multiply tints the white photo background into the
+                      // mint stage so the product sits on it seamlessly.
+                      ColorFiltered(
+                        colorFilter: const ColorFilter.mode(mint, BlendMode.multiply),
+                        child: photos.length < 2
+                            ? _photo(photos.isEmpty ? basket.coverImage : photos.first, basket)
+                            : PageView.builder(
+                                controller: _pages,
+                                itemCount: photos.length,
+                                onPageChanged: (i) => setState(() => _page = i),
+                                itemBuilder: (_, i) => _photo(photos[i], basket),
                               ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.navy,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${basket.itemCount} item${basket.itemCount == 1 ? '' : 's'}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
-                    ),
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16),
-                      ),
-                      child: AspectRatio(
-                        aspectRatio: 1.25,
-                        child: Stack(
-                          fit: StackFit.expand,
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        right: 8,
+                        child: Row(
                           children: [
-                            Container(
-                              color: const Color(0xFFF6F8FB),
-                              child: photos.length < 2
-                                  ? _photo(
-                                      photos.isEmpty
-                                          ? basket.coverImage
-                                          : photos.first,
-                                      basket,
-                                    )
-                                  : PageView.builder(
-                                      controller: _pages,
-                                      itemCount: photos.length,
-                                      onPageChanged: (i) =>
-                                          setState(() => _page = i),
-                                      itemBuilder: (_, i) =>
-                                          _photo(photos[i], basket),
-                                    ),
-                            ),
-                            if (count > 1)
-                              Positioned(
-                                top: 6,
-                                right: 7,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
+                            chip(
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.verified_rounded, size: 12, color: Colors.white),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    pct != null ? '$pct% off' : 'Combo',
+                                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.white),
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.55),
-                                    borderRadius: BorderRadius.circular(9),
-                                  ),
-                                  child: Text.rich(
-                                    TextSpan(
-                                      children: [
-                                        TextSpan(
-                                          text: '${_page + 1}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                        TextSpan(text: ' / $count'),
-                                      ],
-                                    ),
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
+                                ],
                               ),
+                              bg: const Color(0xFF0F5C31),
+                            ),
+                            const Spacer(),
+                            chip(
+                              Text(
+                                '${basket.itemCount} item${basket.itemCount == 1 ? '' : 's'}',
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF14532D)),
+                              ),
+                              bg: Colors.white,
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                      if (count > 1)
+                        Positioned(
+                          bottom: 8,
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (var d = 0; d < count && d < 6; d++)
+                                Container(
+                                  width: d == _page ? 14 : 5,
+                                  height: 5,
+                                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(3),
+                                    color: d == _page ? const Color(0xFF0F5C31) : Colors.black26,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
 
-              // ── White info panel ──
+              // ── Title + price, description, call to open ──
               Expanded(
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.groceryGreenLight,
-                          borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: AppColors.groceryGreenTint),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              basket.isMultiOption
-                                  ? Icons.tune_rounded
-                                  : Icons.eco_rounded,
-                              size: 11,
-                              color: AppColors.groceryGreenDark,
-                            ),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                basket.isMultiOption
-                                    ? 'Customizable'
-                                    : 'Fixed combo',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.navy,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        basket.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          height: 1.2,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0B0B0B),
-                        ),
-                      ),
-                      const Spacer(),
-                      const _DashedRule(),
-                      const SizedBox(height: 6),
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (basket.bundlePrice != null)
-                            Flexible(
-                              flex: 3,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  '₹${basket.bundlePrice}',
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF0B0B0B),
-                                  ),
-                                ),
+                          Expanded(
+                            child: Text(
+                              basket.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                height: 1.2,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0B0B0B),
                               ),
                             ),
-                          if (basket.hasSavings && basket.mrpTotal != null) ...[
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                '₹${basket.mrpTotal}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textHint,
-                                  decoration: TextDecoration.lineThrough,
+                          ),
+                          if (basket.bundlePrice != null) ...[
+                            const SizedBox(width: 6),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '\u20b9${basket.bundlePrice}',
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF157038)),
                                 ),
-                              ),
+                                if (basket.hasSavings && basket.mrpTotal != null)
+                                  Text(
+                                    '\u20b9${basket.mrpTotal}',
+                                    maxLines: 1,
+                                    style: const TextStyle(fontSize: 9.5, color: AppColors.textHint, decoration: TextDecoration.lineThrough),
+                                  ),
+                              ],
                             ),
                           ],
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Material(
-                        color: const Color(0xFF0B0B0B),
-                        borderRadius: BorderRadius.circular(20),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: _addToCart,
-                          child: const SizedBox(
-                            height: 32,
-                            width: double.infinity,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.shopping_cart_outlined,
-                                  size: 15,
-                                  color: Colors.white,
-                                ),
-                                SizedBox(width: 5),
-                                Flexible(
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      'Add to cart',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                      const SizedBox(height: 3),
+                      Text(
+                        desc,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 9.5, height: 1.3, color: AppColors.textSecondary),
+                      ),
+                      const Spacer(),
+                      // Not an add-to-cart: the whole card opens the combo,
+                      // where the customer chooses their products.
+                      Container(
+                        height: 32,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFF1E8A4C), Color(0xFF0B5A2C)],
                           ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Choose items',
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
+                          ],
                         ),
                       ),
                     ],
@@ -422,7 +301,7 @@ class _ComboCardState extends ConsumerState<_ComboCard> {
   }
 
   Widget _photo(String url, MarketplaceBasket basket) => Padding(
-    padding: const EdgeInsets.all(6),
+    padding: const EdgeInsets.all(4),
     child: AppRemoteImage(
       imageUrl: url,
       rawPath: url,
@@ -434,32 +313,4 @@ class _ComboCardState extends ConsumerState<_ComboCard> {
       fit: BoxFit.contain,
     ),
   );
-}
-
-/// A thin dashed horizontal rule.
-class _DashedRule extends StatelessWidget {
-  const _DashedRule();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        const dash = 4.0, gap = 3.0;
-        final n = (c.maxWidth / (dash + gap)).floor();
-        return Row(
-          children: List.generate(
-            n,
-            (_) => const Padding(
-              padding: EdgeInsets.only(right: gap),
-              child: SizedBox(
-                width: dash,
-                height: 1,
-                child: ColoredBox(color: Color(0xFFD9DEE5)),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }

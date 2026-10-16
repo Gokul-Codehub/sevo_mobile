@@ -399,7 +399,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
       children: [
         if (recent.isNotEmpty) ...[
           _SectionHeader(

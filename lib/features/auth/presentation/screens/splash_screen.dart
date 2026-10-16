@@ -9,7 +9,7 @@ import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../../shared/widgets/banner_media.dart';
 import '../../../home/data/homepage_repository.dart';
-import '../widgets/animated_splash_art.dart';
+import '../widgets/sevo_gradient_splash.dart';
 
 /// Screen 1: Splash Screen
 ///
@@ -39,7 +39,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Timer? _navTimer;
 
   /// The brand splash image always stays up this long (the original 2.2 s) ...
-  static const _minDisplay = Duration(milliseconds: 2200);
+  /// (3.0 s now, so the full intro animation can play.)
+  static const _minDisplay = Duration(milliseconds: 3000);
+
+  /// Set once we have navigated (timer or the Continue pill) so only one wins.
+  bool _navigated = false;
 
   /// ... and, if Home's first data is still loading after that, a little
   /// longer — never more than this in total — so Home opens filled in.
@@ -95,7 +99,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // `selectedAddressProvider` by the time Home/Checkout need it.
     ref.read(addressListProvider);
     _navTimer = Timer(_minDisplay, () async {
-      if (!mounted) return;
+      if (!mounted || _navigated) return;
       // Hold the splash until the data Home needs has arrived, so the
       // customer lands on a filled-in page instead of a wall of skeletons.
       // Errors/timeouts are ignored here — Home handles those itself.
@@ -122,7 +126,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               .timeout(const Duration(seconds: 2));
         } catch (_) {}
       }
-      if (!mounted) return;
+      if (!mounted || _navigated) return;
       // Fixed 2026-09-19 — this used to go straight to Home on every cold
       // start, which meant OnboardingScreen and LocationAccessScreen
       // (both fully built, both registered routes) were never actually
@@ -132,7 +136,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // there's no login wall added here.
       final hasSeenOnboarding =
           await ref.read(secureStorageProvider).hasSeenOnboarding();
-      if (!mounted) return;
+      if (!mounted || _navigated) return;
+      _navigated = true;
       context.go(hasSeenOnboarding ? AppRoutes.home : AppRoutes.onboarding);
     });
   }
@@ -146,37 +151,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Blue-to-white launch splash (sevo_gradient_splash.dart). The previous
+    // illustrated splash (AnimatedSplashArt + three-dot loader) is no longer
+    // shown; its files are left in place.
     return Scaffold(
       backgroundColor: Colors.white,
       body: FadeTransition(
         opacity: _fadeAnim,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // The splash is now a living illustration (animated_splash_art.dart)
-            // rather than the old single flat image: logo springs in, service
-            // tiles pop and bounce in turn, a truck drives across the hills.
-            const ColoredBox(color: Colors.white),
-            const AnimatedSplashArt(),
-            // Status line + dots, over the hills at the bottom.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 96,
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SplashStatusLine(),
-                    const SizedBox(height: 14),
-                    _ThreeDotLoader(),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: const SevoGradientSplash(),
       ),
     );
   }

@@ -9,6 +9,7 @@ import '../../../../shared/navigation/admin_link_resolver.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/banner_media.dart';
+import '../../../../shared/widgets/common_widgets.dart';
 import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../../../catalog/domain/catalog_models.dart';
 import '../../../catalog/domain/catalog_providers.dart';
@@ -42,7 +43,25 @@ class HomeStudioBlock extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(homeStudioPageProvider(pageKey));
     return async.when(
-      loading: () => AspectRatio(aspectRatio: aspectRatio, child: const SizedBox.expand()),
+      loading: () => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AspectRatio(aspectRatio: aspectRatio, child: const ShimmerBox(borderRadius: 0)),
+          const SizedBox(height: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(child: ShimmerBox(height: 84, borderRadius: 14)),
+                SizedBox(width: 10),
+                Expanded(child: ShimmerBox(height: 84, borderRadius: 14)),
+                SizedBox(width: 10),
+                Expanded(child: ShimmerBox(height: 84, borderRadius: 14)),
+              ],
+            ),
+          ),
+        ],
+      ),
       error: (_, __) => fallback,
       data: (page) {
         if (page == null || page.useLegacy || page.sections.isEmpty) return fallback;
@@ -259,15 +278,21 @@ class _StudioBannerCarouselState extends State<StudioBannerCarousel> {
   @override
   Widget build(BuildContext context) {
     if (_slides.isEmpty) return const SizedBox.shrink();
+    // Advertisement Carousel: coverflow style (big centre card, smaller
+    // neighbours tucked behind it). Other banner templates are unchanged.
+    if (widget.section.template == 'ad_carousel' && _slides.length >= 2) {
+      return _StudioCoverflow(key: ValueKey('cf-${widget.section.id}'), section: widget.section, pageKey: widget.pageKey);
+    }
     final ratio = _aspect(widget.section.settings['aspect']?.toString());
     final showDots = _slides.length > 1 && widget.section.flag('indicators', fallback: true);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+        // Edge to edge: the banner uses the phone's full width (no side
+        // margins, no rounded corners).
+        SizedBox(
+          width: double.infinity,
+          child: ClipRect(
             child: AspectRatio(
               aspectRatio: ratio,
               child: Listener(
@@ -314,6 +339,192 @@ class _StudioBannerCarouselState extends State<StudioBannerCarousel> {
             ],
           ),
         ],
+      ],
+    );
+  }
+}
+
+// ───────────────── coverflow ad carousel ─────────────────
+
+/// Advertisement Carousel animation: the centre card is large, the previous /
+/// next cards are smaller and sit partly behind it. Swiping or autoplay makes
+/// the cards scale and slide over each other. Loops endlessly.
+class _StudioCoverflow extends StatefulWidget {
+  const _StudioCoverflow({super.key, required this.section, required this.pageKey});
+
+  final StudioSection section;
+  final String pageKey;
+
+  @override
+  State<_StudioCoverflow> createState() => _StudioCoverflowState();
+}
+
+class _StudioCoverflowState extends State<_StudioCoverflow> {
+  static const double _fraction = 0.74; // card width as a share of the screen
+  static const double _sideScale = 0.84; // neighbour size relative to centre
+  static const double _tuck = 0.16; // how far neighbours slide behind centre
+
+  List<StudioSlide> get _slides => widget.section.slides;
+  int get _n => _slides.length;
+
+  late final int _initial = _n * 1000;
+  late final PageController _c = PageController(viewportFraction: _fraction, initialPage: _initial);
+  late int _cur = _initial;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoplay();
+  }
+
+  void _startAutoplay() {
+    _timer?.cancel();
+    if (!widget.section.flag('autoplay', fallback: true)) return;
+    final seconds = widget.section.intSetting('interval_seconds', 4).clamp(2, 15);
+    _timer = Timer.periodic(Duration(seconds: seconds), (_) {
+      if (!mounted || !_c.hasClients) return;
+      final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduce) {
+        _c.jumpToPage(_cur + 1);
+      } else {
+        _c.nextPage(duration: const Duration(milliseconds: 650), curve: Curves.easeInOutCubic);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  Widget _card(int k, double page, double cardW, double cardH) {
+    final signed = k - page;
+    final double d = signed.abs().clamp(0.0, 1.0).toDouble();
+    final scale = 1 - (1 - _sideScale) * d;
+    final dx = signed * cardW - (signed == 0 ? 0 : signed.sign) * _tuck * cardW * d;
+    final slide = _slides[k % _n];
+    return Transform.translate(
+      offset: Offset(dx, 0),
+      child: Transform.scale(
+        scale: scale,
+        child: SizedBox(
+          width: cardW,
+          height: cardH,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.15 * (1 - d)), blurRadius: 14, offset: const Offset(0, 6))],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BannerMedia(url: slide.imageUrl, title: slide.title.isEmpty ? null : slide.title),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Coverflow cards are ~18% taller than the plain banner shape.
+    final double ratio = (_aspect(widget.section.settings['aspect']?.toString()) / 1.18).clamp(0.8, 2.4).toDouble();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        LayoutBuilder(
+          builder: (context, box) {
+            final cardW = box.maxWidth * _fraction;
+            final cardH = cardW / ratio;
+            final fogW = (box.maxWidth - cardW) / 2 + box.maxWidth * 0.03;
+            return SizedBox(
+              height: cardH + 12,
+              child: Listener(
+                onPointerDown: (_) => _timer?.cancel(),
+                onPointerUp: (_) => _startAutoplay(),
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    Positioned.fill(
+                      child: AnimatedBuilder(
+                        animation: _c,
+                        builder: (context, _) {
+                          final page = (_c.hasClients && _c.position.haveDimensions)
+                              ? (_c.page ?? _initial.toDouble())
+                              : _initial.toDouble();
+                          final base = page.round();
+                          // Paint farthest first so the centre card is on top.
+                          final ks = [for (var k = base - 2; k <= base + 2; k++) k]
+                            ..sort((x, y) => (y - page).abs().compareTo((x - page).abs()));
+                          return Stack(
+                            alignment: Alignment.center,
+                            children: [for (final k in ks) _card(k, page, cardW, cardH)],
+                          );
+                        },
+                      ),
+                    ),
+                    // Soft fog at the far left / right: side cards keep their own
+                    // colours but dissolve toward the edges, so the front card
+                    // stands out.
+                    Positioned(
+                      left: 0, top: 0, bottom: 0, width: fogW,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [Colors.white.withOpacity(0.85), Colors.white.withOpacity(0)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 0, top: 0, bottom: 0, width: fogW,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerRight,
+                              end: Alignment.centerLeft,
+                              colors: [Colors.white.withOpacity(0.85), Colors.white.withOpacity(0)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Invisible pages: swipe + tap handling only.
+                    Positioned.fill(
+                      child: PageView.builder(
+                        controller: _c,
+                        onPageChanged: (k) => setState(() => _cur = k),
+                        itemBuilder: (context, k) => Semantics(
+                          button: true,
+                          label: _slides[k % _n].alt.isNotEmpty ? _slides[k % _n].alt : _slides[k % _n].title,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              if (k == _cur) {
+                                openStudioDestination(context, _slides[k % _n].destination, widget.pageKey);
+                              } else {
+                                _c.animateToPage(k, duration: const Duration(milliseconds: 450), curve: Curves.easeInOutCubic);
+                              }
+                            },
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -593,7 +804,7 @@ class _BestsellerTileCard extends ConsumerWidget {
             child: Stack(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
                   child: thumbs.isEmpty
                       ? const Center(child: Icon(Icons.local_grocery_store_rounded, color: AppColors.groceryGreenDark, size: 32))
@@ -602,14 +813,14 @@ class _BestsellerTileCard extends ConsumerWidget {
                           itemCount: 4,
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
-                            crossAxisSpacing: 4,
-                            mainAxisSpacing: 4,
+                            crossAxisSpacing: 3,
+                            mainAxisSpacing: 3,
                           ),
                           itemBuilder: (context, i) => ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(8),
                             child: Container(
                               color: Colors.white,
-                              child: AppRemoteImage(imageUrl: thumbs[i % thumbs.length], title: title, fit: BoxFit.contain),
+                              child: SizedBox.expand(child: AppRemoteImage(imageUrl: thumbs[i % thumbs.length], title: title, fit: BoxFit.cover)),
                             ),
                           ),
                         ),
@@ -742,23 +953,37 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(14),
                       onTap: () => context.push('/categories/${c.slug}'),
                       child: Container(
-                        padding: const EdgeInsets.all(8),
+                        clipBehavior: Clip.antiAlias,
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: AppColors.divider),
                         ),
+                        // Image fills the top 3/4 edge to edge (cover); the
+                        // name sits in the bottom 1/4.
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Expanded(
-                              child: (c.image ?? '').isNotEmpty
-                                  ? AppRemoteImage(imageUrl: c.image!, fit: BoxFit.contain)
-                                  : const Icon(Icons.category_rounded, color: AppColors.navy),
+                              flex: 3,
+                              child: SizedBox.expand(
+                                child: (c.image ?? '').isNotEmpty
+                                    ? AppRemoteImage(imageUrl: c.image!, fit: BoxFit.cover)
+                                    : Container(
+                                        color: const Color(0xFFF1F5F9),
+                                        child: const Icon(Icons.category_rounded, color: AppColors.navy),
+                                      ),
+                              ),
                             ),
-                            const SizedBox(height: 6),
-                            Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
+                            Expanded(
+                              flex: 1,
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.15, color: Color(0xFF1A1A1A))),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),

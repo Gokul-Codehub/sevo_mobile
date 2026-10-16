@@ -12,6 +12,7 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
   Category category,
 ) {
   return showModalBottomSheet<CategoryPopupTile>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

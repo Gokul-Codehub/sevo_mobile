@@ -304,7 +304,7 @@ class _DepartmentProductGrid extends ConsumerWidget {
         }
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          padding: EdgeInsets.fromLTRB(12, 12, 12, 16 + MediaQuery.paddingOf(context).bottom),
           children: rows,
         );
       },

@@ -65,7 +65,7 @@ class AllServicesScreen extends ConsumerWidget {
 
           return categoriesAsync.when(
             loading: () => GridView.builder(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + MediaQuery.paddingOf(context).bottom),
               itemCount: 6,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
@@ -106,7 +106,7 @@ class AllServicesScreen extends ConsumerWidget {
               // not a category, so it isn't counted against the admin's
               // real category list, just appended after it.
               return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + MediaQuery.paddingOf(context).bottom),
                 itemCount: services.length + 1,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,

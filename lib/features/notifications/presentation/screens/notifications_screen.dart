@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/common_widgets.dart';
 import '../../domain/notification_models.dart';
 import '../../domain/notification_providers.dart';
 import '../../../../core/navigation/safe_back.dart';
@@ -68,7 +69,35 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         onRefresh: () => controller.refresh(silent: true),
         child: Builder(builder: (context) {
           if (!state.loadedOnce && state.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return ListView(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: List.generate(
+                7,
+                (_) => const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShimmerCircle(size: 40),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ShimmerLine(width: 160, height: 13),
+                            SizedBox(height: 8),
+                            ShimmerLine(height: 11),
+                            SizedBox(height: 6),
+                            ShimmerLine(width: 90, height: 10),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
           }
           if (state.items.isEmpty) {
             return ListView(
@@ -119,7 +148,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           }
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, 24 + MediaQuery.paddingOf(context).bottom),
             itemCount: state.items.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {

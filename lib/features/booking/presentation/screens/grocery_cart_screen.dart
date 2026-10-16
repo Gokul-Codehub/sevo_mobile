@@ -1647,6 +1647,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
   void _openAddressSheet(BuildContext context, List<Address> addresses) {
     showModalBottomSheet(
+      useRootNavigator: true,
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(8)),

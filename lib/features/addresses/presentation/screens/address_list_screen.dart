@@ -111,7 +111,7 @@ class AddressListScreen extends ConsumerWidget {
             children: [
               // Add New Address
               Material(
-                color: AppColors.primaryLight,
+                color: Color(0xFFE6ECF4),
                 borderRadius: BorderRadius.circular(16),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
@@ -121,14 +121,14 @@ class AddressListScreen extends ConsumerWidget {
                     child: Row(
                       children: [
                         Icon(Icons.add_rounded,
-                            color: AppColors.primary, size: 26),
+                            color: AppColors.navy, size: 26),
                         SizedBox(width: 16),
                         Text(
                           'Add New Address',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.primaryDark,
+                            color: AppColors.navyDark,
                           ),
                         ),
                       ],
@@ -273,7 +273,7 @@ class _AddressCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+              color: isSelected ? AppColors.navy : const Color(0xFFE2E8F0),
               width: isSelected ? 1.6 : 1,
             ),
           ),
@@ -287,10 +287,10 @@ class _AddressCard extends StatelessWidget {
                     width: 46,
                     height: 46,
                     decoration: const BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: Color(0xFFE6ECF4),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(_typeIcon, size: 24, color: AppColors.primary),
+                    child: Icon(_typeIcon, size: 24, color: AppColors.navy),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -327,11 +327,11 @@ class _AddressCard extends StatelessWidget {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : Colors.white,
+                        color: isSelected ? AppColors.navy : Colors.white,
                         borderRadius: BorderRadius.circular(7),
                         border: Border.all(
                           color: isSelected
-                              ? AppColors.primary
+                              ? AppColors.navy
                               : const Color(0xFFCBD5E1),
                           width: 1.5,
                         ),
@@ -352,7 +352,7 @@ class _AddressCard extends StatelessWidget {
                       padding:
                           const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD3F1DD),
+                        color: const Color(0xFFDCE6F2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
@@ -360,7 +360,7 @@ class _AddressCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF0B5D2A),
+                          color: AppColors.navy,
                         ),
                       ),
                     ),

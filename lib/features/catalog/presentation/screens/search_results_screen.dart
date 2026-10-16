@@ -159,6 +159,7 @@ class _RefineBar extends ConsumerWidget {
   void _showSortSheet(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(searchRefineProvider(keyArg).notifier);
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -206,6 +207,7 @@ class _RefineBar extends ConsumerWidget {
     final brandNames = {for (final b in brands.values) if (b.isNotEmpty) b}.toList()..sort();
 
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -604,7 +606,7 @@ class _ServiceSearchResultsState extends ConsumerState<ServiceSearchResultsScree
       body: Builder(builder: (context) {
         if (st.loading) {
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
             itemCount: 4,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (_, __) => const ShimmerCard(height: 150),
@@ -652,7 +654,7 @@ class _ServiceSearchResultsState extends ConsumerState<ServiceSearchResultsScree
 
         return ListView(
           controller: _scroll,
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: EdgeInsets.only(bottom: 24 + MediaQuery.paddingOf(context).bottom),
           children: [
             if (chips.isNotEmpty) ...[
               const Padding(
@@ -741,7 +743,7 @@ class _GrocerySearchResultsState extends ConsumerState<GrocerySearchResultsScree
       body: Builder(builder: (context) {
         if (st.loading) {
           return GridView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.paddingOf(context).bottom),
             itemCount: 6,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,

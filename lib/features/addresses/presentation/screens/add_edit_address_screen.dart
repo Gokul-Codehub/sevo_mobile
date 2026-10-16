@@ -385,7 +385,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Icon(Icons.location_on_rounded,
-                        size: 52, color: AppColors.primary),
+                        size: 52, color: AppColors.navy),
                   ],
                 ),
               ),
@@ -537,11 +537,11 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                           width: 58,
                           height: 58,
                           decoration: BoxDecoration(
-                            color: AppColors.primaryLight,
+                            color: Color(0xFFE6ECF4),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.location_on_rounded,
-                              color: AppColors.primary, size: 28),
+                              color: AppColors.navy, size: 28),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -575,7 +575,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                         TextButton(
                           onPressed: _goToDetails,
                           style: TextButton.styleFrom(
-                            foregroundColor: AppColors.primary,
+                            foregroundColor: AppColors.navy,
                             minimumSize: const Size(0, 36),
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                           ),
@@ -593,7 +593,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     child: FilledButton(
                       onPressed: _goToDetails,
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: AppColors.navy,
                         minimumSize: const Size(88, 54),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16)),
@@ -636,7 +636,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       border: border(const Color(0xFFE2E8F0)),
       enabledBorder: border(const Color(0xFFE2E8F0)),
-      focusedBorder: border(AppColors.primary, 1.5),
+      focusedBorder: border(AppColors.navy, 1.5),
       errorBorder: border(AppColors.error),
       focusedErrorBorder: border(AppColors.error, 1.5),
     );
@@ -650,10 +650,10 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         child: Container(
           height: 46,
           decoration: BoxDecoration(
-            color: selected ? AppColors.primaryLight : Colors.white,
+            color: selected ? Color(0xFFE6ECF4) : Colors.white,
             borderRadius: BorderRadius.circular(23),
             border: Border.all(
-              color: selected ? AppColors.primary : const Color(0xFFE2E8F0),
+              color: selected ? AppColors.navy : const Color(0xFFE2E8F0),
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -662,14 +662,14 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
             children: [
               Icon(icon,
                   size: 19,
-                  color: selected ? AppColors.primary : AppColors.textSecondary),
+                  color: selected ? AppColors.navy : AppColors.textSecondary),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  color: selected ? AppColors.primary : AppColors.navy,
+                  color: selected ? AppColors.navy : AppColors.navy,
                 ),
               ),
             ],
@@ -700,7 +700,13 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () {
             if (widget.initialAddress == null) {
-              setState(() => _stage = 0);
+              // Back from the details form re-opens the map as a fresh step
+              // (not as "Change Location"), so the map's own back arrow then
+              // leaves the screen instead of bouncing back here forever.
+              setState(() {
+                _visitedDetails = false;
+                _stage = 0;
+              });
             } else {
               context.goBack();
             }
@@ -776,13 +782,13 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(Icons.edit_rounded,
-                                          size: 14, color: AppColors.primary),
+                                          size: 14, color: AppColors.navy),
                                       SizedBox(width: 5),
                                       Text('Change Location',
                                           style: TextStyle(
                                               fontSize: 11.5,
                                               fontWeight: FontWeight.w800,
-                                              color: AppColors.primary)),
+                                              color: AppColors.navy)),
                                     ],
                                   ),
                                 ),
@@ -799,11 +805,11 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                               width: 38,
                               height: 38,
                               decoration: const BoxDecoration(
-                                color: AppColors.primaryLight,
+                                color: Color(0xFFE6ECF4),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.location_on_rounded,
-                                  size: 20, color: AppColors.primary),
+                                  size: 20, color: AppColors.navy),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -947,7 +953,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: result.isServiceable
-                          ? const Color(0xFFEAF8EF)
+                          ? const Color(0xFFE6ECF4)
                           : AppColors.errorLight,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -959,7 +965,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                               : Icons.error_outline_rounded,
                           size: 18,
                           color: result.isServiceable
-                              ? AppColors.primary
+                              ? AppColors.navy
                               : AppColors.error,
                         ),
                         const SizedBox(width: 8),
@@ -969,7 +975,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                             style: TextStyle(
                               fontSize: 11.5,
                               color: result.isServiceable
-                                  ? AppColors.primaryDark
+                                  ? AppColors.navyDark
                                   : AppColors.error,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1014,7 +1020,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           child: FilledButton(
             onPressed: _isLoading ? null : _handleSave,
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: AppColors.navy,
               minimumSize: const Size(88, 54),
               shape:
                   RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1041,7 +1047,16 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           (_stage == 1 && widget.initialAddress != null),
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        setState(() => _stage = _stage == 1 ? 0 : 1);
+        setState(() {
+          if (_stage == 1) {
+            // Details -> map, but as a fresh step so the next back leaves.
+            _visitedDetails = false;
+            _stage = 0;
+          } else {
+            // Map opened via "Change Location" -> back to the details form.
+            _stage = 1;
+          }
+        });
       },
       child: _stage == 0 ? _buildMapStage() : _buildDetailsStage(),
     );

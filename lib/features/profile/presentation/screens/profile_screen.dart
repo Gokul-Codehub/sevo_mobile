@@ -32,6 +32,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _pickAndUploadAvatar(BuildContext context) async {
     final source = await showModalBottomSheet<ImageSource>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -54,13 +55,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera_rounded,
-                  color: AppColors.primary),
+                  color: AppColors.navy),
               title: const Text('Take a Photo'),
               onTap: () => Navigator.pop(ctx, ImageSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_rounded,
-                  color: AppColors.primary),
+                  color: AppColors.navy),
               title: const Text('Choose from Gallery'),
               onTap: () => Navigator.pop(ctx, ImageSource.gallery),
             ),
@@ -100,7 +101,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(error ?? 'Profile photo updated!'),
-        backgroundColor: error != null ? AppColors.error : AppColors.primary,
+        backgroundColor: error != null ? AppColors.error : AppColors.navy,
       ),
     );
   }
@@ -399,7 +400,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: ElevatedButton(
               onPressed: () => context.push('/login'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: AppColors.navy,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -418,6 +419,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final emailController = TextEditingController(text: user?.email ?? '');
 
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -484,13 +486,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Profile updated successfully!'),
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: AppColors.navy,
                       ),
                     );
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: AppColors.navy,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -508,6 +510,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -544,12 +548,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
         title: const Row(
           children: [
-            Icon(Icons.verified, color: AppColors.primary),
+            Icon(Icons.verified, color: AppColors.navy),
             SizedBox(width: 8),
             Text(
               '30-Day Guarantee',
@@ -568,7 +574,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         actions: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: AppColors.navy,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -585,6 +591,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -601,7 +609,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         actions: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: AppColors.navy,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -618,6 +626,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -640,12 +650,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 mode: LaunchMode.externalApplication,
               );
             },
+            style: TextButton.styleFrom(foregroundColor: AppColors.navy),
             icon: const Icon(Icons.open_in_new_rounded, size: 14),
             label: const Text('Open Online (Web)'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: AppColors.navy,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -662,6 +673,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -701,7 +714,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: Row(
                     children: [
                       Icon(Icons.open_in_new_rounded,
-                          size: 14, color: AppColors.primary),
+                          size: 14, color: AppColors.navy),
                       SizedBox(width: 6),
                       Flexible(
                         child: Text(
@@ -709,7 +722,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
+                            color: AppColors.navy,
                             decoration: TextDecoration.underline,
                           ),
                         ),
@@ -752,7 +765,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     content: Text(
                       'Your account and data have been permanently deleted.',
                     ),
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.navy,
                   ),
                 );
               }

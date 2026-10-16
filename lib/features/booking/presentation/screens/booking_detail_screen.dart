@@ -93,7 +93,7 @@ class BookingDetailScreen extends ConsumerWidget {
     final cancelReason = (booking.cancellationReason ?? '').trim();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+      padding: EdgeInsets.fromLTRB(16, 14, 16, 20 + MediaQuery.paddingOf(context).bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -692,6 +692,7 @@ class BookingDetailScreen extends ConsumerWidget {
     ref.read(selectedBookingServiceIdProvider.notifier).state = null;
 
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       useSafeArea: true,

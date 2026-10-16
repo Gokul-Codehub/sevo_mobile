@@ -13,6 +13,7 @@ import 'product_card.dart';
 /// out of stock shows "Sold out".
 Future<void> showProductVariantSheet(BuildContext context, ServiceItem product) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

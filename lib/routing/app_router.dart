@@ -24,9 +24,10 @@ import '../features/catalog/data/basket_models.dart';
 import '../features/catalog/domain/catalog_models.dart';
 import '../features/catalog/presentation/screens/all_services_screen.dart';
 import '../features/catalog/presentation/screens/basket_detail_screen.dart';
-import '../features/catalog/presentation/screens/basket_list_screen.dart';
+import '../features/catalog/presentation/screens/combo_offers_screen.dart';
 import '../features/catalog/presentation/screens/category_detail_screen.dart';
 import '../features/catalog/presentation/screens/grocery_product_detail_screen.dart';
+import '../features/catalog/presentation/screens/recipe_detail_screen.dart';
 import '../features/catalog/presentation/screens/search_screen.dart';
 import '../features/catalog/presentation/screens/search_results_screen.dart';
 import '../features/catalog/domain/search_keywords.dart';
@@ -80,6 +81,9 @@ abstract final class AppRoutes {
   // GroceryProductDetailScreen's doc comment for why these can't share a
   // screen).
   static const String groceryProductDetail = '/products/:slug';
+  // Recipe page (ingredients with add-to-cart + cooking steps), opened from a
+  // product's "Recipes & Meal Ideas" strip.
+  static const String recipeDetail = '/recipes/:key';
   // Added 2026-10-08 — Seller Hub combo/bundle offers ("Baskets"); see
   // BasketListScreen/BasketDetailScreen's doc comments.
   static const String baskets = '/baskets';
@@ -284,9 +288,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: AppRoutes.recipeDetail,
+            name: 'recipe-detail',
+            builder: (context, state) => RecipeDetailScreen(
+              recipeKey: state.pathParameters['key'] ?? '',
+            ),
+          ),
+          GoRoute(
             path: AppRoutes.baskets,
             name: 'baskets',
-            builder: (context, state) => const BasketListScreen(),
+            builder: (context, state) => const ComboOffersScreen(),
           ),
           GoRoute(
             path: AppRoutes.basketDetail,
