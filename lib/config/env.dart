@@ -28,10 +28,10 @@ class Env {
   // This affects EVERY API call the app makes (auth, booking, addresses,
   // everything) -- revert to the commented production line below once the
   // real vendor.sevo.co.in deploy is current.
+  // PRODUCTION (restored 2026-10-15 for the live build wired to Sevo Home Studio).
+  // For local LAN testing swap to: 'http://192.168.1.77:8000'
   static const String mediaBaseUrl =
       'https://sevo.co.in';
-      // 'http://192.168.1.77:8000';
-      // 'https://127.0.0.1:8000';
 
   // ── Vendor Grocery Hub base origin ──
   // Added 2026-09-19, confirmed directly by the user ("i actually working
@@ -58,17 +58,17 @@ class Env {
   // deploy went live — back to the production host, trailing slash still
   // intentionally omitted since every call site appends its own leading
   // '/api/...' (see the doc comment above).
+  // PRODUCTION. For local LAN testing swap to: 'http://192.168.1.77:8001'
   static const String groceryHubBaseUrl =
       'https://vendor.sevo.co.in';
-    //   'http://192.168.1.77:8001';
 
   // ── Production WebSocket base (authoritative per Handover Bible §3) ──
   // Updated 2026-09-23 alongside [mediaBaseUrl] — same domain move.
   // Switched 2026-09-25 alongside [mediaBaseUrl] to match the local
   // CalServices instance -- revert together with it.
+  // PRODUCTION. For local LAN testing swap to: 'ws://192.168.1.77:8000/ws'
   static const String wsBaseUrl =
       'wss://sevo.co.in/ws';
-    //   'ws://http://192.168.1.77:8001/ws';
 
   // ── WebSocket channel paths ──
   /// Tracking channel: append `/{identifier}/?token=<tracking_token>`

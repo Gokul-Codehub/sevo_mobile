@@ -33,6 +33,7 @@ import '../../../../shared/providers/bottom_nav_visibility_provider.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/home_flow_mode.dart';
 import '../widgets/grocery_section_layouts.dart';
+import '../widgets/home_studio_block.dart';
 import '../widgets/home_flow_theme.dart';
 
 /// Up to 6 distinct services/groceries pulled from the customer's own
@@ -634,7 +635,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _ModeContentFade(
               key: ValueKey(flowMode),
               animate: _animateModeContent,
-              slivers: flowMode == HomeFlowMode.groceries
+              // Sevo Home Studio: when a page is published AND switched on
+              // for this mode, everything configured there renders here,
+              // right after the wave banner, in place of the legacy rows.
+              // Otherwise (off / unpublished / offline without cache) the
+              // legacy sections below render exactly as before.
+              slivers: homeStudioContentSlivers(
+                    ref,
+                    flowMode == HomeFlowMode.groceries ? 'grocery_home' : 'services_home',
+                    footer: _HomeFooter(mode: flowMode, theme: flowTheme),
+                  ) ??
+                (flowMode == HomeFlowMode.groceries
                 ? _buildGroceriesContentSlivers(
                     context: context,
                     groceryCategory: groceryCategoryForShopByCategory,
@@ -649,7 +660,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     popularServicesAsync: popularServicesAsync,
                     myBookingsAsync: myBookingsAsync,
                     screenWidth: screenWidth,
-                  ),
+                  )),
             ),
           ],
                     ),
