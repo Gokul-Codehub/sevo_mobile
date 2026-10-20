@@ -30,9 +30,11 @@ import '../../../catalog/presentation/widgets/product_card.dart';
 import '../../../catalog/presentation/screens/grocery_hub_category_screen.dart';
 import '../../../logistics/domain/logistics_providers.dart';
 import '../../../../shared/providers/bottom_nav_visibility_provider.dart';
+import '../../../../core/services/home_live_updates.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/home_flow_mode.dart';
 import '../widgets/grocery_section_layouts.dart';
+import '../widgets/home_studio_block.dart';
 import '../widgets/home_flow_theme.dart';
 
 /// Up to 6 distinct services/groceries pulled from the customer's own
@@ -54,6 +56,14 @@ import '../widgets/home_flow_theme.dart';
 /// [_BookAgainTile]) as a reliable fallback signal for "this is a grocery
 /// item", used below.
 const int _bookAgainMarketplaceIdOffset = 800000000;
+
+/// Sevo Home Studio owns everything BELOW the wave banner. When true, the old
+/// homepage-builder sections (grocery sections, bestsellers, popular services,
+/// book-again rows …) are never rendered or loaded there. Only the legacy
+/// "Mobile app banners" (hero video + promo banners) and "Mobile Quick Access
+/// Cards" (mode switcher + top cards) above it still come from the old config.
+/// Set to false to restore the old fallback sections.
+const bool _kHomeContentFromStudioOnly = true;
 
 /// Fixed 2026-10-07 per explicit bug report (a grocery reorder — "Yellaki
 /// Banana" etc. — showing up in Services mode's "Book Again", opening the
@@ -165,8 +175,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scroll = ScrollController();
   final _collapse = ValueNotifier<double>(0);
 
-  static const _collapseStart = 120.0;
-  static const _collapseEnd = 220.0;
+  static const _collapseStart = 200.0;
+  static const _collapseEnd = 260.0;
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
@@ -242,6 +252,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // When the admin hasn't published anything there yet, fall back to the
     // original 2-item Groceries/Services list built from the live catalog,
     // so the row is never empty on a fresh install.
+    // Start the live-refresh socket (re-fetches Home when an admin publishes).
+    ref.watch(homeLiveUpdatesProvider);
     final homepageConfigForTopCards = ref.watch(homepageConfigProvider).valueOrNull;
     final adminTopCards = homepageConfigForTopCards?.topCards ?? const [];
     final quickAccessCards = adminTopCards.isNotEmpty
@@ -568,7 +580,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ? displayLocation
                                     : 'Select delivery address',
                                 style: const TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.navy,
                                   height: 1.15,
@@ -634,7 +646,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _ModeContentFade(
               key: ValueKey(flowMode),
               animate: _animateModeContent,
-              slivers: flowMode == HomeFlowMode.groceries
+              // Sevo Home Studio: when a page is published AND switched on
+              // for this mode, everything configured there renders here,
+              // right after the wave banner, in place of the legacy rows.
+              // Otherwise (off / unpublished / offline without cache) the
+              // legacy sections below render exactly as before.
+              slivers: homeStudioContentSlivers(
+                    ref,
+                    flowMode == HomeFlowMode.groceries ? 'grocery_home' : 'services_home',
+                    footer: _HomeFooter(mode: flowMode, theme: flowTheme),
+                  ) ??
+                (_kHomeContentFromStudioOnly
+                ? <Widget>[
+                    SliverToBoxAdapter(child: _HomeFooter(mode: flowMode, theme: flowTheme)),
+                  ]
+                : flowMode == HomeFlowMode.groceries
                 ? _buildGroceriesContentSlivers(
                     context: context,
                     groceryCategory: groceryCategoryForShopByCategory,
@@ -649,7 +675,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     popularServicesAsync: popularServicesAsync,
                     myBookingsAsync: myBookingsAsync,
                     screenWidth: screenWidth,
-                  ),
+                  )),
             ),
           ],
                     ),
@@ -765,7 +791,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'Book Again',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: AppColors.navy,
                           ),
@@ -774,7 +800,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'From your recent orders',
                           style: TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
@@ -861,7 +887,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const Text(
                     'Recommended Services',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                       letterSpacing: -0.3,
@@ -884,7 +910,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Text(
                         'See all',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           color: theme.accent,
                         ),
@@ -1009,7 +1035,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'Book Again',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: AppColors.navy,
                           ),
@@ -1018,7 +1044,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Text(
                           'From your recent orders',
                           style: TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 12,
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1117,12 +1143,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       //                 children: [
       //                   Text(
       //                     'Browse Groceries by Category',
-      //                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
+      //                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy),
       //                   ),
       //                   SizedBox(height: 2),
       //                   Text(
       //                     'Oils, dairy, pantry & more — shop by department',
-      //                     style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+      //                     style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
       //                   ),
       //                 ],
       //               ),
@@ -1161,7 +1187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Text(
               'Bestsellers',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -1206,7 +1232,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Text(
               'Bestsellers',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -1538,7 +1564,7 @@ class _MarketplaceDepartmentCarousel extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -1549,7 +1575,7 @@ class _MarketplaceDepartmentCarousel extends ConsumerWidget {
             child: Text(
               'See all',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: HomeFlowTheme.groceries.accent,
               ),
@@ -1788,7 +1814,7 @@ class _AnimatedSearchHintsState extends State<_AnimatedSearchHints> {
         currentText,
         key: ValueKey<String>(currentText),
         style: const TextStyle(
-          fontSize: 13.5,
+          fontSize: 12.5,
           color: AppColors.textHint,
           fontWeight: FontWeight.w400,
         ),
@@ -2267,7 +2293,7 @@ class _StickyHomeHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                     color: ink,
                   ),
@@ -2345,7 +2371,7 @@ class _StickyHomeHeader extends StatelessWidget {
                           flowTheme.searchPlaceholder,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13.5, color: AppColors.textHint),
+                          style: const TextStyle(fontSize: 12.5, color: AppColors.textHint),
                         ),
                       ),
                     ],
@@ -2401,7 +2427,7 @@ class _StickyHomeHeader extends StatelessWidget {
                             Text(
                               tile.label,
                               style: TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: ink,
                               ),
@@ -2430,7 +2456,9 @@ class _StickyHomeHeader extends StatelessWidget {
             child: Align(
               alignment: Alignment.bottomCenter,
               heightFactor: Curves.easeOut.transform(t),
-              child: Opacity(opacity: Curves.easeIn.transform(t), child: child),
+              // Solid (no fade): a see-through bar let the page's own header
+              // show through mid-scroll, doubling the search box and tabs.
+              child: child,
             ),
           ),
         );
@@ -2465,7 +2493,9 @@ class _HomeFooter extends StatelessWidget {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.fromLTRB(20, 26, 20, 130),
+      // Clearance for the floating nav pill only (Scaffold.extendBody lets the
+      // page run behind it) — not a fixed 130px blank band.
+      padding: EdgeInsets.fromLTRB(20, 26, 20, 16 + MediaQuery.paddingOf(context).bottom),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -2482,7 +2512,7 @@ class _HomeFooter extends StatelessWidget {
             tagline,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: AppColors.navy,
             ),
@@ -2697,7 +2727,7 @@ class _RotatingHeroGreetingState extends State<_RotatingHeroGreeting> {
           Text(
             "IT'S TIME TO",
             style: GoogleFonts.poppins(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: widget.textColor.withValues(alpha: 0.85),
               letterSpacing: 2.2,
@@ -2741,7 +2771,7 @@ class _RotatingHeroGreetingState extends State<_RotatingHeroGreeting> {
               key: ValueKey(_index),
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.baloo2(
-                fontSize: 28,
+                fontSize: 24.5,
                 fontWeight: FontWeight.w800,
                 color: widget.textColor,
                 height: 1.05,
@@ -3028,7 +3058,7 @@ class _QuickAccessPillTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: isSelected ? accent : AppColors.navy,
                   ),
@@ -3284,7 +3314,7 @@ class _GroceryHubBestsellerTile extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.navy,
               height: 1.2,
@@ -3399,7 +3429,7 @@ class _AdminBestsellerTile extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.navy,
               height: 1.2,
@@ -3631,7 +3661,7 @@ class _BookAgainTile extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 11.5,
+                fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: AppColors.navy,
                 height: 1.2,
@@ -4313,7 +4343,7 @@ class _GoodsTransportCard extends StatelessWidget {
                       const Text(
                         'Goods & Transport',
                         style: TextStyle(
-                          fontSize: 19,
+                          fontSize: 16.5,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
                           letterSpacing: -0.4,
@@ -4323,7 +4353,7 @@ class _GoodsTransportCard extends StatelessWidget {
                       const Text(
                         'For all your moving needs',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF475569),
                         ),
@@ -4350,7 +4380,7 @@ class _GoodsTransportCard extends StatelessWidget {
                         Text(
                           'Book now',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
@@ -4467,7 +4497,7 @@ class _FreshProduceCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 13.5,
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
                           height: 1.15,
@@ -4624,7 +4654,7 @@ class _GroceriesCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
                           letterSpacing: -0.3,
@@ -4997,7 +5027,7 @@ class _PromoBannerSlide extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: banner.accentColor,
                     letterSpacing: 0.5,
@@ -5009,7 +5039,7 @@ class _PromoBannerSlide extends ConsumerWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                     height: 1.2,
@@ -5030,7 +5060,7 @@ class _PromoBannerSlide extends ConsumerWidget {
                         Text(
                           banner.ctaLabel,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: AppColors.navy,
                           ),

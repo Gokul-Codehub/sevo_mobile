@@ -13,6 +13,7 @@ import 'product_card.dart';
 /// out of stock shows "Sold out".
 Future<void> showProductVariantSheet(BuildContext context, ServiceItem product) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -29,8 +30,13 @@ class _VariantSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final options = product.variantOptions.isNotEmpty ? product.variantOptions : [product];
     final maxHeight = MediaQuery.of(context).size.height * 0.75;
+    // Space the floating nav bar (and system bar) takes at the bottom: the
+    // white sheet runs behind it, and the rows get this much end padding so
+    // the last pack / its Add button always stays clear of the bar.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return SafeArea(
+      bottom: false,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -47,11 +53,11 @@ class _VariantSheet extends ConsumerWidget {
           ),
           Container(
             constraints: BoxConstraints(maxHeight: maxHeight),
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            decoration: BoxDecoration(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -77,6 +83,7 @@ class _VariantSheet extends ConsumerWidget {
                 Flexible(
                   child: ListView.separated(
                     shrinkWrap: true,
+                    padding: EdgeInsets.only(bottom: bottomInset + 12),
                     itemCount: options.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) => _VariantRow(

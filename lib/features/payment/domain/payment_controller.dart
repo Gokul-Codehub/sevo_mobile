@@ -1,13 +1,16 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../../core/errors/api_error.dart';
+import '../../../routing/app_router.dart' show rootNavigatorKey;
 import '../../auth/domain/auth_notifier.dart';
 import '../../booking/domain/booking_models.dart';
 import '../../booking/domain/booking_providers.dart';
 import '../data/payment_repository.dart';
+import '../presentation/screens/paytm_checkout_screen.dart';
 import 'payment_models.dart';
 
 /// State notifier managing the complete Razorpay checkout and verification lifecycle.
@@ -81,6 +84,33 @@ class PaymentController extends Notifier<PaymentState> {
     }
     _activeOrderId = order.orderId;
 
+    // The server picks the gateway. Non-Razorpay providers never need a
+    // Razorpay key, so they are handled before the key check below.
+    switch (order.provider) {
+      case 'paytm':
+        await _payWithPaytm(booking, order);
+        return;
+      case 'paytm_mock':
+        // Server-issued, signed mock completion (non-production only).
+        await _verifyAndFinish(
+          bookingId: booking.id,
+          orderId: order.orderId,
+          paymentId: order.providerTransactionId ?? '',
+          signature: order.providerSignature ?? '',
+        );
+        return;
+      case 'sandbox':
+        // Local sandbox: the server accepts the order without a signature
+        // only when PAYMENT_SANDBOX_MODE is on; otherwise it answers 503.
+        await _verifyAndFinish(
+          bookingId: booking.id,
+          orderId: order.orderId,
+          paymentId: '',
+          signature: '',
+        );
+        return;
+    }
+
     // PaymentInitiateView returns an empty key_id specifically when this
     // backend environment has no live Razorpay gateway configured (see
     // PaymentOrder.fromJson's doc comment) — fail honestly instead of
@@ -126,13 +156,68 @@ class PaymentController extends Notifier<PaymentState> {
     }
   }
 
+  // ── Paytm (live) ──────────────────────────────────────────────────────────
+  Future<void> _payWithPaytm(Booking booking, PaymentOrder order) async {
+    final context = rootNavigatorKey.currentContext;
+    final navigator = rootNavigatorKey.currentState;
+    if (context == null || navigator == null) {
+      state = const PaymentFailed(
+        errorMessage: 'Could not open Paytm checkout. Please try again.',
+      );
+      return;
+    }
+    final token = order.txnToken;
+    final mid = order.mid;
+    final script = order.checkoutScriptUrl;
+    if (token == null || mid == null || script == null) {
+      state = const PaymentFailed(
+        errorMessage: 'Paytm checkout could not be started. Please try again.',
+      );
+      return;
+    }
+    state = const PaymentProcessing(statusMessage: 'Opening Paytm...');
+    // Closed by the customer or finished by Paytm: either way the server is
+    // asked to confirm with Paytm itself, the app never trusts the page.
+    await navigator.push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PaytmCheckoutScreen(
+          orderId: order.orderId,
+          mid: mid,
+          txnToken: token,
+          checkoutOrigin: Uri.parse(script).origin,
+        ),
+      ),
+    );
+    await _verifyAndFinish(
+      bookingId: booking.id,
+      orderId: order.orderId,
+      paymentId: '',
+      signature: '',
+      notPaidMessage:
+          'Paytm payment was not completed. You have not been charged unless Paytm confirms it; check your booking before trying again.',
+    );
+  }
+
   // ── Success Callback ──────────────────────────────────────────────────────
   Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    final bookingId = _activeBookingId ?? 0;
-    final orderId = response.orderId ?? _activeOrderId ?? '';
-    final paymentId = response.paymentId ?? '';
-    final signature = response.signature ?? '';
+    await _verifyAndFinish(
+      bookingId: _activeBookingId ?? 0,
+      orderId: response.orderId ?? _activeOrderId ?? '',
+      paymentId: response.paymentId ?? '',
+      signature: response.signature ?? '',
+    );
+  }
 
+  /// Asks the server to verify the payment (it is the only judge of "paid")
+  /// and moves the controller to success or failure.
+  Future<void> _verifyAndFinish({
+    required int bookingId,
+    required String orderId,
+    required String paymentId,
+    required String signature,
+    String? notPaidMessage,
+  }) async {
     state = const PaymentProcessing(
       statusMessage: 'Verifying payment with bank...',
     );
@@ -160,9 +245,11 @@ class PaymentController extends Notifier<PaymentState> {
         ref.invalidate(myBookingsProvider);
       case Failure(:final error):
         state = PaymentFailed(
-          errorMessage: 'Payment received but verification failed: ${error.message}',
+          errorMessage: notPaidMessage ??
+              'Payment received but verification failed: ${error.message}',
         );
     }
+    if (bookingId > 0) ref.invalidate(bookingDetailProvider(bookingId));
   }
 
   // ── Error Callback ────────────────────────────────────────────────────────

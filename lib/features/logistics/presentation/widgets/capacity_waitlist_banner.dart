@@ -90,7 +90,7 @@ class _CapacityWaitlistBannerState extends ConsumerState<CapacityWaitlistBanner>
                 child: Text(
                   '${DateFormat('d MMM').format(date)} is fully booked',
                   style: const TextStyle(
-                      fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.navy),
+                      fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy),
                 ),
               ),
             ],
@@ -100,11 +100,11 @@ class _CapacityWaitlistBannerState extends ConsumerState<CapacityWaitlistBanner>
             existing != null
                 ? "You're on the list. We'll notify you here and by email if a place opens up — you'll then have a short time to book it."
                 : "Want it anyway? We can tell you if a place opens up. You'll get a notification and a short window to book it.",
-            style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.textSecondary),
+            style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.textSecondary),
           ),
           if (_message != null && existing == null) ...[
             const SizedBox(height: 6),
-            Text(_message!, style: const TextStyle(fontSize: 12.5, color: AppColors.error)),
+            Text(_message!, style: const TextStyle(fontSize: 12, color: AppColors.error)),
           ],
           const SizedBox(height: 10),
           if (existing != null)

@@ -135,20 +135,22 @@ class ServiceCard extends ConsumerWidget {
         'building ServiceCard: title=${service.title}, id=${service.id}, quantityInCart=$quantityInCart, isGrocery=$isGrocery');
 
     return _lockTextScale(context, Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border, width: 0.8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
+      margin: EdgeInsets.symmetric(vertical: isGrocery ? 6 : 9),
+      decoration: isGrocery
+          ? BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border, width: 0.8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            )
+          : null,
+      clipBehavior: isGrocery ? Clip.antiAlias : Clip.none,
       child: isGrocery
           ? Padding(
               padding: const EdgeInsets.all(10),
@@ -160,15 +162,13 @@ class ServiceCard extends ConsumerWidget {
               ),
             )
           : InkWell(
+              borderRadius: BorderRadius.circular(24),
               onTap: onTap ?? () => _navigateToDetail(context),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: _buildCardContent(
-                  context,
-                  ref,
-                  isGrocery: isGrocery,
-                  quantityInCart: quantityInCart,
-                ),
+              child: _buildCardContent(
+                context,
+                ref,
+                isGrocery: isGrocery,
+                quantityInCart: quantityInCart,
               ),
             ),
     ));
@@ -218,7 +218,7 @@ class ServiceCard extends ConsumerWidget {
                         Text(
                           service.title,
                           style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: AppColors.navy,
                             letterSpacing: -0.2,
@@ -233,7 +233,7 @@ class ServiceCard extends ConsumerWidget {
                           Text(
                             service.displayUnit,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary,
                             ),
@@ -250,7 +250,7 @@ class ServiceCard extends ConsumerWidget {
                               Text(
                                 service.rating.toStringAsFixed(1),
                                 style: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.navy,
                                 ),
@@ -267,12 +267,12 @@ class ServiceCard extends ConsumerWidget {
                                 const SizedBox(width: 8),
                                 const Text('•',
                                     style: TextStyle(
-                                        color: AppColors.textHint, fontSize: 12)),
+                                        color: AppColors.textHint, fontSize: 11.5)),
                                 const SizedBox(width: 8),
                                 Text(
                                   '${service.durationMinutes} mins',
                                   style: const TextStyle(
-                                    fontSize: 11.5,
+                                    fontSize: 11,
                                     color: AppColors.textSecondary,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -292,7 +292,7 @@ class ServiceCard extends ConsumerWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 11,
                               color: AppColors.textSecondary,
                             ),
                           ),
@@ -318,7 +318,7 @@ class ServiceCard extends ConsumerWidget {
                       Text(
                         '₹${service.effectivePrice}',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: AppColors.navy,
                         ),
@@ -328,7 +328,7 @@ class ServiceCard extends ConsumerWidget {
                         Text(
                           '₹${service.price}',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             color: AppColors.textHint,
                             decoration: TextDecoration.lineThrough,
                           ),
@@ -353,7 +353,7 @@ class ServiceCard extends ConsumerWidget {
                                 gradient: const LinearGradient(
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
-                                  colors: [Color(0xFF2FA354), Color(0xFF14612F)],
+                                  colors: [Color(0xFF1E3A8A), Color(0xFF0D253A)],
                                 ),
                                 borderRadius: BorderRadius.circular(18),
                               ),
@@ -366,7 +366,7 @@ class ServiceCard extends ConsumerWidget {
                                   Text(
                                     'Add',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11.5,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -380,7 +380,7 @@ class ServiceCard extends ConsumerWidget {
                             onPressed: () =>
                                 _handleBuyNow(context, ref, quantityInCart),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.groceryGreen,
+                              backgroundColor: AppColors.navy,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 4),
@@ -393,7 +393,7 @@ class ServiceCard extends ConsumerWidget {
                             child: const Text(
                               'BUY',
                               style: TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w700),
+                                  fontSize: 11.5, fontWeight: FontWeight.w700),
                             ),
                           ),
                         ],
@@ -403,7 +403,7 @@ class ServiceCard extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Material(
-                            color: AppColors.groceryGreen,
+                            color: AppColors.navy,
                             borderRadius: BorderRadius.circular(8),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -439,7 +439,7 @@ class ServiceCard extends ConsumerWidget {
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w800,
-                                      fontSize: 13,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ),
@@ -480,7 +480,7 @@ class ServiceCard extends ConsumerWidget {
                             onPressed: () =>
                                 _handleBuyNow(context, ref, quantityInCart),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.groceryGreenDark,
+                              backgroundColor: AppColors.navy,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 4),
@@ -493,7 +493,7 @@ class ServiceCard extends ConsumerWidget {
                             child: const Text(
                               'BUY',
                               style: TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w700),
+                                  fontSize: 11.5, fontWeight: FontWeight.w700),
                             ),
                           ),
                         ],
@@ -504,8 +504,8 @@ class ServiceCard extends ConsumerWidget {
                     ElevatedButton(
                       onPressed: onTap ?? () => _navigateToDetail(context),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.serviceBlueLight,
-                        foregroundColor: AppColors.serviceBlue,
+                        backgroundColor: Color(0xFFE8EDF7),
+                        foregroundColor: AppColors.navy,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 18, vertical: 6),
@@ -517,7 +517,7 @@ class ServiceCard extends ConsumerWidget {
                       child: const Text(
                         'View Details',
                         style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -537,285 +537,266 @@ class ServiceCard extends ConsumerWidget {
   /// the duration chip stays legible over any photo. Price and "View
   /// Details" sit below it, unchanged in spirit from the original bottom
   /// row, just without the left-thumbnail Row this replaces.
+  /// Services listing card (redesigned 2026-10-14 from the supplied reference):
+  /// a large rounded photo with a mint "X% OFF" pill, and a white panel that
+  /// overlaps the photo's bottom edge holding a dark duration disc, the title +
+  /// blurb, and a mint price block with the "View Details" action.
   Widget _buildServiceHeroContent(
     BuildContext context,
     WidgetRef ref, {
     required int quantityInCart,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildImageOrIcon(
-                  service,
-                  width: double.infinity,
-                  height: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.45),
-                      ],
-                      stops: const [0.55, 1.0],
+    const mint = Color(0xFFE8EDF7);
+    const mintText = Color(0xFF1E3A8A);
+    const overlap = 30.0;
+
+    final showDiscount = service.discountPercent != null && !service.hasPackageOptions;
+    final mins = service.durationMinutes;
+    final durationTop = mins >= 60
+        ? (mins % 60 == 0 ? '${mins ~/ 60}' : (mins / 60).toStringAsFixed(1))
+        : '$mins';
+    final durationUnit = mins >= 60 ? (mins == 60 ? 'hr' : 'hrs') : 'mins';
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final imageHeight = (c.maxWidth.isFinite ? c.maxWidth : 320.0) / 1.22;
+        return Stack(
+          children: [
+            // ── Photo ───────────────────────────────────────────────────
+            SizedBox(
+              height: imageHeight,
+              width: double.infinity,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildImageOrIcon(
+                      service,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
                     ),
-                  ),
-                ),
-                // Fixed 2026-10-08 (QA CMP04 — "the word 'Unavailable'
-                // does not show for the unavailable packages"): an admin-
-                // deactivated package (`service.isAvailable` false, see
-                // ServiceItem.status) is still returned by the catalog so
-                // the customer can see it was once offered, but nothing
-                // marked it as such — this greys the whole hero image and
-                // adds the same "Unavailable" label CMP01's booking gate
-                // (service_detail_screen.dart) now enforces, so the two
-                // read as one consistent state instead of a silent block.
-                if (!service.isAvailable) ...[
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  const Positioned.fill(
-                    child: Center(
-                      child: _UnavailableBadge(),
-                    ),
-                  ),
-                ],
-                // Added 2026-09-17 per a supplied reference screenshot: a
-                // "Most Booked" badge, driven by the real `isPopular` flag
-                // the backend already sends (CatalogServiceSerializer) —
-                // never shown for a service the admin hasn't actually
-                // marked popular.
-                if (service.badgeLabel != null)
-                  Positioned(
-                    left: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryDark,
-                        borderRadius: BorderRadius.circular(8),
+                    // Admin-deactivated package: grey the photo and label it
+                    // (QA CMP04) — same behaviour as before the redesign.
+                    if (!service.isAvailable) ...[
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                        ),
                       ),
-                      child: Row(
+                      const Positioned.fill(
+                        child: Center(child: _UnavailableBadge()),
+                      ),
+                    ],
+                    // "Most Booked" style badge from the real isPopular flag.
+                    if (service.badgeLabel != null)
+                      Positioned(
+                        left: 10,
+                        top: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.navy,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded, size: 12, color: Colors.white),
+                              const SizedBox(width: 3),
+                              Text(
+                                service.badgeLabel!,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    // Top-right: mint "X% OFF" pill (from the real discount),
+                    // or the rating when there is no discount to show.
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: showDiscount
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: mint,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${service.discountPercent}% OFF',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: mintText,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.star_rounded, size: 14, color: AppColors.star),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    service.rating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.navy,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Overlapping white panel ─────────────────────────────────
+            Padding(
+              padding: EdgeInsets.only(top: imageHeight - overlap),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (mins > 0) ...[
+                      Container(
+                        width: 54,
+                        height: 54,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF1B1B1F),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              durationTop,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                height: 1.05,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              durationUnit,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                height: 1.05,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: Text(
+                        service.title,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.navy,
+                          letterSpacing: -0.3,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Mint price block, exactly as in the reference: big
+                    // price with the struck-through old price beside/below it.
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: mint,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.star_rounded, size: 12, color: Colors.white),
-                          const SizedBox(width: 3),
+                          if (service.hasPackageOptions)
+                            const Text(
+                              'From',
+                              style: TextStyle(
+                                fontSize: 11,
+                                height: 1.1,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
                           Text(
-                            service.badgeLabel!,
+                            '₹${service.hasPackageOptions ? service.startsAtPrice : service.effectivePrice}',
                             style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              fontSize: 19.5,
+                              height: 1.1,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF111111),
+                              letterSpacing: -0.5,
                             ),
                           ),
+                          if (service.hasDiscount && !service.hasPackageOptions)
+                            Text(
+                              '₹${service.price}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                height: 1.2,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textSecondary,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                  ),
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star_rounded, size: 13, color: AppColors.star),
-                        const SizedBox(width: 2),
-                        Text(
-                          service.rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.navy,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (service.durationMinutes > 0)
-                  Positioned(
-                    left: 10,
-                    bottom: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '${service.durationMinutes} mins',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          service.title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: AppColors.navy,
-            letterSpacing: -0.2,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (_cardBlurb(service) != null) ...[
-          const SizedBox(height: 3),
-          Text(
-            _cardBlurb(service)!,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        const Divider(color: AppColors.divider, height: 1),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Flexible + scaleDown: on a narrow card (e.g. next to the
-            // subcategory rail) the price / MRP / "% OFF" group shrinks to fit
-            // instead of overflowing past the button.
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                if (service.hasPackageOptions)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 4),
-                    child: Text('From',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary)),
-                  ),
-                Text(
-                  '₹${service.hasPackageOptions ? service.startsAtPrice : service.effectivePrice}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
-                  ),
-                ),
-                if (service.hasDiscount && !service.hasPackageOptions) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    '₹${service.price}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textHint,
-                      decoration: TextDecoration.lineThrough,
-                    ),
-                  ),
-                ],
-                // Added 2026-09-17 per a supplied reference screenshot: a
-                // "X% OFF" pill computed from the real
-                // `ServiceItem.discountPercent` getter (price vs.
-                // discountedPrice) — never a hardcoded percentage.
-                if (service.discountPercent != null && !service.hasPackageOptions) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.chipGreenBg,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '${service.discountPercent}% OFF',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.chipGreenText,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: onTap ?? () => _navigateToDetail(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.serviceBlueLight,
-                foregroundColor: AppColors.serviceBlue,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                minimumSize: const Size(0, 34),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              child: Text(
-                service.hasPackageOptions
-                    ? '${service.packageOptions.length} options'
-                    : 'View Details',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+                  ],
                 ),
               ),
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
-}
-
-/// One-line summary under a package title: the short description when the
-/// backend sends one, otherwise the first lines of the admin's description
-/// (the list API only fills `description`).
-String? _cardBlurb(ServiceItem s) {
-  final short = s.shortDescription?.trim();
-  if (short != null && short.isNotEmpty) return short;
-  final d = s.description?.trim();
-  if (d == null || d.isEmpty) return null;
-  return d.replaceAll(RegExp(r'\s+'), ' ');
 }
 
 /// Small pill shown over a deactivated package's hero image — see the
@@ -835,7 +816,7 @@ class _UnavailableBadge extends StatelessWidget {
       child: const Text(
         'Unavailable',
         style: TextStyle(
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: FontWeight.w800,
           color: Colors.white,
           letterSpacing: 0.3,

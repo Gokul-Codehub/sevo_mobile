@@ -165,15 +165,33 @@ class _AppShellState extends ConsumerState<AppShell> {
     // scroll direction (see home_screen.dart); every other tab ignores it
     // and always shows the nav bar, exactly as before.
     final navVisible = !isHomeTab || ref.watch(bottomNavVisibleProvider);
+    // True only on the Home screen itself ('/'). _currentIndex() falls back to
+    // 0 for every pushed page (categories, product / service detail, booking
+    // flow ...), so isHomeTab can't be used to tell them apart.
+    final onHomeScreen = GoRouterState.of(context).uri.path == AppRoutes.home;
+    // Only the Home screen itself (whose nav bar hides on scroll) lets content
+    // run behind the floating pill. Every other screen — including the pages
+    // opened from Home (categories, products, recipes …) — is laid out ABOVE
+    // the pill, so the last row of a list and its Add buttons can always be
+    // scrolled clear of the footer.
 
     return PopScope(
       // Only Home is this shell's root with nowhere left to pop to, so
       // only Home needs the double-back-to-exit interception; every other
       // tab keeps its normal back behavior (e.g. popping a pushed detail
       // screen) untouched.
-      canPop: !isHomeTab,
+      // Updated 2026-10-14: other tabs reached with `context.go` (bottom bar,
+      // Profile links) have nothing left to pop, so the system back used to
+      // close the app. They now fall back to Home first; Home keeps the
+      // double-back-to-exit. Pushed detail screens still pop normally
+      // because their own navigator handles back before this one.
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop || !isHomeTab) return;
+        if (didPop) return;
+        if (!isHomeTab) {
+          context.go(AppRoutes.home);
+          return;
+        }
         if (_handleHomeBackPress()) {
           SystemNavigator.pop();
         }
@@ -190,6 +208,10 @@ class _AppShellState extends ConsumerState<AppShell> {
         // under _FloatingActionButtonTransition. This app never uses a FAB
         // here, so removing the animation removes the race entirely.
         floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
+        // Home: page content runs behind the floating pill (no blank band
+        // while scrolling, and the pill hides/shows without a layout jump).
+        // Page content paints behind the floating pill; scroll views add the nav inset as bottom padding.
+        extendBody: onHomeScreen,
         body: widget.child,
         bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0
             ? const SizedBox.shrink()
@@ -206,10 +228,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                           top: false,
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                            child: _buildNavBar(
-                              context,
-                              currentIndex,
-                              totalCartCount,
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable: aiChatOpen,
+                              builder: (context, aiOpen, _) {
+                                final aiIndex = AppShell._tabs
+                                    .indexWhere((t) => t.isAiTab);
+                                return _buildNavBar(
+                                  context,
+                                  aiOpen && aiIndex >= 0 ? aiIndex : currentIndex,
+                                  totalCartCount,
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -422,7 +451,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                           maxLines: 1,
                           style: TextStyle(
                             color: _pal.onPill,
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),

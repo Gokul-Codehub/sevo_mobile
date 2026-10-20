@@ -229,7 +229,7 @@ class _SeeAllProductsBar extends ConsumerWidget {
               const Text(
                 'See all products',
                 style: TextStyle(
-                  fontSize: 14.5,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w700,
                   color: AppColors.navy,
                 ),
@@ -269,7 +269,7 @@ class _SectionTitle extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.navy,
               ),
@@ -510,7 +510,7 @@ class _ProductRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: AppColors.navy,
                     ),
@@ -543,7 +543,7 @@ class _ProductRow extends StatelessWidget {
                   Text(
                     '₹${service.effectivePrice}',
                     style: const TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                       color: AppColors.navy,
                     ),
@@ -750,7 +750,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        fontSize: 15,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w800,
                                         color: Colors.white,
                                       ),
@@ -760,7 +760,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                       section.bannerSubtitle,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                                      style: const TextStyle(fontSize: 11.5, color: Colors.white70),
                                     ),
                                   if (section.bannerCtaText.isNotEmpty) ...[
                                     const SizedBox(height: 6),
@@ -811,7 +811,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.navy,
                                 ),
@@ -820,7 +820,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                 const SizedBox(height: 3),
                                 Text(
                                   service.displayUnit,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textHint),
+                                  style: const TextStyle(fontSize: 11.5, color: AppColors.textHint),
                                 ),
                               ],
                               const SizedBox(height: 6),
@@ -830,7 +830,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                     Text(
                                       '₹${service.price}',
                                       style: const TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11.5,
                                         color: AppColors.textHint,
                                         decoration: TextDecoration.lineThrough,
                                       ),
@@ -840,7 +840,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
                                   Text(
                                     '₹${service.effectivePrice}',
                                     style: const TextStyle(
-                                      fontSize: 17,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w900,
                                       color: AppColors.navy,
                                     ),
@@ -969,10 +969,10 @@ class _BannerProductRailLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+        // Edge to edge: full phone width, no side margin, square corners.
+        SizedBox(
+          width: double.infinity,
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
             onTap: section.bannerCtaLink.trim().isEmpty
                 ? null
                 : () => handleAdminLinkTap(
@@ -982,21 +982,25 @@ class _BannerProductRailLayout extends StatelessWidget {
                     ),
             child: Container(
               width: double.infinity,
-              height: 150,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                // Shows while the image loads, and is what's visible at all
-                // if no banner image was uploaded (title/subtitle-only
-                // banner) — never an empty container either way.
-                gradient: const LinearGradient(
-                  colors: [AppColors.groceryGreen, AppColors.groceryGreenDark],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
+              // With an uploaded image the banner is just that image at full
+              // width and natural height — no green backdrop, no dark scrim,
+              // no cropping — so a transparent PNG stays transparent and the
+              // page shows through. Without one, the original green card.
+              height: section.bannerImageUrl != null ? null : 150,
+              constraints: section.bannerImageUrl != null ? const BoxConstraints(minHeight: 120) : null,
+              // Container asserts clip needs a decoration; the image banner has none.
+              clipBehavior: section.bannerImageUrl != null ? Clip.none : Clip.antiAlias,
+              decoration: section.bannerImageUrl != null
+                  ? null
+                  : const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.groceryGreen, AppColors.groceryGreenDark],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
               child: Stack(
-                fit: StackFit.expand,
+                fit: section.bannerImageUrl != null ? StackFit.loose : StackFit.expand,
                 children: [
                   if (section.bannerImageUrl != null)
                     AppRemoteImage(
@@ -1004,12 +1008,10 @@ class _BannerProductRailLayout extends StatelessWidget {
                       rawPath: section.bannerImageUrl,
                       title: section.bannerTitle.isNotEmpty ? section.bannerTitle : section.title,
                       width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.fitWidth,
                     ),
-                  // Scrim so white banner text stays legible over any photo
-                  // — matches the gradient-overlay convention AppRemoteImage
-                  // itself already uses for its placeholder state.
+                  if (section.bannerImageUrl == null)
+                  // Scrim so white banner text stays legible on the green card.
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -1022,7 +1024,9 @@ class _BannerProductRailLayout extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Padding(
+                  if (section.bannerTitle.isNotEmpty || section.bannerSubtitle.isNotEmpty || section.bannerCtaText.isNotEmpty)
+                  Positioned.fill(
+                    child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1033,10 +1037,10 @@ class _BannerProductRailLayout extends StatelessWidget {
                             section.bannerTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 20,
+                            style: TextStyle(
+                              fontSize: 17.5,
                               fontWeight: FontWeight.w900,
-                              color: Colors.white,
+                              color: section.bannerImageUrl != null ? AppColors.navy : Colors.white,
                             ),
                           ),
                         if (section.bannerSubtitle.isNotEmpty) ...[
@@ -1045,10 +1049,10 @@ class _BannerProductRailLayout extends StatelessWidget {
                             section.bannerSubtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
+                            style: TextStyle(
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: section.bannerImageUrl != null ? AppColors.navy : Colors.white,
                             ),
                           ),
                         ],
@@ -1057,20 +1061,21 @@ class _BannerProductRailLayout extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: section.bannerImageUrl != null ? AppColors.groceryGreenDark : Colors.white,
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               section.bannerCtaText,
-                              style: const TextStyle(
-                                fontSize: 12,
+                              style: TextStyle(
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w800,
-                                color: AppColors.groceryGreenDark,
+                                color: section.bannerImageUrl != null ? Colors.white : AppColors.groceryGreenDark,
                               ),
                             ),
                           ),
                         ],
                       ],
+                    ),
                     ),
                   ),
                 ],
@@ -1418,7 +1423,7 @@ class _CategoryTileGridLayout extends ConsumerWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.navy),
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.navy),
                     ),
                     if (section.showCategoryProductCount)
                       Text(

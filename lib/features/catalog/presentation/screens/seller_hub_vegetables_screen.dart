@@ -304,7 +304,7 @@ class _DepartmentProductGrid extends ConsumerWidget {
         }
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          padding: EdgeInsets.fromLTRB(12, 12, 12, 16 + MediaQuery.paddingOf(context).bottom),
           children: rows,
         );
       },
@@ -327,59 +327,73 @@ class _DepartmentRailTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Selected: soft green-tinted rounded card + bold green label + accent bar
+    // on the right edge. Unselected: just the round picture, no card.
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.background : Colors.transparent,
-          border: Border(
-            right: BorderSide(
-              color: selected ? AppColors.groceryGreen : Colors.transparent,
-              width: 3,
-            ),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Stack(
           children: [
             Container(
-              width: 52,
-              height: 52,
-              padding: const EdgeInsets.all(2),
+              width: double.infinity,
+              margin: const EdgeInsets.only(left: 6, right: 8),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected ? AppColors.groceryGreen : Colors.transparent,
-                  width: 2,
+                color: selected ? const Color(0xFFE3F1E8) : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? const Color(0xFFCFE6D8) : AppColors.groceryGreenLight,
+                    ),
+                    child: ClipOval(
+                      child: (image != null && image!.trim().isNotEmpty)
+                          ? AppRemoteImage(
+                              imageUrl: image,
+                              title: label,
+                              fit: BoxFit.cover,
+                              semanticIcon: Icons.eco_rounded,
+                            )
+                          : const Icon(Icons.eco_rounded, color: AppColors.groceryGreenDark, size: 26),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? AppColors.groceryGreenDark : AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Positioned(
+                right: 0,
+                top: 14,
+                bottom: 14,
+                child: Container(
+                  width: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.groceryGreen,
+                    borderRadius: BorderRadius.horizontal(left: Radius.circular(4)),
+                  ),
                 ),
-                color: AppColors.groceryGreenLight,
               ),
-              child: ClipOval(
-                child: (image != null && image!.trim().isNotEmpty)
-                    ? AppRemoteImage(
-                        imageUrl: image,
-                        title: label,
-                        fit: BoxFit.cover,
-                        semanticIcon: Icons.eco_rounded,
-                      )
-                    : const Icon(Icons.eco_rounded, color: AppColors.groceryGreenDark, size: 24),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                color: selected ? AppColors.navy : AppColors.textPrimary,
-                height: 1.2,
-              ),
-            ),
           ],
         ),
       ),

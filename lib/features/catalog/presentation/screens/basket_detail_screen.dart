@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,10 +8,22 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
+import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/basket_cart.dart';
 import '../../data/basket_models.dart';
 import '../../data/marketplace_catalog_repository.dart';
+import '../../../../core/navigation/safe_back.dart';
+import '../../../../routing/app_router.dart';
+
+// Combo page palette — same as the grocery product page.
+const Color _cbGreen = Color(0xFF157038);
+const Color _cbHero = Color(0xFFF4F6F4);
+const Color _cbCream = Colors.white;
+/// Light page tint behind the whole screen (neutral light grey; cards stay white).
+const Color _cbPage = Color(0xFFF5F6F8);
+const Color _cbOfferYellow = Color(0xFFF9C93A);
+const Color _cbOfferOrange = Color(0xFFF59E0B);
 
 /// Full detail for one Seller Hub combo/bundle offer ("Basket"), laid out like
 /// the website's combo page: a photo gallery, a "Bundle deal" header, a fixed
@@ -37,6 +50,9 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
 
   /// Gallery page to bring forward after the customer picks an option.
   int? _focusPage;
+
+  /// How many of this combo to add (stepper beside the Add to Cart pill).
+  int _qty = 1;
 
   static int? _keyOf(BasketSlotOption? o) => o?.productId ?? o?.id ?? o?.optionId;
 
@@ -77,8 +93,10 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
   }
 
   void _addToCart(MarketplaceBasket basket) {
-    final addedCount =
-        addComboToCart(ref.read(cartProvider.notifier), basket, _selectedOption);
+    var addedCount = 0;
+    for (var n = 0; n < _qty; n++) {
+      addedCount += addComboToCart(ref.read(cartProvider.notifier), basket, _selectedOption);
+    }
 
     if (!mounted) return;
     if (addedCount > 0) {
@@ -95,7 +113,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
     final detailAsync = ref.watch(marketplaceBasketDetailProvider(widget.basketId));
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _cbPage,
       body: detailAsync.when(
         data: (fetched) {
           final basket = fetched ?? widget.initialBasket;
@@ -111,7 +129,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
             _ensureDefaultSelections(basket);
             return _buildBody(context, basket);
           }
-          return const Center(child: CircularProgressIndicator());
+          return const _BasketDetailSkeleton();
         },
         error: (_, __) {
           final basket = widget.initialBasket;
@@ -132,13 +150,13 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
           Align(
             alignment: Alignment.topLeft,
             child: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+              onPressed: () => context.goBack(),
             ),
           ),
           Expanded(
             child: Center(
-              child: Text(message, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+              child: Text(message, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
             ),
           ),
         ],
@@ -158,6 +176,13 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
         (icon: Icons.layers_outlined, text: '$itemCount ${itemCount == 1 ? 'item' : 'items'} included'),
     ];
 
+    // Stat strip cells — only real fields the backend sent.
+    final statCells = <({String value, String label})>[
+      if (itemCount > 0) (value: '$itemCount', label: itemCount == 1 ? 'Item' : 'Items'),
+      if (pct != null) (value: '$pct%', label: 'Saving'),
+      (value: basket.inStock ? 'In stock' : 'Sold out', label: 'Availability'),
+    ];
+
     return Column(
       children: [
         Expanded(
@@ -169,10 +194,12 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                 title: basket.title,
                 savePercent: pct,
                 focusPage: _focusPage,
-                onBack: () => context.pop(),
+                onBack: () => context.goBack(),
+                onCart: () => context.push(AppRoutes.cart),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              Container(
+                color: _cbPage,
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -183,8 +210,8 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                         const _Pill(
                           icon: Icons.local_offer_rounded,
                           label: 'BUNDLE DEAL',
-                          fg: Color(0xFF6D28D9),
-                          bg: Color(0xFFEDE9FE),
+                          fg: _cbGreen,
+                          bg: Color(0xFFE3F1E8),
                         ),
                         if (basket.isMultiOption)
                           const _Pill(
@@ -202,15 +229,43 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      basket.title,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.navy,
-                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            basket.title,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              height: 1.25,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (basket.bundlePrice != null) ...[
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '\u20b9${basket.bundlePrice}',
+                                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _cbGreen),
+                              ),
+                              if (basket.hasSavings && basket.mrpTotal != null)
+                                Text(
+                                  '\u20b9${basket.mrpTotal}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textHint,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                     if (meta.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -226,7 +281,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   m.text,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
@@ -234,15 +289,20 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    _PriceCard(basket: basket, savePercent: pct),
+                    _StatStrip(cells: statCells),
                     if (basket.description.isNotEmpty) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 22),
+                      const Text(
+                        'Description',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 8),
                       Text(
                         basket.description,
-                        style: const TextStyle(fontSize: 13.5, color: AppColors.textSecondary, height: 1.45),
+                        style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.5),
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 22),
                     _WhatsInside(
                       basket: basket,
                       itemCount: itemCount,
@@ -253,13 +313,12 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                         _focusPage = index + (basket.primaryImage.isNotEmpty ? 1 : 0);
                       }),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
+                        color: _cbCream,
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: const Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,7 +328,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                           Expanded(
                             child: Text(
                               "Combo items are added to your cart at their own regular prices — the combo total above is Seller Hub's reference price for this offer.",
-                              style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.4),
+                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
                             ),
                           ),
                         ],
@@ -288,28 +347,77 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
 
   Widget _buildBottomBar(BuildContext context, MarketplaceBasket basket) {
     final price = basket.bundlePrice;
+    Widget round(IconData icon, VoidCallback? onTap) => GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: onTap == null ? const Color(0xFF9DB8A8) : const Color(0xFF0F5C31),
+            ),
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
+        );
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppColors.border)),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        decoration: BoxDecoration(
+          color: _cbPage,
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 14, offset: const Offset(0, -4))],
         ),
-        child: FilledButton.icon(
-          onPressed: basket.inStock ? () => _addToCart(basket) : null,
-          icon: const Icon(Icons.shopping_bag_outlined, size: 20),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.groceryGreen,
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          label: Text(
-            basket.inStock
-                ? 'Add Combo to Cart${price != null ? ' • ₹$price' : ''}'
-                : 'Out of Stock',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-          ),
+        child: Row(
+          children: [
+            round(Icons.remove_rounded, _qty > 1 ? () => setState(() => _qty--) : null),
+            SizedBox(
+              width: 38,
+              child: Text(
+                '$_qty',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              ),
+            ),
+            round(Icons.add_rounded, _qty < 10 ? () => setState(() => _qty++) : null),
+            const SizedBox(width: 14),
+            Expanded(
+              child: GestureDetector(
+                onTap: basket.inStock ? () => _addToCart(basket) : null,
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: basket.inStock
+                          ? const [Color(0xFF1E8A4C), Color(0xFF0B5A2C)]
+                          : const [Color(0xFF9CA3AF), Color(0xFF6B7280)],
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.shopping_bag_outlined, size: 18, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            basket.inStock
+                                ? 'Add to Cart${price != null ? '  \u2022  \u20b9${price * Decimal.fromInt(_qty)}' : ''}'
+                                : 'Out of Stock',
+                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -318,13 +426,16 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
 
 // ── Gallery ─────────────────────────────────────────────────────────────────
 
-/// Swipeable photo gallery with a thumbnail strip, a SAVE chip and the back
-/// button, auto-advancing every few seconds (a touch restarts the countdown).
+/// Full-bleed swipeable photo hero with a back button, a yellow/orange SAVE
+/// ribbon and page dots, topped by the rounded white sheet; the thumbnail
+/// strip sits inside that sheet. Auto-advances every few seconds (a touch
+/// restarts the countdown).
 class _ComboGallery extends StatefulWidget {
   const _ComboGallery({
     required this.urls,
     required this.title,
     required this.onBack,
+    required this.onCart,
     this.savePercent,
     this.focusPage,
   });
@@ -332,6 +443,7 @@ class _ComboGallery extends StatefulWidget {
   final List<String> urls;
   final String title;
   final VoidCallback onBack;
+  final VoidCallback onCart;
   final int? savePercent;
   final int? focusPage;
 
@@ -382,7 +494,7 @@ class _ComboGalleryState extends State<_ComboGallery> {
     super.dispose();
   }
 
-  Widget _image(String? url, {double pad = 20}) => Padding(
+  Widget _image(String? url, {double pad = 0, BoxFit fit = BoxFit.cover}) => Padding(
         padding: EdgeInsets.all(pad),
         child: AppRemoteImage(
           imageUrl: url,
@@ -392,7 +504,7 @@ class _ComboGalleryState extends State<_ComboGallery> {
           slug: 'seller_hub_groceries',
           width: double.infinity,
           height: double.infinity,
-          fit: BoxFit.contain,
+          fit: fit,
         ),
       );
 
@@ -400,105 +512,94 @@ class _ComboGalleryState extends State<_ComboGallery> {
   Widget build(BuildContext context) {
     final urls = widget.urls;
     final top = MediaQuery.of(context).padding.top;
+    Widget circleBtn(IconData icon, VoidCallback onTap) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 10, offset: const Offset(0, 3))],
+            ),
+            child: Icon(icon, size: 20, color: _cbGreen),
+          ),
+        );
     return Container(
-      color: Colors.white,
+      color: _cbPage,
       child: Column(
         children: [
-          SizedBox(
-            height: 290 + top,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  top: top,
-                  child: urls.length <= 1
-                      ? _image(urls.isEmpty ? null : urls.first)
+          // Full-bleed photo with large rounded bottom corners.
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(34)),
+            child: SizedBox(
+              height: 330 + top,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(color: Colors.white),
+                  urls.length <= 1
+                      ? _image(urls.isEmpty ? null : urls.first, pad: 8, fit: BoxFit.contain)
                       : Listener(
                           onPointerDown: (_) => _start(),
                           child: PageView.builder(
                             controller: _controller,
                             itemCount: urls.length,
                             onPageChanged: (i) => setState(() => _page = i),
-                            itemBuilder: (_, i) => _image(urls[i]),
+                            itemBuilder: (_, i) => _image(urls[i], pad: 8, fit: BoxFit.contain),
                           ),
                         ),
-                ),
-                Positioned(
-                  left: 8,
-                  top: top + 6,
-                  child: Material(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    shape: const CircleBorder(),
-                    elevation: 1,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy, size: 22),
-                      onPressed: widget.onBack,
-                    ),
-                  ),
-                ),
-                if (widget.savePercent != null)
-                  Positioned(
-                    right: 12,
-                    top: top + 14,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFBBF24),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'SAVE ${widget.savePercent}%',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1F2937),
+                  if (widget.savePercent != null)
+                    Positioned(
+                      left: 0,
+                      bottom: 18,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(14, 7, 20, 7),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(colors: [_cbOfferYellow, _cbOfferOrange]),
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(22),
+                            bottomRight: Radius.circular(22),
+                          ),
+                        ),
+                        child: Text(
+                          'SAVE ${widget.savePercent}%',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          if (urls.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: SizedBox(
-                height: 54,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: urls.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final selected = i == _page;
-                    return GestureDetector(
-                      onTap: () {
-                        _controller.animateToPage(
-                          i,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOut,
-                        );
-                        _start();
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: selected ? AppColors.groceryGreen : AppColors.border,
-                            width: selected ? 2 : 1,
-                          ),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: _image(urls[i], pad: 4),
-                      ),
-                    );
-                  },
-                ),
+                  Positioned(left: 16, top: top + 8, child: circleBtn(Icons.arrow_back_rounded, widget.onBack)),
+                  Positioned(right: 16, top: top + 8, child: circleBtn(Icons.shopping_bag_outlined, widget.onCart)),
+                ],
               ),
             ),
+          ),
+          // Page dots under the photo.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: SizedBox(
+              height: 8,
+              child: urls.length > 1
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(urls.length, (i) {
+                        final active = i == _page;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: active ? 18 : 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: active ? _cbGreen : Colors.black26,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      }),
+                    )
+                  : null,
+            ),
+          ),
         ],
       ),
     );
@@ -535,88 +636,42 @@ class _Pill extends StatelessWidget {
   }
 }
 
-class _PriceCard extends StatelessWidget {
-  const _PriceCard({required this.basket, required this.savePercent});
+/// Soft rounded stat strip (value over label, thin dividers between cells).
+class _StatStrip extends StatelessWidget {
+  const _StatStrip({required this.cells});
 
-  final MarketplaceBasket basket;
-  final int? savePercent;
+  final List<({String value, String label})> cells;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0D8FB)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0F6D28D9), blurRadius: 14, offset: Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(color: _cbCream, borderRadius: BorderRadius.circular(16)),
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'FIXED COMBO PRICE',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.7,
-                    color: Color(0xFF6D28D9),
-                  ),
+          for (var i = 0; i < cells.length; i++) ...[
+            if (i > 0) Container(width: 1, height: 30, color: const Color(0xFFE3E8F0)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      cells[i].value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _cbGreen),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(cells[i].label, style: const TextStyle(fontSize: 11.5, color: Color(0xFF6B7788))),
+                  ],
                 ),
               ),
-              if (basket.hasSavings)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppColors.warningLight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFCD34D)),
-                  ),
-                  child: Text(
-                    'You save ₹${basket.savings}${savePercent != null ? ' ($savePercent%)' : ''}',
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF92400E),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              if (basket.bundlePrice != null)
-                Text(
-                  '₹${basket.bundlePrice}',
-                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.navy),
-                ),
-              if (basket.hasSavings && basket.mrpTotal != null) ...[
-                const SizedBox(width: 10),
-                Text(
-                  'MRP ₹${basket.mrpTotal}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textHint,
-                    decoration: TextDecoration.lineThrough,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 2),
-          const Text(
-            'Inclusive of all taxes',
-            style: TextStyle(fontSize: 11.5, color: AppColors.textHint),
-          ),
+            ),
+          ],
         ],
       ),
     );
@@ -659,19 +714,19 @@ class _WhatsInside extends StatelessWidget {
               const Expanded(
                 child: Text(
                   "What's in this combo",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
               ),
               if (basket.isMultiOption)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEDE9FE),
+                    color: const Color(0xFFE3F1E8),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
                     'Tap to customize',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF6D28D9)),
+                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: _cbGreen),
                   ),
                 ),
             ],
@@ -679,7 +734,7 @@ class _WhatsInside extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             '$itemCount ${itemCount == 1 ? 'item' : 'items'} configured',
-            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 12),
           for (var i = 0; i < visibleSlots.length; i++)
@@ -724,12 +779,12 @@ class _WhatsInside extends StatelessWidget {
       const SizedBox(height: 6),
       Row(
         children: [
-          const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.groceryGreen),
+          const Icon(Icons.check_circle_rounded, size: 18, color: _cbGreen),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               'Your combo \u00b7 ${items.length} ${items.length == 1 ? 'item' : 'items'} confirmed',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
           ),
         ],
@@ -775,10 +830,10 @@ class _SlotCard extends StatelessWidget {
                 width: 24,
                 height: 24,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(color: Color(0xFF6D28D9), shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: _cbGreen, shape: BoxShape.circle),
                 child: Text(
                   '$number',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white),
                 ),
               ),
               const SizedBox(width: 8),
@@ -787,17 +842,17 @@ class _SlotCard extends StatelessWidget {
                   slot.slotTitle.isNotEmpty ? slot.slotTitle : 'Item $number',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
               ),
               if (multi)
                 _MiniChip(
                   text: 'Choose 1 of ${slot.options.length}',
-                  bg: const Color(0xFFEDE9FE),
-                  fg: const Color(0xFF6D28D9),
+                  bg: const Color(0xFFE3F1E8),
+                  fg: _cbGreen,
                 ),
               const SizedBox(width: 6),
-              _MiniChip(text: 'Qty: ${slot.quantity}', bg: Colors.white, fg: AppColors.navy, border: true),
+              _MiniChip(text: 'Qty: ${slot.quantity}', bg: Colors.white, fg: AppColors.textPrimary, border: true),
             ],
           ),
           const SizedBox(height: 10),
@@ -874,10 +929,10 @@ class _OptionTile extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: selectable && selected ? AppColors.groceryGreenLight : Colors.white,
+            color: selectable && selected ? Color(0xFFE3F1E8) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selectable && selected ? AppColors.groceryGreen : AppColors.border,
+              color: selectable && selected ? _cbGreen : AppColors.border,
               width: selectable && selected ? 1.6 : 1,
             ),
           ),
@@ -887,7 +942,7 @@ class _OptionTile extends StatelessWidget {
                 Icon(
                   selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
                   size: 20,
-                  color: selected ? AppColors.groceryGreen : AppColors.textHint,
+                  color: selected ? _cbGreen : AppColors.textHint,
                 ),
                 const SizedBox(width: 8),
               ],
@@ -922,10 +977,10 @@ class _OptionTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         height: 1.25,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.navy,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     if (sub.isNotEmpty) ...[
@@ -950,7 +1005,7 @@ class _OptionTile extends StatelessWidget {
                             Text(
                               '₹$selling',
                               style: const TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary,
                               ),
@@ -1029,16 +1084,51 @@ class _FixedItemCard extends StatelessWidget {
                   item.productTitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.navy),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                 ),
                 if (sub.isNotEmpty)
                   Text(sub, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ],
             ),
           ),
-          _MiniChip(text: 'Qty: ${item.quantity}', bg: Colors.white, fg: AppColors.navy, border: true),
+          _MiniChip(text: 'Qty: ${item.quantity}', bg: Colors.white, fg: AppColors.textPrimary, border: true),
         ],
       ),
+    );
+  }
+}
+
+
+/// Placeholder shown while a combo's detail is loading and no list data is
+/// available to paint from: hero photo, title/price rows and item cards.
+class _BasketDetailSkeleton extends StatelessWidget {
+  const _BasketDetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      children: const [
+        ShimmerBox(height: 300, borderRadius: 0),
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ShimmerLine(width: 220, height: 20),
+              SizedBox(height: 10),
+              ShimmerLine(width: 120, height: 16),
+              SizedBox(height: 18),
+              ShimmerCard(height: 88),
+              SizedBox(height: 12),
+              ShimmerCard(height: 88),
+              SizedBox(height: 12),
+              ShimmerCard(height: 88),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

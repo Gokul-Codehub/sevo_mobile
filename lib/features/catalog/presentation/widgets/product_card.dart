@@ -20,6 +20,24 @@ import '../../domain/catalog_models.dart';
 /// layout (mainAxisSize.min throughout, no Expanded) so it never overflows
 /// regardless of how it's hosted by the caller — the caller only needs to
 /// give it a width.
+/// Optional look for the grocery card (used by Home Studio's Cut-out Panel).
+/// Null = the standard look, so every other screen is unchanged.
+class ProductCardStyle {
+  const ProductCardStyle({
+    this.radius = 18,
+    this.fillColor = Colors.white,
+    this.borderColor,
+    this.borderWidth = 1,
+    this.shadow = true,
+  });
+
+  final double radius;
+  final Color fillColor;
+  final Color? borderColor;
+  final double borderWidth;
+  final bool shadow;
+}
+
 class ProductCard extends ConsumerWidget {
   const ProductCard({
     super.key,
@@ -29,8 +47,10 @@ class ProductCard extends ConsumerWidget {
     this.showPrice = true,
     this.showDiscount = true,
     this.showAddButton = true,
+    this.style,
   });
 
+  final ProductCardStyle? style;
   final ServiceItem service;
   final VoidCallback? onTap;
 
@@ -301,7 +321,7 @@ class ProductCard extends ConsumerWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.navy,
                     height: 1.2,
@@ -331,7 +351,7 @@ class ProductCard extends ConsumerWidget {
                           Text(
                             '₹${service.effectivePrice}',
                             style: const TextStyle(
-                              fontSize: 14.5,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w900,
                               color: AppColors.navy,
                             ),
@@ -432,9 +452,9 @@ class ProductCard extends ConsumerWidget {
       clipBehavior: Clip.none,
       children: [
         CustomPaint(
-          painter: _NotchedCardPainter(notch: notch),
+          painter: _NotchedCardPainter(notch: notch, style: style),
           child: ClipPath(
-            clipper: _NotchedCardClipper(notch: notch),
+            clipper: _NotchedCardClipper(notch: notch, radius: style?.radius ?? 18.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,7 +574,7 @@ class ProductCard extends ConsumerWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF0F172A),
                               height: 1.2,
@@ -578,7 +598,7 @@ class ProductCard extends ConsumerWidget {
                                     Text(
                                       '₹${service.effectivePrice}',
                                       style: const TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w900,
                                         color: AppColors.groceryGreenDark,
                                       ),
@@ -849,7 +869,7 @@ class QuickAddControl extends ConsumerWidget {
               Text(
                 'Add',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
@@ -887,7 +907,7 @@ class QuickAddControl extends ConsumerWidget {
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
-              fontSize: 12,
+              fontSize: 11.5,
             ),
           ),
           InkWell(
@@ -927,13 +947,14 @@ const _addGradient = LinearGradient(
   colors: [Color(0xFF2FA354), Color(0xFF14612F)],
 );
 
-Path _notchedCardPath(Size s, bool notch) {
-  const r = 18.0, rn = 14.0;
+Path _notchedCardPath(Size s, bool notch, [double radius = 18.0]) {
+  final r = radius.clamp(0.0, s.shortestSide / 2).toDouble();
+  const rn = 14.0;
   final w = s.width, h = s.height;
   const nw = ProductCard._notchW, nh = ProductCard._notchH;
   final p = Path()..moveTo(r, 0);
   p.lineTo(w - r, 0);
-  p.arcToPoint(Offset(w, r), radius: const Radius.circular(r));
+  p.arcToPoint(Offset(w, r), radius: Radius.circular(r));
   if (notch) {
     p.lineTo(w, h - nh - rn);
     p.arcToPoint(Offset(w - rn, h - nh), radius: const Radius.circular(rn));
@@ -944,46 +965,60 @@ Path _notchedCardPath(Size s, bool notch) {
       clockwise: false,
     );
     p.lineTo(w - nw, h - r);
-    p.arcToPoint(Offset(w - nw - r, h), radius: const Radius.circular(r));
+    p.arcToPoint(Offset(w - nw - r, h), radius: Radius.circular(r));
   } else {
     p.lineTo(w, h - r);
-    p.arcToPoint(Offset(w - r, h), radius: const Radius.circular(r));
+    p.arcToPoint(Offset(w - r, h), radius: Radius.circular(r));
   }
   p.lineTo(r, h);
-  p.arcToPoint(Offset(0, h - r), radius: const Radius.circular(r));
+  p.arcToPoint(Offset(0, h - r), radius: Radius.circular(r));
   p.lineTo(0, r);
-  p.arcToPoint(Offset(r, 0), radius: const Radius.circular(r));
+  p.arcToPoint(Offset(r, 0), radius: Radius.circular(r));
   return p..close();
 }
 
 class _NotchedCardClipper extends CustomClipper<Path> {
-  const _NotchedCardClipper({required this.notch});
+  const _NotchedCardClipper({required this.notch, this.radius = 18.0});
   final bool notch;
+  final double radius;
   @override
-  Path getClip(Size size) => _notchedCardPath(size, notch);
+  Path getClip(Size size) => _notchedCardPath(size, notch, radius);
   @override
-  bool shouldReclip(_NotchedCardClipper old) => old.notch != notch;
+  bool shouldReclip(_NotchedCardClipper old) => old.notch != notch || old.radius != radius;
 }
 
 class _NotchedCardPainter extends CustomPainter {
-  const _NotchedCardPainter({required this.notch});
+  const _NotchedCardPainter({required this.notch, this.style});
   final bool notch;
+  final ProductCardStyle? style;
   @override
   void paint(Canvas canvas, Size size) {
-    final path = _notchedCardPath(size, notch);
-    canvas.drawShadow(path, const Color(0x400F172A), 5, false);
-    canvas.drawPath(path, Paint()..color = Colors.white);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = AppColors.divider,
-    );
+    final st = style;
+    final path = _notchedCardPath(size, notch, st?.radius ?? 18.0);
+    if (st == null || st.shadow) {
+      canvas.drawShadow(path, const Color(0x400F172A), 5, false);
+    }
+    canvas.drawPath(path, Paint()..color = st?.fillColor ?? Colors.white);
+    final bw = st?.borderWidth ?? 1.0;
+    if (bw > 0) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = bw
+          ..color = st?.borderColor ?? AppColors.divider,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(_NotchedCardPainter old) => old.notch != notch;
+  bool shouldRepaint(_NotchedCardPainter old) =>
+      old.notch != notch ||
+      old.style?.radius != style?.radius ||
+      old.style?.fillColor != style?.fillColor ||
+      old.style?.borderColor != style?.borderColor ||
+      old.style?.borderWidth != style?.borderWidth ||
+      old.style?.shadow != style?.shadow;
 }
 
 /// The Add button seated in the card's notch: a dark-green gradient pill with
@@ -1031,7 +1066,7 @@ class _NotchAddButton extends ConsumerWidget {
                 Text(
                   'Add',
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
@@ -1074,7 +1109,7 @@ class _NotchAddButton extends ConsumerWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
-                  fontSize: 12,
+                  fontSize: 11.5,
                 ),
               ),
               btn(

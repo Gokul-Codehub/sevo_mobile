@@ -143,7 +143,7 @@ class _WorkExtensionScreenState extends ConsumerState<WorkExtensionScreen> {
                         child: Text(
                           'Your technician ${proposal.technicianName} has requested approval for extra work on-site.',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             color: AppColors.primaryDark,
                             fontWeight: FontWeight.w500,
                           ),
@@ -176,7 +176,7 @@ class _WorkExtensionScreenState extends ConsumerState<WorkExtensionScreen> {
                         Text(
                           proposal.reason,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: AppColors.textPrimary,
                             height: 1.4,
                           ),
@@ -214,12 +214,12 @@ class _WorkExtensionScreenState extends ConsumerState<WorkExtensionScreen> {
                               children: [
                                 Text(
                                   '${item.title} (x${item.quantity})',
-                                  style: const TextStyle(fontSize: 13),
+                                  style: const TextStyle(fontSize: 12),
                                 ),
                                 Text(
                                   '₹${item.totalPrice}',
                                   style: const TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -234,14 +234,14 @@ class _WorkExtensionScreenState extends ConsumerState<WorkExtensionScreen> {
                             const Text(
                               'Additional Total Amount:',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             Text(
                               '₹${proposal.additionalAmount}',
                               style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primary,
                               ),

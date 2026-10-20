@@ -88,6 +88,24 @@ class CustomerNotification extends Equatable {
     );
   }
 
+  /// Same keys as the server JSON, so [fromJson] can read it back (used by the
+  /// on-device history).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'event_key': eventKey,
+        'category': category,
+        'level': level,
+        'title': title,
+        'body': body,
+        'deep_link': deepLink,
+        'action_label': actionLabel,
+        'action_url': actionUrl,
+        'is_read': isRead,
+        'requires_action': requiresAction,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'expires_at': expiresAt?.toUtc().toIso8601String(),
+      };
+
   @override
   List<Object?> get props => [id, isRead, title, body, expiresAt];
 }

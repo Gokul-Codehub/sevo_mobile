@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/common_widgets.dart';
 import '../../domain/notification_models.dart';
 import '../../domain/notification_providers.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// The customer's notification inbox (opened from the bell on Home).
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -49,11 +51,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         elevation: 0.5,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.pop(),
+          onPressed: () => context.goBack(),
         ),
         title: const Text(
           'Notifications',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
         ),
         actions: [
           if (state.unreadCount > 0)
@@ -67,7 +69,35 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         onRefresh: () => controller.refresh(silent: true),
         child: Builder(builder: (context) {
           if (!state.loadedOnce && state.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return ListView(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: List.generate(
+                7,
+                (_) => const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShimmerCircle(size: 40),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ShimmerLine(width: 160, height: 13),
+                            SizedBox(height: 8),
+                            ShimmerLine(height: 11),
+                            SizedBox(height: 6),
+                            ShimmerLine(width: 90, height: 10),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
           }
           if (state.items.isEmpty) {
             return ListView(
@@ -92,14 +122,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           Text(
                             state.error != null ? "Couldn't load notifications" : "You're all caught up",
                             style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
+                                fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             state.error ??
                                 'Booking updates, appointment openings and offers will show up here.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 13.5, color: AppColors.textSecondary),
+                            style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                           ),
                           if (state.error != null) ...[
                             const SizedBox(height: 14),
@@ -118,7 +148,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           }
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, 24 + MediaQuery.paddingOf(context).bottom),
             itemCount: state.items.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
@@ -203,7 +233,7 @@ class _NotificationTile extends StatelessWidget {
                             child: Text(
                               n.title,
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: n.isRead ? FontWeight.w700 : FontWeight.w800,
                                 color: AppColors.navy,
                               ),
@@ -226,7 +256,7 @@ class _NotificationTile extends StatelessWidget {
                         Text(
                           n.body,
                           style: const TextStyle(
-                              fontSize: 13, height: 1.35, color: AppColors.textSecondary),
+                              fontSize: 12, height: 1.35, color: AppColors.textSecondary),
                         ),
                       ],
                       const SizedBox(height: 6),
@@ -235,7 +265,7 @@ class _NotificationTile extends StatelessWidget {
                           Text(
                             expired ? 'Expired' : _ago(n.createdAt),
                             style: TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 11,
                               color: expired ? AppColors.error : AppColors.textHint,
                               fontWeight: expired ? FontWeight.w700 : FontWeight.w500,
                             ),
@@ -245,7 +275,7 @@ class _NotificationTile extends StatelessWidget {
                             Text(
                               '· ${_left(n.expiresAt!)}',
                               style: TextStyle(
-                                  fontSize: 11.5, fontWeight: FontWeight.w700, color: style.color),
+                                  fontSize: 11, fontWeight: FontWeight.w700, color: style.color),
                             ),
                           ],
                         ],

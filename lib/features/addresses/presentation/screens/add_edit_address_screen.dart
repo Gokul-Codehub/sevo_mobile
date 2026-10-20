@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart' show Factory;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
@@ -11,6 +9,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../logistics/domain/logistics_providers.dart';
 import '../../domain/address_models.dart';
 import '../../domain/address_notifier.dart';
+import '../../../../core/navigation/safe_back.dart';
 
 /// Screen to create or edit a customer address with live map pin & service zone check.
 class AddEditAddressScreen extends ConsumerStatefulWidget {
@@ -40,6 +39,16 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   bool _isLoading = false;
   bool _isLocating = false;
 
+  // Redesigned flow: 0 = map picker, 1 = details form.
+  int _stage = 0;
+  bool _visitedDetails = false;
+  bool _satellite = false;
+  bool _searching = false;
+  final _searchController = TextEditingController();
+  String _placeTitle = '';
+  String _placeLine = '';
+  String _lastAutoLine2 = '';
+
   double _currentLat = 12.754598;
   double _currentLng = 77.834477;
   GoogleMapController? _mapController;
@@ -58,11 +67,18 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
     _isDefault = addr?.isDefault ?? false;
     _currentLat = addr?.latitude ?? 12.754598;
     _currentLng = addr?.longitude ?? 77.834477;
+    _stage = addr == null ? 0 : 1;
+    _visitedDetails = addr != null;
+    if (addr != null) {
+      _placeLine = addr.formattedAddress;
+      _placeTitle = addr.addressLine2 ?? addr.city;
+    }
   }
 
   @override
   void dispose() {
     _mapController?.dispose();
+    _searchController.dispose();
     _line1Controller.dispose();
     _line2Controller.dispose();
     _landmarkController.dispose();
@@ -156,8 +172,13 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         final streetBits = [p.street, p.subLocality]
             .where((s) => s != null && s.trim().isNotEmpty)
             .join(', ');
-        if (streetBits.isNotEmpty && _line2Controller.text.trim().isEmpty) {
+        // Only overwrite the street line when it is empty or still holds
+        // the previous auto-filled value (never the customer's own text).
+        if (streetBits.isNotEmpty &&
+            (_line2Controller.text.trim().isEmpty ||
+                _line2Controller.text.trim() == _lastAutoLine2)) {
           _line2Controller.text = streetBits;
+          _lastAutoLine2 = streetBits;
         }
         if ((p.locality ?? '').trim().isNotEmpty) {
           _cityController.text = p.locality!.trim();
@@ -167,6 +188,25 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         }
         if ((p.postalCode ?? '').trim().isNotEmpty) {
           _pincodeController.text = p.postalCode!.trim();
+        }
+        final area = [p.subLocality, p.locality]
+            .where((s) => s != null && s.trim().isNotEmpty)
+            .map((s) => s!.trim())
+            .toList();
+        final line = [
+          streetBits,
+          if ((p.locality ?? '').trim().isNotEmpty) p.locality!.trim(),
+          [
+            if ((p.administrativeArea ?? '').trim().isNotEmpty)
+              p.administrativeArea!.trim(),
+            if ((p.postalCode ?? '').trim().isNotEmpty) p.postalCode!.trim(),
+          ].join(' - '),
+        ].where((s) => s.isNotEmpty).join(', ');
+        if (mounted) {
+          setState(() {
+            _placeTitle = area.isNotEmpty ? area.first : 'Selected location';
+            _placeLine = line;
+          });
         }
       }
     } catch (_) {
@@ -232,279 +272,650 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           backgroundColor: AppColors.success,
         ),
       );
-      context.pop();
+      context.goBack();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  // ───────────────────────────────────────────────────────────────────────
+  // Redesigned address flow (2026-10-14, per the UI requirement image):
+  //   stage 0 — full-screen map with a fixed centre pin, search bar and a
+  //             "Confirm your service location" sheet;
+  //   stage 1 — "Address details" form with a small map card + Change
+  //             Location, address-type pills and bordered fields.
+  // New addresses start at stage 0; editing starts at stage 1. All save /
+  // geocode / serviceability logic is unchanged.
+  // ───────────────────────────────────────────────────────────────────────
+  Future<void> _searchPlace(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _searching = true);
+    try {
+      final results = await locationFromAddress(q);
+      if (results.isNotEmpty) {
+        final l = results.first;
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(LatLng(l.latitude, l.longitude), 16),
+        );
+      } else {
+        _showLocationError('No results for "$q".');
+      }
+    } catch (_) {
+      _showLocationError('Could not find that place. Try a different search.');
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  Widget _circleButton(IconData icon, VoidCallback onTap, {bool loading = false}) {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 3,
+      shadowColor: Colors.black26,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: loading
+              ? const Padding(
+                  padding: EdgeInsets.all(13),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(icon, color: AppColors.navy, size: 22),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapStage() {
+    final target = LatLng(_currentLat, _currentLng);
+    final topPad = MediaQuery.of(context).padding.top;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GoogleMap(
+              initialCameraPosition: CameraPosition(target: target, zoom: 16),
+              onMapCreated: (c) => _mapController = c,
+              mapType: _satellite ? MapType.hybrid : MapType.normal,
+              onCameraMove: (pos) {
+                _currentLat = pos.target.latitude;
+                _currentLng = pos.target.longitude;
+              },
+              onCameraIdle: () {
+                if (!mounted) return;
+                setState(() {});
+                _reverseGeocodeAndFillFields(_currentLat, _currentLng);
+              },
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              compassEnabled: false,
+              mapToolbarEnabled: false,
+            ),
+          ),
+
+          // Fixed centre pin + hint tooltip (the map moves under it).
+          Align(
+            alignment: Alignment.center,
+            child: IgnorePointer(
+              child: FractionalTranslation(
+                translation: const Offset(0, -0.5),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: AppColors.navy,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'Move pin to set your exact location',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Icon(Icons.location_on_rounded,
+                        size: 52, color: AppColors.navy),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Back + search
+          Positioned(
+            top: topPad + 8,
+            left: 12,
+            right: 12,
+            child: Row(
+              children: [
+                _circleButton(Icons.arrow_back_rounded, () {
+                  if (_visitedDetails) {
+                    setState(() => _stage = 1);
+                  } else {
+                    context.goBack();
+                  }
+                }),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: _searchPlace,
+                      style: const TextStyle(fontSize: 13.5),
+                      decoration: InputDecoration(
+                        hintText: 'Search for area, landmark...',
+                        hintStyle: const TextStyle(
+                            fontSize: 13, color: AppColors.textHint),
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            color: AppColors.textSecondary),
+                        suffixIcon: _searching
+                            ? const Padding(
+                                padding: EdgeInsets.all(14),
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Locate-me / map-type buttons
+          Positioned(
+            right: 14,
+            bottom: 268 + bottomPad,
+            child: Column(
+              children: [
+                _circleButton(Icons.my_location_rounded,
+                    _isLocating ? () {} : _handleUseCurrentLocation,
+                    loading: _isLocating),
+                const SizedBox(height: 10),
+                _circleButton(
+                  Icons.layers_rounded,
+                  () => setState(() => _satellite = !_satellite),
+                ),
+              ],
+            ),
+          ),
+
+          // Confirm sheet
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottomPad),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD5DAE1),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Confirm ',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+                        ),
+                        TextSpan(
+                          text: 'your service location',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w900, color: AppColors.navy),
+                        ),
+                      ],
+                    ),
+                    style: TextStyle(fontSize: 15),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE6ECF4),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.location_on_rounded,
+                              color: AppColors.navy, size: 28),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _placeTitle.isEmpty ? 'Selected location' : _placeTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.navy),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _placeLine.isEmpty
+                                    ? '${_currentLat.toStringAsFixed(5)}, ${_currentLng.toStringAsFixed(5)}'
+                                    : _placeLine,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    height: 1.35,
+                                    color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _goToDetails,
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.navy,
+                            minimumSize: const Size(0, 36),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                          child: const Text('Edit',
+                              style: TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w800)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: FilledButton(
+                      onPressed: _goToDetails,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.navy,
+                        minimumSize: const Size(88, 54),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text('Confirm and add details',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToDetails() {
+    setState(() {
+      _visitedDetails = true;
+      _stage = 1;
+    });
+  }
+
+  InputDecoration _fieldDecoration(String label, IconData icon, {String? hint}) {
+    OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: c, width: w),
+        );
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 22),
+      labelStyle: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+      floatingLabelStyle: const TextStyle(
+          fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      border: border(const Color(0xFFE2E8F0)),
+      enabledBorder: border(const Color(0xFFE2E8F0)),
+      focusedBorder: border(AppColors.navy, 1.5),
+      errorBorder: border(AppColors.error),
+      focusedErrorBorder: border(AppColors.error, 1.5),
+    );
+  }
+
+  Widget _typePill(String value, String label, IconData icon) {
+    final selected = _addressType == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _addressType = value),
+        child: Container(
+          height: 46,
+          decoration: BoxDecoration(
+            color: selected ? Color(0xFFE6ECF4) : Colors.white,
+            borderRadius: BorderRadius.circular(23),
+            border: Border.all(
+              color: selected ? AppColors.navy : const Color(0xFFE2E8F0),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 19,
+                  color: selected ? AppColors.navy : AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: selected ? AppColors.navy : AppColors.navy,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailsStage() {
     final currentPincode = _pincodeController.text.trim();
-    // Fixed 2026-10-06: always check against the live pinned coordinates
-    // (always present — defaults to Hosur) rather than gating on a 6-digit
-    // PIN code that a freshly-dropped pin may not have resolved yet.
+    // Always check against the live pinned coordinates (see 2026-10-06 note).
     final serviceabilityAsync = ref.watch(serviceabilityProvider((
       pincode: currentPincode,
       lat: _currentLat,
       lng: _currentLng,
     )));
-
-    final targetPos = LatLng(_currentLat, _currentLng);
+    final target = LatLng(_currentLat, _currentLng);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
+        backgroundColor: const Color(0xFFF7F9FC),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleSpacing: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
+          onPressed: () {
+            if (widget.initialAddress == null) {
+              // Back from the details form re-opens the map as a fresh step
+              // (not as "Change Location"), so the map's own back arrow then
+              // leaves the screen instead of bouncing back here forever.
+              setState(() {
+                _visitedDetails = false;
+                _stage = 0;
+              });
+            } else {
+              context.goBack();
+            }
+          },
+        ),
         title: Text(
-          widget.initialAddress == null ? 'Add New Address' : 'Edit Address',
+          widget.initialAddress == null ? 'Address details' : 'Edit address',
+          style: const TextStyle(
+              color: AppColors.navy, fontWeight: FontWeight.w900, fontSize: 16.5),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Map Location Pin Picker Card
+                // Map card + chosen location
                 Container(
-                  height: 160,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.border),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: Stack(
+                  child: Column(
                     children: [
-                      GoogleMap(
-                        initialCameraPosition: CameraPosition(
-                          target: targetPos,
-                          zoom: 14.5,
-                        ),
-                        onMapCreated: (c) => _mapController = c,
-                        // Fixed 2026-10-06 ("the map could not be move it
-                        // has fixed"): a GoogleMap nested inside a
-                        // SingleChildScrollView loses every pan/drag gesture
-                        // to the ancestor scroll view's own vertical drag
-                        // recognizer — Flutter's gesture arena hands drags
-                        // to the Scrollable by default, so the map behaves
-                        // as if frozen even though nothing disabled it.
-                        // EagerGestureRecognizer (built into
-                        // package:flutter/gestures.dart) claims the gesture
-                        // for the map immediately instead of waiting to lose
-                        // that arbitration — the standard fix for Google
-                        // Maps Flutter embedded in a scrollable.
-                        gestureRecognizers: {
-                          Factory<OneSequenceGestureRecognizer>(
-                            () => EagerGestureRecognizer(),
-                          ),
-                        },
-                        onTap: (latLng) {
-                          setState(() {
-                            _currentLat = latLng.latitude;
-                            _currentLng = latLng.longitude;
-                          });
-                          // Fixed 2026-10-06: tapping/dragging the pin used
-                          // to leave City/State/PIN Code — and so the
-                          // serviceability banner below, keyed off them —
-                          // stuck on whatever they last held. Now every pin
-                          // move re-resolves them for the new spot.
-                          _reverseGeocodeAndFillFields(
-                              latLng.latitude, latLng.longitude);
-                        },
-                        markers: {
-                          Marker(
-                            markerId: const MarkerId('address_pin'),
-                            position: targetPos,
-                            draggable: true,
-                            onDragEnd: (newPos) {
-                              setState(() {
-                                _currentLat = newPos.latitude;
-                                _currentLng = newPos.longitude;
-                              });
-                              _reverseGeocodeAndFillFields(
-                                  newPos.latitude, newPos.longitude);
-                            },
-                          ),
-                        },
-                        myLocationButtonEnabled: false,
-                        zoomControlsEnabled: false,
-                      ),
-                      Positioned(
-                        top: 10,
-                        left: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.touch_app, size: 12, color: Colors.white),
-                              SizedBox(width: 4),
-                              Text(
-                                'Tap to pin service location',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      SizedBox(
+                        height: 130,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: GoogleMap(
+                                  key: ValueKey('mini_${_currentLat}_$_currentLng'),
+                                  initialCameraPosition:
+                                      CameraPosition(target: target, zoom: 15.5),
+                                  liteModeEnabled: true,
+                                  zoomControlsEnabled: false,
+                                  myLocationButtonEnabled: false,
+                                  mapToolbarEnabled: false,
+                                  compassEnabled: false,
+                                  markers: {
+                                    Marker(
+                                      markerId: const MarkerId('address_pin'),
+                                      position: target,
+                                    ),
+                                  },
+                                ),
                               ),
-                            ],
-                          ),
+                            ),
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: GestureDetector(
+                                onTap: () => setState(() => _stage = 0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.12),
+                                        blurRadius: 6,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.edit_rounded,
+                                          size: 14, color: AppColors.navy),
+                                      SizedBox(width: 5),
+                                      Text('Change Location',
+                                          style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppColors.navy)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE6ECF4),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.location_on_rounded,
+                                  size: 20, color: AppColors.navy),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _placeTitle.isEmpty
+                                        ? 'Selected location'
+                                        : _placeTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.navy),
+                                  ),
+                                  if (_placeLine.isNotEmpty)
+                                    Text(
+                                      _placeLine,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontSize: 11.5,
+                                          height: 1.3,
+                                          color: AppColors.textSecondary),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 18),
 
-                // Use Current Location button — fetches real GPS coordinates
-                // and reverse-geocodes them into the fields below.
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: OutlinedButton.icon(
-                    onPressed: _isLocating ? null : _handleUseCurrentLocation,
-                    icon: _isLocating
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location_rounded, size: 18),
-                    label: Text(
-                      _isLocating ? 'Detecting location...' : 'Use Current Location',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary, width: 1.2),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Address Type Chips
-                Text(
-                  'Address Type',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                const Text('Select address type',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary)),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    ChoiceChip(
-                      avatar: const Icon(Icons.home_outlined, size: 16),
-                      label: const Text('Home'),
-                      selected: _addressType == 'home',
-                      onSelected: (val) {
-                        if (val) setState(() => _addressType = 'home');
-                      },
-                    ),
+                    _typePill('home', 'Home', Icons.home_rounded),
                     const SizedBox(width: 10),
-                    ChoiceChip(
-                      avatar: const Icon(Icons.business_outlined, size: 16),
-                      label: const Text('Work'),
-                      selected: _addressType == 'work',
-                      onSelected: (val) {
-                        if (val) setState(() => _addressType = 'work');
-                      },
-                    ),
+                    _typePill('work', 'Office', Icons.business_rounded),
                     const SizedBox(width: 10),
-                    ChoiceChip(
-                      avatar: const Icon(Icons.location_on_outlined, size: 16),
-                      label: const Text('Other'),
-                      selected: _addressType == 'other',
-                      onSelected: (val) {
-                        if (val) setState(() => _addressType = 'other');
-                      },
-                    ),
+                    _typePill('other', 'Other', Icons.location_on_outlined),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // Flat / House / Building
                 TextFormField(
                   controller: _line1Controller,
-                  decoration: const InputDecoration(
-                    labelText: 'Flat / House No., Floor, Building *',
-                    hintText: 'e.g. Flat 302, Prestige Tower',
-                    prefixIcon: Icon(Icons.apartment_outlined),
-                  ),
+                  decoration: _fieldDecoration(
+                      'Flat / House No., Floor, Building *', Icons.apartment_rounded),
                   validator: (v) => v == null || v.trim().isEmpty
                       ? 'Please enter house/building info'
                       : null,
                 ),
-                const SizedBox(height: 16),
-
-                // Street / Area
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _line2Controller,
-                  decoration: const InputDecoration(
-                    labelText: 'Street, Sector, Area',
-                    hintText: 'e.g. 12th Main, Indiranagar',
-                    prefixIcon: Icon(Icons.signpost_outlined),
-                  ),
+                  decoration: _fieldDecoration(
+                      'Street, Sector, Area', Icons.signpost_outlined),
                 ),
-                const SizedBox(height: 16),
-
-                // Landmark
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _landmarkController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nearby Landmark (Optional)',
-                    hintText: 'e.g. Near Metro Station',
-                    prefixIcon: Icon(Icons.flag_outlined),
-                  ),
+                  decoration: _fieldDecoration(
+                      'Nearby Landmark (Optional)', Icons.flag_outlined),
                 ),
-                const SizedBox(height: 16),
-
-                // City & State Row
+                const SizedBox(height: 12),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: TextFormField(
                         controller: _cityController,
-                        decoration: const InputDecoration(
-                          labelText: 'City *',
-                          prefixIcon: Icon(Icons.location_city_outlined),
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Required'
-                            : null,
+                        decoration:
+                            _fieldDecoration('City *', Icons.location_city_rounded),
+                        validator: (v) =>
+                            v == null || v.trim().isEmpty ? 'Required' : null,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
                         controller: _stateController,
-                        decoration: const InputDecoration(
-                          labelText: 'State *',
-                          prefixIcon: Icon(Icons.map_outlined),
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Required'
-                            : null,
+                        decoration: _fieldDecoration('State *', Icons.map_outlined),
+                        validator: (v) =>
+                            v == null || v.trim().isEmpty ? 'Required' : null,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-
-                // Pincode
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _pincodeController,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
-                  decoration: const InputDecoration(
-                    labelText: 'PIN Code *',
-                    counterText: '',
-                    prefixIcon: Icon(Icons.pin_drop_outlined),
-                  ),
+                  decoration: _fieldDecoration('PIN Code *', Icons.pin_drop_outlined)
+                      .copyWith(counterText: ''),
                   onChanged: (v) => setState(() {}),
                   validator: (v) {
                     if (v == null || v.trim().length != 6) {
@@ -514,112 +925,140 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   },
                 ),
 
-                // Live Serviceability Status Banner — always shown now
-                // (the pin always has coordinates, Hosur default included),
-                // so it reflects the actual pinned location, not just a
-                // typed PIN code.
-                ...[
-                  const SizedBox(height: 14),
-                  serviceabilityAsync.when(
-                    loading: () => Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: const Row(
-                        children: [
-                          SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 10),
-                          Text(
-                            'Checking service availability...',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
+                // Live serviceability banner (reflects the pinned location).
+                const SizedBox(height: 14),
+                serviceabilityAsync.when(
+                  loading: () => Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    error: (error, stackTrace) => const SizedBox.shrink(),
-                    data: (result) => Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: result.isServiceable
-                            ? AppColors.surfaceVariant
-                            : AppColors.errorLight,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            result.isServiceable
-                                ? Icons.verified_rounded
-                                : Icons.error_outline_rounded,
-                            size: 18,
-                            color: result.isServiceable
-                                ? AppColors.primary
-                                : AppColors.error,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              result.message,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: result.isServiceable
-                                    ? AppColors.primaryDark
-                                    : AppColors.error,
-                                fontWeight: FontWeight.w500,
-                              ),
+                    child: const Row(
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 10),
+                        Text('Checking service availability...',
+                            style: TextStyle(fontSize: 11.5)),
+                      ],
+                    ),
+                  ),
+                  error: (error, stackTrace) => const SizedBox.shrink(),
+                  data: (result) => Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: result.isServiceable
+                          ? const Color(0xFFE6ECF4)
+                          : AppColors.errorLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          result.isServiceable
+                              ? Icons.verified_rounded
+                              : Icons.error_outline_rounded,
+                          size: 18,
+                          color: result.isServiceable
+                              ? AppColors.navy
+                              : AppColors.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            result.message,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: result.isServiceable
+                                  ? AppColors.navyDark
+                                  : AppColors.error,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-
-                const SizedBox(height: 20),
-
-                // Set as default address switch
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Make this my default address',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Used automatically during service checkout',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  value: _isDefault,
-                  onChanged: (val) => setState(() => _isDefault = val),
                 ),
 
-                const SizedBox(height: 32),
-
-                // Save button
-                FilledButton(
-                  onPressed: _isLoading ? null : _handleSave,
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Save Address'),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Make this my default address',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w700)),
+                    subtitle: const Text('Used automatically during service checkout',
+                        style: TextStyle(
+                            fontSize: 11.5, color: AppColors.textSecondary)),
+                    value: _isDefault,
+                    onChanged: (val) => setState(() => _isDefault = val),
+                  ),
                 ),
               ],
             ),
           ),
         ),
       ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.fromLTRB(
+            16, 10, 16, 14 + MediaQuery.of(context).padding.bottom),
+        color: const Color(0xFFF7F9FC),
+        child: SizedBox(
+          height: 54,
+          child: FilledButton(
+            onPressed: _isLoading ? null : _handleSave,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.navy,
+              minimumSize: const Size(88, 54),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: _isLoading
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Save Address',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: (_stage == 0 && !_visitedDetails) ||
+          (_stage == 1 && widget.initialAddress != null),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        setState(() {
+          if (_stage == 1) {
+            // Details -> map, but as a fresh step so the next back leaves.
+            _visitedDetails = false;
+            _stage = 0;
+          } else {
+            // Map opened via "Change Location" -> back to the details form.
+            _stage = 1;
+          }
+        });
+      },
+      child: _stage == 0 ? _buildMapStage() : _buildDetailsStage(),
     );
   }
 }

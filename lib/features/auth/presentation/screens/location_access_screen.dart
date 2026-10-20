@@ -89,7 +89,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                 'Where do you need\nthe service?',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 26,
+                  fontSize: 23,
                   fontWeight: FontWeight.w800,
                   color: AppColors.navy,
                   height: 1.25,
@@ -101,7 +101,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                 "We'll show services near\nyour location",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w400,
                   color: AppColors.textSecondary,
                   height: 1.4,
@@ -131,7 +131,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.08),
+                              color: AppColors.navy.withValues(alpha: 0.08),
                               blurRadius: 30,
                               spreadRadius: 10,
                             ),
@@ -150,7 +150,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                         height: 90,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primary.withValues(alpha: 0.15),
+                          color: AppColors.navy.withValues(alpha: 0.15),
                         ),
                       ),
 
@@ -160,7 +160,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                         height: 54,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primary,
+                          color: AppColors.navy,
                           boxShadow: [
                             BoxShadow(
                               color: Color(0x3305A357),
@@ -201,12 +201,12 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                   label: Text(
                     _isLoadingGps ? 'Locating...' : 'Use Current Location',
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.navy,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -227,7 +227,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                     child: Text(
                       'or',
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: AppColors.textHint,
                       ),
@@ -249,7 +249,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                   label: const Text(
                     'Enter Location Manually',
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppColors.navy,
                     ),

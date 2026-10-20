@@ -123,6 +123,8 @@ class LogisticsRepository {
     required String date,
     String? serviceId,
     String? claimToken,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       final path = (serviceId != null && serviceId.trim().isNotEmpty)
@@ -135,6 +137,14 @@ class LogisticsRepository {
           if (serviceId != null && serviceId.trim().isNotEmpty)
             'service': serviceId.trim(),
           if (claimToken != null && claimToken.isNotEmpty) 'claim_token': claimToken,
+          // Same-day availability is checked against the technician pool near
+          // the service address, so the server needs the address coordinates
+          // (the web sends them too). Without them same-day slots come back
+          // as "Select a service address ...".
+          if (latitude != null && longitude != null && (latitude != 0 || longitude != 0)) ...{
+            'latitude': latitude,
+            'longitude': longitude,
+          },
         },
       );
       return ResponseNormalizer.extract(response, (data) {
@@ -142,6 +152,12 @@ class LogisticsRepository {
         final isOpen = map['is_open'];
         final remaining = int.tryParse('${map['future_daily_remaining'] ?? ''}');
         final limit = int.tryParse('${map['future_daily_limit'] ?? map['future_daily_booking_limit'] ?? ''}');
+        final advanceDays = int.tryParse('${map['advance_booking_days'] ?? ''}');
+        final minNotice = int.tryParse('${map['minimum_notice_minutes'] ?? ''}');
+        final sameDay = map['same_day_booking'] is bool ? map['same_day_booking'] as bool : true;
+        final closedWeekdays = map['closed_weekdays'] is List
+            ? (map['closed_weekdays'] as List).map((e) => int.tryParse('$e')).whereType<int>().toList()
+            : const <int>[];
         if (isOpen == false) {
           // Closed for this date (day off, holiday override, booking
           // disabled) — an empty list renders as "No Available Slots" in
@@ -152,6 +168,10 @@ class LogisticsRepository {
             reason: map['reason']?.toString(),
             futureRemaining: remaining,
             futureLimit: limit,
+            sameDayBooking: sameDay,
+            advanceBookingDays: advanceDays,
+            closedWeekdays: closedWeekdays,
+            minNoticeMinutes: minNotice,
           );
         }
 
@@ -175,6 +195,7 @@ class LogisticsRepository {
             endTime: end,
             label: (m['time'] ?? (start.isNotEmpty ? start : '')).toString(),
             isAvailable: m['available'] == true,
+            reason: m['available'] == true ? null : (m['reason'] ?? '').toString().trim().isEmpty ? null : m['reason'].toString(),
           );
         }).toList();
         return TimeSlotDay(
@@ -182,13 +203,16 @@ class LogisticsRepository {
           reason: map['reason']?.toString(),
           futureRemaining: remaining,
           futureLimit: limit,
+          sameDayBooking: sameDay,
+          advanceBookingDays: advanceDays,
+          closedWeekdays: closedWeekdays,
+          minNoticeMinutes: minNotice,
         );
       });
-    } on Exception catch (_) {
-      // Network/parsing failure — fall back to the generic hourly grid
-      // rather than leaving the customer with a blank/broken slot picker.
-      // This is a true network-error fallback now, not the everyday path.
-      return Success(TimeSlotDay(slots: _generateDefaultSlots(date)));
+    } on Exception catch (e) {
+      // Like the web: show "could not load slots" with a retry instead of
+      // inventing a slot grid the server would reject at booking time.
+      return Failure(_toError(e));
     }
   }
 

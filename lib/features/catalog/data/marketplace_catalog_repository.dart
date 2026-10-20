@@ -9,6 +9,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
 import '../domain/catalog_models.dart';
 import 'basket_models.dart';
+import 'recipe_models.dart';
 
 /// Seller Hub Marketplace catalog — the REAL, admin-managed category tree
 /// for packaged groceries.
@@ -209,6 +210,8 @@ class MarketplaceProduct {
     this.variantAttributeName,
     this.variantLabel,
     this.variants = const [],
+    this.showRecipes = false,
+    this.recipes = const [],
   });
 
   final int id;
@@ -264,6 +267,11 @@ class MarketplaceProduct {
   final String? variantAttributeName;
   final String? variantLabel;
   final List<MarketplaceProduct> variants;
+
+  /// "Recipes & Meal Ideas" for this product (detail endpoint only): shown
+  /// only when the seller turned `show_recipes` on and recipes exist.
+  final bool showRecipes;
+  final List<RecipeSummary> recipes;
 
   /// Whether this product has more than one real, selectable variant worth
   /// showing a picker for — a lone product technically "in its own group"
@@ -413,6 +421,14 @@ class MarketplaceProduct {
               .whereType<Map>()
               .map((m) => MarketplaceProduct.fromJson(Map<String, dynamic>.from(m)))
               .where((p) => p.id != 0 && p.title.isNotEmpty)
+              .toList()
+          : const [],
+      showRecipes: json['show_recipes'] == true,
+      recipes: json['recipes'] is List
+          ? (json['recipes'] as List)
+              .whereType<Map>()
+              .map((m) => RecipeSummary.fromJson(Map<String, dynamic>.from(m)))
+              .where((r) => r.title.isNotEmpty && (r.slug.isNotEmpty || r.id != 0))
               .toList()
           : const [],
     );

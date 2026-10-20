@@ -6,15 +6,17 @@ import 'package:location/location.dart' as loc;
 
 import '../../../core/errors/api_error.dart';
 import '../data/logistics_repository.dart';
+import '../../addresses/domain/address_notifier.dart' show selectedAddressProvider;
 import '../../notifications/domain/capacity_claim.dart';
 import 'gt_models.dart';
 import 'logistics_models.dart';
 
 /// Currently selected booking appointment date.
 final selectedBookingDateProvider = StateProvider<DateTime>((ref) {
-  final now = DateTime.now();
-  // If at or after 6 PM (18:00), same-day booking closes; default to tomorrow
-  return now.hour >= 18 ? now.add(const Duration(days: 1)) : now;
+  // Start on today. Whether today is still bookable (cut-off, notice, closed
+  // day) is decided by the server's slot engine, exactly like the web; the
+  // slot picker offers "next available day" when today has nothing left.
+  return DateTime.now();
 });
 
 /// Currently selected booking time slot.
@@ -33,12 +35,14 @@ final selectedBookingServiceIdProvider = StateProvider<String?>((ref) => null);
 /// One day's slots + day-level facts for a date (YYYY-MM-DD), service id/slug
 /// and (optionally) a held availability claim token.
 final timeSlotDayProvider = FutureProvider.autoDispose.family<TimeSlotDay,
-    ({String date, String? serviceId, String? claimToken})>((ref, params) async {
+    ({String date, String? serviceId, String? claimToken, double? latitude, double? longitude})>((ref, params) async {
   final repo = ref.watch(logisticsRepositoryProvider);
   final result = await repo.getTimeSlotDay(
     date: params.date,
     serviceId: params.serviceId,
     claimToken: params.claimToken,
+    latitude: params.latitude,
+    longitude: params.longitude,
   );
 
   return switch (result) {
@@ -51,7 +55,7 @@ final timeSlotDayProvider = FutureProvider.autoDispose.family<TimeSlotDay,
 final timeSlotsProvider = FutureProvider.autoDispose.family<List<TimeSlot>,
     ({String date, String? serviceId})>((ref, params) async {
   final day = await ref.watch(timeSlotDayProvider(
-          (date: params.date, serviceId: params.serviceId, claimToken: null))
+          (date: params.date, serviceId: params.serviceId, claimToken: null, latitude: null, longitude: null))
       .future);
   return day.slots;
 });
@@ -78,11 +82,29 @@ final currentSelectedDayProvider = FutureProvider.autoDispose<TimeSlotDay>((ref)
   final selectedDate = ref.watch(selectedBookingDateProvider);
   final serviceId = ref.watch(selectedBookingServiceIdProvider);
   final claim = ref.watch(activeCapacityClaimProvider);
+  final address = ref.watch(selectedAddressProvider);
   final dateString = DateFormat('yyyy-MM-dd').format(selectedDate);
-  return ref.watch(timeSlotDayProvider(
-          (date: dateString, serviceId: serviceId, claimToken: claim?.token))
-      .future);
+  return ref.watch(timeSlotDayProvider((
+    date: dateString,
+    serviceId: serviceId,
+    claimToken: claim?.token,
+    latitude: address?.latitude,
+    longitude: address?.longitude,
+  )).future).then((day) {
+    // Remember the booking window (closed weekdays, how far ahead, same-day)
+    // so the calendar can grey out days the server will refuse.
+    Future.microtask(() {
+      try {
+        ref.read(slotWindowProvider.notifier).state = day;
+      } catch (_) {}
+    });
+    return day;
+  });
 });
+
+/// Last booking-window facts the server sent (see [TimeSlotDay]); used by the
+/// calendar. Null until the first slot response arrives.
+final slotWindowProvider = StateProvider<TimeSlotDay?>((ref) => null);
 
 /// Convenience provider for slots of the currently selected date + service.
 final currentSelectedDateSlotsProvider = FutureProvider.autoDispose<List<TimeSlot>>((ref) async {

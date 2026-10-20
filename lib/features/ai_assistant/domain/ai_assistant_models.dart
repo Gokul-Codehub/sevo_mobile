@@ -73,7 +73,12 @@ class AiChatMessage extends Equatable {
     this.photoName,
     this.localImageBytes,
     this.navigateTo,
+    this.handedOff = false,
   });
+
+  /// True when the server marked this turn as part of a human-support
+  /// handoff (history only).
+  final bool handedOff;
 
   /// A web path the assistant says this answer is about (`navigate_to`),
   /// shown as a "Go to Service & Booking Page" button under the bubble.
@@ -117,12 +122,13 @@ class AiChatMessage extends Equatable {
       photoName: (json['photo_name'] ?? '').toString().trim().isEmpty
           ? null
           : json['photo_name'].toString().trim(),
+      handedOff: json['handed_off'] == true,
     );
   }
 
   @override
   List<Object?> get props =>
-      [sender, content, sources, isError, photoUrl, photoName, localImageBytes, navigateTo];
+      [sender, content, sources, isError, photoUrl, photoName, localImageBytes, navigateTo, handedOff];
 }
 
 /// One saved chat session in `GET /api/ai/conversations/` (signed-in only).

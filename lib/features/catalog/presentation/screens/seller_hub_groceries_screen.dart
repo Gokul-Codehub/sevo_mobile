@@ -1,6 +1,7 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
@@ -66,6 +67,9 @@ bool _subtreeContainsSlug(MarketplaceCategory node, String wantedSlugClean) {
 class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScreen> {
   int? _selectedRootId;
   int? _selectedSubcategoryId;
+  /// Ids of the categories the shopper drilled into (below the main category).
+  /// While non-empty the rail shows ONLY the children of the last one.
+  final List<int> _drill = [];
   bool _appliedInitialSlug = false;
 
   /// Same lookup the body does once on its first build, as a pure function,
@@ -123,6 +127,13 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
         children: [
           AppBar(
             title: Text(_screenTitle(treeAsync.valueOrNull)),
+            // Drilled into a sub-category: the back arrow goes up one level.
+            leading: _drill.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => setState(() => _selectedSubcategoryId = _drill.removeLast()),
+                  )
+                : null,
             backgroundColor: Colors.white,
             foregroundColor: AppColors.textPrimary,
             elevation: 0.5,
@@ -131,12 +142,21 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
               // another feature something like Basket could you get into
               // our app?") — the only entry point into the new Seller Hub
               // combo/bundle offers; see BasketListScreen's doc comment.
-              TextButton.icon(
-                onPressed: () => context.push('/baskets'),
-                icon: const Icon(Icons.card_giftcard_rounded, size: 18, color: AppColors.primary),
-                label: const Text(
-                  'Combos',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
+              // 2026-10-15: the text button became the supplied "Combo Offer"
+              // ribbon (assets/images/combo_offer.svg); same destination.
+              Semantics(
+                button: true,
+                label: 'Combo offers',
+                child: InkWell(
+                  onTap: () => context.push('/baskets'),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: SvgPicture.asset(
+                      'assets/images/combo_offer.svg',
+                      height: 34,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -205,6 +225,27 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
                   if (_subtreeContainsSlug(child, wanted)) {
                     _selectedRootId = root.id;
                     _selectedSubcategoryId = child.id;
+                    // Walk down to the linked node; each level we pass
+                    // through is "drilled into" so the rail shows only that
+                    // level's categories.
+                    var node = child;
+                    while (node.slug.replaceAll('-', '_').toLowerCase() != wanted) {
+                      MarketplaceCategory? next;
+                      for (final c in node.children) {
+                        if (_subtreeContainsSlug(c, wanted)) {
+                          next = c;
+                          break;
+                        }
+                      }
+                      if (next == null) break;
+                      _drill.add(node.id);
+                      _selectedSubcategoryId = next.id;
+                      node = next;
+                    }
+                    if (node.children.any((c) => c.hasAnyProducts)) {
+                      _drill.add(node.id);
+                      _selectedSubcategoryId = null; // first of its categories
+                    }
                     break outer;
                   }
                 }
@@ -224,8 +265,15 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
           // A root with no subcategories of its own (already a leaf) falls
           // back to treating itself as the sole entry, so the screen still
           // works for a main category that has no further nesting.
-          final subcategories = selectedRoot.children.where((c) => c.hasAnyProducts).toList();
-          final railItems = subcategories.isNotEmpty ? subcategories : [selectedRoot];
+          // Drilled in: only the children of the last drilled category.
+          var railParent = selectedRoot;
+          for (final id in _drill) {
+            final next = railParent.children.where((c) => c.id == id).firstOrNull;
+            if (next == null) break;
+            railParent = next;
+          }
+          final subcategories = railParent.children.where((c) => c.hasAnyProducts).toList();
+          final railItems = subcategories.isNotEmpty ? subcategories : [railParent];
 
           if (railItems.isEmpty) {
             return const Center(
@@ -243,6 +291,27 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
             orElse: () => railItems.first,
           );
 
+          final gridId = selectedSubcategory.id;
+
+          final railTiles = <Widget>[];
+          for (final dept in railItems) {
+            final hasNext = dept.id != railParent.id && dept.children.any((c) => c.hasAnyProducts);
+            railTiles.add(_DepartmentRailTile(
+              label: dept.name,
+              image: dept.image,
+              selected: dept.id == effectiveSubcategoryId,
+              onTap: () => setState(() {
+                if (hasNext) {
+                  // Has another level: show only its categories on the left.
+                  _drill.add(dept.id);
+                  _selectedSubcategoryId = null; // first of its categories
+                } else {
+                  _selectedSubcategoryId = dept.id;
+                }
+              }),
+            ));
+          }
+
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -251,22 +320,13 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
                 color: Colors.white,
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: railItems
-                      .map(
-                        (dept) => _DepartmentRailTile(
-                          label: dept.name,
-                          image: dept.image,
-                          selected: dept.id == effectiveSubcategoryId,
-                          onTap: () => setState(() => _selectedSubcategoryId = dept.id),
-                        ),
-                      )
-                      .toList(),
+                  children: railTiles,
                 ),
               ),
               Expanded(
                 child: _DepartmentProductGrid(
-                  key: ValueKey(selectedSubcategory.id),
-                  departmentId: selectedSubcategory.id,
+                  key: ValueKey(gridId),
+                  departmentId: gridId,
                 ),
               ),
             ],
@@ -360,7 +420,7 @@ class _DepartmentProductGrid extends ConsumerWidget {
         }
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          padding: EdgeInsets.fromLTRB(12, 12, 12, 16 + MediaQuery.paddingOf(context).bottom),
           children: rows,
         );
       },
@@ -383,59 +443,73 @@ class _DepartmentRailTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Selected: soft green-tinted rounded card + bold green label + accent bar
+    // on the right edge. Unselected: just the round picture, no card.
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.background : Colors.transparent,
-          border: Border(
-            right: BorderSide(
-              color: selected ? AppColors.groceryGreen : Colors.transparent,
-              width: 3,
-            ),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Stack(
           children: [
             Container(
-              width: 52,
-              height: 52,
-              padding: const EdgeInsets.all(2),
+              width: double.infinity,
+              margin: const EdgeInsets.only(left: 6, right: 8),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected ? AppColors.groceryGreen : Colors.transparent,
-                  width: 2,
+                color: selected ? const Color(0xFFE3F1E8) : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? const Color(0xFFCFE6D8) : AppColors.groceryGreenLight,
+                    ),
+                    child: ClipOval(
+                      child: (image != null && image!.trim().isNotEmpty)
+                          ? AppRemoteImage(
+                              imageUrl: image,
+                              title: label,
+                              fit: BoxFit.cover,
+                              semanticIcon: Icons.storefront_rounded,
+                            )
+                          : const Icon(Icons.storefront_rounded, color: AppColors.groceryGreenDark, size: 26),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? AppColors.groceryGreenDark : AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Positioned(
+                right: 0,
+                top: 14,
+                bottom: 14,
+                child: Container(
+                  width: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.groceryGreen,
+                    borderRadius: BorderRadius.horizontal(left: Radius.circular(4)),
+                  ),
                 ),
-                color: AppColors.groceryGreenLight,
               ),
-              child: ClipOval(
-                child: (image != null && image!.trim().isNotEmpty)
-                    ? AppRemoteImage(
-                        imageUrl: image,
-                        title: label,
-                        fit: BoxFit.cover,
-                        semanticIcon: Icons.storefront_rounded,
-                      )
-                    : const Icon(Icons.storefront_rounded, color: AppColors.groceryGreenDark, size: 24),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                color: selected ? AppColors.navy : AppColors.textPrimary,
-                height: 1.2,
-              ),
-            ),
           ],
         ),
       ),

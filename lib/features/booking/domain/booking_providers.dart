@@ -255,10 +255,11 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       slot: slot,
     );
     switch (result) {
-      case Success(:final data):
+      case Success():
+        // The server returns a reschedule REQUEST (pending approval), not an
+        // updated booking -- so just refresh; don't overwrite `state`.
         ref.invalidate(myBookingsProvider);
         ref.invalidate(bookingDetailProvider(id));
-        state = AsyncValue.data(data);
         return null;
       case Failure(:final error):
         return error.message;

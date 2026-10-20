@@ -241,7 +241,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                     '${pendingAction.service.title} added to cart',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 11.5,
                     ),
                   ),
                   backgroundColor: AppColors.primary,
@@ -340,7 +340,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
               const Text(
                 'Verify your number',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 21,
                   fontWeight: FontWeight.w800,
                   color: AppColors.navy,
                   letterSpacing: -0.3,
@@ -350,7 +350,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
               RichText(
                 text: TextSpan(
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: AppColors.textSecondary,
                     height: 1.4,
                   ),
@@ -395,7 +395,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                       // a longer update across the remaining boxes, so the
                       // cap on this field is gone.
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 21,
                         fontWeight: FontWeight.w800,
                         color: AppColors.navy,
                         height: 1.0,
@@ -446,7 +446,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                           child: Text(
                             'Resend OTP in ${_formatTimer(_secondsRemaining)}',
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppColors.primaryDark,
                             ),
@@ -484,7 +484,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                       : const Text(
                           'Verify',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -501,7 +501,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                     const Text(
                       "Didn't receive OTP? ",
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         color: AppColors.textSecondary,
                       ),
                     ),
@@ -512,7 +512,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                       child: Text(
                         'Resend',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: _secondsRemaining > 0
                               ? AppColors.textHint

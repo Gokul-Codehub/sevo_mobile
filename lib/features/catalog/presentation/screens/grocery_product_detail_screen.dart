@@ -7,15 +7,27 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/marketplace_catalog_repository.dart';
+import '../../data/recipe_models.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
 import '../widgets/product_card.dart';
+import '../../../../core/navigation/safe_back.dart';
+
+// Product page palette (matches the redesigned cart / bookings / services).
+const Color _gpHero = Color(0xFFF4F6F4);
+const Color _gpCream = Color(0xFFF4F6F4);
+const Color _gpGrey = Color(0xFF6B7788);
+const Color _gpGreen = Color(0xFF157038); // matches the category page Add button
+// Offer colors — same golden yellow / amber orange the home page uses.
+const Color _gpOfferYellow = Color(0xFFF9C93A);
+const Color _gpOfferOrange = Color(0xFFF59E0B);
+const Color _gpOfferDeep = Color(0xFFD97706);
+const Color _gpGreenDark =Color(0xFF10612F); // matches the Go to Cart pill
 
 /// Dedicated product page for groceries, vegetables and fruits —
 /// deliberately SEPARATE from [ServiceDetailScreen].
@@ -278,248 +290,238 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
     // after those first widgets painted. SliverAppBar only needs a
     // Navigator (for the back button), not a Scaffold, so it still works
     // exactly the same inside a plain CustomScrollView.
+    final cartCount = cartItems.fold<int>(0, (sum, i) => sum + i.quantity);
+    final showTag = product.hasDiscount && product.discountPercent != null;
+    final categoryLabel = (product.categoryName ?? '').trim();
+
+    // Stat strip cells — only real fields the backend actually sent.
+    final statCells = <({String value, String label})>[
+      if (product.displayUnit.isNotEmpty) (value: product.displayUnit, label: 'Pack'),
+      if (showTag) (value: '${product.discountPercent}%', label: 'Discount'),
+      (value: product.inStock ? 'In stock' : 'Sold out', label: 'Availability'),
+    ];
+
     return Container(
       color: Colors.white,
       child: Column(
         children: [
           Expanded(
             child: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 280,
-            pinned: true,
-            backgroundColor: Colors.white,
-            elevation: 0,
-            leading: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.4), shape: BoxShape.circle),
-                child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-              ),
-              onPressed: () => context.pop(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                color: AppColors.surfaceVariant,
-                child: _ProductGallery(
-                  key: ValueKey('gallery-${product.id}'),
-                  urls: galleryUrls,
-                  product: product,
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: 360,
+                  pinned: true,
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  backgroundColor: _gpHero,
+                  surfaceTintColor: Colors.transparent,
+                  automaticallyImplyLeading: false,
+                  leadingWidth: 64,
+                  leading: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Center(
+                      child: _RoundIconButton(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: 'Back',
+                        onTap: () => context.goBack(),
+                      ),
+                    ),
+                  ),
+                  // The rounded white sheet that rises over the photo.
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(24),
+                    child: Container(
+                      height: 24,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                      ),
+                    ),
+                  ),
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: Container(
+                      color: _gpHero,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Padding(
+                            // Photo runs behind the sheet's rounded corners, so the
+                            // corners show the photo (not a grey gap).
+                            padding: EdgeInsets.zero,
+                            child: _ProductGallery(
+                              key: ValueKey('gallery-${product.id}'),
+                              urls: galleryUrls,
+                              product: product,
+                            ),
+                          ),
+                          if (showTag)
+                            Positioned(
+                              left: 0,
+                              bottom: 28,
+                              child: _DiscountTag(percent: product.discountPercent!),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Rating
-                  if (product.rating > 0)
-                    Row(
+                SliverToBoxAdapter(
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.groceryGreen,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                product.rating.toStringAsFixed(1),
-                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Colors.white),
+                        // Title + rating
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                product.title,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                  height: 1.25,
+                                ),
                               ),
-                              const SizedBox(width: 2),
-                              const Icon(Icons.star_rounded, size: 13, color: Colors.white),
+                            ),
+                            if (product.rating > 0) ...[
+                              const SizedBox(width: 12),
+                              _RatingBadge(rating: product.rating, reviewCount: product.reviewCount),
                             ],
-                          ),
+                          ],
                         ),
-                        if (product.reviewCount > 0) ...[
-                          const SizedBox(width: 8),
+                        if (product.displayUnit.isNotEmpty) ...[
+                          const SizedBox(height: 4),
                           Text(
-                            '${product.reviewCount} ratings',
-                            style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                            product.displayUnit,
+                            style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                           ),
                         ],
-                      ],
-                    ),
-                  if (product.rating > 0) const SizedBox(height: 8),
+                        if (categoryLabel.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  categoryLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12.5, color: _gpGrey, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 14),
 
-                  // Title
-                  Text(
-                    product.title,
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1.3),
-                  ),
-                  if (product.displayUnit.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      product.displayUnit,
-                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-
-                  // Variant picker (e.g. 500g / 1kg / 5kg) — added 2026-10-08
-                  // per explicit request ("for a particular product there
-                  // are three variations ... could you get into our app").
-                  // Each sibling is a REAL, separately priced/stocked
-                  // product on the vendor (see MarketplaceProduct's doc
-                  // comment on `variants`), only known once the background
-                  // detail enrichment above resolves — same
-                  // progressive-enhancement pattern as the description.
-                  const SizedBox(height: 12),
-
-                  // Price
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        '₹${product.effectivePrice}',
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
-                      ),
-                      if (product.hasDiscount) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          'MRP ₹${product.price}',
-                          style: const TextStyle(fontSize: 13, color: AppColors.textHint, decoration: TextDecoration.lineThrough),
+                        // Price
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              '₹${product.effectivePrice}',
+                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: _gpGreen),
+                            ),
+                            if (product.hasDiscount) ...[
+                              const SizedBox(width: 10),
+                              Text(
+                                'MRP ₹${product.price}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textHint,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
+                        if (showTag) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            '${product.discountPercent}% OFF on MRP',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _gpOfferDeep),
+                          ),
+                        ],
+                        const SizedBox(height: 3),
+                        const Text(
+                          'Inclusive of all taxes',
+                          style: TextStyle(fontSize: 11.5, color: AppColors.textHint),
+                        ),
+                        const SizedBox(height: 16),
+
+                        _StatStrip(cells: statCells),
+
+                        // Stock note
+                        if (!product.inStock) ...[
+                          const SizedBox(height: 12),
+                          _InfoRow(icon: Icons.remove_shopping_cart_outlined, text: 'Currently out of stock', color: AppColors.error),
+                        ] else if (product.maxQuantity > 0 && product.maxQuantity <= 5) ...[
+                          const SizedBox(height: 12),
+                          _InfoRow(icon: Icons.inventory_2_outlined, text: 'Only ${product.maxQuantity} left in stock', color: AppColors.warning),
+                        ],
+
+                        // Choose unit — sibling units of the SAME product live
+                        // here, above the description, and switch in place.
+                        if (hasUnits) ...[
+                          const SizedBox(height: 18),
+                          _UnitSelector(
+                            variants: enrichedProduct!.variants,
+                            selectedId: selectedVariant?.id ?? enrichedProduct.id,
+                            attributeName: enrichedProduct.variantAttributeName,
+                            onSelect: (id) => setState(() => _selectedVariantId = id),
+                          ),
+                        ],
+
+                        // Description — real admin/seller-entered copy only.
+                        if ((effectiveDescription ?? '').trim().isNotEmpty) ...[
+                          const SizedBox(height: 22),
+                          _ProductAboutSection(text: effectiveDescription!.trim()),
+                        ],
+
+                        // Recipes & Meal Ideas — only when the seller enabled it
+                        // for this product and recipes actually exist.
+                        if (enrichedProduct != null && enrichedProduct.showRecipes && enrichedProduct.recipes.isNotEmpty) ...[
+                          const SizedBox(height: 26),
+                          _RecipesRail(productTitle: product.title, recipes: enrichedProduct.recipes),
+                        ],
+
+                        if (relatedAsync != null) ...[
+                          const SizedBox(height: 26),
+                          const Text(
+                            'Similar Products',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 12),
+                          _SimilarProductsGrid(relatedAsync: relatedAsync, currentId: product.id),
+                        ],
+                        const SizedBox(height: 90),
                       ],
-                    ],
-                  ),
-                  if (product.hasDiscount && product.discountPercent != null) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      '${product.discountPercent}% OFF on MRP',
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.groceryGreenDark),
                     ),
-                  ],
-                  const SizedBox(height: 3),
-                  const Text(
-                    'Inclusive of all taxes',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.textHint),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Stock note
-                  if (!product.inStock)
-                    _InfoRow(icon: Icons.remove_shopping_cart_outlined, text: 'Currently out of stock', color: AppColors.error)
-                  else if (product.maxQuantity > 0 && product.maxQuantity <= 5)
-                    _InfoRow(icon: Icons.inventory_2_outlined, text: 'Only ${product.maxQuantity} left in stock', color: AppColors.warning),
-
-                  // Choose unit — sibling units of the SAME product live
-                  // here, above "About", and switch in place.
-                  if (hasUnits) ...[
-                    const SizedBox(height: 16),
-                    _UnitSelector(
-                      variants: enrichedProduct!.variants,
-                      selectedId: selectedVariant?.id ?? enrichedProduct.id,
-                      attributeName: enrichedProduct.variantAttributeName,
-                      onSelect: (id) => setState(() => _selectedVariantId = id),
-                    ),
-                  ],
-
-                  // Description — real admin/seller-entered copy only.
-                  // Fixed 2026-10-08 ("align the details properly use bold
-                  // for title and lite for details"): this combined block
-                  // (real description + specs + storage + shelf life, see
-                  // MarketplaceProduct._combinedDescription) is a flat list
-                  // of lines where sellers consistently alternate a short
-                  // label line ("Health Benefits", "Shelf Life", "Country
-                  // of Origin"...) with its value line(s) right after —
-                  // rendering it as one plain Text lost that structure
-                  // entirely. _ProductAboutSection below recognizes the
-                  // known label lines and bolds them, keeping everything
-                  // else as regular/lighter body text.
-                  if ((effectiveDescription ?? '').trim().isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    _ProductAboutSection(text: effectiveDescription!.trim()),
-                  ],
-
-                  if (relatedAsync != null) ...[
-                    const SizedBox(height: 22),
-                    const Divider(height: 1),
-                    const SizedBox(height: 16),
-                    const Text('Similar Products', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-                    const SizedBox(height: 12),
-                    _SimilarProductsGrid(relatedAsync: relatedAsync, currentId: product.id),
-                  ],
-                  const SizedBox(height: 90),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-            ),
-          ),
-          _buildCartBar(context, ref, product, quantityInCart),
+          _buildCartBar(context, ref, product, quantityInCart, cartCount),
         ],
       ),
     );
   }
 
-  Widget _buildCartBar(BuildContext context, WidgetRef ref, ServiceItem product, int quantityInCart) {
+  Widget _buildCartBar(BuildContext context, WidgetRef ref, ServiceItem product, int quantityInCart, int cartCount) {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2))],
+          boxShadow: [BoxShadow(color: const Color(0xFF14532D).withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, -4))],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '₹${product.effectivePrice}',
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                      ),
-                      if (product.displayUnit.isNotEmpty)
-                        Text(product.displayUnit, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-                // Fixed 2026-09-28 per reported crash log (creator chain
-                // "ConstrainedBox ← _InputPadding ← ... ← FilledButton ←
-                // _CartAction ← Row", constraints "BoxConstraints(unconstrained)",
-                // additionalConstraints "w=Infinity"): _CartAction's "Add to
-                // Cart" state renders a FilledButton, which internally builds a
-                // _RenderInputPadding to enforce its minimum tap-target size —
-                // that widget's constraint math produces an invalid
-                // tight-infinite width whenever it's handed unbounded width,
-                // which is exactly what a Row always gives a non-flex child.
-                // Same exact bug already diagnosed and fixed the same way on
-                // CategoryDetailScreen's cart bar (see that screen's matching
-                // doc comment) — IntrinsicWidth measures the child's natural
-                // width first and lays it out with that concrete, finite
-                // number, so the button never sees an unbounded constraint.
-                IntrinsicWidth(
-                  child: _CartAction(product: product, quantityInCart: quantityInCart),
-                ),
-              ],
-            ),
-            // Added 2026-10-06 per explicit request ("i have added a
-            // product then it should show the 'Go to cart' to redirect")
-            // — reuses the exact same green pill "Go to Cart" affordance
-            // already used on CategoryDetailScreen/SellerHubGroceries-
-            // Screen/SellerHubVegetablesScreen's cart bars, wrapped in
-            // IntrinsicWidth for the same unbounded-width reason as above.
-            // Only shown once this product is actually in the cart.
-            if (quantityInCart > 0) ...[
-              const SizedBox(height: 10),
-              const GoToCartPill(expand: true),
-            ],
-          ],
-        ),
+        child: _BottomActions(product: product, quantityInCart: quantityInCart, cartCount: cartCount),
       ),
     );
   }
@@ -567,13 +569,13 @@ class _ProductAboutSection extends StatelessWidget {
       line.split(' ').length <= 6;
 
   static const _body = TextStyle(
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
     height: 1.5,
   );
   static const _strong = TextStyle(
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
     height: 1.5,
@@ -586,7 +588,7 @@ class _ProductAboutSection extends StatelessWidget {
           children: [
             const Padding(
               padding: EdgeInsets.only(top: 8, right: 9),
-              child: Icon(Icons.circle, size: 5, color: AppColors.groceryGreen),
+              child: Icon(Icons.circle, size: 5, color: _gpGreen),
             ),
             Expanded(child: child),
           ],
@@ -670,30 +672,16 @@ class _ProductAboutSection extends StatelessWidget {
       }
     }
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider, width: 1),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.info_outline_rounded, size: 19, color: AppColors.groceryGreen),
-              SizedBox(width: 8),
-              Text(
-                'About this item',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-              ),
-            ],
+          const Text(
+            'About this item',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 10),
-          const Divider(height: 1, color: AppColors.divider),
-          const SizedBox(height: 8),
           ...children,
         ],
       ),
@@ -723,9 +711,8 @@ class _UnitSelector extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider, width: 1),
+        color: _gpCream,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,7 +720,7 @@ class _UnitSelector extends StatelessWidget {
         Text(
           'SELECT PACK ${(attributeName ?? '').isNotEmpty ? attributeName!.toUpperCase() : 'SIZE'} / VARIANT',
           style: const TextStyle(
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.6,
             color: AppColors.textSecondary,
@@ -758,10 +745,10 @@ class _UnitSelector extends StatelessWidget {
                   constraints: const BoxConstraints(minWidth: 96),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: selected ? AppColors.groceryGreen.withValues(alpha: 0.08) : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                    color: selected ? _gpGreen.withValues(alpha: 0.08) : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: selected ? AppColors.groceryGreen : AppColors.divider,
+                      color: selected ? _gpGreen : const Color(0xFFE3E8F0),
                       width: selected ? 1.6 : 1.1,
                     ),
                   ),
@@ -772,7 +759,7 @@ class _UnitSelector extends StatelessWidget {
                       Text(
                         label,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: out ? AppColors.textHint : AppColors.textPrimary,
                         ),
@@ -784,12 +771,12 @@ class _UnitSelector extends StatelessWidget {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('\u20b9${v.sellingPrice}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                            Text('\u20b9${v.sellingPrice}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
                             if (v.hasStrikeThroughMrp) ...[
                               const SizedBox(width: 5),
                               Text(
                                 '\u20b9${v.mrp}',
-                                style: const TextStyle(fontSize: 11, color: AppColors.textHint, decoration: TextDecoration.lineThrough),
+                                style: TextStyle(fontSize: 11, color: AppColors.textHint, decoration: TextDecoration.lineThrough),
                               ),
                             ],
                           ],
@@ -875,7 +862,7 @@ class _ProductGalleryState extends State<_ProductGallery> {
       semanticIcon: ImageUrlHelper.mapCategoryIcon(p.categoryName, p.slug),
       width: double.infinity,
       height: double.infinity,
-      fit: BoxFit.contain,
+      fit: BoxFit.cover,
     );
   }
 
@@ -898,7 +885,7 @@ class _ProductGalleryState extends State<_ProductGallery> {
         Positioned(
           left: 0,
           right: 0,
-          bottom: 10,
+          bottom: 34,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(urls.length, (i) {
@@ -909,7 +896,7 @@ class _ProductGalleryState extends State<_ProductGallery> {
                 width: active ? 18 : 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: active ? AppColors.groceryGreen : Colors.black26,
+                  color: active ? _gpGreen : Colors.black26,
                   borderRadius: BorderRadius.circular(3),
                 ),
               );
@@ -936,7 +923,7 @@ class _InfoRow extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: color),
           const SizedBox(width: 6),
-          Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: color)),
+          Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
@@ -996,61 +983,509 @@ class _SimilarProductsGrid extends StatelessWidget {
   }
 }
 
-/// Full-size ADD / quantity-stepper control for the sticky bottom bar —
-/// mirrors ProductCard._buildGroceryAction's logic (same cartProvider calls)
-/// at a larger touch target appropriate for a primary page action.
-class _CartAction extends ConsumerWidget {
-  const _CartAction({required this.product, required this.quantityInCart});
+/// Floating white circle button used over the hero photo (back / cart) and in
+/// the bottom bar. [badge] > 0 shows a small count bubble.
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+    this.badge = 0,
+    this.size = 42,
+    this.bordered = false,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+  final int badge;
+  final double size;
+  final bool bordered;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: bordered ? Border.all(color: const Color(0xFFE3E8F0), width: 1.2) : null,
+                  boxShadow: bordered
+                      ? null
+                      : [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 10, offset: const Offset(0, 3))],
+                ),
+                child: Icon(icon, size: size * 0.5, color: _gpGreen),
+              ),
+              if (badge > 0)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _gpGreen,
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      badge > 99 ? '99+' : '$badge',
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "20% OFF" ribbon that sits on the photo's lower-left edge, just above the
+/// white sheet.
+class _DiscountTag extends StatelessWidget {
+  const _DiscountTag({required this.percent});
+
+  final Object percent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 22, 8),
+      decoration: const BoxDecoration(
+        // Home page's golden yellow → amber orange.
+        gradient: LinearGradient(colors: [_gpOfferYellow, _gpOfferOrange]),
+        borderRadius: BorderRadius.only(topRight: Radius.circular(22), bottomRight: Radius.circular(22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: const BoxDecoration(color: Color(0xFF1F2937), shape: BoxShape.circle),
+            child: const Icon(Icons.percent_rounded, size: 14, color: _gpOfferYellow),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$percent% OFF',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "★ 4.8 (120)" — top-right of the title row.
+class _RatingBadge extends StatelessWidget {
+  const _RatingBadge({required this.rating, required this.reviewCount});
+
+  final double rating;
+  final int reviewCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: _gpGreen, borderRadius: BorderRadius.circular(6)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  rating.toStringAsFixed(1),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+                const SizedBox(width: 2),
+                const Icon(Icons.star_rounded, size: 13, color: Colors.white),
+              ],
+            ),
+          ),
+          if (reviewCount > 0) ...[
+            const SizedBox(height: 3),
+            Text('$reviewCount ratings', style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Soft rounded stat strip (value over label, thin dividers between cells).
+class _StatStrip extends StatelessWidget {
+  const _StatStrip({required this.cells});
+
+  final List<({String value, String label})> cells;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(color: _gpCream, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: [
+          for (var i = 0; i < cells.length; i++) ...[
+            if (i > 0) Container(width: 1, height: 30, color: const Color(0xFFE3E8F0)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      cells[i].value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _gpGreen),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(cells[i].label, style: const TextStyle(fontSize: 11.5, color: _gpGrey)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom action bar — cart shortcut + Add to Cart, or (once in the cart) a
+/// quantity stepper + Go to Cart. Same cartProvider calls as before.
+class _BottomActions extends ConsumerWidget {
+  const _BottomActions({required this.product, required this.quantityInCart, required this.cartCount});
 
   final ServiceItem product;
   final int quantityInCart;
+  final int cartCount;
+
+  static const double _h = 54;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!product.inStock) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(8)),
-        child: const Text('Out of Stock', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textHint)),
+        height: _h,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: const Color(0xFFEDF0F5), borderRadius: BorderRadius.circular(_h / 2)),
+        child: const Text(
+          'Out of Stock',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textHint),
+        ),
       );
     }
 
+    final ctaShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(_h / 2));
+
     if (quantityInCart == 0) {
-      return FilledButton(
-        onPressed: () {
-          ref.read(cartProvider.notifier).addService(product);
-          AppToast.addedToCart(context, product.title);
-        },
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.groceryGreen,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Text('Add to Cart', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+      return Row(
+        children: [
+          _RoundIconButton(
+            icon: Icons.shopping_bag_outlined,
+            tooltip: 'Cart',
+            badge: cartCount,
+            size: _h,
+            bordered: true,
+            onTap: () => context.push('/cart'),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              onPressed: () {
+                ref.read(cartProvider.notifier).addService(product);
+                AppToast.addedToCart(context, product.title);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: _gpGreen,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, _h),
+                shape: ctaShape,
+              ),
+              child: Text(
+                'Add to Cart  •  ₹${product.effectivePrice}',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
     final atMax = quantityInCart >= product.maxQuantity;
-    return Container(
-      decoration: BoxDecoration(color: AppColors.groceryGreen, borderRadius: BorderRadius.circular(8)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            onPressed: () => ref.read(cartProvider.notifier).updateQuantity(product.id, quantityInCart - 1),
-            icon: const Icon(Icons.remove, color: Colors.white, size: 18),
+    return Row(
+      children: [
+        Container(
+          height: _h,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(color: const Color(0xFFE6F2EA), borderRadius: BorderRadius.circular(_h / 2)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _StepButton(
+                icon: Icons.remove_rounded,
+                filled: false,
+                onTap: () => ref.read(cartProvider.notifier).updateQuantity(product.id, quantityInCart - 1),
+              ),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  '$quantityInCart',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _gpGreen),
+                ),
+              ),
+              _StepButton(
+                icon: Icons.add_rounded,
+                filled: true,
+                dimmed: atMax,
+                onTap: atMax
+                    ? () => AppToast.show(context, 'Only ${product.maxQuantity} in stock', type: AppToastType.error)
+                    : () {
+                        ref.read(cartProvider.notifier).updateQuantity(product.id, quantityInCart + 1);
+                        AppToast.addedToCart(context, product.title);
+                      },
+              ),
+            ],
           ),
-          Text('$quantityInCart', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
-          IconButton(
-            onPressed: atMax
-                ? () => AppToast.show(context, 'Only ${product.maxQuantity} in stock', type: AppToastType.error)
-                : () {
-                    ref.read(cartProvider.notifier).updateQuantity(product.id, quantityInCart + 1);
-                    AppToast.addedToCart(context, product.title);
-                  },
-            icon: Icon(Icons.add, color: atMax ? Colors.white54 : Colors.white, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: () => context.go('/cart'),
+            icon: const Icon(Icons.shopping_bag_outlined, size: 20),
+            label: const Text('Go to Cart', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+            style: FilledButton.styleFrom(
+              backgroundColor: _gpGreen,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, _h),
+              shape: ctaShape,
+            ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({required this.icon, required this.filled, required this.onTap, this.dimmed = false});
+
+  final IconData icon;
+  final bool filled;
+  final bool dimmed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: filled ? (dimmed ? _gpGreen.withValues(alpha: 0.4) : _gpGreen) : Colors.white,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 20, color: filled ? Colors.white : _gpGreen),
+      ),
+    );
+  }
+}
+
+/// "Recipes & Meal Ideas" strip on a product page: curated recipes that use
+/// this product. Tapping one opens the recipe page, where every ingredient
+/// can be added to the cart.
+class _RecipesRail extends StatelessWidget {
+  const _RecipesRail({required this.productTitle, required this.recipes});
+
+  final String productTitle;
+  final List<RecipeSummary> recipes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.restaurant_menu_rounded, size: 19, color: _gpGreen),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Recipes & Meal Ideas',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)),
+              child: Text(
+                '${recipes.length} ${recipes.length == 1 ? 'recipe' : 'recipes'}',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _gpGrey),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Cook something delicious with fresh $productTitle',
+          style: const TextStyle(fontSize: 12.5, color: _gpGrey, height: 1.35),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 218,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: recipes.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) => _RecipeCard(recipe: recipes[i]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecipeCard extends StatelessWidget {
+  const _RecipeCard({required this.recipe});
+
+  final RecipeSummary recipe;
+
+  @override
+  Widget build(BuildContext context) {
+    final dietColor = switch (recipe.diet) {
+      RecipeDiet.veg => const Color(0xFF059669),
+      RecipeDiet.nonVeg => const Color(0xFFE11D48),
+      RecipeDiet.egg => const Color(0xFFB45309),
+    };
+    return GestureDetector(
+      onTap: () => context.push('/recipes/${Uri.encodeComponent(recipe.key)}'),
+      child: Container(
+        width: 168,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 112,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: const Color(0xFFF1F5F9),
+                    child: AppRemoteImage(imageUrl: recipe.coverImage, title: recipe.title, fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: dietColor, width: 1.4),
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(color: dietColor, shape: BoxShape.circle),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (recipe.cookTimeMinutes > 0)
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.schedule_rounded, size: 11, color: Colors.white),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${recipe.cookTimeMinutes} mins',
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 9, 10, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recipe.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, height: 1.25, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 3),
+                    if (recipe.kcal > 0)
+                      Text(
+                        '${recipe.kcal} kcal',
+                        style: const TextStyle(fontSize: 11, color: _gpGrey, fontWeight: FontWeight.w600),
+                      ),
+                    const Spacer(),
+                    const Row(
+                      children: [
+                        Text('View Recipe', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _gpGreen)),
+                        SizedBox(width: 2),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: _gpGreen),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

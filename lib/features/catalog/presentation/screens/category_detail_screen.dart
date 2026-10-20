@@ -38,7 +38,17 @@ class _VerticalDepartmentTile extends StatelessWidget {
     this.accent = AppColors.groceryGreen,
     this.accentLight = AppColors.groceryGreenLight,
     this.accentDark = AppColors.groceryGreenDark,
+    this.modern = false,
+    this.discSelected = const Color(0xFFD9E8FB),
+    this.discIdle = const Color(0xFFFDEFE3),
   });
+
+  /// Services rail look: selected tile is a soft tinted rounded card with a
+  /// bold accent label and an accent bar on the right edge; unselected tiles
+  /// are just the round picture over a soft peach disc (no ring, no card).
+  final bool modern;
+  final Color discSelected;
+  final Color discIdle;
 
   /// Selection / ring colors — grocery green by default, service blue for the
   /// services rail.
@@ -52,8 +62,79 @@ class _VerticalDepartmentTile extends StatelessWidget {
   final String? image;
   final IconData icon;
 
+  Widget _buildModern() {
+    final disc = selected ? discSelected : discIdle;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Stack(
+          children: [
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(left: 6, right: 8),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+              decoration: BoxDecoration(
+                color: selected ? accentLight : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: disc),
+                    child: ClipOval(
+                      child: image != null
+                          ? AppRemoteImage(
+                              imageUrl: image,
+                              title: label,
+                              fit: BoxFit.cover,
+                              semanticIcon: icon,
+                            )
+                          : Icon(icon, color: accentDark, size: 26),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? accent : AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Positioned(
+                right: 0,
+                top: 14,
+                bottom: 14,
+                child: Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(4)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (modern) return _buildModern();
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -144,7 +225,7 @@ _HeroCopy _heroCopyFor(String slug, String name) {
   if (s.contains('ac') || s.contains('appliance')) {
     return const _HeroCopy(
       icon: Icons.ac_unit_rounded,
-      color: AppColors.serviceBlue,
+      color: AppColors.navy,
       tagline: 'Cooling Comfort, Anytime',
       headline1: 'Keep Your Home Cool',
       headline2: '& Hassle-Free',
@@ -194,7 +275,7 @@ _HeroCopy _heroCopyFor(String slug, String name) {
   if (s.contains('plumb') || s.contains('electric') || s.contains('carpenter')) {
     return const _HeroCopy(
       icon: Icons.build_rounded,
-      color: AppColors.serviceBlue,
+      color: AppColors.navy,
       tagline: 'Fixed Right, First Time',
       headline1: 'Fix It Right',
       headline2: '& Hassle-Free',
@@ -203,7 +284,7 @@ _HeroCopy _heroCopyFor(String slug, String name) {
   }
   return _HeroCopy(
     icon: Icons.home_repair_service_rounded,
-    color: AppColors.primary,
+    color: AppColors.navy,
     tagline: 'Trusted Professionals, Anytime',
     headline1: name,
     headline2: '& Hassle-Free',
@@ -234,10 +315,10 @@ class _FilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : Colors.white,
+          color: selected ? AppColors.navy : Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected ? AppColors.navy : AppColors.border,
             width: 1.2,
           ),
         ),
@@ -337,6 +418,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       if (!mounted) return;
       ref.invalidate(categoryServicesProvider);
       ref.invalidate(subServicesProvider);
+      // The category list (which carries the admin's popup config) is also
+      // keepAlive-cached: without this, a popup enabled for a category
+      // (e.g. AC) after the app started never shows until a restart.
+      ref.invalidate(categoriesProvider);
     });
   }
 
@@ -450,14 +535,15 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   Widget _withServiceRail(
     bool isGrocery,
     List<Subcategory> subs,
-    Widget body,
-  ) {
+    Widget body, {
+    Category? category,
+  }) {
     final group = _popupGroupSlugs;
     if (group != null) {
       subs = subs.where((s) => group.contains(s.slug)).toList();
     }
     if (isGrocery || subs.isEmpty) return body;
-    const blue = AppColors.serviceBlue;
+    const blue = AppColors.navy;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -467,12 +553,17 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
+              // "All" shows the category's own picture (e.g. the carpenter
+              // photo) instead of a generic grid glyph; the glyph is only the
+              // fallback when the category has no image.
               _VerticalDepartmentTile(
                 label: 'All',
+                image: (category?.image ?? '').trim().isEmpty ? null : category!.image,
                 icon: Icons.grid_view_rounded,
+                modern: true,
                 accent: blue,
-                accentLight: AppColors.serviceBlueLight,
-                accentDark: AppColors.serviceBlueDark,
+                accentLight: Color(0xFFE8EDF7),
+                accentDark: AppColors.navy,
                 selected: _selectedSubcategorySlug == null,
                 onTap: () => setState(() {
                   _selectedSubcategorySlug = null;
@@ -484,9 +575,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                   label: sub.name,
                   image: sub.image,
                   icon: Icons.home_repair_service_rounded,
+                  modern: true,
                   accent: blue,
-                  accentLight: AppColors.serviceBlueLight,
-                  accentDark: AppColors.serviceBlueDark,
+                  accentLight: Color(0xFFE8EDF7),
+                  accentDark: AppColors.navy,
                   selected: _selectedSubcategorySlug == sub.slug,
                   onTap: () => setState(() => _selectedSubcategorySlug =
                       _selectedSubcategorySlug == sub.slug ? null : sub.slug),
@@ -523,7 +615,13 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         }).firstOrNull;
 
     _maybeRedirectToLogistics(currentCategory);
-    _maybeShowCategoryPopup(currentCategory);
+    // Popup config comes from the freshest copy of the category: the
+    // object handed in via `extra` can predate an admin popup change.
+    final livePopupCategory = liveCategories?.where((c) {
+      final cClean = c.slug.replaceAll('-', '_').toLowerCase();
+      return c.slug == widget.categorySlug || cClean == wClean;
+    }).firstOrNull;
+    _maybeShowCategoryPopup(livePopupCategory ?? currentCategory);
     if (currentCategory?.flowType == CatalogFlowType.logistics) {
       // Redirect scheduled above for after this frame — show a plain
       // loading state in the meantime rather than flashing the normal
@@ -639,7 +737,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         ],
       ),
       Expanded(
-            child: _withServiceRail(isGroceryCategory, subcategories, servicesAsync.when(
+            child: _withServiceRail(isGroceryCategory, subcategories, category: currentCategory, servicesAsync.when(
         // Grocery categories show their own rail once loaded, so the skeleton
         // draws one; service categories get their rail from _withServiceRail
         // around this body, so the skeleton must not add a second.
@@ -819,7 +917,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           // Appliance, Electrician, ...) only.
           if (!isGroceryCategory) {
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
               children: [
                 ...services.map(
                   (service) => Padding(
@@ -853,6 +951,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                         label: 'All',
                         icon: Icons.grid_view_rounded,
                         selected: _selectedDepartment == null,
+                        modern: true,
+                        accentLight: const Color(0xFFE3F1E8),
+                        discSelected: const Color(0xFFCFE6D8),
+                        discIdle: AppColors.groceryGreenLight,
                         onTap: () => _selectDepartment(null),
                       ),
                       ...(adminDepartments.isNotEmpty
@@ -861,6 +963,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                                 label: dept.name,
                                 image: dept.image ?? findProductGroup(dept.name)?.image,
                                 selected: _selectedDepartment == dept.name,
+                                modern: true,
+                                accentLight: const Color(0xFFE3F1E8),
+                                discSelected: const Color(0xFFCFE6D8),
+                                discIdle: AppColors.groceryGreenLight,
                                 onTap: () => _selectDepartment(
                                   _selectedDepartment == dept.name ? null : dept.name,
                                 ),
@@ -871,6 +977,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                                 label: group.name,
                                 image: group.image,
                                 selected: _selectedDepartment == group.name,
+                                modern: true,
+                                accentLight: const Color(0xFFE3F1E8),
+                                discSelected: const Color(0xFFCFE6D8),
+                                discIdle: AppColors.groceryGreenLight,
                                 onTap: () => _selectDepartment(
                                   _selectedDepartment == group.name ? null : group.name,
                                 ),
@@ -881,7 +991,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                  padding: EdgeInsets.fromLTRB(12, 12, 12, 16 + MediaQuery.paddingOf(context).bottom),
                   children: [
                     if (selectedProductGroup != null && selectedProductGroup.hasSubcategoryBreakdown) ...[
                       SingleChildScrollView(

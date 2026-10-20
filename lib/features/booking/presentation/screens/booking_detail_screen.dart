@@ -10,8 +10,16 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error.dart';
+import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../catalog/data/catalog_repository.dart';
+import '../../../catalog/domain/catalog_models.dart';
+import '../../../logistics/domain/logistics_providers.dart'
+    show selectedBookingDateProvider, selectedBookingServiceIdProvider, selectedTimeSlotProvider;
+import '../../../logistics/presentation/widgets/gt_slot_picker.dart' show GtSlotPicker;
+import '../../../logistics/presentation/widgets/slot_picker_widget.dart' show SlotPickerWidget;
 import '../../data/booking_repository.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
@@ -75,99 +83,197 @@ class BookingDetailScreen extends ConsumerWidget {
     ThemeData theme,
     Booking booking,
   ) {
+    final first = booking.items.isNotEmpty ? booking.items.first.service : null;
+    final extra = booking.items.length - 1;
+    final title = first == null
+        ? 'Service Booking'
+        : (extra > 0 ? '${first.title} +$extra more' : first.title);
+    final itemCount = booking.items.fold<int>(0, (s, i) => s + i.quantity);
+    final created = booking.createdAt;
+    final note = (booking.specialInstructions ?? '').trim();
+    final cancelReason = (booking.cancellationReason ?? '').trim();
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(16, 14, 16, 20 + MediaQuery.paddingOf(context).bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-                // ── 1. Header Card with ID and Status ───────────────────────
-                Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Service Request',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              booking.requestId,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        BookingStatusChip(status: booking.status),
-                      ],
+          // ── 1. Summary card (template layout) ───────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: _bdCardDecoration(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: SizedBox(
+                        width: 84,
+                        height: 84,
+                        child: first == null
+                            ? Container(
+                                color: AppColors.surfaceVariant,
+                                child: const Icon(Icons.home_repair_service_outlined,
+                                    color: AppColors.textHint),
+                              )
+                            : _BookingItemThumb(service: first),
+                      ),
                     ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            booking.address?.formattedAddress ?? booking.requestId,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF6B7788),
+                              height: 1.3,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          BookingStatusChip(status: booking.status),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const _BdDivider(),
+                Wrap(
+                  spacing: 18,
+                  runSpacing: 8,
+                  children: [
+                    _BdMeta(Icons.schedule_rounded, booking.scheduledTimeSlot),
+                    _BdMeta(Icons.calendar_today_outlined, booking.scheduledDate),
+                    _BdMeta(Icons.shopping_bag_outlined,
+                        '$itemCount item${itemCount == 1 ? '' : 's'}'),
+                  ],
+                ),
+                const _BdDivider(),
+                const Text(
+                  'SUMMARY OF CHARGES',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                    color: Color(0xFF6B7788),
                   ),
                 ),
+                const SizedBox(height: 10),
+                _BillRow(label: 'Service Request', amount: booking.requestId),
+                if (created != null)
+                  _BillRow(
+                    label: 'Booking Date',
+                    amount: DateFormat('MMM dd, yyyy - h a').format(created.toLocal()),
+                  ),
+                _BillRow(label: 'Scheduled Date', amount: booking.scheduledDate),
+                _BillRow(label: 'Time Slot', amount: booking.scheduledTimeSlot),
+                if (booking.address != null) ...[
+                  _BillRow(
+                    label: 'Address Type',
+                    amount: booking.address!.addressType.isEmpty
+                        ? '-'
+                        : '${booking.address!.addressType[0].toUpperCase()}${booking.address!.addressType.substring(1)}',
+                  ),
+                  _BillRow(
+                    label: 'Service Address',
+                    amount: booking.address!.formattedAddress,
+                    multiline: true,
+                  ),
+                ],
+                if (note.isNotEmpty)
+                  _BillRow(label: 'Special Instructions', amount: note, multiline: true),
+                if (cancelReason.isNotEmpty)
+                  _BillRow(
+                      label: 'Cancellation Reason', amount: cancelReason, multiline: true),
+                const _BdDivider(),
+                const Text(
+                  'SERVICES',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                    color: Color(0xFF6B7788),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...booking.items.map(
+                  (item) => _BillRow(
+                    label: '${item.service.title} x ${item.quantity}',
+                    amount: '₹${item.totalPrice}',
+                    multiline: true,
+                    leftFlex: true,
+                  ),
+                ),
+                // Fixed 2026-09-17 per explicit report: the payment rows
+                // reflect the booking's real `payment_status` only — a
+                // 'paid' booking claims an amount paid, everything else is
+                // shown as owed / refunded, never an invented advance.
+                ..._paymentSummaryRows(booking),
+                const _BdDivider(),
+                _BillRow(
+                  label: 'Total',
+                  amount: '₹${booking.totalAmount}',
+                  isBold: true,
+                ),
+              ],
+            ),
+          ),
 
-                const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
                 // ── 1b. Active Quotation (Painting/Masonry/AC-Inspection) ───
                 // Added 2026-09-26: this ESTIMATION-kind booking may have a
                 // live quotation attached (see ActiveQuoteCard's doc
                 // comment) — shows nothing when booking.quote is null, so
                 // this is a no-op for every ordinary fixed-price booking.
-                if (booking.hasActiveQuote) ...[
+          if (booking.hasActiveQuote) ...[
                   ActiveQuoteCard(booking: booking),
                   const SizedBox(height: 16),
                 ],
 
-                // ── 2. Booking Timeline Tracker ─────────────────────────────
-                Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Service Status Tracker',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _TimelineTracker(currentStatus: booking.status),
-                      ],
-                    ),
+          // ── 2. Booking Timeline Tracker ─────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: _bdCardDecoration(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Service Status Tracker',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 16),
+                _TimelineTracker(currentStatus: booking.status),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
 
                 // ── 3. Assigned Technician Card (if assigned) ───────────────
                 if (booking.technician != null) ...[
-                  Card(
-                    elevation: 0,
-                    color: AppColors.surfaceVariant,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: const BorderSide(color: AppColors.primaryLight, width: 0.8),
-                    ),
+                  Container(
+                    decoration: _bdCardDecoration(),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -228,7 +334,7 @@ class BookingDetailScreen extends ConsumerWidget {
                                           Text(
                                             booking.technician!.rating!.toStringAsFixed(1),
                                             style: const TextStyle(
-                                              fontSize: 12,
+                                              fontSize: 11.5,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -291,168 +397,6 @@ class BookingDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
-                // ── 4. Appointment Schedule & Location ──────────────────────
-                Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Schedule & Location',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.calendar_today_outlined,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  booking.scheduledDate,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                Text(
-                                  booking.scheduledTimeSlot,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        if (booking.address != null) ...[
-                          const Divider(height: 20),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.location_on_outlined,
-                                size: 18,
-                                color: AppColors.primary,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      booking.address!.addressType.toUpperCase(),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                    Text(
-                                      booking.address!.formattedAddress,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textPrimary,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // ── 5. Service Items & Bill Summary ─────────────────────────
-                Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: AppColors.borderSubtle, width: 0.8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Services & Payment Summary',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ...booking.items.map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${item.service.title} x ${item.quantity}',
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '₹${item.totalPrice}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const Divider(height: 20),
-                        _BillRow(
-                          label: 'Total Amount',
-                          amount: '₹${booking.totalAmount}',
-                          isBold: true,
-                        ),
-                        const SizedBox(height: 6),
-                        // Fixed 2026-09-17 per explicit report: this row
-                        // used to unconditionally read "Advance Paid: ₹X"
-                        // for every booking — X being a fabricated 20% of
-                        // the total that the backend never actually sent —
-                        // even when no payment had been made at all. It now
-                        // reflects the booking's real `payment_status`:
-                        // only a 'paid' booking claims an amount was paid;
-                        // everything else (pending, partial without a real
-                        // figure, refunded, failed) is shown as owed, never
-                        // as a paid receipt that didn't happen.
-                        ..._paymentSummaryRows(booking),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
                 // ── 6. Action Buttons driven strictly by available_actions ──
                 if (booking.canReschedule || booking.canCancel) ...[
                   Row(
@@ -481,6 +425,30 @@ class BookingDetailScreen extends ConsumerWidget {
                         ),
                       ],
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Online booking created but not paid yet (advance / full
+                // payment). Unpaid online Goods & Transport bookings are
+                // cancelled by the server after a short window, so offer the
+                // payment here instead of leaving the customer to find it.
+                if (!booking.canPayBalance &&
+                    (booking.canPayAdvance ||
+                        (booking.status == 'waiting_for_payment' &&
+                            booking.paymentStatus != 'paid'))) ...[
+                  FilledButton.icon(
+                    onPressed: () {
+                      context.push('/checkout/payment?booking=${booking.id}&type=advance');
+                    },
+                    icon: const Icon(Icons.payment),
+                    label: const Text('Pay now'),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Unpaid online bookings are cancelled automatically after a short time.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -524,10 +492,10 @@ class BookingDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
-                const SizedBox(height: 40),
-              ],
-            ),
-          );
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
   }
 
   // Fetches the real backend-generated invoice PDF and hands it to the
@@ -583,6 +551,10 @@ class BookingDetailScreen extends ConsumerWidget {
   void _showCancelDialog(BuildContext context, WidgetRef ref, Booking booking) {
     final otherController = TextEditingController();
     String? selectedReason;
+    // Real fee / refund for cancelling right now (null = couldn't load; the
+    // dialog then keeps its generic wording).
+    final previewFuture =
+        ref.read(bookingRepositoryProvider).getCancellationPreview(booking.id);
 
     showDialog<void>(
       context: context,
@@ -598,12 +570,70 @@ class BookingDetailScreen extends ConsumerWidget {
                 children: [
                   const Text(
                     'Are you sure you want to cancel this booking? If advance was paid, refund will be initiated.',
-                    style: TextStyle(fontSize: 13),
+                    style: TextStyle(fontSize: 12),
                   ),
                   const SizedBox(height: 10),
+                  FutureBuilder<CancellationPreview?>(
+                    future: previewFuture,
+                    builder: (context, snap) {
+                      final p = snap.data;
+                      if (p == null) return const SizedBox.shrink();
+                      String money(double v) => '₹${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2)}';
+                      final locked = p.locked;
+                      return Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: locked ? AppColors.errorLight : AppColors.primaryTint,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (locked)
+                              Text(
+                                p.message ?? 'Cancellation is locked for this booking.',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              )
+                            else ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Cancellation fee', style: TextStyle(fontSize: 12)),
+                                  Text(p.fee > 0 ? money(p.fee) : 'Free',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                                ],
+                              ),
+                              if (p.isPaid) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Refund to you', style: TextStyle(fontSize: 12)),
+                                    Text(money(p.refund),
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.primary)),
+                                  ],
+                                ),
+                              ],
+                              if (p.message != null) ...[
+                                const SizedBox(height: 6),
+                                Text(p.message!,
+                                    style: const TextStyle(
+                                        fontSize: 11, color: AppColors.textSecondary)),
+                              ],
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   const Text(
                     'Reason for cancellation',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
                   ),
                   ..._cancelReasonOptions.map(
                     (reason) => RadioListTile<String>(
@@ -612,7 +642,7 @@ class BookingDetailScreen extends ConsumerWidget {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
-                      title: Text(reason, style: const TextStyle(fontSize: 13)),
+                      title: Text(reason, style: const TextStyle(fontSize: 12)),
                       onChanged: (value) => setState(() => selectedReason = value),
                     ),
                   ),
@@ -622,7 +652,7 @@ class BookingDetailScreen extends ConsumerWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
-                    title: const Text('Other', style: TextStyle(fontSize: 13)),
+                    title: const Text('Other', style: TextStyle(fontSize: 12)),
                     onChanged: (value) => setState(() => selectedReason = value),
                   ),
                   if (isOther) ...[
@@ -644,9 +674,11 @@ class BookingDetailScreen extends ConsumerWidget {
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Keep Booking'),
               ),
-              FilledButton(
+              FutureBuilder<CancellationPreview?>(
+                future: previewFuture,
+                builder: (_, cancelSnap) => FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                onPressed: selectedReason == null || (isOther && otherController.text.trim().isEmpty)
+                onPressed: (cancelSnap.data?.locked ?? false) || selectedReason == null || (isOther && otherController.text.trim().isEmpty)
                     ? null
                     : () async {
                         final finalReason = isOther
@@ -664,6 +696,7 @@ class BookingDetailScreen extends ConsumerWidget {
                       },
                 child: const Text('Confirm Cancel'),
               ),
+              ),
             ],
           );
         },
@@ -672,94 +705,112 @@ class BookingDetailScreen extends ConsumerWidget {
   }
 
   void _showRescheduleModal(BuildContext context, WidgetRef ref, Booking booking) {
-    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
-    String selectedSlot = '09:00 AM - 11:00 AM';
+    // Fixed 2026-10-15: the sheet used a hard-coded slot list that didn't match
+    // the real slots, and sent the wrong request fields (see
+    // BookingRepository.rescheduleBooking). It now uses the same server-driven
+    // calendar + slot picker as checkout, starting from tomorrow with nothing
+    // selected.
+    ref.read(selectedBookingDateProvider.notifier).state =
+        DateTime.now().add(const Duration(days: 1));
+    ref.read(selectedTimeSlotProvider.notifier).state = null;
+    // Use the booked service's own slot rules (hours, closed days, notice),
+    // like the web reschedule modal; goods & transport uses its own endpoint.
+    final firstSvc = booking.items.isNotEmpty ? booking.items.first.service : null;
+    final svcSlug = (firstSvc?.slug ?? '').trim();
+    ref.read(selectedBookingServiceIdProvider.notifier).state =
+        (svcSlug.isEmpty || svcSlug == 'service') ? null : svcSlug;
+    final catHint = '${firstSvc?.categorySlug ?? ''} $svcSlug'.toLowerCase();
+    String? gtCategory;
+    if (catHint.contains('packers')) {
+      gtCategory = 'packers_movers';
+    } else if (catHint.contains('ptl')) {
+      gtCategory = 'ptl';
+    } else if (catHint.contains('two') && catHint.contains('wheel')) {
+      gtCategory = 'goods_transport_two_wheeler';
+    } else if (catHint.contains('goods') || catHint.contains('transport') || catHint.contains('truck')) {
+      gtCategory = 'goods_transport_truck';
+    }
 
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Reschedule Booking',
-                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Select new appointment date:'),
-              const SizedBox(height: 8),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_month, color: AppColors.primary),
-                title: Text(DateFormat('EEEE, d MMMM yyyy').format(selectedDate)),
-                trailing: const Text('Change', style: TextStyle(color: AppColors.primary)),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: selectedDate,
-                    firstDate: DateTime.now().add(const Duration(days: 1)),
-                    lastDate: DateTime.now().add(const Duration(days: 14)),
-                  );
-                  if (picked != null) {
-                    setModalState(() => selectedDate = picked);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              const Text('Select new time slot:'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+      builder: (ctx) => Consumer(
+        builder: (ctx, sheetRef, _) {
+          final slot = sheetRef.watch(selectedTimeSlotProvider);
+          final date = sheetRef.watch(selectedBookingDateProvider);
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  '09:00 AM - 11:00 AM',
-                  '11:00 AM - 01:00 PM',
-                  '02:00 PM - 04:00 PM',
-                  '04:00 PM - 06:00 PM',
-                  '06:00 PM - 08:00 PM',
-                ].map((slot) {
-                  final isSelected = selectedSlot == slot;
-                  return ChoiceChip(
-                    label: Text(slot, style: const TextStyle(fontSize: 12)),
-                    selected: isSelected,
-                    onSelected: (val) {
-                      if (val) setModalState(() => selectedSlot = slot);
-                    },
-                  );
-                }).toList(),
+                  const Text(
+                    'Reschedule Booking',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.navy),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Pick a new date and time. Our team will confirm the change.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: gtCategory != null
+                          ? GtSlotPicker(category: gtCategory)
+                          : const SlotPickerWidget(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: slot == null
+                          ? null
+                          : () async {
+                              Navigator.pop(ctx);
+                              final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+                              final error = await ref
+                                  .read(bookingActionControllerProvider.notifier)
+                                  .rescheduleBooking(
+                                    id: booking.id,
+                                    date: formattedDate,
+                                    slot: slot.label,
+                                  );
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    error ??
+                                        'Reschedule request submitted. We will confirm your new time shortly.',
+                                  ),
+                                  backgroundColor: error != null ? AppColors.error : AppColors.navy,
+                                ),
+                              );
+                            },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.navy,
+                        minimumSize: const Size(0, 50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                      child: Text(
+                        slot == null ? 'Select a time slot' : 'Confirm Reschedule',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  final formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
-                  final error = await ref
-                      .read(bookingActionControllerProvider.notifier)
-                      .rescheduleBooking(
-                        id: booking.id,
-                        date: formattedDate,
-                        slot: selectedSlot,
-                      );
-                  if (error != null && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(error), backgroundColor: AppColors.error),
-                    );
-                  }
-                },
-                child: const Text('Confirm Reschedule'),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -848,7 +899,7 @@ class _TimelineTracker extends StatelessWidget {
               style: const TextStyle(
                 color: AppColors.error,
                 fontWeight: FontWeight.w600,
-                fontSize: 12,
+                fontSize: 11.5,
               ),
             ),
           ],
@@ -938,38 +989,94 @@ class _BillRow extends StatelessWidget {
     required this.label,
     required this.amount,
     this.isBold = false,
+    this.multiline = false,
+    this.leftFlex = false,
   });
 
   final String label;
   final String amount;
   final bool isBold;
+  final bool multiline;
+  final bool leftFlex;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: isBold ? 14 : 12,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: isBold ? AppColors.textPrimary : AppColors.textSecondary,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          amount,
-          style: TextStyle(
-            fontSize: isBold ? 15 : 12,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-            color: isBold ? AppColors.priceColor : AppColors.textPrimary,
-          ),
+    final labelText = Text(
+      label,
+      style: TextStyle(
+        fontSize: isBold ? 14 : 12,
+        fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
+        color: isBold ? AppColors.navy : AppColors.navy,
+      ),
+    );
+    final valueText = Text(
+      amount,
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        fontSize: isBold ? 18 : 12,
+        fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+        color: AppColors.navy,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (leftFlex)
+            Expanded(child: labelText)
+          else
+            Flexible(flex: 0, child: labelText),
+          const SizedBox(width: 16),
+          leftFlex
+              ? valueText
+              : Expanded(child: multiline ? valueText : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: valueText,
+                )),
+        ],
+      ),
+    );
+  }
+}
+
+BoxDecoration _bdCardDecoration() => BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
         ),
       ],
     );
-  }
+
+class _BdDivider extends StatelessWidget {
+  const _BdDivider();
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Divider(height: 1, thickness: 0.8, color: Color(0xFFEDF0F5)),
+      );
+}
+
+class _BdMeta extends StatelessWidget {
+  const _BdMeta(this.icon, this.text);
+  final IconData icon;
+  final String text;
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF6B7788)),
+          const SizedBox(width: 6),
+          Text(text,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.navy)),
+        ],
+      );
 }
 
 // Fixed 2026-09-17 per explicit report ("there is hardcoded like Advance
@@ -1028,11 +1135,65 @@ Widget _buildTechAvatarFallback(String? name) {
       child: Text(
         initial,
         style: const TextStyle(
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: FontWeight.bold,
           color: Colors.white,
         ),
       ),
     ),
   );
+}
+
+/// Package picture for a booking line. The booking record (cart_data) only
+/// stores id / name / price / quantity, so when the item carries no image we
+/// look the package up in the catalog by id (falling back to exact title).
+final bookingItemImageProvider =
+    FutureProvider.autoDispose.family<String?, String>((ref, key) async {
+  final sep = key.indexOf('|');
+  final id = int.tryParse(key.substring(0, sep));
+  final title = key.substring(sep + 1).trim();
+  if (title.isEmpty) return null;
+  final res = await ref.watch(catalogRepositoryProvider).searchServices(title);
+  if (res is! Success<List<ServiceItem>>) return null;
+  bool hasImg(ServiceItem s) => (s.imageUrl ?? '').trim().isNotEmpty;
+  for (final s in res.data) {
+    if (s.id == id && hasImg(s)) return s.imageUrl;
+  }
+  for (final s in res.data) {
+    if (s.title.trim().toLowerCase() == title.toLowerCase() && hasImg(s)) {
+      return s.imageUrl;
+    }
+  }
+  return null;
+});
+
+class _BookingItemThumb extends ConsumerWidget {
+  const _BookingItemThumb({required this.service});
+  final ServiceItem service;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    var url = service.imageUrl;
+    if ((url ?? '').trim().isEmpty) {
+      final lookup = ref
+          .watch(bookingItemImageProvider('${service.id}|${service.title}'));
+      // Shimmer while the lookup runs, so the category icon never flashes
+      // before the real picture.
+      if (lookup.isLoading) {
+        return const ShimmerBox(width: 84, height: 84, borderRadius: 0);
+      }
+      url = lookup.valueOrNull;
+    }
+    return AppRemoteImage(
+      imageUrl: url,
+      rawPath: url,
+      categoryName: service.categoryName,
+      slug: service.slug,
+      semanticIcon:
+          ImageUrlHelper.mapCategoryIcon(service.categoryName, service.slug),
+      width: 84,
+      height: 84,
+      fit: BoxFit.cover,
+    );
+  }
 }

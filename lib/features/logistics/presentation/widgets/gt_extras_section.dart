@@ -16,15 +16,15 @@ import '../../domain/logistics_providers.dart';
 //   GtPoliciesSection  /policies/ terms + /faqs/
 
 const _titleStyle = TextStyle(
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: FontWeight.w800,
   color: AppColors.navy,
 );
-const _hintStyle = TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.4);
+const _hintStyle = TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4);
 
 InputDecoration _decoration(String hint) => InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(fontSize: 13, color: AppColors.textHint),
+      hintStyle: const TextStyle(fontSize: 12, color: AppColors.textHint),
       filled: true,
       fillColor: Colors.white,
       isDense: true,
@@ -86,10 +86,10 @@ class _CardHeader extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: AppColors.serviceBlue.withValues(alpha: 0.10),
+            color: AppColors.navy.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, size: 20, color: AppColors.serviceBlue),
+          child: Icon(icon, size: 20, color: AppColors.navy),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -98,14 +98,14 @@ class _CardHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(title, style: _titleStyle.copyWith(fontSize: 15)),
+                  Text(title, style: _titleStyle.copyWith(fontSize: 14)),
                   if (required)
                     const Text(
                       ' *',
                       style: TextStyle(
                         color: AppColors.error,
                         fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                        fontSize: 14,
                       ),
                     ),
                 ],
@@ -125,7 +125,7 @@ Widget _fieldLabel(String text) => Padding(
       child: Text(
         text,
         style: const TextStyle(
-          fontSize: 12.5,
+          fontSize: 12,
           fontWeight: FontWeight.w700,
           color: AppColors.textSecondary,
           letterSpacing: 0.2,
@@ -178,12 +178,12 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text(
           'This needs a truck',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy),
         ),
         content: Text(
           '"${item.name}" cannot be carried on a 2-wheeler.\n\n'
           'Do you want to ship it by mini truck instead?',
-          style: const TextStyle(fontSize: 13.5, height: 1.45),
+          style: const TextStyle(fontSize: 12.5, height: 1.45),
         ),
         actions: [
           TextButton(
@@ -191,7 +191,7 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
             child: const Text('No, continue'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.serviceBlue),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.navy),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Yes, book a truck'),
           ),
@@ -315,12 +315,12 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                                       horizontal: 10, vertical: 12),
                                   decoration: BoxDecoration(
                                     color: isSel
-                                        ? AppColors.serviceBlue.withValues(alpha: 0.10)
+                                        ? AppColors.navy.withValues(alpha: 0.10)
                                         : Colors.transparent,
                                     border: Border(
                                       left: BorderSide(
                                         color: isSel
-                                            ? AppColors.serviceBlue
+                                            ? AppColors.navy
                                             : Colors.transparent,
                                         width: 3,
                                       ),
@@ -333,12 +333,12 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                                   child: Text(
                                     c.name,
                                     style: TextStyle(
-                                      fontSize: 12.5,
+                                      fontSize: 12,
                                       height: 1.25,
                                       fontWeight:
                                           isSel ? FontWeight.w800 : FontWeight.w600,
                                       color: isSel
-                                          ? AppColors.serviceBlue
+                                          ? AppColors.navy
                                           : AppColors.navy,
                                     ),
                                   ),
@@ -394,7 +394,7 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                             child: Text(
                               selected.infoBanner!,
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 color: Color(0xFF92400E),
                                 height: 1.4,
                               ),
@@ -462,20 +462,20 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
   Widget _summaryPill(IconData icon, String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: AppColors.serviceBlue.withValues(alpha: 0.08),
+          color: AppColors.navy.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: AppColors.serviceBlue),
+            Icon(icon, size: 14, color: AppColors.navy),
             const SizedBox(width: 5),
             Text(
               text,
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w700,
-                color: AppColors.serviceBlue,
+                color: AppColors.navy,
               ),
             ),
           ],
@@ -589,7 +589,7 @@ class _ItemRow extends StatelessWidget {
           Text(
             item.name,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               height: 1.25,
               fontWeight: active ? FontWeight.w800 : FontWeight.w600,
               color: AppColors.navy,
@@ -644,14 +644,14 @@ class _ItemRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.serviceBlue, width: 1),
+                  border: Border.all(color: AppColors.navy, width: 1),
                 ),
                 child: const Text(
                   'ADD',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.serviceBlue,
+                    color: AppColors.navy,
                   ),
                 ),
               ),
@@ -659,7 +659,7 @@ class _ItemRow extends StatelessWidget {
           else
             Container(
               decoration: BoxDecoration(
-                color: AppColors.serviceBlue,
+                color: AppColors.navy,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -674,7 +674,7 @@ class _ItemRow extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
-                        fontSize: 13,
+                        fontSize: 12,
                       ),
                     ),
                   ),
@@ -754,7 +754,7 @@ class _FitmentBanner extends ConsumerWidget {
                           'Suggested: ${rec['name']}'
                           '${sameCategory ? '' : ' (change transportation type)'}',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                             color: AppColors.navy,
                           ),
@@ -795,10 +795,10 @@ class _FitmentBanner extends ConsumerWidget {
   Widget _note(String text, {bool error = false, bool ok = false, Widget? footer}) {
     final color = error
         ? AppColors.error
-        : (ok ? AppColors.groceryGreenDark : AppColors.textSecondary);
+        : (ok ? AppColors.navy : AppColors.textSecondary);
     final bg = error
         ? const Color(0xFFFEF2F2)
-        : (ok ? AppColors.groceryGreenLight : _kPanelBg);
+        : (ok ? Color(0xFFE8EDF7) : _kPanelBg);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -825,7 +825,7 @@ class _FitmentBanner extends ConsumerWidget {
                 child: Text(
                   text,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     color: color,
                     height: 1.4,
                     fontWeight: FontWeight.w600,
@@ -1098,7 +1098,7 @@ class _GtPtlSectionState extends ConsumerState<GtPtlSection> {
                   Text(
                     'Pick one of these vehicles for Part Truck Load: '
                     '${cfg.tiers.map((t) => t.name).join(', ')}.',
-                    style: const TextStyle(fontSize: 12, color: AppColors.error, height: 1.4),
+                    style: const TextStyle(fontSize: 11.5, color: AppColors.error, height: 1.4),
                   ),
                 ],
                 const SizedBox(height: 10),
@@ -1168,7 +1168,7 @@ class _GtPtlSectionState extends ConsumerState<GtPtlSection> {
                         error: (e, _) => Text(
                           _msg(e),
                           style: const TextStyle(
-                              fontSize: 12.5, color: AppColors.error, height: 1.4),
+                              fontSize: 12, color: AppColors.error, height: 1.4),
                         ),
                         data: (quote) => Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1176,12 +1176,12 @@ class _GtPtlSectionState extends ConsumerState<GtPtlSection> {
                             const Text(
                               'Part Truck Load fare',
                               style: TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w700),
+                                  fontSize: 12, fontWeight: FontWeight.w700),
                             ),
                             Text(
                               '₹${quote.total.toStringAsFixed(0)}',
                               style: const TextStyle(
-                                fontSize: 20,
+                                fontSize: 17.5,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.navy,
                               ),
@@ -1231,7 +1231,7 @@ class GtQuoteNotices extends ConsumerWidget {
               Expanded(
                 child: Text(
                   supplyMsg!,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFFB45309), height: 1.4),
+                  style: const TextStyle(fontSize: 11.5, color: Color(0xFFB45309), height: 1.4),
                 ),
               ),
             ],
@@ -1323,7 +1323,7 @@ class GtPoliciesSection extends ConsumerWidget {
                       title: Text(
                         f.question,
                         style: const TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navy,
                         ),
@@ -1416,11 +1416,11 @@ class _PmInventoryPickerState extends ConsumerState<PmInventoryPicker> {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                         decoration: BoxDecoration(
                           color: isSel
-                              ? AppColors.serviceBlue.withValues(alpha: 0.10)
+                              ? AppColors.navy.withValues(alpha: 0.10)
                               : Colors.transparent,
                           border: Border(
                             left: BorderSide(
-                              color: isSel ? AppColors.serviceBlue : Colors.transparent,
+                              color: isSel ? AppColors.navy : Colors.transparent,
                               width: 3,
                             ),
                             bottom: const BorderSide(color: AppColors.border, width: 0.5),
@@ -1432,10 +1432,10 @@ class _PmInventoryPickerState extends ConsumerState<PmInventoryPicker> {
                               child: Text(
                                 c.name,
                                 style: TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   height: 1.25,
                                   fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
-                                  color: isSel ? AppColors.serviceBlue : AppColors.navy,
+                                  color: isSel ? AppColors.navy : AppColors.navy,
                                 ),
                               ),
                             ),
@@ -1444,7 +1444,7 @@ class _PmInventoryPickerState extends ConsumerState<PmInventoryPicker> {
                                 margin: const EdgeInsets.only(left: 4),
                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.serviceBlue,
+                                  color: AppColors.navy,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -1491,14 +1491,14 @@ class _PmInventoryPickerState extends ConsumerState<PmInventoryPicker> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Icon(Icons.inventory_2_outlined, size: 15, color: AppColors.serviceBlue),
+              const Icon(Icons.inventory_2_outlined, size: 15, color: AppColors.navy),
               const SizedBox(width: 6),
               Text(
                 '$total item${total == 1 ? '' : 's'} selected',
                 style: const TextStyle(
-                  fontSize: 12.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.serviceBlue,
+                  color: AppColors.navy,
                 ),
               ),
             ],
@@ -1529,7 +1529,7 @@ class _PmRow extends StatelessWidget {
             Text(
               item.name,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 height: 1.25,
                 fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                 color: AppColors.navy,
@@ -1553,14 +1553,14 @@ class _PmRow extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.serviceBlue, width: 1),
+                    border: Border.all(color: AppColors.navy, width: 1),
                   ),
                   child: const Text(
                     'ADD',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.serviceBlue,
+                      color: AppColors.navy,
                     ),
                   ),
                 ),
@@ -1568,7 +1568,7 @@ class _PmRow extends StatelessWidget {
             else
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.serviceBlue,
+                  color: AppColors.navy,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -1583,7 +1583,7 @@ class _PmRow extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
-                          fontSize: 13,
+                          fontSize: 12,
                         ),
                       ),
                     ),
