@@ -30,6 +30,7 @@ import '../../../catalog/presentation/widgets/product_card.dart';
 import '../../../catalog/presentation/screens/grocery_hub_category_screen.dart';
 import '../../../logistics/domain/logistics_providers.dart';
 import '../../../../shared/providers/bottom_nav_visibility_provider.dart';
+import '../../../../core/services/home_live_updates.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/home_flow_mode.dart';
 import '../widgets/grocery_section_layouts.dart';
@@ -174,8 +175,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scroll = ScrollController();
   final _collapse = ValueNotifier<double>(0);
 
-  static const _collapseStart = 120.0;
-  static const _collapseEnd = 220.0;
+  static const _collapseStart = 200.0;
+  static const _collapseEnd = 260.0;
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
@@ -251,6 +252,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // When the admin hasn't published anything there yet, fall back to the
     // original 2-item Groceries/Services list built from the live catalog,
     // so the row is never empty on a fresh install.
+    // Start the live-refresh socket (re-fetches Home when an admin publishes).
+    ref.watch(homeLiveUpdatesProvider);
     final homepageConfigForTopCards = ref.watch(homepageConfigProvider).valueOrNull;
     final adminTopCards = homepageConfigForTopCards?.topCards ?? const [];
     final quickAccessCards = adminTopCards.isNotEmpty
@@ -2453,7 +2456,9 @@ class _StickyHomeHeader extends StatelessWidget {
             child: Align(
               alignment: Alignment.bottomCenter,
               heightFactor: Curves.easeOut.transform(t),
-              child: Opacity(opacity: Curves.easeIn.transform(t), child: child),
+              // Solid (no fade): a see-through bar let the page's own header
+              // show through mid-scroll, doubling the search box and tabs.
+              child: child,
             ),
           ),
         );

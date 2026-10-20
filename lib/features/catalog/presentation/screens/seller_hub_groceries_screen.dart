@@ -67,6 +67,9 @@ bool _subtreeContainsSlug(MarketplaceCategory node, String wantedSlugClean) {
 class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScreen> {
   int? _selectedRootId;
   int? _selectedSubcategoryId;
+  /// Ids of the categories the shopper drilled into (below the main category).
+  /// While non-empty the rail shows ONLY the children of the last one.
+  final List<int> _drill = [];
   bool _appliedInitialSlug = false;
 
   /// Same lookup the body does once on its first build, as a pure function,
@@ -124,6 +127,13 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
         children: [
           AppBar(
             title: Text(_screenTitle(treeAsync.valueOrNull)),
+            // Drilled into a sub-category: the back arrow goes up one level.
+            leading: _drill.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => setState(() => _selectedSubcategoryId = _drill.removeLast()),
+                  )
+                : null,
             backgroundColor: Colors.white,
             foregroundColor: AppColors.textPrimary,
             elevation: 0.5,
@@ -215,6 +225,27 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
                   if (_subtreeContainsSlug(child, wanted)) {
                     _selectedRootId = root.id;
                     _selectedSubcategoryId = child.id;
+                    // Walk down to the linked node; each level we pass
+                    // through is "drilled into" so the rail shows only that
+                    // level's categories.
+                    var node = child;
+                    while (node.slug.replaceAll('-', '_').toLowerCase() != wanted) {
+                      MarketplaceCategory? next;
+                      for (final c in node.children) {
+                        if (_subtreeContainsSlug(c, wanted)) {
+                          next = c;
+                          break;
+                        }
+                      }
+                      if (next == null) break;
+                      _drill.add(node.id);
+                      _selectedSubcategoryId = next.id;
+                      node = next;
+                    }
+                    if (node.children.any((c) => c.hasAnyProducts)) {
+                      _drill.add(node.id);
+                      _selectedSubcategoryId = null; // first of its categories
+                    }
                     break outer;
                   }
                 }
@@ -234,8 +265,15 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
           // A root with no subcategories of its own (already a leaf) falls
           // back to treating itself as the sole entry, so the screen still
           // works for a main category that has no further nesting.
-          final subcategories = selectedRoot.children.where((c) => c.hasAnyProducts).toList();
-          final railItems = subcategories.isNotEmpty ? subcategories : [selectedRoot];
+          // Drilled in: only the children of the last drilled category.
+          var railParent = selectedRoot;
+          for (final id in _drill) {
+            final next = railParent.children.where((c) => c.id == id).firstOrNull;
+            if (next == null) break;
+            railParent = next;
+          }
+          final subcategories = railParent.children.where((c) => c.hasAnyProducts).toList();
+          final railItems = subcategories.isNotEmpty ? subcategories : [railParent];
 
           if (railItems.isEmpty) {
             return const Center(
@@ -253,6 +291,27 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
             orElse: () => railItems.first,
           );
 
+          final gridId = selectedSubcategory.id;
+
+          final railTiles = <Widget>[];
+          for (final dept in railItems) {
+            final hasNext = dept.id != railParent.id && dept.children.any((c) => c.hasAnyProducts);
+            railTiles.add(_DepartmentRailTile(
+              label: dept.name,
+              image: dept.image,
+              selected: dept.id == effectiveSubcategoryId,
+              onTap: () => setState(() {
+                if (hasNext) {
+                  // Has another level: show only its categories on the left.
+                  _drill.add(dept.id);
+                  _selectedSubcategoryId = null; // first of its categories
+                } else {
+                  _selectedSubcategoryId = dept.id;
+                }
+              }),
+            ));
+          }
+
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -261,22 +320,13 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
                 color: Colors.white,
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: railItems
-                      .map(
-                        (dept) => _DepartmentRailTile(
-                          label: dept.name,
-                          image: dept.image,
-                          selected: dept.id == effectiveSubcategoryId,
-                          onTap: () => setState(() => _selectedSubcategoryId = dept.id),
-                        ),
-                      )
-                      .toList(),
+                  children: railTiles,
                 ),
               ),
               Expanded(
                 child: _DepartmentProductGrid(
-                  key: ValueKey(selectedSubcategory.id),
-                  departmentId: selectedSubcategory.id,
+                  key: ValueKey(gridId),
+                  departmentId: gridId,
                 ),
               ),
             ],

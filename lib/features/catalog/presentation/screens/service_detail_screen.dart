@@ -88,6 +88,20 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
   Widget build(BuildContext context) {
     final serviceAsync = ref.watch(serviceDetailProvider(widget.serviceSlug));
     final effectiveService = serviceAsync.valueOrNull ?? widget.initialService;
+    // Goods & Transport packages are booked on the consolidated Goods &
+    // Transport page, never on this generic service page (any entry point:
+    // home cards, search, deep links).
+    if (effectiveService != null && effectiveService.isGoodsTransport) {
+      final target = effectiveService.goodsTransportPath;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.pushReplacement(target);
+      });
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     if (effectiveService != null) {
       return _buildScaffold(context, effectiveService);
     }

@@ -24,8 +24,15 @@ class SevoGradientSplash extends StatefulWidget {
 
 class _SevoGradientSplashState extends State<SevoGradientSplash>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: SevoGradientSplash.duration);
+  // animationBehavior.preserve is the actual fix for "the splash has no
+  // animation": by default a controller jumps almost straight to its end
+  // whenever Android's "Remove animations" / animator-duration-scale 0 /
+  // battery-saver setting is on, so the intro was over in a few milliseconds.
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: SevoGradientSplash.duration,
+    animationBehavior: AnimationBehavior.preserve,
+  );
   bool _started = false;
 
   @override

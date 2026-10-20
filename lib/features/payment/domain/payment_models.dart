@@ -13,7 +13,28 @@ class PaymentOrder extends Equatable {
     this.keyId,
     this.bookingId,
     this.receipt,
+    this.provider = 'razorpay',
+    this.txnToken,
+    this.mid,
+    this.checkoutScriptUrl,
+    this.providerTransactionId,
+    this.providerSignature,
   });
+
+  /// Which gateway the server chose for this order: `razorpay`, `paytm`
+  /// (live), `paytm_mock` / `sandbox` (non-production). The app never decides
+  /// this itself, it follows what `/payment/initiate/` returns.
+  final String provider;
+
+  /// Paytm live: server-issued transaction token + merchant id + the checkout
+  /// script URL (its host tells us staging vs production).
+  final String? txnToken;
+  final String? mid;
+  final String? checkoutScriptUrl;
+
+  /// Paytm mock only: the server-signed completion payload.
+  final String? providerTransactionId;
+  final String? providerSignature;
 
   final String orderId; // Razorpay Order ID (e.g. "order_NWxxx")
   final Decimal amount; // Amount in Rupees
@@ -56,7 +77,18 @@ class PaymentOrder extends Equatable {
       keyId: keyId,
       bookingId: parseIntOrNull(json['booking_id']),
       receipt: json['receipt']?.toString(),
+      provider: (json['provider'] ?? 'razorpay').toString().trim().toLowerCase(),
+      txnToken: _nonEmpty(json['txn_token']),
+      mid: _nonEmpty(json['mid']),
+      checkoutScriptUrl: _nonEmpty(json['checkout_script_url']),
+      providerTransactionId: _nonEmpty(json['transaction_id']),
+      providerSignature: _nonEmpty(json['signature']),
     );
+  }
+
+  static String? _nonEmpty(Object? v) {
+    final t = v?.toString().trim() ?? '';
+    return t.isEmpty ? null : t;
   }
 
   Map<String, dynamic> toJson() => {
@@ -69,7 +101,7 @@ class PaymentOrder extends Equatable {
       };
 
   @override
-  List<Object?> get props => [orderId, amount, amountInPaiseDirect, currency, keyId, bookingId, receipt];
+  List<Object?> get props => [orderId, amount, amountInPaiseDirect, currency, keyId, bookingId, receipt, provider, txnToken, mid];
 }
 
 /// Verification payload sent to backend after Razorpay payment success.

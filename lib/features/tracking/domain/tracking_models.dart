@@ -74,6 +74,9 @@ class TrackingUpdate extends Equatable {
     this.extraCharges = const [],
     this.deliveryException,
     this.deliveryOtp,
+    this.feedbackToken,
+    this.feedbackSubmitted = false,
+    this.feedbackRating,
     this.requestId,
     this.bookingId,
     required this.updatedAt,
@@ -117,6 +120,13 @@ class TrackingUpdate extends Equatable {
   final List<TrackingExtraCharge> extraCharges;
   final TrackingDeliveryException? deliveryException;
   final String? deliveryOtp;
+
+  /// Trip rating handed out by the server once a Goods & Transport trip is
+  /// delivered (`feedback` block of the tracking payload). Null while the trip
+  /// is not rateable.
+  final String? feedbackToken;
+  final bool feedbackSubmitted;
+  final int? feedbackRating;
 
   final String? requestId;
   final int? bookingId;
@@ -210,6 +220,15 @@ class TrackingUpdate extends Equatable {
               Map<String, dynamic>.from(json['delivery_exception'] as Map))
           : null,
       deliveryOtp: _asNonEmptyString(json['delivery_otp']),
+      feedbackToken: json['feedback'] is Map
+          ? _asNonEmptyString((json['feedback'] as Map)['token'])
+          : null,
+      feedbackSubmitted: json['feedback'] is Map &&
+          ((json['feedback'] as Map)['submitted'] == true ||
+              (json['feedback'] as Map)['is_submitted'] == true),
+      feedbackRating: json['feedback'] is Map
+          ? _asInt((json['feedback'] as Map)['rating'])
+          : null,
       requestId: _asNonEmptyString(json['request_id']),
       bookingId: _asInt(json['booking_id'] ?? json['job_id']),
       updatedAt: DateTime.now(),
@@ -253,6 +272,9 @@ class TrackingUpdate extends Equatable {
         extraCharges: extraCharges,
         deliveryException: deliveryException,
         deliveryOtp: deliveryOtp,
+        feedbackToken: feedbackToken,
+        feedbackSubmitted: feedbackSubmitted,
+        feedbackRating: feedbackRating,
         requestId: requestId,
         bookingId: bookingId,
         updatedAt: updatedAt,
@@ -286,6 +308,9 @@ class TrackingUpdate extends Equatable {
         extraCharges,
         deliveryException,
         deliveryOtp,
+        feedbackToken,
+        feedbackSubmitted,
+        feedbackRating,
         requestId,
         bookingId,
         updatedAt,

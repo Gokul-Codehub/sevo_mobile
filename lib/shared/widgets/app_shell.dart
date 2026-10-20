@@ -165,6 +165,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     // scroll direction (see home_screen.dart); every other tab ignores it
     // and always shows the nav bar, exactly as before.
     final navVisible = !isHomeTab || ref.watch(bottomNavVisibleProvider);
+    // True only on the Home screen itself ('/'). _currentIndex() falls back to
+    // 0 for every pushed page (categories, product / service detail, booking
+    // flow ...), so isHomeTab can't be used to tell them apart.
+    final onHomeScreen = GoRouterState.of(context).uri.path == AppRoutes.home;
     // Only the Home screen itself (whose nav bar hides on scroll) lets content
     // run behind the floating pill. Every other screen — including the pages
     // opened from Home (categories, products, recipes …) — is laid out ABOVE
@@ -207,7 +211,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         // Home: page content runs behind the floating pill (no blank band
         // while scrolling, and the pill hides/shows without a layout jump).
         // Page content paints behind the floating pill; scroll views add the nav inset as bottom padding.
-        extendBody: true,
+        extendBody: onHomeScreen,
         body: widget.child,
         bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0
             ? const SizedBox.shrink()

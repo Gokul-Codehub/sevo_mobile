@@ -18,6 +18,7 @@ import '../../../catalog/data/catalog_repository.dart';
 import '../../../catalog/domain/catalog_models.dart';
 import '../../../logistics/domain/logistics_providers.dart'
     show selectedBookingDateProvider, selectedBookingServiceIdProvider, selectedTimeSlotProvider;
+import '../../../logistics/presentation/widgets/gt_slot_picker.dart' show GtSlotPicker;
 import '../../../logistics/presentation/widgets/slot_picker_widget.dart' show SlotPickerWidget;
 import '../../data/booking_repository.dart';
 import '../../domain/booking_models.dart';
@@ -428,6 +429,30 @@ class BookingDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
+                // Online booking created but not paid yet (advance / full
+                // payment). Unpaid online Goods & Transport bookings are
+                // cancelled by the server after a short window, so offer the
+                // payment here instead of leaving the customer to find it.
+                if (!booking.canPayBalance &&
+                    (booking.canPayAdvance ||
+                        (booking.status == 'waiting_for_payment' &&
+                            booking.paymentStatus != 'paid'))) ...[
+                  FilledButton.icon(
+                    onPressed: () {
+                      context.push('/checkout/payment?booking=${booking.id}&type=advance');
+                    },
+                    icon: const Icon(Icons.payment),
+                    label: const Text('Pay now'),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Unpaid online bookings are cancelled automatically after a short time.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 if (booking.canPayBalance) ...[
                   FilledButton.icon(
                     onPressed: () {
@@ -688,8 +713,23 @@ class BookingDetailScreen extends ConsumerWidget {
     ref.read(selectedBookingDateProvider.notifier).state =
         DateTime.now().add(const Duration(days: 1));
     ref.read(selectedTimeSlotProvider.notifier).state = null;
-    // Global slot config (no stale service id left over from a checkout).
-    ref.read(selectedBookingServiceIdProvider.notifier).state = null;
+    // Use the booked service's own slot rules (hours, closed days, notice),
+    // like the web reschedule modal; goods & transport uses its own endpoint.
+    final firstSvc = booking.items.isNotEmpty ? booking.items.first.service : null;
+    final svcSlug = (firstSvc?.slug ?? '').trim();
+    ref.read(selectedBookingServiceIdProvider.notifier).state =
+        (svcSlug.isEmpty || svcSlug == 'service') ? null : svcSlug;
+    final catHint = '${firstSvc?.categorySlug ?? ''} $svcSlug'.toLowerCase();
+    String? gtCategory;
+    if (catHint.contains('packers')) {
+      gtCategory = 'packers_movers';
+    } else if (catHint.contains('ptl')) {
+      gtCategory = 'ptl';
+    } else if (catHint.contains('two') && catHint.contains('wheel')) {
+      gtCategory = 'goods_transport_two_wheeler';
+    } else if (catHint.contains('goods') || catHint.contains('transport') || catHint.contains('truck')) {
+      gtCategory = 'goods_transport_truck';
+    }
 
     showModalBottomSheet<void>(
       useRootNavigator: true,
@@ -721,8 +761,12 @@ class BookingDetailScreen extends ConsumerWidget {
                     style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 14),
-                  const Flexible(
-                    child: SingleChildScrollView(child: SlotPickerWidget()),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: gtCategory != null
+                          ? GtSlotPicker(category: gtCategory)
+                          : const SlotPickerWidget(),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(

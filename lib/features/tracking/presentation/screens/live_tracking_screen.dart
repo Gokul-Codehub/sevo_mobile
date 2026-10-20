@@ -611,6 +611,15 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       ],
                     ],
 
+                    // Delivered Goods & Transport trips get a rating token from
+                    // the server; show the rate card for it.
+                    if (tracking.feedbackToken != null)
+                      GtRateTripCard(
+                        token: tracking.feedbackToken!,
+                        submitted: tracking.feedbackSubmitted,
+                        rating: tracking.feedbackRating,
+                      ),
+
                     if (tracking.startOtp == null && tracking.paymentConfirmationOtp == null)
                       const SizedBox.shrink()
                     else

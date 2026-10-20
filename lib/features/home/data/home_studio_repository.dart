@@ -138,7 +138,29 @@ class HomeStudioRepository {
   /// Latest published page. Network first; on any failure falls back to the
   /// last good copy stored on this phone. Returns null when there is nothing
   /// to show, in which case Home keeps its legacy layout.
-  Future<StudioPage?> load(String pageKey) async {
+  Future<StudioPage?> load(String pageKey, {void Function()? onLateFresh}) async {
+    // Fast path: when a saved copy exists, show it if the network is slow
+    // (> 1.5 s) instead of making the customer wait, then refresh quietly
+    // once the real answer arrives ([onLateFresh]).
+    final cached = await _readCache(pageKey);
+    final fetch = _fetch(pageKey);
+    if (cached == null) {
+      return (await fetch) ?? _readCache(pageKey);
+    }
+    try {
+      final fresh = await fetch.timeout(const Duration(milliseconds: 1500));
+      return fresh ?? cached;
+    } on TimeoutException {
+      unawaited(fetch.then((fresh) {
+        // Only refresh when the server really has something newer.
+        if (fresh != null && fresh.version != cached.version) onLateFresh?.call();
+      }).catchError((_) {}));
+      return cached;
+    }
+  }
+
+  /// Network fetch; saves/clears the cache. Null on any failure.
+  Future<StudioPage?> _fetch(String pageKey) async {
     try {
       final response = await api.get('/home/pages/$pageKey/').timeout(const Duration(seconds: 6));
       final body = response.data;
@@ -155,7 +177,7 @@ class HomeStudioRepository {
     } catch (e) {
       debugPrint('[HomeStudio] fetch failed for $pageKey: $e');
     }
-    return _readCache(pageKey);
+    return null;
   }
 
   Future<void> _save(String pageKey, Map<String, dynamic> raw) async {
@@ -199,5 +221,12 @@ final homeStudioPageProvider =
   // stays on screen (no flicker).
   final timer = Timer(const Duration(seconds: 90), ref.invalidateSelf);
   ref.onDispose(timer.cancel);
-  return ref.watch(homeStudioRepositoryProvider).load(pageKey);
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  return ref.watch(homeStudioRepositoryProvider).load(
+    pageKey,
+    onLateFresh: () {
+      if (!disposed) ref.invalidateSelf();
+    },
+  );
 });

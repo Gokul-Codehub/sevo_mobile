@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error.dart';
@@ -525,6 +526,76 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// ── Rate the trip ────────────────────────────────────────────────────────────
+
+/// "Rate your trip" — shown once the server has issued a feedback token for a
+/// delivered Goods & Transport / Packers & Movers trip (the `feedback` block of
+/// the tracking payload). Opens the normal feedback screen with that token.
+class GtRateTripCard extends StatelessWidget {
+  const GtRateTripCard({
+    super.key,
+    required this.token,
+    this.submitted = false,
+    this.rating,
+  });
+
+  final String token;
+  final bool submitted;
+  final int? rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDeco(Colors.white, const Color(0xFFE6E8EE)),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF4D6),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.star_rounded, color: Color(0xFFF59E0B)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  submitted ? 'Thanks for your feedback' : 'Rate your trip',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  submitted
+                      ? (rating != null ? 'You rated this trip $rating/5.' : 'Your rating was received.')
+                      : 'How was your driver and delivery?',
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          if (!submitted)
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.navy),
+              onPressed: () => context.push('/feedback/$token'),
+              child: const Text('Rate', style: TextStyle(fontWeight: FontWeight.w800)),
             ),
         ],
       ),

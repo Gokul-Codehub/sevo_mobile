@@ -1148,3 +1148,49 @@ class VegetableCategorySummary extends Equatable {
   List<Object?> get props =>
       [id, name, slug, parentId, image, vegetablesCount, subcategoriesCount];
 }
+
+
+/// Goods & Transport items never use the generic service-detail page; they are
+/// booked on the consolidated Goods & Transport screen. This gives the route
+/// (with the vehicle category pre-selected when it can be told from the name).
+extension GoodsTransportRoute on ServiceItem {
+  bool get isGoodsTransport => flowType == CatalogFlowType.logistics;
+
+  /// Vehicle-type name shown on home cards instead of the package title.
+  String get goodsTransportLabel {
+    final path = goodsTransportPath;
+    if (path.endsWith('packers_movers')) return 'Packers & Movers';
+    if (path.endsWith('two_wheeler')) return '2-Wheeler';
+    if (path.endsWith('truck')) return 'Mini Truck';
+    return title;
+  }
+
+  /// Vehicle-type artwork (same images the web uses for these tiles).
+  String? get goodsTransportImageUrl {
+    final path = goodsTransportPath;
+    const base = 'https://sevo.co.in';
+    if (path.endsWith('packers_movers')) return '$base/hero_packers_bg.png';
+    if (path.endsWith('two_wheeler')) return '$base/hero_twowheeler_bg.png';
+    if (path.endsWith('truck')) return '$base/hero_minitruck_bg.png';
+    return null;
+  }
+
+  String get goodsTransportPath {
+    final t = '$slug $title'.toLowerCase();
+    String? cat;
+    if (t.contains('packers') ||
+        t.contains('shifting') ||
+        t.contains('bhk') ||
+        t.contains('household') ||
+        t.contains('movers')) {
+      cat = 'packers_movers';
+    } else if (t.contains('wheeler') || t.contains('bike') || t.contains('scooter')) {
+      cat = 'two_wheeler';
+    } else if (t.contains('truck') || t.contains('tempo') || t.contains('pickup') || t.contains(' ton')) {
+      cat = 'truck';
+    }
+    return cat == null
+        ? '/goods-transport/booking'
+        : '/goods-transport/booking?category=$cat';
+  }
+}

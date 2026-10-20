@@ -694,9 +694,22 @@ class TimeSlotDay {
     this.reason,
     this.futureRemaining,
     this.futureLimit,
+    this.sameDayBooking = true,
+    this.advanceBookingDays,
+    this.closedWeekdays = const [],
+    this.minNoticeMinutes,
   });
 
   final List<TimeSlot> slots;
+
+  /// Booking window facts from the server's slot engine (same ones the web
+  /// calendar uses): whether today can be booked, how many days ahead a
+  /// customer may book, the weekdays the service is closed (Monday = 0 ...
+  /// Sunday = 6, as the server sends them) and the minimum notice.
+  final bool sameDayBooking;
+  final int? advanceBookingDays;
+  final List<int> closedWeekdays;
+  final int? minNoticeMinutes;
   final bool isOpen;
   final String? reason;
 
@@ -717,7 +730,12 @@ class TimeSlot extends Equatable {
     required this.endTime,
     required this.label,
     this.isAvailable = true,
+    this.reason,
   });
+
+  /// Why the server marked the slot unavailable ("Slot full", "Requires 2h
+  /// notice", "Time has passed" ...). Null when available.
+  final String? reason;
 
   final String id;
   final String date; // YYYY-MM-DD
@@ -749,5 +767,5 @@ class TimeSlot extends Equatable {
       };
 
   @override
-  List<Object?> get props => [id, date, startTime, endTime, label, isAvailable];
+  List<Object?> get props => [id, date, startTime, endTime, label, isAvailable, reason];
 }
