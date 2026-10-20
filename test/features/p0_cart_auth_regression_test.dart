@@ -65,6 +65,21 @@ class MockSecureStorage implements SecureStorage {
     final token = await getAccessToken();
     return token != null && token.isNotEmpty;
   }
+
+  @override
+  Future<bool> hasSeenOnboarding() async => _data['calservices_onboarding_seen'] == 'true';
+
+  @override
+  Future<void> setOnboardingSeen() async => _data['calservices_onboarding_seen'] = 'true';
+
+  @override
+  Future<String> getOrCreateGroceryHubGuestId() async {
+    final existing = _data['grocery_hub_guest_id'];
+    if (existing != null && existing.isNotEmpty) return existing;
+    const generated = 'mock_guest_id_123';
+    _data['grocery_hub_guest_id'] = generated;
+    return generated;
+  }
 }
 
 // ── Helper Test Fixtures ─────────────────────────────────────────────────────
