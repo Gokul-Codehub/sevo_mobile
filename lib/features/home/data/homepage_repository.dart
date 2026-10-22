@@ -371,6 +371,8 @@ class MobileGrocerySection {
     this.showCategoryImage = true,
     this.showCategoryName = true,
     this.showCategoryProductCount = true,
+    this.titleImageUrl = '',
+    this.titleFont = '',
   });
 
   final String id;
@@ -442,6 +444,11 @@ class MobileGrocerySection {
   final bool showCategoryImage;
   final bool showCategoryName;
   final bool showCategoryProductCount;
+
+  /// Home Studio only: uploaded image shown instead of the title text, and
+  /// the admin-chosen title font key. Empty for every legacy section.
+  final String titleImageUrl;
+  final String titleFont;
 
   bool get isGrid => layout == GrocerySectionLayout.grid3;
 

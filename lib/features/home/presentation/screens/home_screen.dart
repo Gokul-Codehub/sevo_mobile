@@ -174,6 +174,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Scrolling back to the top eases it back to 0.
   final _scroll = ScrollController();
   final _collapse = ValueNotifier<double>(0);
+  final _refreshKey = GlobalKey<RefreshIndicatorState>();
+  DateTime? _lastHomeTapAt;
+
+  /// Home tab tapped while on Home: 1st tap -> scroll to top; a 2nd tap within
+  /// 2 seconds -> scroll to top and reload everything (same as pull-to-refresh).
+  void _onHomeTabTap() {
+    final now = DateTime.now();
+    final isSecond = _lastHomeTapAt != null &&
+        now.difference(_lastHomeTapAt!) < const Duration(seconds: 2);
+    _lastHomeTapAt = isSecond ? null : now;
+    ref.read(bottomNavVisibleProvider.notifier).state = true;
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (isSecond) {
+      Future<void>.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) _refreshKey.currentState?.show();
+      });
+    }
+  }
 
   static const _collapseStart = 200.0;
   static const _collapseEnd = 260.0;
@@ -230,6 +254,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(homeTabTapProvider, (_, __) => _onHomeTabTap());
     final groceryHubCategories = ref.watch(groceryHubCategoriesProvider);
     final popularServicesAsync = ref.watch(popularServicesProvider);
     final myBookingsAsync = ref.watch(myBookingsProvider(null));
@@ -459,6 +484,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 return false;
               },
               child: RefreshIndicator(
+              key: _refreshKey,
               color: flowTheme.accent,
               // Added 2026-09-19, REDONE same day per explicit feedback
               // ("it supposed to be the reloading stating showing in

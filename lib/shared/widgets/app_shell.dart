@@ -429,6 +429,12 @@ class _AppShellState extends ConsumerState<AppShell> {
           showAiChatSheet(context);
           return;
         }
+        // Home tab tapped while already on Home: let Home scroll to top / reload.
+        if (tab.route == AppRoutes.home &&
+            GoRouterState.of(context).uri.path == AppRoutes.home) {
+          ref.read(homeTabTapProvider.notifier).state++;
+          return;
+        }
         context.go(tab.route);
       },
       child: Center(

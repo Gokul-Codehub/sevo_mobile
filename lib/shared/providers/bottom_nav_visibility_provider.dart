@@ -12,3 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// while the Home tab is active, so every other tab's nav bar is
 /// unaffected and always visible.
 final bottomNavVisibleProvider = StateProvider<bool>((ref) => true);
+
+/// Incremented each time the Home tab is tapped while Home is already showing.
+/// Home reacts: first tap scrolls to the top, a second tap soon after reloads.
+final homeTabTapProvider = StateProvider<int>((ref) => 0);

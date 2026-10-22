@@ -76,7 +76,7 @@ class ProductCard extends ConsumerWidget {
   // [groceryCardHeight] that could silently drift from it.
   static const double _titleBlockHeight = 28.0;
   static const double _notchW = 60.0;
-  static const double _notchH = 36.0;
+  static const double _notchH = 32.0;
 
   /// Pack text for the selector row; a bare unit ("kg") reads as "1 kg".
   static String _packLabel(ServiceItem s) {
@@ -448,7 +448,14 @@ class ProductCard extends ConsumerWidget {
     // corner and seats the Add button in it (with a soft white ring).
     final notch = showAddButton && showImage && service.inStock;
     final nW = notch ? _notchW : 0.0;
-    return Stack(
+    // Align first: grids hand the card a tight cell height that is a little
+    // taller than its content, which left the notch button (anchored to the
+    // Stack's bottom) hanging below the card. Loosening the height makes the
+    // Stack exactly as tall as the card, so the button always sits in the notch.
+    return Align(
+      alignment: Alignment.topCenter,
+      heightFactor: 1.0,
+      child: Stack(
       clipBehavior: Clip.none,
       children: [
         CustomPaint(
@@ -775,9 +782,13 @@ class ProductCard extends ConsumerWidget {
             bottom: 0,
             width: _notchW,
             height: _notchH,
-            child: Center(child: _NotchAddButton(service: service)),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: _NotchAddButton(service: service),
+            ),
           ),
       ],
+    ),
     );
   }
 
@@ -1135,8 +1146,8 @@ class _NotchAddButton extends ConsumerWidget {
     }
     return Container(
       width: ProductCard._notchW - 4,
-      height: ProductCard._notchH - 4,
-      padding: const EdgeInsets.all(3),
+      height: ProductCard._notchH - 2,
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),

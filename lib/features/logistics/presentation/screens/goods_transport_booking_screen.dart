@@ -28,6 +28,7 @@ import '../widgets/gt_slot_picker.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Added 2026-09-19, REWRITTEN 2026-09-20 per explicit feedback after the
 /// first version shipped:
@@ -98,6 +99,11 @@ class _GoodsTransportBookingScreenState
   final _dropContactPhoneController = TextEditingController();
   final _declaredValueController = TextEditingController();
   final _consigneeRelationshipController = TextEditingController();
+  final _consigneeFocus = FocusNode();
+
+  // Scroll targets: when a required step is missing, _warn() scrolls here.
+  final Map<String, GlobalKey> _anchors = {};
+  GlobalKey _anchor(String name) => _anchors.putIfAbsent(name, () => GlobalKey(debugLabel: name));
 
   bool _isLoading = false;
   // 0 Cargo · 1 Locations · 2 Schedule · 3 Fare
@@ -340,6 +346,7 @@ class _GoodsTransportBookingScreenState
     _dropContactPhoneController.dispose();
     _declaredValueController.dispose();
     _consigneeRelationshipController.dispose();
+    _consigneeFocus.dispose();
     super.dispose();
   }
 
@@ -374,7 +381,60 @@ class _GoodsTransportBookingScreenState
       loadingHelp: ref.read(loadingHelpProvider),
       cargo: cargo.isEmpty ? null : cargo,
       customerGstin: _effectiveGstin,
+      waypoints: _waypoints(),
     );
+  }
+
+  /// Pinned intermediate stops as quote waypoints.
+  List<Map<String, double>>? _waypoints() {
+    final stops = ref.read(gtStopsProvider);
+    if (stops.isEmpty) return null;
+    return [
+      for (final s in stops) {'lat': s.latitude, 'lng': s.longitude},
+    ];
+  }
+
+  /// Booking payload stops (web shape), also echoed under cart_data[0].
+  List<Map<String, dynamic>> _stopsPayload() {
+    final stops = ref.read(gtStopsProvider);
+    return [
+      for (var i = 0; i < stops.length; i++)
+        {
+          'stop_order': i + 1,
+          'address': stops[i].address,
+          'latitude': stops[i].latitude,
+          'longitude': stops[i].longitude,
+        },
+    ];
+  }
+
+  Future<void> _handleAddStop() async {
+    final stops = ref.read(gtStopsProvider);
+    if (stops.length >= kMaxGtAdditionalStops) return;
+    final result = await context.push<PickedDropLocation>(
+      AppRoutes.dropLocationPicker,
+    );
+    if (result != null && mounted) {
+      ref.read(gtStopsProvider.notifier).state = [...stops, result];
+    }
+  }
+
+  Future<void> _handleEditStop(int index) async {
+    final stops = ref.read(gtStopsProvider);
+    final result = await context.push<PickedDropLocation>(
+      AppRoutes.dropLocationPicker,
+      extra: stops[index],
+    );
+    if (result != null && mounted) {
+      final next = [...ref.read(gtStopsProvider)];
+      next[index] = result;
+      ref.read(gtStopsProvider.notifier).state = next;
+    }
+  }
+
+  void _removeStop(int index) {
+    final next = [...ref.read(gtStopsProvider)]..removeAt(index);
+    ref.read(gtStopsProvider.notifier).state = next;
   }
 
   String _apiMsg(Object e) => e is ApiError ? e.message : e.toString();
@@ -514,9 +574,17 @@ class _GoodsTransportBookingScreenState
     final cargo = ref.read(cargoDeclarationProvider);
     if (!cargo.isEmpty) extra.addAll(cargo.toPayload());
 
+    final stopsPayload = _stopsPayload();
+    if (stopsPayload.isNotEmpty) extra['stops'] = stopsPayload;
+
     return (
       error: null,
-      cart: [line(q.total, q.toCartEcho())],
+      cart: [
+        line(q.total, {
+          ...q.toCartEcho(),
+          if (stopsPayload.isNotEmpty) 'stops': stopsPayload,
+        }),
+      ],
       extra: extra,
       total: Decimal.parse(q.total.toStringAsFixed(2)),
       paymentMethod: paymentMethod,
@@ -771,6 +839,12 @@ class _GoodsTransportBookingScreenState
     } else if (result.booking != null) {
       ref.read(selectedLogisticsTierProvider.notifier).state = null;
       ref.read(dropLocationProvider.notifier).state = null;
+      ref.read(gtStopsProvider.notifier).state = const [];
+      if (prep.paymentMethod == 'ONLINE') {
+        AppToast.show(context, 'Almost done - complete your payment to confirm.');
+        context.go('/checkout/payment?booking=${result.booking!.id}&type=full&from=checkout');
+        return;
+      }
       AppToast.bookingSuccessful(context);
       context.go(
         '/bookings/success/${result.booking!.id}',
@@ -955,6 +1029,34 @@ class _GoodsTransportBookingScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: AppColors.warning),
     );
+    _revealFor(message);
+  }
+
+  /// Takes the customer to the part of the form the message is about
+  /// (and into the text box, for the consignee field).
+  void _revealFor(String message) {
+    final s = message.toLowerCase();
+    String? target;
+    FocusNode? focus;
+    if (s.contains('consignee')) {
+      target = 'Declared value';
+      focus = _consigneeFocus;
+    } else if (s.contains('vehicle')) {
+      target = 'Vehicle type';
+    } else if (s.contains('stop ')) {
+      target = 'Additional stops';
+    } else if (s.contains('pickup address') || s.contains('pickup location')) {
+      target = 'Pickup address';
+    } else if (s.contains('drop-off') || s.contains('drop off')) {
+      target = 'Drop-off location';
+    } else if (s.contains('slot')) {
+      target = 'Select date & slot';
+    } else if (s.contains('item to move')) {
+      target = 'Items to move';
+    } else if (s.contains('cargo') || s.contains('weight')) {
+      target = 'Cargo';
+    }
+    if (target != null) revealField(_anchor(target), focus: focus);
   }
 
   @override
@@ -1000,6 +1102,7 @@ class _GoodsTransportBookingScreenState
     ref.watch(loadingHelpProvider);
     ref.watch(cargoDeclarationProvider);
     ref.watch(customerGstinProvider);
+    final extraStops = ref.watch(gtStopsProvider);
     final ptlMode = ref.watch(ptlModeProvider) &&
         vehicleCategory == LogisticsVehicleCategory.truck;
 
@@ -1118,6 +1221,8 @@ class _GoodsTransportBookingScreenState
             if (_step == 0) ...[
             // ── Vehicle category tabs (Truck / 2-Wheeler) ──
             _SectionCard(
+              anchorKey: _anchor('Vehicle type'),
+
               label: 'Vehicle type',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1186,6 +1291,8 @@ class _GoodsTransportBookingScreenState
             const SizedBox(height: 18),
             // ── Vehicle tier / package picker ──
             _SectionCard(
+              anchorKey: _anchor('Package'),
+
               label: 'Package',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1377,6 +1484,8 @@ class _GoodsTransportBookingScreenState
             // logistics_models.dart. Only ever shown for this category.
             if (isPackersMovers) ...[
               _SectionCard(
+                anchorKey: _anchor('Items to move'),
+
                 label: 'Items to move',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1472,6 +1581,8 @@ class _GoodsTransportBookingScreenState
             ),
               const SizedBox(height: 18),
               _SectionCard(
+                anchorKey: _anchor('Move details'),
+
                 label: 'Move details',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1652,12 +1763,14 @@ class _GoodsTransportBookingScreenState
                 const SizedBox(height: 18),
               ],
               if (!ptlMode) ...[
-                GtCargoSection(city: selectedTier?.city ?? 'Hosur'),
+                KeyedSubtree(key: _anchor('Cargo'), child: GtCargoSection(city: selectedTier?.city ?? 'Hosur')),
                 const SizedBox(height: 18),
               ],
             ],
             // ── Declared value / consignee relationship ──
             _SectionCard(
+              anchorKey: _anchor('Declared value'),
+
               label: 'Declared value',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1691,6 +1804,7 @@ class _GoodsTransportBookingScreenState
                     const SizedBox(height: 12),
                     TextField(
                       controller: _consigneeRelationshipController,
+                      focusNode: _consigneeFocus,
                       decoration: _fieldDecoration(
                         'Your relationship to the consignee (required for high-value goods)',
                       ),
@@ -1711,6 +1825,8 @@ class _GoodsTransportBookingScreenState
             // picker — real coordinates are required here for the fare
             // engine, same as the drop-off pin below). ──
             _SectionCard(
+              anchorKey: _anchor('Pickup address'),
+
               label: 'Pickup address',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1815,9 +1931,112 @@ class _GoodsTransportBookingScreenState
                 lng: selectedAddress.longitude,
               ),
             const SizedBox(height: 18),
+            // ── Additional stops (optional, spot bookings only) ──
+            if (!isPackersMovers && !ptlMode) ...[
+              _SectionCard(
+                anchorKey: _anchor('Additional stops'),
+
+                label: 'Additional stops',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Add stop (${extraStops.length}/$kMaxGtAdditionalStops)',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        if (extraStops.length < kMaxGtAdditionalStops)
+                          GestureDetector(
+                            onTap: _handleAddStop,
+                            child: const Text(
+                              '+ Add stop',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.navy,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (extraStops.isEmpty) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Need to stop somewhere on the way? Add up to 3 stops between pickup and drop-off. Extra stops may add to the fare.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                    for (var i = 0; i < extraStops.length; i++) ...[
+                      const Divider(height: 20, color: AppColors.border),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 10,
+                            backgroundColor: AppColors.navy,
+                            child: Text(
+                              '${i + 1}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => _handleEditStop(i),
+                              child: Text(
+                                extraStops[i].address,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _removeStop(i),
+                            child: const Padding(
+                              padding: EdgeInsets.only(left: 8),
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 18,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      _ServiceAreaBanner(
+                        label: 'Stop ${i + 1}',
+                        pincode: '',
+                        lat: extraStops[i].latitude,
+                        lng: extraStops[i].longitude,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
             // ── Drop-off location (map pick — required; see file-level
             // note on why free text alone can't work here). ──
             _SectionCard(
+              anchorKey: _anchor('Drop-off location'),
+
               label: 'Drop-off location',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1944,6 +2163,8 @@ class _GoodsTransportBookingScreenState
             if (_step == 2) ...[
             // ── Pickup date & time (server-driven slots) ──
             _SectionCard(
+              anchorKey: _anchor('Select date & slot'),
+
               label: 'Select date & slot',
               child: GtSlotPicker(
                 category: ptlMode ? 'ptl' : vehicleCategory.serviceCategoryValue,
@@ -1956,6 +2177,8 @@ class _GoodsTransportBookingScreenState
             // ── Live fare — "the frontend never determines the fare, it
             // renders what [the server] returns" (backend's own words). ──
             _SectionCard(
+              anchorKey: _anchor('Fare details'),
+
               label: 'Fare details',
               child: isPackersMovers
                   ? (pmQuoteParam == null
@@ -2203,6 +2426,20 @@ class _GoodsTransportBookingScreenState
       if (dropArea != null && !dropArea.isServiceable) {
         _warn('Your drop-off location is outside our service area.');
         return;
+      }
+      final stops = ref.read(gtStopsProvider);
+      for (var i = 0; i < stops.length; i++) {
+        final area = ref
+            .read(serviceabilityProvider((
+              pincode: '',
+              lat: stops[i].latitude,
+              lng: stops[i].longitude,
+            )))
+            .valueOrNull;
+        if (area != null && !area.isServiceable) {
+          _warn('Stop ${i + 1} is outside our service area.');
+          return;
+        }
       }
     } else if (_step == 2) {
       if (ref.read(selectedTimeSlotProvider) == null) {
@@ -2491,9 +2728,12 @@ class _FareRow extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.child, this.label});
+  const _SectionCard({required this.child, this.label, this.anchorKey});
 
   final Widget child;
+
+  /// Lets the screen scroll to this card (see `_revealFor`).
+  final GlobalKey? anchorKey;
 
   /// Small step caption shown above the card, like the numbered steps of the
   /// service booking flow ("STEP 2 · Package").
@@ -2501,6 +2741,11 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final w = _content();
+    return anchorKey == null ? w : KeyedSubtree(key: anchorKey, child: w);
+  }
+
+  Widget _content() {
     final card = _card();
     if (label == null) return card;
     return Column(

@@ -1,3 +1,4 @@
+import '../../../../shared/widgets/login_required_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -120,13 +121,17 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
 
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('My Bookings')),
-        body: EmptyStateWidget(
+        backgroundColor: const Color(0xFFF7F9FC),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFF7F9FC),
+          title: const Text('My Bookings'),
+        ),
+        body: LoginRequiredView(
           title: 'Sign in to view bookings',
           subtitle: 'Please log in to track your service requests and bookings.',
-          emoji: '🔐',
-          actionLabel: 'Login / Sign Up',
-          action: () => context.push('/login'),
+          buttonLabel: 'Login / Sign Up',
+          icon: Icons.event_note_rounded,
+          onPressed: () => context.push('/login'),
         ),
       );
     }

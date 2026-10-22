@@ -27,6 +27,7 @@ import '../../../pricing/domain/service_fare.dart';
 import '../../data/coupon_repository.dart';
 import '../widgets/coupon_bottom_sheet.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Screen 14: Booking Summary / Checkout Screen
 /// Matches reference screen 14 with selected service summary, date/time picker,
@@ -48,6 +49,9 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _notesController = TextEditingController();
   final _phoneController = TextEditingController();
+  // Scroll targets for "you missed this" - see revealField().
+  final _slotKey = GlobalKey(debugLabel: 'slot');
+  final _addressKey = GlobalKey(debugLabel: 'address');
   bool _isLoading = false;
   ServiceItem? _scheduledService;
   int _serviceQuantity = 1;
@@ -244,6 +248,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'Please select an appointment time slot.',
         type: AppToastType.error,
       );
+      revealField(_slotKey);
       return;
     }
 
@@ -307,6 +312,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (result.error != null) {
       AppToast.show(context, result.error!, type: AppToastType.error);
     } else if (result.booking != null) {
+      if (_paymentMethod == 'ONLINE') {
+        // Pay Online: take the (test) payment now. The booking only shows
+        // its success screen once the payment goes through.
+        AppToast.show(context, 'Almost done - complete your payment to confirm.');
+        context.go('/checkout/payment?booking=${result.booking!.id}&type=full&from=checkout');
+        return;
+      }
       AppToast.bookingSuccessful(context);
       context.go('/bookings/success/${result.booking!.id}',
           extra: result.booking);
@@ -393,12 +405,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (ref.read(selectedTimeSlotProvider) == null) {
         AppToast.show(context, 'Please select an appointment time slot.',
             type: AppToastType.error);
+        revealField(_slotKey);
         return;
       }
     } else if (_step == 1) {
       if (ref.read(selectedAddressProvider) == null) {
         AppToast.show(context, 'Please select or add a service address.',
             type: AppToastType.error);
+        revealField(_addressKey);
         return;
       }
     }
@@ -678,7 +692,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildDateTimeStep() {
-    return _card(
+    return KeyedSubtree(
+      key: _slotKey,
+      child: _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -688,6 +704,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const SlotPickerWidget(),
         ],
       ),
+    ),
     );
   }
 
@@ -695,7 +712,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildAddressSection(selectedAddress),
+        KeyedSubtree(key: _addressKey, child: _buildAddressSection(selectedAddress)),
         const SizedBox(height: 12),
         _buildInstructions(),
       ],

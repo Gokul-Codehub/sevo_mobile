@@ -27,6 +27,9 @@ class Coupon {
     required this.discountValue,
     required this.maxDiscount,
     required this.minBooking,
+    this.customerEligibility = '',
+    this.serviceEligibility = '',
+    this.expiresAt,
   });
 
   final String id;
@@ -39,6 +42,12 @@ class Coupon {
   final Decimal discountValue;
   final Decimal maxDiscount;
   final Decimal minBooking;
+
+  /// Optional detail fields the backend already returns (used by the Home
+  /// offers popup's Terms & Conditions). Empty / null when absent.
+  final String customerEligibility;
+  final String serviceEligibility;
+  final DateTime? expiresAt;
 
   bool get isPercentage => discountType.toLowerCase() == 'percentage';
 
@@ -73,6 +82,11 @@ class Coupon {
       minBooking:
           parseMoneyOrNull(json['minBooking'] ?? json['min_booking']) ??
               Decimal.zero,
+      customerEligibility:
+          (json['customerEligibility'] ?? json['customer_eligibility'] ?? '').toString(),
+      serviceEligibility:
+          (json['serviceEligibility'] ?? json['service_eligibility'] ?? '').toString(),
+      expiresAt: DateTime.tryParse((json['expiresAt'] ?? json['expires_at'] ?? json['endDate'] ?? json['end_date'] ?? '').toString())?.toLocal(),
     );
   }
 }

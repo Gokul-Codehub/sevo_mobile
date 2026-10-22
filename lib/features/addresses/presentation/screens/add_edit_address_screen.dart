@@ -10,6 +10,7 @@ import '../../../logistics/domain/logistics_providers.dart';
 import '../../domain/address_models.dart';
 import '../../domain/address_notifier.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Screen to create or edit a customer address with live map pin & service zone check.
 class AddEditAddressScreen extends ConsumerStatefulWidget {
@@ -45,6 +46,12 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   bool _satellite = false;
   bool _searching = false;
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
+
+  /// True while the pinned location is outside the service area (updated from
+  /// the live serviceability check; keeps its last value while re-checking so
+  /// the sheet doesn't flicker as the map moves).
+  bool _outsideArea = false;
   String _placeTitle = '';
   String _placeLine = '';
   String _lastAutoLine2 = '';
@@ -79,6 +86,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   void dispose() {
     _mapController?.dispose();
     _searchController.dispose();
+    _searchFocus.dispose();
     _line1Controller.dispose();
     _line2Controller.dispose();
     _landmarkController.dispose();
@@ -222,7 +230,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   }
 
   Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateAndFocus(_formKey)) return;
 
     setState(() => _isLoading = true);
 
@@ -332,6 +340,22 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
 
   Widget _buildMapStage() {
     final target = LatLng(_currentLat, _currentLng);
+    // Live serviceability of the pinned spot (same check the details form uses).
+    ref.listen(
+      serviceabilityProvider((
+        pincode: _pincodeController.text.trim(),
+        lat: _currentLat,
+        lng: _currentLng,
+      )),
+      (prev, next) {
+        next.whenData((r) {
+          final outside = !r.isServiceable;
+          if (mounted && outside != _outsideArea) {
+            setState(() => _outsideArea = outside);
+          }
+        });
+      },
+    );
     final topPad = MediaQuery.of(context).padding.top;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
@@ -423,6 +447,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     ),
                     child: TextField(
                       controller: _searchController,
+                      focusNode: _searchFocus,
                       textInputAction: TextInputAction.search,
                       onSubmitted: _searchPlace,
                       style: const TextStyle(fontSize: 13.5),
@@ -458,7 +483,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           // Locate-me / map-type buttons
           Positioned(
             right: 14,
-            bottom: 268 + bottomPad,
+            bottom: (_outsideArea ? 214 : 268) + bottomPad,
             child: Column(
               children: [
                 _circleButton(Icons.my_location_rounded,
@@ -491,7 +516,9 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   ),
                 ],
               ),
-              child: Column(
+              child: _outsideArea
+                  ? _buildUnavailablePanel()
+                  : Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -609,6 +636,89 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Shown instead of the confirm sheet while the pin is outside the service
+  /// area, so the customer finds out right on the map, before filling details.
+  Widget _buildUnavailablePanel() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD5DAE1),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 52,
+              height: 52,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Positioned(
+                    left: 0,
+                    bottom: 0,
+                    child: Icon(Icons.location_on_rounded, size: 48, color: AppColors.navy),
+                  ),
+                  Positioned(
+                    right: -2,
+                    top: 0,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                      alignment: Alignment.center,
+                      child: const Text('!',
+                          style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, height: 1)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("SEVO isn't available here",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.navy)),
+                  SizedBox(height: 4),
+                  Text("We're expanding our service and hope to reach you soon.",
+                      style: TextStyle(fontSize: 13.5, height: 1.35, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: FilledButton(
+            onPressed: () {
+              _searchController.clear();
+              _searchFocus.requestFocus();
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.navy,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: const Text('Try another location',
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
+          ),
+        ),
+      ],
     );
   }
 

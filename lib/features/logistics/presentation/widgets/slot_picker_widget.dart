@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../core/errors/api_error.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
 import 'capacity_waitlist_banner.dart';
@@ -26,12 +27,6 @@ class SlotPickerWidget extends ConsumerWidget {
     final day = ref.watch(currentSelectedDayProvider).valueOrNull;
     final claim = ref.watch(activeCapacityClaimProvider);
     final window = ref.watch(slotWindowProvider);
-
-    // Same rule as the web checkout: slots the server flags as passed /
-    // needing notice, and (for today, in India time) slots starting less than
-    // 60 minutes from now, are hidden rather than shown greyed-out.
-    final rawSlots = slotsAsync.valueOrNull ?? const <TimeSlot>[];
-    final shown = rawSlots.where((s) => _isBookableWindow(s, selectedDate)).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,28 +73,23 @@ class SlotPickerWidget extends ConsumerWidget {
         ],
 
         // ── 2. Time Slots (grouped) ──
-        Row(
-          children: [
-            const Text(
-              'Select Time Slot',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: AppColors.navy,
-              ),
-            ),
-          ],
+        const Text(
+          'Select Time Slot',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: AppColors.navy,
+          ),
         ),
         const SizedBox(height: 12),
 
         slotsAsync.when(
           loading: () => const ShimmerCard(height: 100),
           error: (err, stackTrace) => ErrorStateWidget(
-            message: 'Unable to load slots. Tap to retry.',
+            message: 'Unable to load slots (${err is ApiError ? err.message : err}). Tap to retry.',
             onRetry: () => ref.refresh(currentSelectedDateSlotsProvider),
           ),
-          data: (allSlots) {
-            final slots = allSlots.where((s) => _isBookableWindow(s, selectedDate)).toList();
+          data: (slots) {
             // A future date at its daily limit: offer an availability alert.
             if (day != null && day.isFutureFull && slots.every((s) => !s.isAvailable)) {
               return const CapacityWaitlistBanner();
@@ -331,51 +321,10 @@ class SlotPickerWidget extends ConsumerWidget {
   /// and "time passed" are decided by the server and arrive via slot.isAvailable
   /// (+ slot.reason), exactly like the web.
   bool _isSlotPast(TimeSlot slot, DateTime selectedDate) {
-    final now = _businessNow();
+    final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final selDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
     return selDay.isBefore(today);
-  }
-
-  /// Booking rules run on India time (Asia/Kolkata), never the phone's clock,
-  /// like the web (`businessNowParts`).
-  static DateTime _businessNow() =>
-      DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
-
-  /// Web minimum lead for a same-day slot (travel + dispatch buffer).
-  static const int _sameDayLeadMinutes = 60;
-
-  /// True when the slot should be offered at all (web `isPastSlot`): hidden if
-  /// the server says it has passed / needs notice, if the date is past, or if
-  /// it is today and starts less than [_sameDayLeadMinutes] from now.
-  bool _isBookableWindow(TimeSlot slot, DateTime selectedDate) {
-    final reason = (slot.reason ?? '').toLowerCase();
-    if (reason.contains('passed') ||
-        reason.contains('notice') ||
-        reason.contains('requires')) {
-      return false;
-    }
-    final now = _businessNow();
-    final today = DateTime(now.year, now.month, now.day);
-    final selDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-    if (selDay.isBefore(today)) return false;
-    if (selDay.isAfter(today)) return true;
-    final startMin = _minutesOf(slot.startTime.isNotEmpty ? slot.startTime : slot.label);
-    if (startMin == null) return true;
-    final nowMin = now.hour * 60 + now.minute;
-    return startMin >= nowMin + _sameDayLeadMinutes;
-  }
-
-  int? _minutesOf(String raw) {
-    final match =
-        RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)?').firstMatch(raw.toUpperCase());
-    if (match == null) return null;
-    var h = int.parse(match.group(1)!);
-    final m = int.parse(match.group(2)!);
-    final mer = match.group(3);
-    if (mer == 'PM' && h < 12) h += 12;
-    if (mer == 'AM' && h == 12) h = 0;
-    return h * 60 + m;
   }
 }
 

@@ -211,7 +211,9 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
         // rather than waiting for BookingNotificationWatcher's next poll.
         // See NotificationService's doc comment for what this can/can't do.
         final firstItem = items.firstOrNull;
-        NotificationService.instance.show(
+        // Pay Online bookings are only "placed" once the payment succeeds:
+        // PaymentScreen announces them then, so nothing is sent here.
+        if (paymentMethod.toUpperCase() != 'ONLINE') NotificationService.instance.show(
           title: 'Booking Placed',
           body: firstItem != null
               ? '${firstItem.service.title} has been booked successfully.'

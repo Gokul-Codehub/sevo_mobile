@@ -397,6 +397,29 @@ class BookingDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
+                // Track Service — shown even before a technician is assigned
+                // (the technician card above carries its own Live Track).
+                if (booking.technician == null &&
+                    !const {
+                      'cancelled', 'rejected', 'closed', 'completed',
+                      'verified', 'feedback_pending', 'feedback_received',
+                      'draft', 'waiting_for_payment', 'pending_payment',
+                    }.contains(booking.status)) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        final identifier =
+                            booking.trackingIdentifier ?? '${booking.id}';
+                        context.push('/track/$identifier', extra: booking);
+                      },
+                      icon: const Icon(Icons.location_on, size: 18),
+                      label: const Text('Track Service'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 // ── 6. Action Buttons driven strictly by available_actions ──
                 if (booking.canReschedule || booking.canCancel) ...[
                   Row(
@@ -450,6 +473,13 @@ class BookingDetailScreen extends ConsumerWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                   ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Pay after service: once the job is done, a cash-on-service
+                // booking can be settled online or in cash.
+                if (_awaitingServicePayment(booking)) ...[
+                  _PayAfterServiceCard(booking: booking),
                   const SizedBox(height: 16),
                 ],
 
@@ -708,17 +738,21 @@ class BookingDetailScreen extends ConsumerWidget {
     // Fixed 2026-10-15: the sheet used a hard-coded slot list that didn't match
     // the real slots, and sent the wrong request fields (see
     // BookingRepository.rescheduleBooking). It now uses the same server-driven
-    // calendar + slot picker as checkout, starting from tomorrow with nothing
+    // calendar + slot picker as checkout, starting from today with nothing
     // selected.
-    ref.read(selectedBookingDateProvider.notifier).state =
-        DateTime.now().add(const Duration(days: 1));
+    // Start on today: customers can pick today's remaining slots as well as
+    // any upcoming day (the calendar greys out days the server won't book).
+    ref.read(selectedBookingDateProvider.notifier).state = DateTime.now();
     ref.read(selectedTimeSlotProvider.notifier).state = null;
     // Use the booked service's own slot rules (hours, closed days, notice),
     // like the web reschedule modal; goods & transport uses its own endpoint.
     final firstSvc = booking.items.isNotEmpty ? booking.items.first.service : null;
     final svcSlug = (firstSvc?.slug ?? '').trim();
+    // The server's slot endpoint 404s when it isn't told which service, so
+    // fall back from the slug to the numeric service id the booking carries.
+    final svcId = (firstSvc?.id ?? 0) > 0 ? '${firstSvc!.id}' : null;
     ref.read(selectedBookingServiceIdProvider.notifier).state =
-        (svcSlug.isEmpty || svcSlug == 'service') ? null : svcSlug;
+        (svcSlug.isEmpty || svcSlug == 'service') ? svcId : svcSlug;
     final catHint = '${firstSvc?.categorySlug ?? ''} $svcSlug'.toLowerCase();
     String? gtCategory;
     if (catHint.contains('packers')) {
@@ -1194,6 +1228,160 @@ class _BookingItemThumb extends ConsumerWidget {
       width: 84,
       height: 84,
       fit: BoxFit.cover,
+    );
+  }
+}
+
+
+// ── Pay after service ───────────────────────────────────────────────────────
+
+/// A finished booking that has not been paid yet (cash-on-service).
+bool _awaitingServicePayment(Booking b) {
+  const done = {
+    'completed',
+    'awaiting_verification',
+    'verified',
+    'feedback_pending',
+    'feedback_received',
+  };
+  const settled = {'paid', 'collected', 'refunded', 'partially_refunded', 'cancelled'};
+  return done.contains(b.status) && !settled.contains(b.paymentStatus);
+}
+
+class _PayAfterServiceCard extends ConsumerStatefulWidget {
+  const _PayAfterServiceCard({required this.booking});
+
+  final Booking booking;
+
+  @override
+  ConsumerState<_PayAfterServiceCard> createState() => _PayAfterServiceCardState();
+}
+
+class _PayAfterServiceCardState extends ConsumerState<_PayAfterServiceCard> {
+  bool _busy = false;
+
+  Future<void> _payOnline() async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Pay online',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy)),
+            const SizedBox(height: 6),
+            Text('Amount: \u20B9${widget.booking.totalAmount}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7E0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Test payment - no real money is charged while the payment gateway is being set up.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF8A6100), fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Pay now'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    // Short pause so the test payment feels like a real one.
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    final result = await ref.read(bookingRepositoryProvider).settlePaymentOnline(widget.booking.id);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    switch (result) {
+      case Success():
+        ref.invalidate(bookingDetailProvider(widget.booking.id));
+        ref.invalidate(myBookingsProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Payment successful. Thank you!')),
+        );
+      case Failure(:final error):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message), backgroundColor: AppColors.error),
+        );
+    }
+  }
+
+  Future<void> _payCash() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pay cash'),
+        content: Text(
+          'Please hand \u20B9${widget.booking.totalAmount} in cash to your technician. '
+          'They will mark it as received.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Payment due',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy)),
+          const SizedBox(height: 4),
+          Text('Your service is complete. Pay \u20B9${widget.booking.totalAmount} online or in cash.',
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _payOnline,
+                  icon: _busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.payment),
+                  label: const Text('Pay online'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _payCash,
+                  icon: const Icon(Icons.payments_outlined),
+                  label: const Text('Pay cash'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

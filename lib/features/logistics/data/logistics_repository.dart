@@ -126,13 +126,40 @@ class LogisticsRepository {
     double? latitude,
     double? longitude,
   }) async {
+    final first = await _getTimeSlotDayAt(
+      date: date,
+      serviceId: serviceId,
+      claimToken: claimToken,
+      latitude: latitude,
+      longitude: longitude,
+    );
+    if (first is Failure && serviceId != null && serviceId.trim().isNotEmpty) {
+      // The service's own slot endpoint failed (unknown slug, 4xx envelope...).
+      // Fall back to the default slot rules instead of a dead-end error.
+      final retry = await _getTimeSlotDayAt(
+        date: date,
+        serviceId: null,
+        claimToken: claimToken,
+        latitude: latitude,
+        longitude: longitude,
+      );
+      if (retry is Success) return retry;
+    }
+    return first;
+  }
+
+  Future<Result<TimeSlotDay>> _getTimeSlotDayAt({
+    required String date,
+    String? serviceId,
+    String? claimToken,
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
       final path = (serviceId != null && serviceId.trim().isNotEmpty)
           ? '/services/${Uri.encodeComponent(serviceId.trim())}/time-slots/'
           : '/services/resolve/time-slots/';
-      final response = await api.get(
-        path,
-        queryParameters: {
+      final qp = <String, dynamic>{
           'date': date,
           if (serviceId != null && serviceId.trim().isNotEmpty)
             'service': serviceId.trim(),
@@ -145,8 +172,18 @@ class LogisticsRepository {
             'latitude': latitude,
             'longitude': longitude,
           },
-        },
-      );
+        };
+      dynamic response;
+      try {
+        response = await api.get(path, queryParameters: qp);
+      } on Exception {
+        // The booked service's slug may not be a slot-configurable service
+        // (e.g. a package slug -> 404). Rather than showing "Unable to load
+        // slots", fall back to the default slot rules like checkout does.
+        if (path == '/services/resolve/time-slots/') rethrow;
+        qp.remove('service');
+        response = await api.get('/services/resolve/time-slots/', queryParameters: qp);
+      }
       return ResponseNormalizer.extract(response, (data) {
         final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
         final isOpen = map['is_open'];
@@ -209,7 +246,7 @@ class LogisticsRepository {
           minNoticeMinutes: minNotice,
         );
       });
-    } on Exception catch (e) {
+    } catch (e) {
       // Like the web: show "could not load slots" with a retry instead of
       // inventing a slot grid the server would reject at booking time.
       return Failure(_toError(e));

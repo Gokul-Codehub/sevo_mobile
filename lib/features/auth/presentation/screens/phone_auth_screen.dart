@@ -12,6 +12,7 @@ import '../../../../shared/utils/input_validators.dart';
 import '../../../../shared/widgets/sevo_logo.dart';
 import '../../domain/auth_models.dart';
 import '../../domain/auth_notifier.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Screen 4: Login / Register
 /// Redesigned to match reference screen 4 with SEVO branding, mobile input, and navy CTA.
@@ -41,7 +42,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   }
 
   Future<void> _handleSendOtp() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateAndFocus(_formKey)) return;
 
     setState(() => _isLoading = true);
 

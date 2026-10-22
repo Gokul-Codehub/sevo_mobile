@@ -72,6 +72,11 @@ class StudioSection {
   final Map<String, dynamic> content;
 
   String get title => (settings['title'] ?? '').toString();
+
+  /// Optional uploaded image shown instead of the title text, and the
+  /// admin-chosen title font key (see studio_title.dart).
+  String get titleImage => (settings['title_image'] ?? '').toString();
+  String get titleFont => (settings['title_font'] ?? '').toString();
   bool flag(String key, {bool fallback = false}) {
     final v = settings[key];
     return v is bool ? v : fallback;

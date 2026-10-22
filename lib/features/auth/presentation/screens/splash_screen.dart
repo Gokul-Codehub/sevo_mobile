@@ -153,7 +153,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           await ref.read(secureStorageProvider).hasSeenOnboarding();
       if (!mounted || _navigated) return;
       _navigated = true;
-      context.go(hasSeenOnboarding ? AppRoutes.home : AppRoutes.onboarding);
+      // The three "next, next, next" intro slides were removed. A first
+      // launch now goes straight to the location prompt (and is marked as
+      // seen so it only happens once per install).
+      if (!hasSeenOnboarding) {
+        await ref.read(secureStorageProvider).setOnboardingSeen();
+        if (!mounted) return;
+        context.go(AppRoutes.locationAccess);
+        return;
+      }
+      context.go(AppRoutes.home);
     });
   }
 

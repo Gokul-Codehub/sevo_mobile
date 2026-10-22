@@ -200,6 +200,12 @@ class PickedDropLocation {
 
 final dropLocationProvider = StateProvider<PickedDropLocation?>((ref) => null);
 
+/// Optional intermediate stops between pickup and drop-off, in order.
+/// Server cap is the tier's `max_additional_stops` (web default 3).
+const int kMaxGtAdditionalStops = 3;
+final gtStopsProvider =
+    StateProvider<List<PickedDropLocation>>((ref) => const []);
+
 /// Parameters that determine whether a live fare quote can be fetched, and
 /// what it should be for.
 class LogisticsQuoteParam {
@@ -214,6 +220,7 @@ class LogisticsQuoteParam {
     this.loadingHelp,
     this.cargo,
     this.customerGstin,
+    this.waypoints,
   });
 
   final int tierId;
@@ -230,6 +237,12 @@ class LogisticsQuoteParam {
   final CargoDeclaration? cargo;
   final String? customerGstin;
 
+  /// Intermediate stops as {lat, lng}, in order. Part of the key.
+  final List<Map<String, double>>? waypoints;
+
+  String get _waypointsKey =>
+      (waypoints ?? const []).map((w) => '${w['lat']},${w['lng']}').join('|');
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -244,12 +257,13 @@ class LogisticsQuoteParam {
           laneId == other.laneId &&
           loadingHelp == other.loadingHelp &&
           cargo == other.cargo &&
-          customerGstin == other.customerGstin;
+          customerGstin == other.customerGstin &&
+          _waypointsKey == other._waypointsKey;
 
   @override
   int get hashCode => Object.hash(tierId, serviceCategory, pickupLatitude,
       pickupLongitude, dropLatitude, dropLongitude, laneId, loadingHelp, cargo,
-      customerGstin);
+      customerGstin, _waypointsKey);
 }
 
 /// The live, authoritative fare for the currently selected tier + pickup +
@@ -270,6 +284,7 @@ final logisticsQuoteProvider = FutureProvider.autoDispose
     loadingHelp: param.loadingHelp,
     cargo: param.cargo,
     customerGstin: param.customerGstin,
+    waypoints: param.waypoints,
   );
 
   return switch (result) {
@@ -567,10 +582,15 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
     }
   }
 
-  void setManualLocation(String address, String pincode) {
+  /// Sets the browsing location by hand (no account needed). [latitude] /
+  /// [longitude] are optional - pass them when the typed place was geocoded
+  /// so serviceability checks use the real point, not the previous one.
+  void setManualLocation(String address, String pincode, {double? latitude, double? longitude}) {
     state = state.copyWith(
       address: address,
       pincode: pincode,
+      latitude: latitude,
+      longitude: longitude,
       isDetected: false,
     );
   }

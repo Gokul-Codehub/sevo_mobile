@@ -420,6 +420,22 @@ class BookingRepository {
     }
   }
 
+  // ── Pay after service (online) ────────────────────────────────────────────
+  /// POST /booking/<id>/settle-payment/ - settles a finished cash-on-service
+  /// booking online. Test gateway only for now; the server answers 503 once
+  /// the mock gateway is switched off.
+  Future<Result<bool>> settlePaymentOnline(int id) async {
+    try {
+      final response = await api.post(
+        '/booking/$id/settle-payment/',
+        data: {'method': 'online'},
+      );
+      return ResponseNormalizer.extract(response, (_) => true);
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
   // ── Cancel booking ────────────────────────────────────────────────────────
   Future<Result<Booking>> cancelBooking({
     required int id,

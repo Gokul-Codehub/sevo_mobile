@@ -18,6 +18,9 @@ import '../../data/home_studio_repository.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/grocery_section_layout.dart';
 import 'grocery_section_layouts.dart';
+import 'offers_rail.dart';
+import 'studio_title.dart';
+import 'tabbed_showcase.dart';
 
 const _kGroceryPage = 'grocery_home';
 
@@ -132,9 +135,20 @@ void openStudioDestination(BuildContext context, StudioDestination d, String pag
       if (v.isNotEmpty) context.push('/baskets/$v');
     case 'search':
       context.push('/search?mode=${grocery ? 'groceries' : 'services'}${v.isEmpty ? '' : '&q=${Uri.encodeQueryComponent(v)}'}');
+    case 'offer':
+      context.push(_offerPath(v, grocery));
     default:
-      break; // none / offer: nothing to open
+      break; // none: nothing to open
   }
+}
+
+/// "Offers page" destination -> /offers route. The admin stores the rule as a
+/// query string in the destination value (mode=percent&v=60&cat=..&title=..).
+String _offerPath(String value, bool grocery) {
+  var q = value.trim();
+  if (q.startsWith('?')) q = q.substring(1);
+  if (!q.contains('scope=')) q = '${q.isEmpty ? '' : '$q&'}scope=${grocery ? 'grocery' : 'services'}';
+  return '/offers?$q';
 }
 
 /// Home Studio destination -> the raw link string the legacy banner CTA
@@ -159,6 +173,8 @@ String _destinationLink(StudioDestination d, {required bool grocery}) {
       return v.isEmpty ? '' : '/baskets/$v';
     case 'search':
       return '/search?mode=${grocery ? 'groceries' : 'services'}${v.isEmpty ? '' : '&q=${Uri.encodeQueryComponent(v)}'}';
+    case 'offer':
+      return _offerPath(v, grocery);
     default:
       return '';
   }
@@ -194,6 +210,10 @@ class StudioSectionView extends ConsumerWidget {
         ));
       case 'festival_showcase':
         return _spaced(_FestivalShowcase(section: section, pageKey: pageKey));
+      case 'offers_rail':
+        return _spaced(OffersRail(section: section));
+      case 'tabbed_showcase':
+        return _spaced(TabbedShowcase(section: section, pageKey: pageKey));
       case 'bestseller_tiles':
         return _spaced(_BestsellerTiles(section: section, pageKey: pageKey));
       case 'service_category_grid':
@@ -645,6 +665,8 @@ class _GroceryDriven extends ConsumerWidget {
       showProductPrice: section.flag('show_price', fallback: true),
       showProductDiscount: section.flag('show_discount', fallback: true),
       showAddButton: section.flag('show_add_button', fallback: true),
+      titleImageUrl: section.titleImage,
+      titleFont: section.titleFont,
       showCategoryImage: section.flag('show_category_image', fallback: true),
       showCategoryName: section.flag('show_category_name', fallback: true),
       showCategoryProductCount: section.flag('show_category_count', fallback: true),
@@ -709,7 +731,7 @@ class _FestivalShowcase extends StatelessWidget {
             decoration: BoxDecoration(color: fg.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
             child: Text(badge.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: fg)),
           ),
-        Text(title, style: TextStyle(fontSize: 22, height: 1.1, fontWeight: FontWeight.w900, color: fg)),
+        StudioTitle(text: title, imageUrl: section.titleImage, font: section.titleFont, maxLines: 3, imageHeight: 40, style: TextStyle(fontSize: 22, height: 1.1, fontWeight: FontWeight.w900, color: fg)),
         if (subtitle.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(subtitle, style: TextStyle(fontSize: 12.5, color: fg.withOpacity(0.9))),
@@ -820,7 +842,7 @@ class _CutoutPanel extends ConsumerWidget {
 
     final productsAsync = type == 'manual'
         ? ref.watch(marketplaceProductsByIdsProvider(ids.join(',')))
-        : ref.watch(marketplaceMergedProductsProvider(([...ids]..sort()).join(',')));
+        : ref.watch(marketplaceMergedProductsProvider(ids.join(',')));
 
     int iv(String k, int d, int lo, int hi) => (int.tryParse(st[k]?.toString() ?? '') ?? d).clamp(lo, hi).toInt();
 
@@ -922,13 +944,13 @@ class _CutoutPanel extends ConsumerWidget {
               onTap: dest.type == 'none' ? null : () => openStudioDestination(context, dest, pageKey),
               child: SizedBox(height: heroH, child: AppRemoteImage(imageUrl: hero.imageUrl, fit: BoxFit.contain)),
             ),
-          if (title.isNotEmpty || (st['banner_subtitle'] ?? '').toString().isNotEmpty)
+          if (title.isNotEmpty || section.titleImage.isNotEmpty || (st['banner_subtitle'] ?? '').toString().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (title.isNotEmpty) Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, height: 1.1, color: fg)),
+                  if (title.isNotEmpty || section.titleImage.isNotEmpty) StudioTitle(text: title, imageUrl: section.titleImage, font: section.titleFont, maxLines: 3, imageHeight: 40, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, height: 1.1, color: fg)),
                   if ((st['banner_subtitle'] ?? '').toString().isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
@@ -994,8 +1016,10 @@ class _BestsellerTiles extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              section.title.isNotEmpty ? section.title : 'Bestsellers',
+            child: StudioTitle(
+              text: section.title.isNotEmpty ? section.title : 'Bestsellers',
+              imageUrl: section.titleImage,
+              font: section.titleFont,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
             ),
           ),
@@ -1164,10 +1188,10 @@ class _ServiceCategoryGrid extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (section.title.isNotEmpty)
+              if (section.title.isNotEmpty || section.titleImage.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(section.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                  child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
                 ),
               if (circular)
                 SizedBox(
@@ -1283,19 +1307,24 @@ class _ServiceDriven extends ConsumerWidget {
     final limit = int.tryParse((c['limit'] ?? '').toString()) ?? 8;
     final seeAllDest = StudioDestination.fromJson(section.settings['see_all_destination']);
     final showSeeAll = section.flag('see_all') && seeAllDest.type != 'none';
+    // Admin "Show on each card" switches (all default on).
+    final showImage = section.flag('show_image', fallback: true);
+    final showName = section.flag('show_name', fallback: true);
+    final showPrice = section.flag('show_price', fallback: true);
+    final showButton = section.flag('show_add_button', fallback: true);
 
     Widget rail(List<_ServiceEntry> entries) {
       if (entries.isEmpty) return const SizedBox.shrink();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (section.title.isNotEmpty)
+          if (section.title.isNotEmpty || section.titleImage.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(section.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                    child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
                   ),
                   if (showSeeAll)
                     GestureDetector(
@@ -1317,8 +1346,8 @@ class _ServiceDriven extends ConsumerWidget {
               itemCount: entries.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (_, i) => entries[i].item != null
-                  ? _ServiceCard(item: entries[i].item!, label: entries[i].label)
-                  : _ServiceCardLoader(slug: entries[i].slug, label: entries[i].label),
+                  ? _ServiceCard(item: entries[i].item!, label: entries[i].label, showImage: showImage, showName: showName, showPrice: showPrice, showButton: showButton)
+                  : _ServiceCardLoader(slug: entries[i].slug, label: entries[i].label, showImage: showImage, showName: showName, showPrice: showPrice, showButton: showButton),
             ),
           ),
         ],
@@ -1361,15 +1390,26 @@ class _ServiceEntry {
 }
 
 class _ServiceCardLoader extends ConsumerWidget {
-  const _ServiceCardLoader({required this.slug, this.label = ''});
+  const _ServiceCardLoader({
+    required this.slug,
+    this.label = '',
+    this.showImage = true,
+    this.showName = true,
+    this.showPrice = true,
+    this.showButton = true,
+  });
   final String slug;
   final String label;
+  final bool showImage;
+  final bool showName;
+  final bool showPrice;
+  final bool showButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(serviceDetailProvider(slug));
     return async.when(
-      data: (item) => _ServiceCard(item: item, label: label),
+      data: (item) => _ServiceCard(item: item, label: label, showImage: showImage, showName: showName, showPrice: showPrice, showButton: showButton),
       loading: () => Container(
         width: _ServiceCard.cardWidth,
         decoration: BoxDecoration(color: Colors.white54, borderRadius: BorderRadius.circular(26)),
@@ -1380,9 +1420,20 @@ class _ServiceCardLoader extends ConsumerWidget {
 }
 
 class _ServiceCard extends StatelessWidget {
-  const _ServiceCard({required this.item, this.label = ''});
+  const _ServiceCard({
+    required this.item,
+    this.label = '',
+    this.showImage = true,
+    this.showName = true,
+    this.showPrice = true,
+    this.showButton = true,
+  });
   final ServiceItem item;
   final String label;
+  final bool showImage;
+  final bool showName;
+  final bool showPrice;
+  final bool showButton;
 
   static const double cardWidth = 172;
 
@@ -1443,12 +1494,13 @@ class _ServiceCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              isGt
-                  ? Expanded(
-                      child: SizedBox(width: double.infinity, child: imageStack),
-                    )
-                  : SizedBox(height: 100, width: double.infinity, child: imageStack),
-              Padding(
+              if (showImage)
+                isGt
+                    ? Expanded(
+                        child: SizedBox(width: double.infinity, child: imageStack),
+                      )
+                    : SizedBox(height: 100, width: double.infinity, child: imageStack),
+              if (showName) Padding(
                 padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1461,11 +1513,11 @@ class _ServiceCard extends StatelessWidget {
                 ),
               ),
               if (!isGt) const Spacer() else const SizedBox(height: 8),
-              Padding(
+              if (showPrice || showButton) Padding(
                 padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
                 child: Row(
                   children: [
-                    if (!isGt)
+                    if (!isGt && showPrice)
                       Flexible(
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
@@ -1482,7 +1534,7 @@ class _ServiceCard extends StatelessWidget {
                         ),
                       ),
                     if (isGt) const Spacer() else const SizedBox(width: 6),
-                    Container(
+                    if (showButton) Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.black,

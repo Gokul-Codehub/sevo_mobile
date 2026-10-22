@@ -21,6 +21,7 @@ import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
 import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../widgets/coupon_bottom_sheet.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Added 2026-10-06 per explicit request ("Before checkout ask the user
 /// to select the delivery option below [Quick delivery, Slot booking
@@ -60,6 +61,8 @@ class GroceryCartScreen extends ConsumerStatefulWidget {
 }
 
 class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
+  // Scroll target for "choose a delivery slot first" - see revealField().
+  final _slotCardKey = GlobalKey(debugLabel: 'deliverySlot');
   /// The cart as the list shows it: loose products one by one, and each combo's
   /// products collapsed into ONE entry (at the position of its first product).
   static List<({int? index, String? comboKey})> _cartEntries(List<CartItem> items) {
@@ -914,7 +917,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             const SizedBox(height: 14),
 
             // ── Delivery slot card (inline, always visible) ──────────────────
-            _buildDeliverySlotCard(context),
+            KeyedSubtree(key: _slotCardKey, child: _buildDeliverySlotCard(context)),
             const SizedBox(height: 14),
 
             // ── Payment method (moved up from the fixed bottom bar) ──────────
@@ -1967,6 +1970,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         'Please choose a delivery slot first (Instant or a scheduled slot).',
         type: AppToastType.error,
       );
+      revealField(_slotCardKey);
       return;
     }
     _handlePlaceOrder(context, ref, activeAddress);

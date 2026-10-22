@@ -1,3 +1,4 @@
+import '../../../../shared/widgets/login_required_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../../auth/domain/auth_notifier.dart';
 import '../../domain/address_models.dart';
 import '../../domain/address_notifier.dart';
+import 'guest_location_picker_screen.dart';
 import '../../../../core/navigation/safe_back.dart';
 
 /// Screen listing customer addresses with options to add, select, edit, or delete.
@@ -24,37 +26,20 @@ class AddressListScreen extends ConsumerWidget {
     // Guard: unauthenticated users get a login prompt, not an error
     final currentUser = ref.watch(currentUserProvider);
     if (currentUser == null || currentUser.isGuest) {
+      // A location is needed to use the app; an account is only needed to book.
+      // So guests picking a service location get the no-login picker.
+      if (isSelectionMode) return const GuestLocationPickerScreen();
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: const Color(0xFFF7F9FC),
         appBar: AppBar(
+          backgroundColor: const Color(0xFFF7F9FC),
           title: Text(isSelectionMode ? 'Select Service Address' : 'Saved Addresses'),
         ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.lock_outline_rounded, size: 64, color: AppColors.textSecondary),
-                const SizedBox(height: 20),
-                Text(
-                  'Login Required',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Please log in to manage your saved addresses.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 28),
-                FilledButton.icon(
-                  onPressed: () => context.push(AppRoutes.login),
-                  icon: const Icon(Icons.login_rounded),
-                  label: const Text('Log In'),
-                ),
-              ],
-            ),
-          ),
+        body: LoginRequiredView(
+          title: 'Login Required',
+          subtitle: 'Please log in to manage your saved addresses.',
+          buttonLabel: 'Log In',
+          onPressed: () => context.push(AppRoutes.login),
         ),
       );
     }

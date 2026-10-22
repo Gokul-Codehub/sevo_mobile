@@ -7,6 +7,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/input_validators.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_notifier.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Screen allowing newly registered customers to set their display name & optional email.
 class ProfileCompletionScreen extends ConsumerStatefulWidget {
@@ -61,7 +62,7 @@ class _ProfileCompletionScreenState
   }
 
   Future<void> _handleComplete() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateAndFocus(_formKey)) return;
 
     setState(() => _isLoading = true);
 

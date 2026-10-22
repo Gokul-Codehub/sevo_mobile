@@ -292,7 +292,9 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
         },
       ),
     );
-    ctrl.dispose();
+    // Not disposed straight away: the sheet is still animating closed and its
+    // TextField would rebuild with a disposed controller (red error screen).
+    Future<void>.delayed(const Duration(milliseconds: 500), ctrl.dispose);
   }
 
   void _showError(String message) {

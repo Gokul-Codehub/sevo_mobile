@@ -300,6 +300,11 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
     String category = 'General Inquiry';
     bool isSubmitting = false;
     String? errorMessage;
+    // So a failed submit can put the cursor in the first empty field.
+    final subjectFocus = FocusNode();
+    final messageFocus = FocusNode();
+    bool subjectMissing = false;
+    bool messageMissing = false;
 
     showModalBottomSheet<void>(
       useRootNavigator: true,
@@ -344,18 +349,29 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
               const SizedBox(height: 14),
               TextField(
                 controller: subjectController,
-                decoration: const InputDecoration(
+                focusNode: subjectFocus,
+                textInputAction: TextInputAction.next,
+                onChanged: (_) {
+                  if (subjectMissing) setModalState(() => subjectMissing = false);
+                },
+                decoration: InputDecoration(
                   labelText: 'Subject',
                   hintText: 'Brief summary of the issue',
+                  errorText: subjectMissing ? 'Please enter a subject' : null,
                 ),
               ),
               const SizedBox(height: 14),
               TextField(
                 controller: messageController,
+                focusNode: messageFocus,
                 maxLines: 3,
-                decoration: const InputDecoration(
+                onChanged: (_) {
+                  if (messageMissing) setModalState(() => messageMissing = false);
+                },
+                decoration: InputDecoration(
                   labelText: 'Message / Description',
                   hintText: 'Provide details to help us assist you faster...',
+                  errorText: messageMissing ? 'Please describe the issue' : null,
                 ),
               ),
               if (errorMessage != null) ...[
@@ -373,8 +389,13 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         final subject = subjectController.text.trim();
                         final message = messageController.text.trim();
                         if (subject.isEmpty || message.isEmpty) {
-                          setModalState(() => errorMessage =
-                              'Please fill in both the subject and message.');
+                          setModalState(() {
+                            subjectMissing = subject.isEmpty;
+                            messageMissing = message.isEmpty;
+                            errorMessage = null;
+                          });
+                          // Take the customer straight to the first empty field.
+                          (subject.isEmpty ? subjectFocus : messageFocus).requestFocus();
                           return;
                         }
                         setModalState(() {
