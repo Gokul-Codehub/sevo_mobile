@@ -333,7 +333,11 @@ class MarketplaceProduct {
       // `unit` field when this product belongs to a variant group — it's
       // the more specific, customer-meaningful weight/size for THIS
       // particular variant.
-      unit: (variantLabel != null && variantLabel!.isNotEmpty) ? variantLabel : unit,
+      // Falls back to the real pack size ("400g", "6 pieces") before the bare
+      // `unit` ("g", "piece"), which on its own read as "1 g" on the cards.
+      unit: (variantLabel != null && variantLabel!.isNotEmpty)
+          ? variantLabel
+          : ((packSize != null && packSize!.isNotEmpty) ? packSize : unit),
       categoryName: categoryName,
       // Forced to contain "grocer" so ServiceItem.flowType always resolves
       // to CatalogFlowType.grocery regardless of this tree's own category
