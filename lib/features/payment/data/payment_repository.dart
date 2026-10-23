@@ -69,6 +69,82 @@ class PaymentRepository {
     }
   }
 
+  // ── Goods Transport / P&M payment options (web parity) ────────────────────
+
+  /// GET /api/payment/config/ — what the server lets the booking pages offer.
+  /// Fails closed (`online_available: false`) like the web client.
+  Future<({bool onlineAvailable, bool walletPartPayment})> getPaymentConfig() async {
+    try {
+      final response = await api.get('/payment/config/');
+      final res = ResponseNormalizer.extract<Map<String, dynamic>>(
+        response,
+        (d) => d is Map ? Map<String, dynamic>.from(d) : <String, dynamic>{},
+      );
+      if (res is Success<Map<String, dynamic>>) {
+        return (
+          onlineAvailable: parseBoolOrDefault(res.data['online_available'], false),
+          walletPartPayment: parseBoolOrDefault(res.data['wallet_part_payment'], false),
+        );
+      }
+    } on Exception {
+      // fall through
+    }
+    return (onlineAvailable: false, walletPartPayment: false);
+  }
+
+  /// GET /api/wallet/ — the signed-in customer's SEVO wallet balance, or
+  /// null (guest / unavailable).
+  Future<double?> getWalletBalance() async {
+    try {
+      final response = await api.get('/wallet/');
+      final res = ResponseNormalizer.extract<double?>(
+        response,
+        (d) => d is Map ? double.tryParse('${d['balance']}') : null,
+      );
+      return res is Success<double?> ? res.data : null;
+    } on Exception {
+      return null;
+    }
+  }
+
+  /// POST /api/payment/wallet-pay/ — pay a GT / P&M booking from the wallet.
+  /// `paid` = fully settled; `partial` = wallet spent, the remainder must be
+  /// paid online (`remaining` rupees). The server decides every amount.
+  Future<({bool paid, bool partial, double? remaining, String? error})> payWithWallet(
+    int bookingId,
+  ) async {
+    try {
+      final response = await api.post(
+        '/payment/wallet-pay/',
+        data: {'booking_id': bookingId, 'allow_partial': true},
+      );
+      final body = response.data;
+      final data = body is Map && body['data'] is Map ? body['data'] as Map : (body is Map ? body : const {});
+      final partial = data['partial'] == true;
+      return (
+        paid: !partial,
+        partial: partial,
+        remaining: double.tryParse('${data['remaining_due']}'),
+        error: null,
+      );
+    } on DioException catch (e) {
+      final d = e.response?.data;
+      String? msg;
+      if (d is Map) {
+        msg = (d['message'] ?? d['error'] ?? d['detail'])?.toString();
+        if (d['error'] is Map) msg = (d['error'] as Map)['message']?.toString() ?? msg;
+      }
+      return (
+        paid: false,
+        partial: false,
+        remaining: null,
+        error: msg ?? 'Wallet payment could not be completed.',
+      );
+    } on Exception catch (e) {
+      return (paid: false, partial: false, remaining: null, error: e.toString());
+    }
+  }
+
   ApiError _toError(Object e) {
     if (e is ApiError) return e;
     if (e is DioException && e.error is ApiError) {

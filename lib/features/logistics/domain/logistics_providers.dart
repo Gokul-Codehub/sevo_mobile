@@ -8,6 +8,7 @@ import '../../../core/errors/api_error.dart';
 import '../data/logistics_repository.dart';
 import '../../addresses/domain/address_notifier.dart' show selectedAddressProvider;
 import '../../notifications/domain/capacity_claim.dart';
+import '../../payment/data/payment_repository.dart';
 import 'gt_models.dart';
 import 'logistics_models.dart';
 
@@ -326,6 +327,87 @@ final pmPickupHasLiftProvider = StateProvider<bool>((ref) => true);
 final pmDropFloorProvider = StateProvider<int>((ref) => 0);
 final pmDropHasLiftProvider = StateProvider<bool>((ref) => true);
 
+/// How the customer wants to pay for a Goods Transport / Packers & Movers
+/// booking: `cod`, `online` or `wallet` (wallet bookings are created as
+/// ONLINE and settled from the SEVO wallet afterwards).
+final gtPaymentMethodProvider = StateProvider<String>((ref) => 'cod');
+
+final gtPaymentConfigProvider = FutureProvider.autoDispose<
+    ({bool onlineAvailable, bool walletPartPayment})>((ref) {
+  return ref.watch(paymentRepositoryProvider).getPaymentConfig();
+});
+
+/// SEVO wallet balance; null for guests.
+final gtWalletBalanceProvider = FutureProvider.autoDispose<double?>((ref) {
+  return ref.watch(paymentRepositoryProvider).getWalletBalance();
+});
+
+/// Extra helpers requested for the move (0..admin `max_helpers`).
+final pmHelpersRequestedProvider = StateProvider<int>((ref) => 0);
+
+/// Selected add-on services: add-on code -> quantity.
+final pmAddOnsSelectedProvider = StateProvider<Map<String, int>>((ref) => const {});
+
+/// Admin limit for extra helpers in [city].
+final pmMaxHelpersProvider = FutureProvider.family<int, String>((ref, city) {
+  return ref.watch(logisticsRepositoryProvider).getPackersMoversMaxHelpers(city);
+});
+
+/// Add-on catalogue configured for [city].
+final pmAddOnsProvider = FutureProvider.family<List<PmAddOn>, String>((ref, city) async {
+  final result = await ref.watch(logisticsRepositoryProvider).getPackersMoversAddOns(city);
+  return switch (result) {
+    Success(:final data) => data,
+    Failure() => const <PmAddOn>[],
+  };
+});
+
+/// Inputs for a service-zone coverage check.
+typedef TripCoverageParam = ({
+  String slug,
+  String? point,
+  double? pickupLat,
+  double? pickupLng,
+  double? dropLat,
+  double? dropLng,
+  String stopsKey,
+  String? vehicleClass,
+  int? laneId,
+});
+
+/// Is this trip (or one end of it) inside the admin's active coverage? Same
+/// rules and messages as the web (`checkRouteCoverage` / `checkPointCoverage`).
+final tripCoverageProvider =
+    FutureProvider.autoDispose.family<TripCoverage, TripCoverageParam>((ref, p) async {
+  // Debounce rapid changes (map pans, stop edits) like the web's 300 ms timer.
+  var cancelled = false;
+  ref.onDispose(() => cancelled = true);
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  if (cancelled) return const TripCoverage();
+  final stops = <Map<String, double>>[];
+  if (p.stopsKey.isNotEmpty) {
+    for (final pair in p.stopsKey.split('|')) {
+      final xy = pair.split(',');
+      if (xy.length == 2) {
+        final a = double.tryParse(xy[0]);
+        final b = double.tryParse(xy[1]);
+        if (a != null && b != null) stops.add({'lat': a, 'lng': b});
+      }
+    }
+  }
+  return ref.watch(logisticsRepositoryProvider).checkTripCoverage(
+        serviceSlug: p.slug,
+        point: p.point,
+        pickupLat: p.pickupLat,
+        pickupLng: p.pickupLng,
+        dropLat: p.dropLat,
+        dropLng: p.dropLng,
+        stops: stops,
+        vehicleClass: p.vehicleClass,
+        laneId: p.laneId,
+      );
+});
+
 /// Free-form on the backend (only checked for equality between quote and
 /// booking, never enumerated/validated) — offered as a simple two-way choice
 /// here since that's the only distinction the booking screen can usefully
@@ -352,6 +434,10 @@ class PmQuoteParam {
     required this.dropFloor,
     required this.dropHasLift,
     required this.relocationType,
+    this.moveDate,
+    this.moveTime,
+    this.stops = const [],
+    this.laneId,
   }) : _inventoryKey = (inventory
             .map((e) => '${e['goods_item_id']}:${e['quantity']}')
             .toList()
@@ -372,6 +458,18 @@ class PmQuoteParam {
   final int dropFloor;
   final bool dropHasLift;
   final String relocationType;
+
+  /// `yyyy-MM-dd` / slot label: admin peak-day and off-hours surcharges are
+  /// priced server-side from these.
+  final String? moveDate;
+  final String? moveTime;
+
+  /// Intermediate stops as `{address, latitude, longitude, stop_type}` maps.
+  final List<Map<String, dynamic>> stops;
+  final int? laneId;
+
+  String get _stopsKey =>
+      stops.map((s) => '${s['latitude']},${s['longitude']}').join('|');
 
   final List<String> _inventoryKey;
 
@@ -394,6 +492,10 @@ class PmQuoteParam {
           dropFloor == other.dropFloor &&
           dropHasLift == other.dropHasLift &&
           relocationType == other.relocationType &&
+          moveDate == other.moveDate &&
+          moveTime == other.moveTime &&
+          laneId == other.laneId &&
+          _stopsKey == other._stopsKey &&
           _inventoryKey.join(',') == other._inventoryKey.join(',');
 
   @override
@@ -412,6 +514,10 @@ class PmQuoteParam {
         dropFloor,
         dropHasLift,
         relocationType,
+        moveDate,
+        moveTime,
+        laneId,
+        _stopsKey,
         _inventoryKey.join(','),
       );
 }
@@ -434,6 +540,10 @@ final pmQuoteProvider = FutureProvider.autoDispose.family<PackersMoversQuote, Pm
     dropFloor: param.dropFloor,
     dropHasLift: param.dropHasLift,
     relocationType: param.relocationType,
+    moveDate: param.moveDate,
+    moveTime: param.moveTime,
+    stops: param.stops,
+    laneId: param.laneId,
   );
 
   return switch (result) {

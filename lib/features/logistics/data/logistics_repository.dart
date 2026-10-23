@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -406,6 +407,13 @@ class LogisticsRepository {
     int dropFloor = 0,
     bool dropHasLift = true,
     String relocationType = 'Within City',
+    // Parity with the web quote: move date/time drive the admin peak-day and
+    // off-hours surcharges, stops/extra_stops price intermediate stops and
+    // lane_id prices a fixed corridor.
+    String? moveDate,
+    String? moveTime,
+    List<Map<String, dynamic>>? stops,
+    int? laneId,
   }) async {
     try {
       final response = await api.post(
@@ -426,6 +434,14 @@ class LogisticsRepository {
           'drop_floor': dropFloor,
           'drop_has_lift': dropHasLift,
           'relocation_type': relocationType,
+          'extra_stops': stops?.length ?? 0,
+          if (laneId != null) 'lane_id': laneId,
+          if (stops != null && stops.isNotEmpty) ...{
+            'stops': stops,
+            'waypoints': stops,
+          },
+          if (moveDate != null && moveDate.isNotEmpty) 'move_date': moveDate,
+          if (moveTime != null && moveTime.isNotEmpty) 'move_time': moveTime,
         },
       );
       return ResponseNormalizer.extract(
@@ -436,6 +452,126 @@ class LogisticsRepository {
       );
     } on Exception catch (e) {
       return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/packers-movers/inventory/?city= — the admin's
+  /// `max_helpers` limit (extra helpers a customer may request).
+  Future<int> getPackersMoversMaxHelpers(String city) async {
+    try {
+      final response = await api.get(
+        '/logistics/packers-movers/inventory/',
+        queryParameters: {'city': city},
+      );
+      final res = ResponseNormalizer.extract<int>(response, (data) {
+        final map = data is Map ? data : const {};
+        return parseIntOrNull(map['max_helpers']) ?? 0;
+      });
+      return res is Success<int> ? res.data : 0;
+    } on Exception {
+      return 0;
+    }
+  }
+
+  /// GET /api/logistics/packers-movers/addons/?city=
+  Future<Result<List<PmAddOn>>> getPackersMoversAddOns(String city) async {
+    try {
+      final response = await api.get(
+        '/logistics/packers-movers/addons/',
+        queryParameters: {if (city.isNotEmpty) 'city': city},
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        final list = _unwrapList(data, keys: const ['addons', 'results']);
+        return list
+            .whereType<Map>()
+            .map((m) => PmAddOn.fromJson(Map<String, dynamic>.from(m)))
+            .where((a) => a.code.isNotEmpty)
+            .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /api/logistics/packers-movers/survey-request/ — records a
+  /// pre-move survey lead when the move cannot be priced instantly.
+  /// Returns the new request id.
+  Future<Result<String>> submitPackersMoversSurveyRequest(
+    Map<String, dynamic> payload, {
+    String? idempotencyKey,
+  }) async {
+    try {
+      final response = await api.post(
+        '/logistics/packers-movers/survey-request/',
+        data: {
+          ...payload,
+          if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+        },
+        options: idempotencyKey == null
+            ? null
+            : Options(headers: {'Idempotency-Key': idempotencyKey}),
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        final map = data is Map ? data : const {};
+        final id = (map['request_id'] ?? map['id'] ?? '').toString();
+        if (id.isEmpty) {
+          throw const ValidationError('The survey request was not confirmed by the server.');
+        }
+        return id;
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /api/settings/service-zones/check/ for a whole trip. Fails open
+  /// (covered) on network errors — the quote and booking endpoints enforce
+  /// coverage server-side regardless, exactly like the web client.
+  Future<TripCoverage> checkTripCoverage({
+    required String serviceSlug,
+    double? pickupLat,
+    double? pickupLng,
+    double? dropLat,
+    double? dropLng,
+    List<Map<String, double>>? stops,
+    String? vehicleClass,
+    int? laneId,
+    String? point,
+  }) async {
+    try {
+      final single = point != null;
+      final lat = single ? (point == 'drop' ? dropLat : pickupLat) : pickupLat;
+      final lng = single ? (point == 'drop' ? dropLng : pickupLng) : pickupLng;
+      if (lat == null || lng == null) return const TripCoverage();
+      if (!single && (dropLat == null || dropLng == null)) return const TripCoverage();
+      final response = await api.post(
+        '/settings/service-zones/check/',
+        data: {
+          'lat': lat,
+          'lng': lng,
+          if (single) 'point': point else ...{'drop_lat': dropLat, 'drop_lng': dropLng},
+          'service_slug': serviceSlug,
+          if (!single && stops != null && stops.isNotEmpty) 'stops': stops,
+          if (vehicleClass != null && vehicleClass.isNotEmpty) 'vehicle_class': vehicleClass,
+          if (!single && laneId != null) 'lane_id': laneId,
+        },
+      );
+      final body = response.data;
+      final data = body is Map && body['data'] is Map ? body['data'] as Map : (body is Map ? body : const {});
+      if (data['in_zone'] == false) {
+        return TripCoverage(
+          inCoverage: false,
+          failedPoint: data['failed_point']?.toString() ?? point,
+          failedStopIndex: parseIntOrNull(data['failed_stop_index']),
+          message: data['message']?.toString() ??
+              (single
+                  ? 'This location is outside our service area.'
+                  : 'This trip is outside our service area.'),
+        );
+      }
+      return const TripCoverage();
+    } on Exception {
+      return const TripCoverage();
     }
   }
 

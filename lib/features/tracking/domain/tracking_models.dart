@@ -79,6 +79,11 @@ class TrackingUpdate extends Equatable {
     this.feedbackRating,
     this.requestId,
     this.bookingId,
+    this.serviceCategory,
+    this.hasPtl = false,
+    this.ptlRequoteEligible = false,
+    this.ptlWeightKg,
+    this.stops = const [],
     required this.updatedAt,
     this.isLiveWs = false,
   });
@@ -130,6 +135,22 @@ class TrackingUpdate extends Equatable {
 
   final String? requestId;
   final int? bookingId;
+
+  /// Server `service_category` slug (e.g. `goods_transport_truck`).
+  final String? serviceCategory;
+
+  /// Light PTL summary (`ptl` block): present for Part Truck Load trips.
+  final bool hasPtl;
+  final bool ptlRequoteEligible;
+  final String? ptlWeightKg;
+
+  /// Whole route as TripStops (PICKUP, each WAYPOINT, DROP).
+  final List<TrackingStop> stops;
+
+  /// Intermediate stops only (pickup and drop have their own rows).
+  List<TrackingStop> get intermediateStops => stops
+      .where((s) => s.stopType != 'PICKUP' && s.stopType != 'DROP')
+      .toList();
 
   final DateTime updatedAt;
 
@@ -231,6 +252,19 @@ class TrackingUpdate extends Equatable {
           : null,
       requestId: _asNonEmptyString(json['request_id']),
       bookingId: _asInt(json['booking_id'] ?? json['job_id']),
+      serviceCategory: _asNonEmptyString(json['service_category']),
+      hasPtl: json['ptl'] is Map,
+      ptlRequoteEligible:
+          json['ptl'] is Map && (json['ptl'] as Map)['requote_eligible'] == true,
+      ptlWeightKg: json['ptl'] is Map
+          ? _asNonEmptyString((json['ptl'] as Map)['declared_weight_kg'])
+          : null,
+      stops: json['logistics'] is Map && (json['logistics'] as Map)['stops'] is List
+          ? ((json['logistics'] as Map)['stops'] as List)
+              .whereType<Map>()
+              .map((e) => TrackingStop.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
       updatedAt: DateTime.now(),
       isLiveWs: isWs,
     );
@@ -277,6 +311,11 @@ class TrackingUpdate extends Equatable {
         feedbackRating: feedbackRating,
         requestId: requestId,
         bookingId: bookingId,
+        serviceCategory: serviceCategory,
+        hasPtl: hasPtl,
+        ptlRequoteEligible: ptlRequoteEligible,
+        ptlWeightKg: ptlWeightKg,
+        stops: stops,
         updatedAt: updatedAt,
         isLiveWs: isLiveWs ?? this.isLiveWs,
       );
@@ -313,6 +352,11 @@ class TrackingUpdate extends Equatable {
         feedbackRating,
         requestId,
         bookingId,
+        serviceCategory,
+        hasPtl,
+        ptlRequoteEligible,
+        ptlWeightKg,
+        stops,
         updatedAt,
         isLiveWs,
       ];
@@ -385,4 +429,35 @@ class TrackingDeliveryException extends Equatable {
 
   @override
   List<Object?> get props => [label, leg, status];
+}
+
+/// One stop of a logistics trip as reported by the tracking payload.
+class TrackingStop extends Equatable {
+  const TrackingStop({
+    required this.id,
+    required this.sequence,
+    required this.stopType,
+    required this.address,
+    this.arrived = false,
+    this.completed = false,
+  });
+
+  factory TrackingStop.fromJson(Map<String, dynamic> j) => TrackingStop(
+        id: _asInt(j['id']) ?? 0,
+        sequence: _asInt(j['sequence']) ?? 0,
+        stopType: (j['stop_type'] ?? '').toString().toUpperCase(),
+        address: (j['address'] ?? '').toString(),
+        arrived: _asNonEmptyString(j['arrived_at']) != null,
+        completed: _asNonEmptyString(j['completed_at']) != null,
+      );
+
+  final int id;
+  final int sequence;
+  final String stopType;
+  final String address;
+  final bool arrived;
+  final bool completed;
+
+  @override
+  List<Object?> get props => [id, sequence, stopType, address, arrived, completed];
 }

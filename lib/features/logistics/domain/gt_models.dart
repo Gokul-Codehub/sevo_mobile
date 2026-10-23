@@ -126,16 +126,70 @@ class GoodsItem extends Equatable {
 }
 
 /// One cargo line sent to quote / evaluate-cargo / booking.
+///
+/// Either a catalogue item ([itemId]) or an "Other / Not listed" custom line
+/// ([customName] set, with per-unit [weightKg] / [cft]) — same shape the web
+/// GoodsCargoSelectorModal sends.
 class CargoLine extends Equatable {
-  const CargoLine({required this.itemId, required this.quantity});
+  const CargoLine({
+    this.itemId,
+    required this.quantity,
+    this.customName,
+    this.weightKg,
+    this.cft,
+    this.isFragile = false,
+    this.sizeKey,
+    this.photoPath,
+    this.lengthCm,
+    this.widthCm,
+    this.heightCm,
+  });
 
-  final int itemId;
+  final int? itemId;
   final int quantity;
 
-  Map<String, dynamic> toJson() => {'item_id': itemId, 'quantity': quantity};
+  final String? customName;
+  final double? weightKg;
+  final double? cft;
+  final bool isFragile;
+  final String? sizeKey;
+  final String? photoPath;
+  final double? lengthCm;
+  final double? widthCm;
+  final double? heightCm;
+
+  bool get isCustom => customName != null;
+
+  Map<String, dynamic> toJson() => isCustom
+      ? {
+          'quantity': quantity,
+          'is_custom': true,
+          'name': customName,
+          'weight_kg': weightKg,
+          'cft': cft,
+          'is_fragile': isFragile,
+        }
+      : {'item_id': itemId, 'quantity': quantity};
+
+  CargoLine withQuantity(int q) => CargoLine(
+        itemId: itemId,
+        quantity: q,
+        customName: customName,
+        weightKg: weightKg,
+        cft: cft,
+        isFragile: isFragile,
+        sizeKey: sizeKey,
+        photoPath: photoPath,
+        lengthCm: lengthCm,
+        widthCm: widthCm,
+        heightCm: heightCm,
+      );
 
   @override
-  List<Object?> get props => [itemId, quantity];
+  List<Object?> get props => [
+        itemId, quantity, customName, weightKg, cft, isFragile, sizeKey,
+        photoPath, lengthCm, widthCm, heightCm,
+      ];
 }
 
 /// What the customer declared about the load. All parts are optional; the

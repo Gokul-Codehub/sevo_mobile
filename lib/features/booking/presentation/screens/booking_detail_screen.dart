@@ -16,6 +16,7 @@ import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../catalog/data/catalog_repository.dart';
 import '../../../catalog/domain/catalog_models.dart';
+import '../../../tracking/presentation/widgets/gt_trip_cards.dart' show GtStopsEditorCard;
 import '../../../logistics/domain/logistics_providers.dart'
     show selectedBookingDateProvider, selectedBookingServiceIdProvider, selectedTimeSlotProvider;
 import '../../../logistics/presentation/widgets/gt_slot_picker.dart' show GtSlotPicker;
@@ -248,6 +249,20 @@ class BookingDetailScreen extends ConsumerWidget {
                   ActiveQuoteCard(booking: booking),
                   const SizedBox(height: 16),
                 ],
+
+          // Logistics bookings: add / edit stops (a paid booking whose fare
+          // would change goes through the fare-amendment approval).
+          if (_isLogisticsBooking(booking) &&
+              !const {
+                'cancelled',
+                'rejected',
+                'completed',
+                'closed',
+                'feedback_pending',
+                'feedback_received',
+              }.contains(booking.status.toLowerCase())) ...[
+            GtStopsEditorCard(bookingId: booking.id),
+          ],
 
           // ── 2. Booking Timeline Tracker ─────────────────────────────
           Container(
@@ -1384,4 +1399,18 @@ class _PayAfterServiceCardState extends ConsumerState<_PayAfterServiceCard> {
       ),
     );
   }
+}
+
+/// Goods Transport / Packers & Movers bookings (the only ones with editable stops).
+bool _isLogisticsBooking(Booking b) {
+  for (final i in b.items) {
+    final slug = (i.service.categorySlug ?? '').toLowerCase();
+    final title = i.service.title.toLowerCase();
+    if (slug.contains('goods_transport') ||
+        slug.contains('packers') ||
+        title.startsWith('packers & movers')) {
+      return true;
+    }
+  }
+  return false;
 }

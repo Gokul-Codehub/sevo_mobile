@@ -595,6 +595,27 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         GtExtraChargesCard(charges: tracking.extraCharges),
                       if (tracking.deliveryException != null)
                         GtDeliveryExceptionCard(exception: tracking.deliveryException!),
+                      // En-route drop change: single-drop Goods Transport,
+                      // live trip, accepted by a driver (same rule as the web).
+                      if ((tracking.bookingId ?? widget.booking?.id) != null &&
+                          tracking.isAccepted &&
+                          !tracking.hasPtl &&
+                          RegExp(r'goods_transport_(truck|two_wheeler)')
+                              .hasMatch((tracking.serviceCategory ?? '').toLowerCase()) &&
+                          tracking.intermediateStops.isEmpty &&
+                          !const {'proof_submitted', 'unable_to_complete'}
+                              .contains(tracking.status.toLowerCase()))
+                        GtChangeDropCard(
+                          bookingId: (tracking.bookingId ?? widget.booking?.id)!,
+                        ),
+                      // Light PTL: pre-dispatch quote revision (eligibility
+                      // is decided by the server).
+                      if ((tracking.bookingId ?? widget.booking?.id) != null &&
+                          tracking.ptlRequoteEligible)
+                        GtPtlRequoteCard(
+                          bookingId: (tracking.bookingId ?? widget.booking?.id)!,
+                          currentWeightKg: tracking.ptlWeightKg,
+                        ),
                       if (tracking.deliveryOtp != null) ...[
                         _OtpCard(
                           label: 'DELIVERY OTP',
@@ -610,6 +631,18 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         const SizedBox(height: 12),
                       ],
                     ],
+
+                    // In-app chat with the driver / technician (every service,
+                    // once someone has accepted; hidden if the viewer is not
+                    // the booking's owner).
+                    if ((tracking.bookingId ?? widget.booking?.id) != null &&
+                        tracking.isAccepted &&
+                        !const {'cancelled', 'rejected'}
+                            .contains(tracking.status.toLowerCase()))
+                      BookingChatCard(
+                        bookingId: (tracking.bookingId ?? widget.booking?.id)!,
+                        trackingToken: widget.booking?.trackingIdentifier,
+                      ),
 
                     // Delivered Goods & Transport trips get a rating token from
                     // the server; show the rate card for it.

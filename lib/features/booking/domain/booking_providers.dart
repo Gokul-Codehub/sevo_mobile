@@ -127,6 +127,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
     String? serviceCategoryOverride,
     List<Map<String, dynamic>>? cartDataOverride,
     Map<String, dynamic>? extraPayload,
+    String? idempotencyKey,
   }) async {
     final List<CartItem> items = customItems ?? ref.read(cartProvider);
     final selectedAddress = ref.read(selectedAddressProvider);
@@ -187,6 +188,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       jobType: jobType,
       serviceCategoryOverride: serviceCategoryOverride,
       cartDataOverride: cartDataOverride,
+      idempotencyKey: idempotencyKey,
       // A held "a slot opened up" claim goes with the booking so the backend
       // counts it as this customer's own place on a full day.
       extraPayload: {

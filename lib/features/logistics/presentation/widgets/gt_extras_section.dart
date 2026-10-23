@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/gt_models.dart';
@@ -147,6 +149,9 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
   final _weightController = TextEditingController();
   Timer? _weightDebounce;
 
+  /// "Other / Not listed" selected: the unlisted-goods form is shown.
+  bool _otherOpen = false;
+
   @override
   void dispose() {
     _weightDebounce?.cancel();
@@ -154,18 +159,22 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
     super.dispose();
   }
 
+  List<CargoLine> _customLines(CargoDeclaration c) =>
+      c.items.where((l) => l.isCustom).toList();
+
   void _setCargo(CargoDeclaration c) =>
       ref.read(cargoDeclarationProvider.notifier).state = c;
 
   int _qty(CargoDeclaration c, int itemId) {
     for (final l in c.items) {
-      if (l.itemId == itemId) return l.quantity;
+      if (!l.isCustom && l.itemId == itemId) return l.quantity;
     }
     return 0;
   }
 
   void _setQty(CargoDeclaration c, int itemId, int qty) {
-    final lines = c.items.where((l) => l.itemId != itemId).toList();
+    final lines =
+        c.items.where((l) => l.isCustom || l.itemId != itemId).toList();
     if (qty > 0) lines.add(CargoLine(itemId: itemId, quantity: qty));
     _setCargo(c.copyWith(items: lines));
   }
@@ -238,6 +247,12 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
     }
 
     final itemCount = cargo.items.fold<int>(0, (s, l) => s + l.quantity);
+    final customWeight = cargo.items
+        .where((l) => l.isCustom)
+        .fold<double>(0, (s, l) => s + (l.weightKg ?? 0) * l.quantity);
+    final customCft = cargo.items
+        .where((l) => l.isCustom)
+        .fold<double>(0, (s, l) => s + (l.cft ?? 0) * l.quantity);
 
     return _card(
       Column(
@@ -294,22 +309,68 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                           flex: 5,
                           child: ListView.builder(
                             padding: EdgeInsets.zero,
-                            itemCount: usable.length,
+                            itemCount: usable.length + 1,
                             itemBuilder: (context, i) {
-                              final c = usable[i];
-                              final isSel = c.id == cargo.goodsCategoryId;
-                              return InkWell(
-                                onTap: () => _setCargo(
-                                  isSel
-                                      ? cargo.copyWith(
-                                          clearGoodsCategory: true,
-                                          items: const [],
-                                        )
-                                      : cargo.copyWith(
-                                          goodsCategoryId: c.id,
-                                          items: const [],
+                              // Last row: "Other / Not listed" (custom cargo),
+                              // same as the web selector.
+                              if (i == usable.length) {
+                                return InkWell(
+                                  onTap: () {
+                                    setState(() => _otherOpen = true);
+                                    _setCargo(cargo.copyWith(
+                                      clearGoodsCategory: true,
+                                      items: _customLines(cargo),
+                                    ));
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: _otherOpen
+                                          ? AppColors.navy.withValues(alpha: 0.10)
+                                          : Colors.transparent,
+                                      border: Border(
+                                        left: BorderSide(
+                                          color: _otherOpen
+                                              ? AppColors.navy
+                                              : Colors.transparent,
+                                          width: 3,
                                         ),
-                                ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Other / Not listed',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        height: 1.25,
+                                        fontStyle: FontStyle.italic,
+                                        fontWeight: _otherOpen
+                                            ? FontWeight.w800
+                                            : FontWeight.w600,
+                                        color: AppColors.navy,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                              final c = usable[i];
+                              final isSel =
+                                  !_otherOpen && c.id == cargo.goodsCategoryId;
+                              return InkWell(
+                                onTap: () {
+                                  setState(() => _otherOpen = false);
+                                  _setCargo(
+                                    isSel
+                                        ? cargo.copyWith(
+                                            clearGoodsCategory: true,
+                                            items: _customLines(cargo),
+                                          )
+                                        : cargo.copyWith(
+                                            goodsCategoryId: c.id,
+                                            items: _customLines(cargo),
+                                          ),
+                                  );
+                                },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 12),
@@ -352,12 +413,14 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                           flex: 6,
                           child: Container(
                             color: Colors.white,
-                            child: selected == null
-                                ? const Center(
+                            child: _otherOpen || selected == null
+                                ? Center(
                                     child: Padding(
-                                      padding: EdgeInsets.all(16),
+                                      padding: const EdgeInsets.all(16),
                                       child: Text(
-                                        'Choose a type of goods to see its items.',
+                                        _otherOpen
+                                            ? 'Describe your goods in the form below.'
+                                            : 'Choose a type of goods to see its items.',
                                         textAlign: TextAlign.center,
                                         style: _hintStyle,
                                       ),
@@ -376,7 +439,27 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                       ],
                     ),
                   ),
-                  if (selected != null && (selected.infoBanner ?? '').isNotEmpty) ...[
+                  if (_otherOpen) ...[
+                    const SizedBox(height: 12),
+                    _CustomCargoForm(
+                      onAdd: (line) => _setCargo(
+                        cargo.copyWith(items: [...cargo.items, line]),
+                      ),
+                    ),
+                  ],
+                  if (_customLines(cargo).isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    for (final l in _customLines(cargo))
+                      _CustomLineTile(
+                        line: l,
+                        onRemove: () => _setCargo(cargo.copyWith(
+                          items: cargo.items.where((x) => !identical(x, l)).toList(),
+                        )),
+                      ),
+                  ],
+                  if (!_otherOpen &&
+                      selected != null &&
+                      (selected.infoBanner ?? '').isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -447,6 +530,12 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                 if (itemCount > 0) _summaryPill(Icons.inventory_2_outlined, '$itemCount item${itemCount == 1 ? '' : 's'}'),
                 if (cargo.declaredWeightKg != null)
                   _summaryPill(Icons.scale_outlined, '~${cargo.declaredWeightKg!.toStringAsFixed(0)} kg'),
+                if (customWeight > 0)
+                  _summaryPill(Icons.scale_outlined,
+                      'Unlisted ${customWeight.toStringAsFixed(customWeight % 1 == 0 ? 0 : 1)} kg'),
+                if (customCft > 0)
+                  _summaryPill(Icons.view_in_ar_outlined,
+                      '${customCft.toStringAsFixed(1)} CFT'),
               ],
             ),
           ],
@@ -481,6 +570,641 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
           ],
         ),
       );
+}
+
+const _kSizePresets = <String, ({String label, double w, double c, double l, double wd, double h})>{
+  'small': (label: 'Small (~10kg, 1.5 CFT)', w: 10, c: 1.5, l: 40, wd: 30, h: 25),
+  'medium': (label: 'Medium (~30kg, 6 CFT)', w: 30, c: 6, l: 60, wd: 50, h: 45),
+  'large': (label: 'Large (~75kg, 18 CFT)', w: 75, c: 18, l: 90, wd: 75, h: 70),
+  'extra_large': (label: 'XL / Oversized (~150kg)', w: 150, c: 35, l: 120, wd: 90, h: 85),
+};
+
+String _n(double v) => v % 1 == 0 ? v.toStringAsFixed(0) : v.toString();
+
+/// "Unlisted / Custom Cargo" entry — mirrors the web GoodsCargoSelectorModal
+/// "Other / Not listed" form (description, quick size, qty, weight, photo,
+/// dimensions, fragile).
+class _CustomCargoForm extends StatefulWidget {
+  const _CustomCargoForm({required this.onAdd});
+
+  final ValueChanged<CargoLine> onAdd;
+
+  @override
+  State<_CustomCargoForm> createState() => _CustomCargoFormState();
+}
+
+class _CustomCargoFormState extends State<_CustomCargoForm> {
+  final _name = TextEditingController();
+  final _qty = TextEditingController(text: '1');
+  final _weight = TextEditingController();
+  final _l = TextEditingController();
+  final _w = TextEditingController();
+  final _h = TextEditingController();
+  String? _size;
+  bool _fragile = false;
+  String? _photo;
+  String? _err;
+
+  @override
+  void dispose() {
+    for (final c in [_name, _qty, _weight, _l, _w, _h]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  double _num(TextEditingController c) => double.tryParse(c.text.trim()) ?? 0;
+
+  double get _cftFromDims {
+    final l = _num(_l), w = _num(_w), h = _num(_h);
+    return l > 0 && w > 0 && h > 0
+        ? (l * w * h / 28316.85 * 100).round() / 100
+        : 0;
+  }
+
+  void _pickSize(String key) {
+    final p = _kSizePresets[key]!;
+    setState(() {
+      _size = key;
+      if (_weight.text.isEmpty) _weight.text = _n(p.w);
+      if (_l.text.isEmpty) _l.text = _n(p.l);
+      if (_w.text.isEmpty) _w.text = _n(p.wd);
+      if (_h.text.isEmpty) _h.text = _n(p.h);
+    });
+  }
+
+  Future<void> _pickPhoto() async {
+    final src = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from gallery'),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+        ]),
+      ),
+    );
+    if (src == null) return;
+    try {
+      final f = await ImagePicker()
+          .pickImage(source: src, maxWidth: 1600, imageQuality: 80);
+      if (f == null || !mounted) return;
+      if (await f.length() > 5 * 1024 * 1024) {
+        setState(() => _err = 'Image size cannot exceed 5MB.');
+        return;
+      }
+      setState(() {
+        _photo = f.path;
+        _err = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _err = 'Could not open the photo.');
+    }
+  }
+
+  void _add() {
+    final name = _name.text.trim();
+    final qty = int.tryParse(_qty.text.trim()) ?? 0;
+    var weight = _num(_weight);
+    var cft = _cftFromDims;
+    if (name.isEmpty) {
+      return setState(() => _err = 'Describe the goods (e.g. clay pots, steel almirah).');
+    }
+    if (name.length > 120) {
+      return setState(() => _err = 'Description can be at most 120 characters.');
+    }
+    if (qty < 1 || qty > 500) {
+      return setState(() => _err = 'Quantity must be between 1 and 500.');
+    }
+    final preset = _size == null ? null : _kSizePresets[_size];
+    if (preset != null) {
+      if (weight <= 0) weight = preset.w;
+      if (cft <= 0) cft = preset.c;
+    }
+    if (!(weight > 0 && weight <= 100000)) {
+      return setState(() => _err = 'Select a simple size or enter approximate weight in kg.');
+    }
+    if (!(cft > 0 && cft <= 10000)) {
+      return setState(() => _err =
+          'Select a simple size, or enter length, width and height in cm.');
+    }
+    widget.onAdd(CargoLine(
+      quantity: qty,
+      customName: name,
+      weightKg: weight,
+      cft: cft,
+      isFragile: _fragile,
+      sizeKey: _size,
+      photoPath: _photo,
+      lengthCm: _l.text.isEmpty ? null : _num(_l),
+      widthCm: _w.text.isEmpty ? null : _num(_w),
+      heightCm: _h.text.isEmpty ? null : _num(_h),
+    ));
+    setState(() {
+      _name.clear();
+      _qty.text = '1';
+      _weight.clear();
+      _l.clear();
+      _w.clear();
+      _h.clear();
+      _size = null;
+      _fragile = false;
+      _photo = null;
+      _err = null;
+    });
+  }
+
+  Widget _numField(TextEditingController c, String hint) => TextField(
+        controller: c,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        onChanged: (_) => setState(() {}),
+        decoration: _decoration(hint),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final qty = int.tryParse(_qty.text.trim()) ?? 1;
+    final totalW = _num(_weight) * (qty < 1 ? 1 : qty);
+    final cft = _cftFromDims;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFA7F3D0)),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Unlisted / Custom Cargo',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF064E3B))),
+              SizedBox(height: 2),
+              Text(
+                'Describe your items and choose approximate size. Declared '
+                'values are checked by driver at pickup.',
+                style: TextStyle(fontSize: 11, color: Color(0xFF065F46), height: 1.35),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _name,
+          maxLength: 120,
+          decoration: _decoration('Describe the goods (e.g. clay pots, wooden bench)')
+              .copyWith(counterText: ''),
+        ),
+        const SizedBox(height: 10),
+        _fieldLabel('Quick Size Selection (per unit)'),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final e in _kSizePresets.entries)
+              ChoiceChip(
+                label: Text(e.value.label, style: const TextStyle(fontSize: 11)),
+                selected: _size == e.key,
+                onSelected: (_) => _pickSize(e.key),
+                selectedColor: AppColors.navy.withValues(alpha: 0.15),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _qty,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
+              decoration: _decoration('Quantity'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: _numField(_weight, 'Approx weight (kg)')),
+        ]),
+        if (_num(_weight) > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Unit: ${_n(_num(_weight))} kg · Total: ${_n((totalW * 10).round() / 10)} kg',
+              style: _hintStyle,
+            ),
+          ),
+        const SizedBox(height: 10),
+        _fieldLabel('Cargo Photo (Evidence for driver verification)'),
+        if (_photo != null)
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFF6EE7B7)),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(File(_photo!), width: 44, height: 44, fit: BoxFit.cover),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Photo ready',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF047857))),
+              ),
+              IconButton(
+                onPressed: () => setState(() => _photo = null),
+                icon: const Icon(Icons.delete_outline, color: Color(0xFFE11D48), size: 20),
+              ),
+            ]),
+          )
+        else
+          InkWell(
+            onTap: _pickPhoto,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border, width: 1.2),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.photo_camera_outlined, size: 18, color: Color(0xFF059669)),
+                  SizedBox(width: 8),
+                  Text('Upload or snap photo of item',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _numField(_l, 'Length (cm)')),
+          const SizedBox(width: 6),
+          Expanded(child: _numField(_w, 'Width (cm)')),
+          const SizedBox(width: 6),
+          Expanded(child: _numField(_h, 'Height (cm)')),
+        ]),
+        if (cft > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('≈ $cft CFT per unit from dimensions', style: _hintStyle),
+          ),
+        const SizedBox(height: 4),
+        CheckboxListTile(
+          value: _fragile,
+          onChanged: (v) => setState(() => _fragile = v ?? false),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('Fragile item (needs gentle handling)',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+        if (_err != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(_err!,
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.error)),
+          ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF059669),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: _add,
+          child: const Text('Add Unlisted Goods',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomLineTile extends StatelessWidget {
+  const _CustomLineTile({required this.line, required this.onRemove});
+
+  final CargoLine line;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFECFDF5).withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF6EE7B7)),
+        ),
+        child: Row(children: [
+          if (line.photoPath != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.file(File(line.photoPath!), width: 32, height: 32, fit: BoxFit.cover),
+              ),
+            ),
+          Expanded(
+            child: Text.rich(TextSpan(children: [
+              TextSpan(
+                text: '${line.quantity}× ${line.customName}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+              TextSpan(
+                text: ' · ${line.weightKg} kg · ${line.cft} CFT each'
+                    '${line.isFragile ? ' · Fragile' : ''}',
+                style: _hintStyle,
+              ),
+            ])),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFE11D48)),
+          ),
+        ]),
+      );
+}
+
+/// Extra helpers + add-on services for a Packers & Movers booking (web
+/// `Extra Helpers` stepper and `PMAddOnPicker`). Everything here is only a
+/// request: the server re-prices helpers and add-ons at booking time.
+class PmExtrasSection extends ConsumerWidget {
+  const PmExtrasSection({super.key, required this.city});
+
+  final String city;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final maxHelpers = ref.watch(pmMaxHelpersProvider(city)).valueOrNull ?? 0;
+    final helpers = ref.watch(pmHelpersRequestedProvider);
+    final addOns = ref.watch(pmAddOnsProvider(city)).valueOrNull ?? const <PmAddOn>[];
+    final selected = ref.watch(pmAddOnsSelectedProvider);
+    if (maxHelpers <= 0 && addOns.isEmpty) return const SizedBox.shrink();
+
+    void setHelpers(int v) =>
+        ref.read(pmHelpersRequestedProvider.notifier).state = v.clamp(0, maxHelpers);
+
+    void toggle(PmAddOn a) {
+      final next = Map<String, int>.from(selected);
+      if (next.containsKey(a.code)) {
+        next.remove(a.code);
+      } else {
+        next[a.code] = 1;
+      }
+      ref.read(pmAddOnsSelectedProvider.notifier).state = next;
+    }
+
+    void setQty(PmAddOn a, int q) {
+      final next = Map<String, int>.from(selected);
+      next[a.code] = q.clamp(1, a.maxQuantity < 1 ? 1 : a.maxQuantity);
+      ref.read(pmAddOnsSelectedProvider.notifier).state = next;
+    }
+
+    Widget stepBtn(IconData icon, VoidCallback? onTap) => InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: onTap == null ? AppColors.border : AppColors.navy,
+              ),
+            ),
+            child: Icon(icon,
+                size: 16, color: onTap == null ? AppColors.textHint : AppColors.navy),
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (maxHelpers > 0)
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Extra helpers',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.navy)),
+                    SizedBox(height: 2),
+                    Text('Additional hands for loading & shifting', style: _hintStyle),
+                  ],
+                ),
+              ),
+              stepBtn(Icons.remove_rounded, helpers <= 0 ? null : () => setHelpers(helpers - 1)),
+              SizedBox(
+                width: 30,
+                child: Text('$helpers',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+              ),
+              stepBtn(Icons.add_rounded,
+                  helpers >= maxHelpers ? null : () => setHelpers(helpers + 1)),
+            ],
+          ),
+        if (addOns.isNotEmpty) ...[
+          if (maxHelpers > 0) const SizedBox(height: 14),
+          const Text('Add-on services',
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.navy)),
+          const SizedBox(height: 8),
+          for (final a in addOns)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: selected.containsKey(a.code) ? AppColors.navy : AppColors.border,
+                ),
+                color: selected.containsKey(a.code)
+                    ? AppColors.navy.withValues(alpha: 0.05)
+                    : Colors.white,
+              ),
+              child: Row(
+                children: [
+                  Checkbox(
+                    value: selected.containsKey(a.code),
+                    onChanged: (_) => toggle(a),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => toggle(a),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(a.name,
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w800)),
+                          Text(
+                            '${a.description.isNotEmpty ? a.description : (a.isLabourOnly ? 'Helper travels with your vehicle' : '')} ${a.priceLabel}'
+                                .trim(),
+                            style: _hintStyle,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (selected.containsKey(a.code) &&
+                      a.pricingMode == 'PER_UNIT' &&
+                      a.maxQuantity > 1) ...[
+                    stepBtn(Icons.remove_rounded,
+                        (selected[a.code] ?? 1) <= 1 ? null : () => setQty(a, (selected[a.code] ?? 1) - 1)),
+                    SizedBox(
+                      width: 28,
+                      child: Text('${selected[a.code]}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                    ),
+                    stepBtn(Icons.add_rounded,
+                        (selected[a.code] ?? 1) >= a.maxQuantity ? null : () => setQty(a, (selected[a.code] ?? 1) + 1)),
+                  ],
+                ],
+              ),
+            ),
+          const Text(
+            'Add-on prices are confirmed by the server when you book.',
+            style: _hintStyle,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Cash / Pay online / SEVO wallet for Goods Transport and Packers & Movers
+/// (web `GTPaymentMethodPicker`). Options come from the server
+/// (`/payment/config/`) and the customer's real wallet balance.
+class GtPaymentMethodPicker extends ConsumerWidget {
+  const GtPaymentMethodPicker({super.key, required this.total});
+
+  /// Server-quoted fare (null while unknown).
+  final double? total;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cfg = ref.watch(gtPaymentConfigProvider).valueOrNull;
+    final wallet = ref.watch(gtWalletBalanceProvider).valueOrNull;
+    final value = ref.watch(gtPaymentMethodProvider);
+
+    final onlineOk = cfg?.onlineAvailable ?? false;
+    final walletEnough = wallet != null && total != null && total! > 0 && wallet >= total!;
+    final canSplit = (cfg?.walletPartPayment ?? false) && onlineOk && wallet != null && wallet > 0;
+
+    final options = <({String id, String label, String hint, bool enabled})>[
+      (
+        id: 'cod',
+        label: 'Cash on delivery',
+        hint: 'Pay the driver at the end of the trip',
+        enabled: true
+      ),
+      (
+        id: 'online',
+        label: 'Pay online',
+        hint: 'UPI, cards, netbanking',
+        enabled: onlineOk
+      ),
+      if (wallet != null && wallet > 0)
+        (
+          id: 'wallet',
+          label: 'SEVO wallet (₹${wallet.toStringAsFixed(wallet % 1 == 0 ? 0 : 2)})',
+          hint: walletEnough
+              ? 'Pay the full fare from your wallet'
+              : canSplit
+                  ? 'Use your wallet, pay the rest online'
+                  : 'Balance is lower than the fare',
+          enabled: walletEnough || canSplit
+        ),
+    ];
+
+    // Fall back to cash when the chosen option stopped being available.
+    final current = options.where((o) => o.id == value && o.enabled).isNotEmpty;
+    if (!current && value != 'cod') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) ref.read(gtPaymentMethodProvider.notifier).state = 'cod';
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final o in options)
+          Opacity(
+            opacity: o.enabled ? 1 : 0.5,
+            child: InkWell(
+              onTap: o.enabled
+                  ? () => ref.read(gtPaymentMethodProvider.notifier).state = o.id
+                  : null,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: value == o.id ? AppColors.navy : AppColors.border,
+                  ),
+                  color: value == o.id
+                      ? AppColors.navy.withValues(alpha: 0.05)
+                      : Colors.white,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      value == o.id
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 18,
+                      color: value == o.id ? AppColors.navy : AppColors.textHint,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(o.label,
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w800)),
+                          Text(o.hint, style: _hintStyle),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _ItemList extends ConsumerWidget {
