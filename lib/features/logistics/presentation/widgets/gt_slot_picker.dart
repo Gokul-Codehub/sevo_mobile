@@ -290,18 +290,44 @@ class _SlotTile extends StatelessWidget {
                     : const Color(0xFFE8ECF1)),
           ),
         ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            slot.label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-              color: isSelected
-                  ? Colors.white
-                  : (available ? AppColors.navy : AppColors.textHint),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                slot.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  decoration: available ? null : TextDecoration.lineThrough,
+                  color: isSelected
+                      ? Colors.white
+                      : (available ? AppColors.navy : AppColors.textHint),
+                ),
+              ),
             ),
-          ),
+            if (!available)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDECEC),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_rounded, size: 10, color: AppColors.error),
+                      SizedBox(width: 3),
+                      Text('Slot full',
+                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.error)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

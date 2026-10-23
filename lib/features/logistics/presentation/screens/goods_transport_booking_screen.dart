@@ -22,6 +22,7 @@ import '../../../catalog/domain/catalog_models.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../payment/data/payment_repository.dart';
 import '../../../../core/errors/api_error.dart';
+import '../../data/logistics_repository.dart';
 import '../../domain/gt_models.dart';
 import '../../domain/gt_providers.dart';
 import '../../domain/logistics_models.dart';

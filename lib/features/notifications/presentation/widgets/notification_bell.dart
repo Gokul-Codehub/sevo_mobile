@@ -6,6 +6,7 @@ import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/notification_providers.dart';
+import '../../../../shared/widgets/motion.dart';
 
 /// The bell beside the delivery location on Home. Shows the unread count and
 /// opens the inbox; a guest is sent to sign in first (the inbox is per account).
@@ -29,21 +30,26 @@ class NotificationBell extends ConsumerWidget {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              child: Icon(
-                unread > 0 ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
-                size: 21,
-                color: color,
+            RingOnIncrease(
+              count: unread,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: Icon(
+                  unread > 0 ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+                  size: 21,
+                  color: color,
+                ),
               ),
             ),
             if (unread > 0)
               Positioned(
                 right: 0,
                 top: 1,
-                child: Container(
+                child: BounceOnChange(
+                  value: unread,
+                  child: Container(
                   constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: BoxDecoration(
@@ -61,6 +67,7 @@ class NotificationBell extends ConsumerWidget {
                       color: Colors.white,
                     ),
                   ),
+                ),
                 ),
               ),
           ],

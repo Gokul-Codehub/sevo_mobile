@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
+import '../../../../shared/utils/date_utils.dart';
 
 /// Screen 17: Order Confirmed Screen
 /// Matches reference screen 17 with animated success ring, booking reference ID,
@@ -92,7 +93,7 @@ class BookingSuccessScreen extends ConsumerWidget {
                       const Divider(height: 22, color: AppColors.border),
                       _SummaryRow(
                         label: 'Service Date',
-                        value: booking.scheduledDate,
+                        value: formatDateString(booking.scheduledDate),
                       ),
                       const SizedBox(height: 10),
                       _SummaryRow(

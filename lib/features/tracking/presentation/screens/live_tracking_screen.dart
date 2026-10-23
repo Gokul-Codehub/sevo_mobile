@@ -16,6 +16,7 @@ import '../../domain/tracking_models.dart';
 import '../widgets/gt_trip_cards.dart';
 import '../widgets/tracking_markers.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../shared/widgets/motion.dart';
 
 /// Route line color — changed 2026-09-16 from AppColors.primary (the app's
 /// brand green, 0xFF05A357) to a dedicated blue per explicit request, and
@@ -339,8 +340,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const ShimmerCircle(size: 40),
-                          const SizedBox(height: 16),
+                          SearchingPulse(
+                            size: 130,
+                            icon: tracking.technicianAssigned ? Icons.engineering_rounded : Icons.person_search_rounded,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(height: 12),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 32),
                             child: Text(
@@ -682,8 +687,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                     width: 48,
                                     height: 48,
                                     fit: BoxFit.cover,
-                                    placeholder: (context, url) => _TechAvatarFallback(
-                                        name: technicianName),
+                                    placeholder: (context, url) =>
+                                        const ShimmerBox(width: 48, height: 48, shape: BoxShape.circle),
                                     errorWidget: (context, url, error) =>
                                         _TechAvatarFallback(name: technicianName),
                                   )

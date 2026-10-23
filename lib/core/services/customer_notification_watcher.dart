@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/booking/domain/cart_notifier.dart';
 import '../../features/notifications/domain/notification_providers.dart';
 import '../../routing/app_router.dart' show rootNavigatorKey;
+import '../../shared/utils/app_toast.dart';
 import 'notification_service.dart';
 
 /// Keeps the in-app inbox fresh while the app is open and turns each NEW
@@ -106,6 +108,7 @@ class _CustomerNotificationWatcherState extends ConsumerState<CustomerNotificati
     for (final n in fresh.take(3)) {
       // Already alerted by the booking-status watcher a moment ago.
       if (inbox.hasRecent(n.title, localOnly: true)) continue;
+      _showInAppToast(n.title, n.target);
       NotificationService.instance.show(
         title: n.title,
         body: n.body.isEmpty ? 'Tap to open' : n.body,
@@ -115,6 +118,24 @@ class _CustomerNotificationWatcherState extends ConsumerState<CustomerNotificati
       );
     }
     _remember(maxId);
+  }
+
+  /// The same alert as a banner inside the app (the device notification only
+  /// shows when the app is in the background).
+  void _showInAppToast(String title, String? target) {
+    final overlay = rootNavigatorKey.currentState?.overlay;
+    if (overlay == null) return;
+    AppToast.show(
+      overlay.context,
+      title,
+      type: AppToastType.info,
+      overlayOverride: overlay,
+      actionLabel: 'View',
+      onAction: () {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx != null) GoRouter.of(ctx).push('/notifications');
+      },
+    );
   }
 
   void _remember(int id) {

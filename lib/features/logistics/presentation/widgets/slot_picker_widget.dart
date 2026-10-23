@@ -89,7 +89,10 @@ class SlotPickerWidget extends ConsumerWidget {
             message: 'Unable to load slots (${err is ApiError ? err.message : err}). Tap to retry.',
             onRetry: () => ref.refresh(currentSelectedDateSlotsProvider),
           ),
-          data: (slots) {
+          data: (allSlots) {
+            // Technician preparation time: for today, only slots starting at least
+            // [_prepLead] from now are offered (the very next one after the threshold).
+            final slots = _withoutPrepWindow(allSlots, selectedDate);
             // A future date at its daily limit: offer an availability alert.
             if (day != null && day.isFutureFull && slots.every((s) => !s.isAvailable)) {
               return const CapacityWaitlistBanner();
@@ -116,7 +119,7 @@ class SlotPickerWidget extends ConsumerWidget {
                           ref.read(selectedTimeSlotProvider.notifier).state = null;
                         },
                         icon: const Icon(Icons.event_available_rounded, size: 18),
-                        label: Text('Show next available date (${DateFormat('EEE, d MMM').format(next)})'),
+                        label: Text('Show next available date (${DateFormat('EEE, dd-MM-yyyy').format(next)})'),
                       ),
                     ),
                   if (slots.isNotEmpty) ...[
@@ -228,6 +231,17 @@ class SlotPickerWidget extends ConsumerWidget {
     final isAvailable = slot.isAvailable && !isPast;
     final why = (slot.reason ?? '').trim();
     final isSelected = isAvailable && selectedSlot?.id == slot.id;
+    // A slot the server has no room for: blocked, with a clear "Full" tag.
+    final lowerWhy = why.toLowerCase();
+    final isFull = !isAvailable &&
+        !isPast &&
+        (why.isEmpty ||
+            lowerWhy.contains('full') ||
+            lowerWhy.contains('capacity') ||
+            lowerWhy.contains('booked') ||
+            lowerWhy.contains('reserved') ||
+            lowerWhy.contains('technician') ||
+            lowerWhy.contains('unavailable'));
 
     return GestureDetector(
       onTap: isAvailable
@@ -258,13 +272,34 @@ class SlotPickerWidget extends ConsumerWidget {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  decoration: isFull ? TextDecoration.lineThrough : null,
                   color: isSelected
                       ? Colors.white
                       : (isAvailable ? AppColors.navy : AppColors.textHint),
                 ),
               ),
             ),
-            if (!isAvailable && why.isNotEmpty)
+            if (isFull)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDECEC),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_rounded, size: 10, color: AppColors.error),
+                      SizedBox(width: 3),
+                      Text('Slot full',
+                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.error)),
+                    ],
+                  ),
+                ),
+              )
+            else if (!isAvailable && why.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
                 child: Text(
@@ -302,6 +337,41 @@ class SlotPickerWidget extends ConsumerWidget {
     if (mer == 'PM' && h < 12) h += 12;
     if (mer == 'AM' && h == 12) h = 0;
     return h;
+  }
+
+  /// Time the technician needs to get ready before a visit.
+  static const Duration _prepLead = Duration(hours: 1);
+
+  /// Minutes since midnight of the slot's start, or null if unreadable.
+  int? _slotStartMinutes(TimeSlot slot) {
+    final timeStr = slot.startTime.isNotEmpty ? slot.startTime : slot.label;
+    final match = RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)?').firstMatch(timeStr.toUpperCase());
+    if (match == null) return null;
+    var h = int.parse(match.group(1)!);
+    final m = int.parse(match.group(2)!);
+    final mer = match.group(3);
+    if (mer == 'PM' && h < 12) h += 12;
+    if (mer == 'AM' && h == 12) h = 0;
+    return h * 60 + m;
+  }
+
+  /// Drops today's slots that start inside the preparation window (or have
+  /// already started). Other dates are untouched.
+  List<TimeSlot> _withoutPrepWindow(List<TimeSlot> slots, DateTime selectedDate) {
+    final now = DateTime.now();
+    final isToday = selectedDate.year == now.year &&
+        selectedDate.month == now.month &&
+        selectedDate.day == now.day;
+    if (!isToday) return slots;
+    final earliest = now.add(_prepLead);
+    final earliestMin = earliest.hour * 60 + earliest.minute;
+    // Booking after midnight-rollover of the threshold means nothing left today.
+    final rolledOver = earliest.day != now.day;
+    return slots.where((s) {
+      if (rolledOver) return false;
+      final start = _slotStartMinutes(s);
+      return start == null || start >= earliestMin;
+    }).toList();
   }
 
   /// Start hour (0-23) of a slot, used for the Morning/Afternoon/Evening groups.

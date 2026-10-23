@@ -59,7 +59,7 @@ class ActiveQuoteCard extends ConsumerWidget {
             if (quote.validUntil != null) ...[
               const SizedBox(height: 6),
               Text(
-                'Valid until ${DateFormat('d MMM, y').format(quote.validUntil!)}',
+                'Valid until ${DateFormat('dd-MM-yyyy').format(quote.validUntil!)}',
                 style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
               ),
             ],

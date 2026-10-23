@@ -7,7 +7,9 @@ import 'common_widgets.dart';
 
 /// Resilient remote image widget with a two-tier fallback:
 /// Tier 1: Live Production HTTPS Asset (CachedNetworkImage)
-/// Tier 2: Branded Semantic Vector Icon Placeholder
+/// Tier 2: Branded Semantic Vector Icon Placeholder - only when there is no
+/// image URL at all. While an image loads, or after a failed request, a
+/// skeleton block is shown instead of the icon.
 ///
 /// This used to have a "Tier 2: local asset bundle" step in between that
 /// tried assets/images/mockups/... before falling back to the icon — but
@@ -124,10 +126,11 @@ class AppRemoteImage extends StatelessWidget {
 
     Widget imageContent;
 
-    if (resolvedUrl == null ||
-        resolvedUrl.isEmpty ||
-        _isKnownBad(resolvedUrl)) {
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
+      // The server returned no image at all: only now is the placeholder icon shown.
       imageContent = _buildPlaceholder();
+    } else if (_isKnownBad(resolvedUrl)) {
+      imageContent = _buildSkeleton();
     } else {
       // Fixed 2026-09-18 (performance pass, "the application is getting
       // lag"): without memCacheWidth/memCacheHeight, CachedNetworkImage
@@ -169,7 +172,8 @@ class AppRemoteImage extends StatelessWidget {
             debugPrint('  -> Using semantic placeholder (will retry after ${_failureCooldown.inSeconds}s)');
           }
           _recentlyFailedUrls[url] = DateTime.now();
-          return _buildPlaceholder();
+          // A bad response keeps the plain skeleton (never the icon).
+          return _buildSkeleton();
         },
       );
     }
@@ -183,6 +187,13 @@ class AppRemoteImage extends StatelessWidget {
 
     return imageContent;
   }
+
+  /// Static (non-animating) skeleton block, for images that failed to load.
+  Widget _buildSkeleton() => Container(
+        width: width,
+        height: height,
+        color: AppColors.shimmerBase,
+      );
 
   Widget _buildPlaceholder() {
     if (fallbackWidget != null) return fallbackWidget!;

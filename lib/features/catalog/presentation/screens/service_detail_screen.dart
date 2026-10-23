@@ -261,6 +261,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                   // Rating & Duration Row
                   Row(
                     children: [
+                      if (service.hasReviews)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
@@ -285,7 +286,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           ],
                         ),
                       ),
-                      if (service.reviewCount > 0) ...[
+                      if (service.hasReviews && service.reviewCount > 0) ...[
                         const SizedBox(width: 8),
                         Text(
                           '(${service.reviewCount} reviews)',
@@ -455,20 +456,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         isIncluded: false,
                       ),
                     const SizedBox(height: 20),
-                  ] else ...[
-                    // Default Inclusions
-                    const _InclusionsCard(
-                      title: "What's Included",
-                      items: [
-                        'Complete system diagnostic check',
-                        'Eco-friendly cleaning solvents',
-                        'Post-service cleanup & testing',
-                        '30-Day service rework warranty',
-                      ],
-                      isIncluded: true,
-                    ),
-                    const SizedBox(height: 20),
                   ],
+                  // (no invented default inclusions: like the web app, an empty
+                  // "What's Included" section is simply not shown)
 
                   // ── What You Need to Get Ready ──
                   // Real backend field (Package.ready via
@@ -616,6 +606,109 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                 )
                                 .toList(),
                           ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Customer Reviews (web parity) ──
+                  if (service.reviews.isNotEmpty) ...[
+                    _DetailSection(
+                      icon: Icons.star_rounded,
+                      title: 'Customer Reviews',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final r in service.reviews)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        r.name.isEmpty ? 'Customer' : r.name,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.navy,
+                                        ),
+                                      ),
+                                      if (r.rating != null) ...[
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.star_rounded, size: 14, color: AppColors.star),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          r.rating!.toStringAsFixed(r.rating! % 1 == 0 ? 0 : 1),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF92400E),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  if (r.text.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 3),
+                                      child: Text(
+                                        r.text,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          height: 1.4,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Frequently Asked Questions (web parity) ──
+                  if (service.faqs.any((f) => f.question.trim().isNotEmpty || f.answer.trim().isNotEmpty)) ...[
+                    _DetailSection(
+                      icon: Icons.help_outline_rounded,
+                      title: 'Frequently Asked Questions',
+                      child: Column(
+                        children: [
+                          for (final f in service.faqs)
+                            if (f.question.trim().isNotEmpty || f.answer.trim().isNotEmpty)
+                              Material(
+                                type: MaterialType.transparency,
+                                child: Theme(
+                                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                child: ExpansionTile(
+                                  tilePadding: EdgeInsets.zero,
+                                  childrenPadding: const EdgeInsets.only(bottom: 10),
+                                  expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                                  title: Text(
+                                    f.question,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.navy,
+                                    ),
+                                  ),
+                                  children: [
+                                    Text(
+                                      f.answer,
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        height: 1.4,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )),
                         ],
                       ),
                     ),
@@ -1056,6 +1149,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                             const SizedBox(height: 10),
                             Row(
                               children: [
+                                if (service.hasReviews) ...[
                                 const Icon(Icons.star_rounded,
                                     size: 22, color: AppColors.star),
                                 const SizedBox(width: 4),
@@ -1067,7 +1161,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                     color: AppColors.navy,
                                   ),
                                 ),
-                                if (service.reviewCount > 0) ...[
+                                ],
+                                if (service.hasReviews && service.reviewCount > 0) ...[
                                   const SizedBox(width: 4),
                                   Text(
                                     '(${service.reviewCount})',
@@ -1797,6 +1892,45 @@ class _PackageOptionPicker extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Titled card used for the Customer Reviews / FAQ sections.
+class _DetailSection extends StatelessWidget {
+  const _DetailSection({required this.icon, required this.title, required this.child});
+
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border, width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: AppColors.navy),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
     );
   }
 }

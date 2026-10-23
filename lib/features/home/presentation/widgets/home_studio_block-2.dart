@@ -1445,7 +1445,7 @@ class _ServiceCard extends StatelessWidget {
         : (isGt ? item.goodsTransportLabel : item.title);
     final badge = item.isPopular
         ? 'Best Seller'
-        : (item.rating >= 4.5 ? 'Top Rated' : '');
+        : (item.hasReviews && item.rating >= 4.5 ? 'Top Rated' : '');
     final imageUrl =
         isGt ? (item.goodsTransportImageUrl ?? item.imageUrl) : item.imageUrl;
     final price = '\u20B9${item.effectivePrice.toDouble().toStringAsFixed(0)}';

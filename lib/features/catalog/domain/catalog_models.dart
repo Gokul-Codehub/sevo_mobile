@@ -253,6 +253,31 @@ class Category extends Equatable {
       ];
 }
 
+/// One customer review of a package (web: `pkg.reviews`, shown under
+/// "Customer Reviews" in the package details).
+class ServiceReview extends Equatable {
+  const ServiceReview({required this.name, required this.text, this.rating});
+
+  final String name;
+  final String text;
+  final double? rating;
+
+  static ServiceReview? tryParse(dynamic raw) {
+    if (raw is! Map) return null;
+    final m = Map<String, dynamic>.from(raw);
+    if (m['enabled'] == false) return null;
+    final name = (m['name'] ?? m['author'] ?? '').toString().trim();
+    final text = (m['text'] ?? m['comment'] ?? '').toString().trim();
+    if (name.isEmpty && text.isEmpty) return null;
+    return ServiceReview(name: name, text: text, rating: double.tryParse('${m['rating'] ?? ''}'));
+  }
+
+  Map<String, dynamic> toJson() => {'name': name, 'text': text, if (rating != null) 'rating': rating};
+
+  @override
+  List<Object?> get props => [name, text, rating];
+}
+
 /// FAQ item for a service.
 class ServiceFaq extends Equatable {
   const ServiceFaq({
@@ -379,6 +404,7 @@ class ServiceItem extends Equatable {
     this.tag,
     this.packageOptions = const [],
     this.selectedOption,
+    this.reviews = const [],
   });
 
   final int id;
@@ -502,6 +528,11 @@ class ServiceItem extends Equatable {
 
   bool get hasVariantOptions => variantOptions.length > 1;
 
+  /// Real customer reviews (empty when there are none - then no rating is shown).
+  final List<ServiceReview> reviews;
+
+  bool get hasReviews => reviews.isNotEmpty;
+
   /// Admin tag shown as a badge on the package (e.g. "Popular", "Best seller").
   final String? tag;
 
@@ -572,6 +603,7 @@ class ServiceItem extends Equatable {
       tag: tag,
       packageOptions: packageOptions,
       selectedOption: option,
+      reviews: reviews,
     );
   }
 
@@ -760,7 +792,17 @@ class ServiceItem extends Equatable {
     return out;
   }
 
+  static double? _avgRating(List<ServiceReview> r) {
+    final rated = r.where((e) => e.rating != null).map((e) => e.rating!).toList();
+    if (rated.isEmpty) return null;
+    return rated.reduce((a, b) => a + b) / rated.length;
+  }
+
   factory ServiceItem.fromJson(Map<String, dynamic> json) {
+    final parsedReviews = (json['reviews'] as List? ?? const [])
+        .map(ServiceReview.tryParse)
+        .whereType<ServiceReview>()
+        .toList();
     final incList = _extractLabeledList(json['inclusions'] ?? json['includes']);
     final excList = _extractLabeledList(json['exclusions'] ?? json['excludes']);
 
@@ -817,8 +859,11 @@ class ServiceItem extends Equatable {
         json['duration']?.toString(),
         json['duration_minutes'],
       ),
-      rating: parseDoubleOrNull(json['rating']) ?? 4.8,
-      reviewCount: parseInt(json['review_count']),
+      // Rating/review count come from the real reviews (like the web app);
+      // with no reviews nothing is shown (UI checks [hasReviews]).
+      rating: _avgRating(parsedReviews) ?? parseDoubleOrNull(json['rating']) ?? 4.8,
+      reviewCount: parsedReviews.isNotEmpty ? parsedReviews.length : parseInt(json['review_count']),
+      reviews: parsedReviews,
       categoryId: categoryId,
       categoryName: json['category_name']?.toString() ??
           (json['category'] is Map ? json['category']['name']?.toString() : null),
@@ -870,6 +915,7 @@ class ServiceItem extends Equatable {
 
   Map<String, dynamic> toJson() => {
         if (tag != null) 'tag': tag,
+        'reviews': reviews.map((r) => r.toJson()).toList(),
         'options': packageOptions.map((o) => o.toJson()).toList(),
         if (selectedOption != null) 'selected_option': selectedOption!.toJson(),
         'id': id,
@@ -949,6 +995,7 @@ class ServiceItem extends Equatable {
         tag,
         packageOptions,
         selectedOption,
+        reviews,
       ];
 }
 

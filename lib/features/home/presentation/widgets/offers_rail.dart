@@ -10,6 +10,7 @@ import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../booking/data/coupon_repository.dart';
 import '../../data/home_studio_repository.dart';
 import 'studio_title.dart';
+import '../../../../shared/utils/date_utils.dart';
 
 /// Home Studio "Offers & Coupons" carousel: ticket-style cards for real,
 /// admin-published coupons only (the live /customer/coupons/ list), so an
@@ -218,13 +219,6 @@ class _OfferTicket extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(18, 10, 14, 10),
               child: Row(
                 children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                    child: Icon(coupon.isPercentage ? Icons.percent_rounded : Icons.local_offer_rounded, color: accent, size: 24),
-                  ),
-                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -275,8 +269,6 @@ class _TicketClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /// Terms built only from what the coupon really says; nothing is invented.
 List<String> _termsFor(Coupon c) {
   final out = <String>[];
@@ -288,7 +280,7 @@ List<String> _termsFor(Coupon c) {
   final svc = c.serviceEligibility.trim();
   if (svc.isNotEmpty && svc.toLowerCase() != 'all services') out.add('Applicable on: $svc.');
   final e = c.expiresAt;
-  if (e != null) out.add('Valid till ${e.day} ${_months[e.month - 1]} ${e.year}.');
+  if (e != null) out.add('Valid till ${formatDmy(e)}.');
   return out;
 }
 

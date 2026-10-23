@@ -88,7 +88,7 @@ class _CapacityWaitlistBannerState extends ConsumerState<CapacityWaitlistBanner>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${DateFormat('d MMM').format(date)} is fully booked',
+                  '${DateFormat('dd-MM-yyyy').format(date)} is fully booked',
                   style: const TextStyle(
                       fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy),
                 ),

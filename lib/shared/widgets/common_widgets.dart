@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import 'status_page.dart';
 
 /// Animated shimmer block with configurable dimensions, shape, and corner radius.
 class ShimmerBox extends StatefulWidget {
@@ -327,55 +328,17 @@ class _EmptyStateWidgetState extends State<EmptyStateWidget>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: FadeTransition(
-        opacity: _fadeAnim,
-        child: SlideTransition(
-          position: _slideAnim,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryTint,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      widget.emoji,
-                      style: const TextStyle(fontSize: 38.5),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  widget.title,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.subtitle,
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                if (widget.action != null && widget.actionLabel != null) ...[
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: widget.action,
-                    child: Text(widget.actionLabel!),
-                  ),
-                ],
-              ],
-            ),
-          ),
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: SlideTransition(
+        position: _slideAnim,
+        child: StatusPage(
+          kind: StatusKind.empty,
+          compact: true,
+          title: widget.title,
+          message: widget.subtitle,
+          actionLabel: widget.actionLabel,
+          onAction: widget.action,
         ),
       ),
     );
@@ -395,51 +358,15 @@ class ErrorStateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.errorLight,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.wifi_off_rounded,
-                size: 38,
-                color: AppColors.error,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Something went wrong',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: theme.textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Try Again'),
-            ),
-          ],
-        ),
-      ),
+    final lower = message.toLowerCase();
+    final offline = lower.contains('internet') || lower.contains('network') || lower.contains('connection');
+    return StatusPage(
+      kind: offline ? StatusKind.noInternet : StatusKind.error,
+      compact: true,
+      title: offline ? 'No internet connection' : 'Something went wrong',
+      message: offline ? 'Please check your network' : message,
+      actionLabel: 'Try again',
+      onAction: onRetry,
     );
   }
 }

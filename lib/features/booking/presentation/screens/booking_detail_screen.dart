@@ -25,6 +25,7 @@ import '../../data/booking_repository.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../widgets/active_quote_card.dart';
+import '../../../../shared/utils/date_utils.dart';
 
 /// Comprehensive booking detail screen with timeline, actions, and technician info.
 class BookingDetailScreen extends ConsumerWidget {
@@ -162,7 +163,7 @@ class BookingDetailScreen extends ConsumerWidget {
                   runSpacing: 8,
                   children: [
                     _BdMeta(Icons.schedule_rounded, booking.scheduledTimeSlot),
-                    _BdMeta(Icons.calendar_today_outlined, booking.scheduledDate),
+                    _BdMeta(Icons.calendar_today_outlined, formatDateString(booking.scheduledDate)),
                     _BdMeta(Icons.shopping_bag_outlined,
                         '$itemCount item${itemCount == 1 ? '' : 's'}'),
                   ],
@@ -182,9 +183,9 @@ class BookingDetailScreen extends ConsumerWidget {
                 if (created != null)
                   _BillRow(
                     label: 'Booking Date',
-                    amount: DateFormat('MMM dd, yyyy - h a').format(created.toLocal()),
+                    amount: DateFormat('dd-MM-yyyy, h:mm a').format(created.toLocal()),
                   ),
-                _BillRow(label: 'Scheduled Date', amount: booking.scheduledDate),
+                _BillRow(label: 'Scheduled Date', amount: formatDateString(booking.scheduledDate)),
                 _BillRow(label: 'Time Slot', amount: booking.scheduledTimeSlot),
                 if (booking.address != null) ...[
                   _BillRow(

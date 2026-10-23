@@ -66,7 +66,9 @@ class StudioTitle extends StatelessWidget {
         child: Align(
           alignment: Alignment.centerLeft,
           child: SizedBox(
-            height: imageHeight,
+            // Image titles are uploaded artwork (logos / lettering) and read small at
+            // text size, so they are drawn larger than the plain-text title would be.
+            height: imageHeight * 1.8,
             child: AppRemoteImage(imageUrl: imageUrl.trim(), title: text, fit: BoxFit.contain),
           ),
         ),

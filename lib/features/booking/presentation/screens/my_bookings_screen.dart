@@ -11,6 +11,8 @@ import '../../../auth/domain/auth_notifier.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import 'booking_detail_screen.dart' show bookingItemImageProvider;
+import '../../../../shared/utils/date_utils.dart';
+import '../../../../shared/widgets/motion.dart';
 
 const Color _mbBg = Color(0xFFF8F4EF);
 
@@ -452,7 +454,7 @@ class _BookingListView extends StatelessWidget {
         separatorBuilder: (context, index) => const SizedBox(height: 14),
         itemBuilder: (context, index) {
           final booking = bookings[index];
-          return _BookingCard(booking: booking);
+          return FadeSlideIn(key: ValueKey('b-${booking.id}'), index: index, child: _BookingCard(booking: booking));
         },
       ),
     );
@@ -622,7 +624,7 @@ class _BookingCard extends ConsumerWidget {
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
-                                  booking.scheduledDate,
+                                  formatDateString(booking.scheduledDate),
                                   style: const TextStyle(
                                       fontSize: 11.5, color: grey),
                                   overflow: TextOverflow.ellipsis,

@@ -1073,9 +1073,11 @@ class _BestsellerTileCard extends ConsumerWidget {
       if (tile['product_ids'] is List)
         for (final v in tile['product_ids'] as List) v.toString(),
     ].where((s) => int.tryParse(s) != null).take(4).toList();
-    final products = ids.isEmpty
-        ? const <MarketplaceProduct>[]
-        : (ref.watch(marketplaceProductsByIdsProvider(ids.join(','))).valueOrNull ?? const <MarketplaceProduct>[]);
+    final productsAsync = ids.isEmpty ? null : ref.watch(marketplaceProductsByIdsProvider(ids.join(',')));
+    final products = productsAsync?.valueOrNull ?? const <MarketplaceProduct>[];
+    // Skeleton until the products answer (a failed request keeps it too); the
+    // cart icon is only for "answered, and there is nothing to show".
+    final imagesPending = productsAsync != null && !productsAsync.hasValue;
     final thumbs = <String>[
       for (final p in products)
         if (p.galleryImages.isNotEmpty) p.galleryImages.first else if ((p.primaryImage ?? '').isNotEmpty) p.primaryImage!,
@@ -1095,7 +1097,9 @@ class _BestsellerTileCard extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
-                  child: thumbs.isEmpty
+                  child: imagesPending
+                      ? const ShimmerBox(borderRadius: 8)
+                      : thumbs.isEmpty
                       ? const Center(child: Icon(Icons.local_grocery_store_rounded, color: AppColors.groceryGreenDark, size: 32))
                       : GridView.builder(
                           physics: const NeverScrollableScrollPhysics(),
@@ -1183,6 +1187,14 @@ class _ServiceCategoryGrid extends ConsumerWidget {
         if (list.length > limit) list = list.sublist(0, limit);
         if (list.isEmpty) return const SizedBox.shrink();
         final cols = (int.tryParse(section.settings['columns']?.toString() ?? '') ?? 3).clamp(2, 4);
+        // Admin "Show on each card" switches.
+        final showImage = section.flag('show_category_image', fallback: true);
+        final showName = section.flag('show_category_name', fallback: true);
+        final showCount = section.flag('show_category_count');
+        String? countText(Category c) {
+          final n = c.subcategories.length;
+          return (showCount && n > 0) ? '$n ${n == 1 ? 'service' : 'services'}' : null;
+        }
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
@@ -1209,18 +1221,20 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                           width: 72,
                           child: Column(
                             children: [
-                              ClipOval(
-                                child: SizedBox(
-                                  width: 64,
-                                  height: 64,
-                                  child: (c.image ?? '').isNotEmpty
-                                      ? AppRemoteImage(imageUrl: c.image!, fit: BoxFit.cover)
-                                      : Container(color: Colors.white, child: const Icon(Icons.category_rounded, color: AppColors.navy)),
+                              if (showImage)
+                                ClipOval(
+                                  child: SizedBox(
+                                    width: 64,
+                                    height: 64,
+                                    child: (c.image ?? '').isNotEmpty
+                                        ? AppRemoteImage(imageUrl: c.image!, fit: BoxFit.cover)
+                                        : Container(color: Colors.white, child: const Icon(Icons.category_rounded, color: AppColors.navy)),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
+                              if (showImage && showName) const SizedBox(height: 6),
+                              if (showName)
+                                Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
                             ],
                           ),
                         ),
@@ -1252,27 +1266,37 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                         // name sits in the bottom 1/4.
                         child: Column(
                           children: [
-                            Expanded(
-                              flex: 3,
-                              child: SizedBox.expand(
-                                child: (c.image ?? '').isNotEmpty
-                                    ? AppRemoteImage(imageUrl: c.image!, fit: BoxFit.cover)
-                                    : Container(
-                                        color: const Color(0xFFF1F5F9),
-                                        child: const Icon(Icons.category_rounded, color: AppColors.navy),
-                                      ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                                  child: Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.15, color: Color(0xFF1A1A1A))),
+                            if (showImage)
+                              Expanded(
+                                flex: 3,
+                                child: SizedBox.expand(
+                                  child: (c.image ?? '').isNotEmpty
+                                      ? AppRemoteImage(imageUrl: c.image!, fit: BoxFit.cover)
+                                      : Container(
+                                          color: const Color(0xFFF1F5F9),
+                                          child: const Icon(Icons.category_rounded, color: AppColors.navy),
+                                        ),
                                 ),
                               ),
-                            ),
+                            if (showName || countText(c) != null)
+                              Expanded(
+                                flex: showImage ? 1 : 3,
+                                child: Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (showName)
+                                          Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.15, color: Color(0xFF1A1A1A))),
+                                        if (countText(c) != null)
+                                          Text(countText(c)!, style: const TextStyle(fontSize: 9.5, color: AppColors.textHint)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -1445,7 +1469,7 @@ class _ServiceCard extends StatelessWidget {
         : (isGt ? item.goodsTransportLabel : item.title);
     final badge = item.isPopular
         ? 'Best Seller'
-        : (item.rating >= 4.5 ? 'Top Rated' : '');
+        : (item.hasReviews && item.rating >= 4.5 ? 'Top Rated' : '');
     final imageUrl =
         isGt ? (item.goodsTransportImageUrl ?? item.imageUrl) : item.imageUrl;
     final price = '\u20B9${item.effectivePrice.toDouble().toStringAsFixed(0)}';

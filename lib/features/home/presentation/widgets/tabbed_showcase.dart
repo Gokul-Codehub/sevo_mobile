@@ -325,7 +325,7 @@ class _ShowcaseCard extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // Image with the offer %, pack size and Add button laid over it.
+              // Image with the offer % and pack size laid over it (Add sits beside the price).
               SizedBox(
                 height: showImage ? 122 : 30,
                 width: double.infinity,
@@ -355,7 +355,7 @@ class _ShowcaseCard extends StatelessWidget {
                       ),
                     if (pack.isNotEmpty)
                       Positioned(
-                        left: 6,
+                        right: 6,
                         bottom: 6,
                         child: Container(
                           constraints: const BoxConstraints(maxWidth: 54),
@@ -364,23 +364,6 @@ class _ShowcaseCard extends StatelessWidget {
                           child: Text(pack, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
                         ),
                       ),
-                    if (showAdd)
-                    Positioned(
-                      right: 4,
-                      bottom: showImage ? 4 : 0,
-                      child: isServices
-                          ? GestureDetector(
-                              onTap: () => context.push('/services/$slug', extra: item),
-                              child: Container(
-                                height: 28,
-                                padding: const EdgeInsets.symmetric(horizontal: 14),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
-                                child: const Text('View', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
-                              ),
-                            )
-                          : QuickAddControl(service: item),
-                    ),
                   ],
                 ),
               ),
@@ -399,27 +382,51 @@ class _ShowcaseCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (showPrice)
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      '\u20b9${_money(item.effectivePrice.toDouble())}',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
-                    ),
-                    if (showDiscount && item.hasDiscount) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        '\u20b9${_money(item.price.toDouble())}',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF), decoration: TextDecoration.lineThrough),
-                      ),
-                    ],
-                  ],
-                ),
+              if (showPrice || showAdd)
+              Row(
+                children: [
+                  Expanded(
+                    child: showPrice
+                        ? Align(
+                            alignment: Alignment.centerLeft,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  Text(
+                                    '₹${_money(item.effectivePrice.toDouble())}',
+                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+                                  ),
+                                  if (showDiscount && item.hasDiscount) ...[
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '₹${_money(item.price.toDouble())}',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF), decoration: TextDecoration.lineThrough),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  if (showAdd)
+                    isServices
+                        ? GestureDetector(
+                            onTap: () => context.push('/services/$slug', extra: item),
+                            child: Container(
+                              height: 28,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(18)),
+                              child: const Text('View', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                            ),
+                          )
+                        : QuickAddControl(service: item),
+                ],
               ),
             ],
           ),

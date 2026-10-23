@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:decimal/decimal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -102,6 +103,8 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
     required Decimal totalAmount,
     String? specialInstructions,
     String? contactPhone,
+    Uint8List? photoBytes,
+    String? photoFileName,
     // Fixed 2026-10-08 (QA CME02 — see checkout_screen.dart's
     // `_paymentMethod` doc comment): forwarded as-is to
     // BookingRepository.createBooking, which previously never sent any
@@ -168,6 +171,9 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       contactPhone: validPhone,
       paymentMethod: paymentMethod,
       customerName: currentUser?.name ?? 'Customer',
+      customerEmail: currentUser?.email,
+      photoBytes: photoBytes,
+      photoFileName: photoFileName,
       // Fixed 2026-08-27: forward the selected address's coordinates so the
       // backend's ServiceRequest.latitude/longitude columns are actually
       // populated instead of staying null for every booking — see the note

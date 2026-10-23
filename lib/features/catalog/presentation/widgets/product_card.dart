@@ -8,6 +8,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/catalog_models.dart';
+import '../../../../shared/widgets/motion.dart';
 
 /// Amazon/Flipkart-style product tile: the image dominates the top of the
 /// card, with a compact name/price/rating block underneath. Used for
@@ -434,7 +435,7 @@ class ProductCard extends ConsumerWidget {
     return GestureDetector(
       onTap:
           onTap ?? () => context.push('/products/$_safeSlug', extra: service),
-      child: _groceryCardBody(quantityInCart, accent, context, ref),
+      child: PressScale(child: _groceryCardBody(quantityInCart, accent, context, ref)),
     );
   }
 

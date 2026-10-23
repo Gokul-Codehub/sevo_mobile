@@ -12,11 +12,63 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/listing_skeleton.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
+import '../../../ac_inspection/data/ac_inspection_repository.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
 import '../widgets/category_popup_sheet.dart';
 import '../widgets/product_card.dart';
 import '../widgets/service_card.dart';
+
+/// Entry card for the AC Inspection & Diagnostic Visit (admin-driven fee/text).
+class _AcInspectionBanner extends ConsumerWidget {
+  const _AcInspectionBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cfg = ref.watch(acInspectionConfigProvider).valueOrNull;
+    if (cfg == null || !cfg.isActive) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => context.push(AppRoutes.acInspection),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(colors: [Color(0xFF0B2337), Color(0xFF1E3A5F)]),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), shape: BoxShape.circle),
+                child: const Icon(Icons.ac_unit_rounded, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(cfg.title,
+                        style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 3),
+                    Text('Not sure about the fault? Inspection at Rs ${cfg.fee} - quote before any repair',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 11.5, height: 1.3)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// Blinkit-style circular department tile (e.g. "Fresh Vegetables", "Fresh
 /// Fruits") built from the Vegetable Inventory category each product
@@ -919,6 +971,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             return ListView(
               padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
               children: [
+                // Air Conditioner: the web's "AC Inspection & Diagnostic Visit".
+                if (categorySlug.replaceAll('-', '_').toLowerCase() == 'ac_appliance')
+                  const _AcInspectionBanner(),
                 ...services.map(
                   (service) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../theme/app_colors.dart';
 
@@ -42,8 +43,11 @@ class AppToast {
     String message, {
     AppToastType type = AppToastType.success,
     Duration? duration,
+    String? actionLabel,
+    VoidCallback? onAction,
+    OverlayState? overlayOverride,
   }) {
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final overlay = overlayOverride ?? Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
 
     // Only one toast on screen at a time — a fast second call (e.g. rapid
@@ -51,20 +55,21 @@ class AppToast {
     _activeEntry?.remove();
     _activeEntry = null;
 
+    // White card with a coloured round icon badge (green / red / navy).
     final Color background;
     final IconData icon;
     switch (type) {
       case AppToastType.success:
         background = AppColors.primary;
-        icon = Icons.check_circle_rounded;
+        icon = Icons.check_rounded;
         break;
       case AppToastType.error:
         background = AppColors.error;
-        icon = Icons.error_rounded;
+        icon = Icons.priority_high_rounded;
         break;
       case AppToastType.info:
         background = AppColors.navy;
-        icon = Icons.info_rounded;
+        icon = Icons.info_outline_rounded;
         break;
     }
 
@@ -87,6 +92,8 @@ class AppToast {
         background: background,
         icon: icon,
         holdFor: holdFor,
+        actionLabel: actionLabel,
+        onAction: onAction,
         onFinished: () {
           if (_activeEntry == entry) {
             _activeEntry = null;
@@ -103,7 +110,16 @@ class AppToast {
   /// Convenience for the app's most common confirmation: an item/service
   /// was just added to the cart.
   static void addedToCart(BuildContext context, String itemName) {
-    show(context, '$itemName added to cart');
+    show(
+      context,
+      '$itemName added to cart',
+      actionLabel: 'View cart',
+      onAction: () {
+        try {
+          GoRouter.of(context).push('/cart');
+        } catch (_) {}
+      },
+    );
   }
 
   /// Convenience for a successfully created booking.
@@ -122,8 +138,12 @@ class _ToastBanner extends StatefulWidget {
     required this.icon,
     required this.onFinished,
     required this.holdFor,
+    this.actionLabel,
+    this.onAction,
   });
 
+  final String? actionLabel;
+  final VoidCallback? onAction;
   final Duration holdFor;
   final String message;
   final Color background;
@@ -178,36 +198,81 @@ class _ToastBannerState extends State<_ToastBanner>
             opacity: _controller,
             child: Material(
               color: Colors.transparent,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: widget.background,
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(widget.icon, color: Colors.white, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        widget.message,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12.5,
-                          color: Colors.white,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onFinished,
+                onVerticalDragEnd: (d) {
+                  if ((d.primaryVelocity ?? 0) < 0) widget.onFinished();
+                },
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(12, 11, 16, 11),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE6EAF0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.navy.withValues(alpha: 0.14),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: widget.background,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(widget.icon, color: Colors.white, size: 17),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: widget.message,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  height: 1.3,
+                                  color: AppColors.navy,
+                                ),
+                              ),
+                              if (widget.actionLabel != null && widget.onAction != null)
+                                WidgetSpan(
+                                  alignment: PlaceholderAlignment.baseline,
+                                  baseline: TextBaseline.alphabetic,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      widget.onFinished();
+                                      widget.onAction!();
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 6),
+                                      child: Text(
+                                        '${widget.actionLabel} →',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

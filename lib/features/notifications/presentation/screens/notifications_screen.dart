@@ -7,6 +7,8 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../domain/notification_models.dart';
 import '../../domain/notification_providers.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../shared/utils/date_utils.dart';
+import '../../../../shared/widgets/motion.dart';
 
 /// The customer's notification inbox (opened from the bell on Home).
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -153,7 +155,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
               final n = state.items[i];
-              return _NotificationTile(notification: n, onTap: () => _open(n));
+              return FadeSlideIn(
+                key: ValueKey('n-${n.id}'),
+                index: i,
+                child: _NotificationTile(notification: n, onTap: () => _open(n)),
+              );
             },
           );
         }),
@@ -308,7 +314,7 @@ class _NotificationTile extends StatelessWidget {
     if (d.inMinutes < 60) return '${d.inMinutes} min ago';
     if (d.inHours < 24) return '${d.inHours} h ago';
     if (d.inDays < 7) return '${d.inDays} d ago';
-    return '${t.day}/${t.month}/${t.year}';
+    return formatDmy(t);
   }
 
   static String _left(DateTime t) {

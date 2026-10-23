@@ -14,6 +14,7 @@ import '../../../catalog/domain/catalog_providers.dart';
 import '../../../home/domain/home_flow_mode.dart';
 import '../../domain/ai_assistant_models.dart';
 import '../../domain/ai_assistant_providers.dart';
+import '../../../../shared/utils/date_utils.dart';
 
 /// Accent used by the redesigned chat (user bubble, send button, orb glow).
 const Color _kAiAccent = Color(0xFF12A4C8);
@@ -414,7 +415,7 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
                         final d = c.updatedAt;
                         final when = d == null
                             ? ''
-                            : ' · ${d.day}/${d.month} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                            : ' · ${formatDmyTime(d)}';
                         return InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () async {

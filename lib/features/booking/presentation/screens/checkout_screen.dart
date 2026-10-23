@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,6 +50,25 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _notesController = TextEditingController();
+
+  /// Optional photo of the problem (web parity: booking `photo`).
+  Uint8List? _photoBytes;
+  String? _photoName;
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final x = await ImagePicker().pickImage(source: source, maxWidth: 1600, imageQuality: 85);
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        if (mounted) AppToast.show(context, 'Photo must be under 5 MB.', type: AppToastType.error);
+        return;
+      }
+      if (mounted) setState(() { _photoBytes = bytes; _photoName = x.name; });
+    } catch (_) {
+      if (mounted) AppToast.show(context, 'Could not open the photo.', type: AppToastType.error);
+    }
+  }
   final _phoneController = TextEditingController();
   // Scroll targets for "you missed this" - see revealField().
   final _slotKey = GlobalKey(debugLabel: 'slot');
@@ -304,6 +325,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               : _notesController.text.trim(),
           contactPhone: contactPhone,
           paymentMethod: _paymentMethod,
+          photoBytes: _photoBytes,
+          photoFileName: _photoName,
         );
 
     if (!mounted) return;
@@ -666,9 +689,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             ),
           ),
-          if (_showNotes || _notesController.text.trim().isNotEmpty)
+          if (_showNotes || _notesController.text.trim().isNotEmpty) ...[
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 10),
               child: TextField(
                 controller: _notesController,
                 maxLines: 2,
@@ -686,6 +709,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               ),
             ),
+            // Optional photo of the problem (same as the web booking form).
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _photoBytes == null
+                  ? Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _pickPhoto(ImageSource.camera),
+                            icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                            label: const Text('Take photo'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _pickPhoto(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library_outlined, size: 18),
+                            label: const Text('Gallery'),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.memory(_photoBytes!, width: 64, height: 64, fit: BoxFit.cover),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text('Photo attached',
+                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.navy)),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove photo',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => setState(() { _photoBytes = null; _photoName = null; }),
+                        ),
+                      ],
+                    ),
+            ),
+          ],
         ],
       ),
     );
@@ -1041,7 +1107,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.navy)),
               const SizedBox(height: 6),
               _detailRow(Icons.calendar_today_rounded, 'Date',
-                  DateFormat('EEE, d MMM yyyy').format(selectedDate)),
+                  DateFormat('EEE, dd-MM-yyyy').format(selectedDate)),
               const Divider(height: 1, color: Color(0xFFF1F5F9)),
               _detailRow(Icons.schedule_rounded, 'Time', selectedSlot?.label ?? '—'),
               const Divider(height: 1, color: Color(0xFFF1F5F9)),

@@ -22,6 +22,7 @@ import '../../../pricing/domain/pricing_providers.dart';
 import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../widgets/coupon_bottom_sheet.dart';
 import '../../../../shared/utils/focus_first_error.dart';
+import '../../../../shared/utils/date_utils.dart';
 
 /// Added 2026-10-06 per explicit request ("Before checkout ask the user
 /// to select the delivery option below [Quick delivery, Slot booking
@@ -1686,11 +1687,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     final diff = target.difference(base).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Tomorrow';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}';
+    return formatDmy(date);
   }
 
   String _formatDateForBooking(DateTime date) =>

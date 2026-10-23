@@ -38,6 +38,7 @@ import '../features/catalog/presentation/screens/service_detail_screen.dart';
 import '../features/feedback/presentation/screens/feedback_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 import '../features/logistics/presentation/screens/drop_location_picker_screen.dart';
+import '../features/ac_inspection/presentation/screens/ac_inspection_screen.dart';
 import '../features/logistics/presentation/screens/goods_transport_booking_screen.dart';
 import '../features/logistics/domain/logistics_models.dart'
     show LogisticsVehicleCategory;
@@ -49,8 +50,8 @@ import '../features/notifications/presentation/screens/notifications_screen.dart
 import '../features/support/presentation/screens/support_screen.dart';
 import '../features/tracking/presentation/screens/live_tracking_screen.dart';
 import '../features/work_extension/presentation/screens/work_extension_screen.dart';
-import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_shell.dart';
+import '../shared/widgets/status_page.dart';
 
 // ── Route path constants ────────────────────────────────────────────────────
 abstract final class AppRoutes {
@@ -110,6 +111,7 @@ abstract final class AppRoutes {
   // Added 2026-09-19 — see CatalogFlowType.logistics for why this route
   // exists separately from bookingCheckout.
   static const String goodsTransportBooking = '/goods-transport/booking';
+  static const String acInspection = '/ac-inspection';
   // Added 2026-09-20 — see DropLocationPickerScreen's doc comment: the
   // customer-web-parity fare engine requires real drop coordinates, which a
   // free-text field cannot supply.
@@ -360,6 +362,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: AppRoutes.acInspection,
+            name: 'ac-inspection',
+            builder: (context, state) => const AcInspectionScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.goodsTransportBooking,
             name: 'goods-transport-booking',
             builder: (context, state) {
@@ -525,72 +532,13 @@ class _NotFoundScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primaryLight,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.search_off_rounded,
-                    size: 44,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  "Page Not Found",
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "The page you're looking for doesn't exist or may\nhave moved. Let's get you back on track.",
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 28),
-                FilledButton.icon(
-                  onPressed: () => context.go(AppRoutes.home),
-                  icon: const Icon(Icons.home_rounded),
-                  label: const Text('Go Home'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 28,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    return StatusScreen(
+      page: StatusPage(
+        kind: StatusKind.notFound,
+        title: 'Page not found',
+        message: "The page you're looking for doesn't exist or may have moved.",
+        actionLabel: 'Go home',
+        onAction: () => context.go(AppRoutes.home),
       ),
     );
   }

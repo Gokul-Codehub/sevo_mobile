@@ -37,6 +37,11 @@ class BookingRepository {
     required Decimal totalAmount,
     String? specialInstructions,
     String? contactPhone,
+    // Web parity (home services): the customer's email (invoices/receipts) and an
+    // optional photo of the problem, sent as the `photo` multipart file.
+    String? customerEmail,
+    Uint8List? photoBytes,
+    String? photoFileName,
     // Fixed 2026-10-08 (QA CME02 — "the payment method is not shown to the
     // customer... but it is showed on the web"): this payload never sent a
     // `payment_method` key at all, so BookingCreateView's own
@@ -188,6 +193,7 @@ class BookingRepository {
           'contact_phone': contactPhone,
         },
         if (customerName != null && customerName.isNotEmpty) 'customer_name': customerName,
+        if (customerEmail != null && customerEmail.isNotEmpty && customerEmail.contains('@')) 'email': customerEmail,
         if (specialInstructions != null && specialInstructions.isNotEmpty) ...{
           'special_instructions': specialInstructions,
           'description': specialInstructions,
@@ -252,9 +258,24 @@ class BookingRepository {
 
       debugPrint(
           '[BookingRepository] POST /booking/ payload: categoryId=$categoryId, serviceId=${firstItem.service.id}, addressId=$addressId, date=$scheduledDate, slot=$scheduledTimeSlot, itemsCount=${items.length}, totalAmount=$totalAmount');
+      // With a photo the request must be multipart (the backend reads `photo`
+      // as a file): scalars as text, `cart_data` as a JSON string - exactly
+      // what the web app sends. Without one it stays plain JSON as before.
+      final Object body;
+      if (photoBytes != null && photoBytes.isNotEmpty) {
+        final fields = <String, dynamic>{};
+        payload.forEach((k, v) {
+          if (v == null || k == 'items') return;
+          fields[k] = (v is Map || v is List) ? jsonEncode(v) : v.toString();
+        });
+        fields['photo'] = MultipartFile.fromBytes(photoBytes, filename: photoFileName ?? 'issue_photo.jpg');
+        body = FormData.fromMap(fields);
+      } else {
+        body = payload;
+      }
       final response = await api.post(
         '/booking/',
-        data: payload,
+        data: body,
         options: (idempotencyKey != null && idempotencyKey.isNotEmpty)
             ? Options(headers: {'Idempotency-Key': idempotencyKey})
             : null,

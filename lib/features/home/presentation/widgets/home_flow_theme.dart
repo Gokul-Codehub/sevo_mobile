@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/homepage_repository.dart' show MobileHomeTheme;
 import '../../domain/home_flow_mode.dart';
 import '../../../../shared/theme/app_colors.dart';
 
@@ -102,4 +103,21 @@ class HomeFlowTheme {
 
   static HomeFlowTheme of(HomeFlowMode mode) =>
       mode == HomeFlowMode.groceries ? groceries : services;
+
+  /// The built-in look with the admin's "Mobile App Theme" colours / video
+  /// size laid over it (any field the admin left empty keeps its default).
+  static HomeFlowTheme withAdmin(HomeFlowMode mode, MobileHomeTheme admin) {
+    final base = of(mode);
+    return HomeFlowTheme(
+      mode: base.mode,
+      accent: admin.accentColor ?? base.accent,
+      accentDark: base.accentDark,
+      gradientTop: admin.backgroundColor ?? base.gradientTop,
+      searchPlaceholder: base.searchPlaceholder,
+      categoryGridTitle: base.categoryGridTitle,
+      trustSectionTitle: base.trustSectionTitle,
+      trustBadges: base.trustBadges,
+      bannerAspectRatio: base.bannerAspectRatio,
+    );
+  }
 }

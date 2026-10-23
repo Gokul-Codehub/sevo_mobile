@@ -638,7 +638,7 @@ class ServiceCard extends ConsumerWidget {
                                 ),
                               ),
                             )
-                          : Container(
+                          : (!service.hasReviews ? const SizedBox.shrink() : Container(
                               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                               decoration: BoxDecoration(
                                 color: Colors.white,
@@ -666,7 +666,7 @@ class ServiceCard extends ConsumerWidget {
                                   ),
                                 ],
                               ),
-                            ),
+                            )),
                     ),
                   ],
                 ),

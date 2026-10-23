@@ -10,6 +10,7 @@ import 'core/utils/restart_widget.dart';
 import 'routing/app_router.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/connectivity_gate.dart';
+import 'shared/widgets/motion.dart';
 
 /// P0 DIAGNOSTIC INSTRUMENTATION — see docs/CalServices_Cart_Catalog_RootCause_Audit.md
 ///
@@ -101,6 +102,7 @@ class CalServicesApp extends ConsumerWidget {
       title: 'SEVO',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      scrollBehavior: const AppScrollBehavior(),
       routerConfig: router,
       // Mounted once, above every routed screen, so it keeps watching
       // booking status changes and posting real device notifications

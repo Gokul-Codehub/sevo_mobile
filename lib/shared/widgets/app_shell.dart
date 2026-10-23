@@ -10,6 +10,7 @@ import '../../features/booking/domain/cart_notifier.dart';
 import '../../routing/app_router.dart';
 import '../providers/bottom_nav_visibility_provider.dart';
 import '../theme/app_colors.dart';
+import 'motion.dart';
 
 /// Main app shell with bottom navigation bar.
 /// Wraps all primary tab destinations including dynamic Cart counter.
@@ -393,7 +394,9 @@ class _AppShellState extends ConsumerState<AppShell> {
           Positioned(
             top: -6,
             right: -8,
-            child: Container(
+            child: BounceOnChange(
+              value: cartCount,
+              child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
               constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
               decoration: BoxDecoration(
@@ -415,6 +418,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                 ),
               ),
+            ),
             ),
           ),
         ],

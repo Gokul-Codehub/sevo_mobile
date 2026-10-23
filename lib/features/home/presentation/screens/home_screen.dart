@@ -318,7 +318,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // sets this instead of navigating away — see _flowModeForCard and the
     // quick-access onTap below.
     final flowMode = ref.watch(homeFlowModeProvider);
-    final flowTheme = HomeFlowTheme.of(flowMode);
+    final themeGroceries = homepageConfigForTopCards?.themeGroceries ?? MobileHomeTheme.empty;
+    final themeServices = homepageConfigForTopCards?.themeServices ?? MobileHomeTheme.empty;
+    final adminTheme = flowMode == HomeFlowMode.groceries ? themeGroceries : themeServices;
+    final flowTheme = HomeFlowTheme.withAdmin(flowMode, adminTheme);
     final groceryCategoryForShopByCategory = groceryQuickAccessCategory;
 
     // Added 2026-10-06 per explicit request (reference screenshots: a big
@@ -644,6 +647,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _UnifiedActiveModeSection(
                   flowMode: flowMode,
                   flowTheme: flowTheme,
+                  themeGroceries: themeGroceries,
+                  themeServices: themeServices,
                   switcherCards: switcherCards,
                   onModeCardTap: (card) {
                     final mode = _flowModeForCard(card);
@@ -1858,6 +1863,8 @@ class _UnifiedActiveModeSection extends StatefulWidget {
   const _UnifiedActiveModeSection({
     required this.flowMode,
     required this.flowTheme,
+    required this.themeGroceries,
+    required this.themeServices,
     required this.switcherCards,
     required this.onModeCardTap,
     required this.greetingText,
@@ -1868,6 +1875,8 @@ class _UnifiedActiveModeSection extends StatefulWidget {
 
   final HomeFlowMode flowMode;
   final HomeFlowTheme flowTheme;
+  final MobileHomeTheme themeGroceries;
+  final MobileHomeTheme themeServices;
   final List<MobileTopCardItem> switcherCards;
   final ValueChanged<MobileTopCardItem> onModeCardTap;
   final String greetingText;
@@ -1912,6 +1921,8 @@ class _UnifiedActiveModeSectionState extends State<_UnifiedActiveModeSection>
       progress: _progress,
       flowMode: widget.flowMode,
       flowTheme: widget.flowTheme,
+      themeGroceries: widget.themeGroceries,
+      themeServices: widget.themeServices,
       switcherCards: widget.switcherCards,
       onModeCardTap: widget.onModeCardTap,
       greetingText: widget.greetingText,
@@ -1927,6 +1938,8 @@ class _UnifiedActiveModeBody extends StatelessWidget {
     required this.progress,
     required this.flowMode,
     required this.flowTheme,
+    required this.themeGroceries,
+    required this.themeServices,
     required this.switcherCards,
     required this.onModeCardTap,
     required this.greetingText,
@@ -1938,6 +1951,8 @@ class _UnifiedActiveModeBody extends StatelessWidget {
   final Animation<double> progress;
   final HomeFlowMode flowMode;
   final HomeFlowTheme flowTheme;
+  final MobileHomeTheme themeGroceries;
+  final MobileHomeTheme themeServices;
   final List<MobileTopCardItem> switcherCards;
   final ValueChanged<MobileTopCardItem> onModeCardTap;
   final String greetingText;
@@ -2012,34 +2027,41 @@ class _UnifiedActiveModeBody extends StatelessWidget {
     // ("make this kind of layout and color for the groceries section") —
     // a deeper golden yellow at the top easing to a pale butter yellow, with
     // near-black text on top of it (see [textOnContainer] below).
-    const groceriesGradient = LinearGradient(
+    final groceriesGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFFF9C93A), Color(0xFFFFE98A)],
+      colors: [
+        themeGroceries.cardColorTop ?? const Color(0xFFF9C93A),
+        themeGroceries.cardColorBottom ?? const Color(0xFFFFE98A),
+      ],
     );
     // Light-blue Services container (2026-10-09, "shall we use light
     // blue for services as like uploaded reference image?") — replaces
     // the old dark navy gradient. Text drawn on it is dark now; see
     // [textOnContainer] below and _TopCardBanner's matching change.
-    const servicesGradient = LinearGradient(
+    final servicesGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFF8EC3F2), Color(0xFFE4F1FE)],
+      colors: [
+        themeServices.cardColorTop ?? const Color(0xFF8EC3F2),
+        themeServices.cardColorBottom ?? const Color(0xFFE4F1FE),
+      ],
     );
 
     final groceriesShadow = const Color(0xFFD99A00).withValues(alpha: 0.28);
     // Darker shade of each mode's header colour — the outline round the tab
     // section (see _UnifiedActiveBackgroundPainter) and the inactive tab's border.
-    const groceriesOutline = Color(0xFFC98F00); // deep amber, from the yellow
-    const servicesOutline = Color(0xFF3F86D6); // deeper blue, from the sky blue
+    final groceriesOutline = themeGroceries.cardOutlineColor ?? const Color(0xFFC98F00); // deep amber, from the yellow
+    final servicesOutline = themeServices.cardOutlineColor ?? const Color(0xFF3F86D6); // deeper blue, from the sky blue
     // Active tab label: a deeper shade still, so it reads on the coloured tab.
-    final activeLabel = isGroceries ? const Color(0xFF7A4F00) : const Color(0xFF1D4ED8);
+    final activeTheme = isGroceries ? themeGroceries : themeServices;
+    final activeLabel = activeTheme.cardTextColor ?? (isGroceries ? const Color(0xFF7A4F00) : const Color(0xFF1D4ED8));
     final servicesShadow = const Color(0xFF1D6FD6).withValues(alpha: 0.18);
 
     // Near-black on Groceries' yellow, dark navy on Services' light blue —
     // white text only ever worked on the old dark containers.
-    final textOnContainer =
-        isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy;
+    final textOnContainer = activeTheme.cardTextColor ??
+        (isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy);
 
     // Resolve Groceries on left and Services on right
     final groceriesCard = switcherCards.firstWhere(
@@ -2123,6 +2145,7 @@ class _UnifiedActiveModeBody extends StatelessWidget {
                           currentMode: flowMode,
                           isUnifiedBackground: true,
                           outlineColor: activeLabel,
+                          inactiveColor: themeGroceries.inactiveCardColor,
                         ),
                       ),
                       const SizedBox(width: gap),
@@ -2135,6 +2158,7 @@ class _UnifiedActiveModeBody extends StatelessWidget {
                           currentMode: flowMode,
                           isUnifiedBackground: true,
                           outlineColor: activeLabel,
+                          inactiveColor: themeServices.inactiveCardColor,
                         ),
                       ),
                     ],
@@ -2234,7 +2258,7 @@ class _UnifiedActiveModeBody extends StatelessWidget {
                     if (!isGroceries) greetingWidget,
 
                     // ── Admin hero video (per mode, Mobile App ▸ Home Banners) ──
-                    _HomeHeroVideo(mode: flowMode, aspectRatio: flowTheme.bannerAspectRatio),
+                    _HomeHeroVideo(mode: flowMode, aspectRatio: activeTheme.videoAspectRatio ?? flowTheme.bannerAspectRatio),
 
                     // ── Promo Banner Carousel ──
                     _PromoBannerCarousel(
@@ -2864,7 +2888,11 @@ class _TopCardBanner extends StatelessWidget {
     this.currentMode,
     this.isUnifiedBackground = false,
     this.outlineColor,
+    this.inactiveColor,
   });
+
+  /// Admin-chosen colour of this card while it is NOT the selected one.
+  final Color? inactiveColor;
 
   final MobileTopCardItem card;
   final VoidCallback onTap;
@@ -2946,7 +2974,7 @@ class _TopCardBanner extends StatelessWidget {
     } else {
       // Inactive tab: clean light surface flush against the header
       backgroundGradient = null;
-      solidBackgroundColor = const Color(0xFFF1F6FA);
+      solidBackgroundColor = inactiveColor ?? const Color(0xFFF1F6FA);
       textColor = isGroceriesCard ? const Color(0xFF1E293B) : const Color(0xFF475569);
       shadows = null;
       border = Border.all(color: AppColors.divider, width: 0.8);

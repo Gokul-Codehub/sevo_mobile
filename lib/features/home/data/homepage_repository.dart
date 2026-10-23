@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart' show Color;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error.dart';
@@ -562,6 +563,92 @@ class QuickBadgeItem {
   }
 }
 
+/// Admin colour theme + hero-video size for ONE Home mode (Groceries or
+/// Services), from config.mobile.theme.{groceries,services} ("Mobile App
+/// Theme" tab of the Home Page Customizer). Every field is optional: a null
+/// colour / empty size means "keep the app's built-in look".
+class MobileHomeTheme {
+  const MobileHomeTheme({
+    this.backgroundColor,
+    this.cardColorTop,
+    this.cardColorBottom,
+    this.cardOutlineColor,
+    this.cardTextColor,
+    this.inactiveCardColor,
+    this.accentColor,
+    this.videoSize = '',
+  });
+
+  static const empty = MobileHomeTheme();
+
+  /// Screen backdrop (top of the page gradient).
+  final Color? backgroundColor;
+
+  /// Gradient of the switcher card / panel (the active tab merges into it).
+  final Color? cardColorTop;
+  final Color? cardColorBottom;
+  final Color? cardOutlineColor;
+
+  /// Label colour on the card panel.
+  final Color? cardTextColor;
+
+  /// The card of the mode that is NOT selected.
+  final Color? inactiveCardColor;
+
+  /// Links, icons, search icon, bell...
+  final Color? accentColor;
+
+  /// 'small' | 'medium' | 'large' (empty = medium).
+  final String videoSize;
+
+  MobileHomeTheme withVideoSize(String size) => MobileHomeTheme(
+        backgroundColor: backgroundColor,
+        cardColorTop: cardColorTop,
+        cardColorBottom: cardColorBottom,
+        cardOutlineColor: cardOutlineColor,
+        cardTextColor: cardTextColor,
+        inactiveCardColor: inactiveCardColor,
+        accentColor: accentColor,
+        videoSize: size,
+      );
+
+  /// Width / height ratio of the Home video for this size.
+  double? get videoAspectRatio {
+    switch (videoSize) {
+      case 'small':
+        return 3.0;
+      case 'medium':
+        return 2.0;
+      case 'large':
+        return 1.3;
+    }
+    return null;
+  }
+
+  static Color? _hex(dynamic raw) {
+    var s = (raw ?? '').toString().trim().replaceAll('#', '');
+    if (s.length == 3) s = s.split('').map((c) => '$c$c').join();
+    if (s.length != 6 && s.length != 8) return null;
+    final v = int.tryParse(s, radix: 16);
+    if (v == null) return null;
+    return Color(s.length == 6 ? 0xFF000000 | v : v);
+  }
+
+  factory MobileHomeTheme.fromJson(dynamic raw) {
+    if (raw is! Map) return empty;
+    return MobileHomeTheme(
+      backgroundColor: _hex(raw['background_color']),
+      cardColorTop: _hex(raw['card_color_top']),
+      cardColorBottom: _hex(raw['card_color_bottom']),
+      cardOutlineColor: _hex(raw['card_outline_color']),
+      cardTextColor: _hex(raw['card_text_color']),
+      inactiveCardColor: _hex(raw['inactive_card_color']),
+      accentColor: _hex(raw['accent_color']),
+      videoSize: (raw['video_size'] ?? '').toString().trim().toLowerCase(),
+    );
+  }
+}
+
 /// The subset of the homepage CMS config this app actually consumes.
 class HomepageConfig {
   const HomepageConfig({
@@ -576,7 +663,13 @@ class HomepageConfig {
     this.greetingServices = '',
     this.greetingGroceries = '',
     this.quickBadges = const [],
+    this.themeGroceries = MobileHomeTheme.empty,
+    this.themeServices = MobileHomeTheme.empty,
   });
+
+  /// Admin colour themes per Home mode (config.mobile.theme).
+  final MobileHomeTheme themeGroceries;
+  final MobileHomeTheme themeServices;
 
   final List<HomeOffer> offers;
   final List<QuickBadgeItem> quickBadges;
@@ -683,6 +776,9 @@ class HomepageRepository {
           return (item.enabled && item.imageUrl != null) ? item : null;
         }
 
+        final rawTheme = mobileSection['theme'];
+        final themeMap = rawTheme is Map ? Map<String, dynamic>.from(rawTheme) : <String, dynamic>{};
+
         final rawHero = mobileSection['heroVideos'];
         final heroMap = rawHero is Map ? Map<String, dynamic>.from(rawHero) : <String, dynamic>{};
         final heroVideoServices = parseHeroVideo(heroMap['services']);
@@ -773,6 +869,11 @@ class HomepageRepository {
           greetingServices: (mobileSection['greetingServices'] ?? '').toString(),
           greetingGroceries: (mobileSection['greetingGroceries'] ?? '').toString(),
           quickBadges: quickBadges,
+          // The video size is set next to each Home video (heroVideos.<mode>.video_size).
+          themeGroceries: MobileHomeTheme.fromJson(themeMap['groceries'])
+              .withVideoSize(((heroMap['groceries'] is Map ? heroMap['groceries']['video_size'] : null) ?? '').toString().trim().toLowerCase()),
+          themeServices: MobileHomeTheme.fromJson(themeMap['services'])
+              .withVideoSize(((heroMap['services'] is Map ? heroMap['services']['video_size'] : null) ?? '').toString().trim().toLowerCase()),
         );
       });
     } on Exception catch (e) {
