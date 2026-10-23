@@ -20,6 +20,24 @@ import '../../domain/catalog_models.dart';
 /// layout (mainAxisSize.min throughout, no Expanded) so it never overflows
 /// regardless of how it's hosted by the caller — the caller only needs to
 /// give it a width.
+/// Optional look for the grocery card (used by Home Studio's Cut-out Panel).
+/// Null = the standard look, so every other screen is unchanged.
+class ProductCardStyle {
+  const ProductCardStyle({
+    this.radius = 18,
+    this.fillColor = Colors.white,
+    this.borderColor,
+    this.borderWidth = 1,
+    this.shadow = true,
+  });
+
+  final double radius;
+  final Color fillColor;
+  final Color? borderColor;
+  final double borderWidth;
+  final bool shadow;
+}
+
 class ProductCard extends ConsumerWidget {
   const ProductCard({
     super.key,
@@ -29,8 +47,10 @@ class ProductCard extends ConsumerWidget {
     this.showPrice = true,
     this.showDiscount = true,
     this.showAddButton = true,
+    this.style,
   });
 
+  final ProductCardStyle? style;
   final ServiceItem service;
   final VoidCallback? onTap;
 
@@ -56,7 +76,7 @@ class ProductCard extends ConsumerWidget {
   // [groceryCardHeight] that could silently drift from it.
   static const double _titleBlockHeight = 28.0;
   static const double _notchW = 60.0;
-  static const double _notchH = 36.0;
+  static const double _notchH = 32.0;
 
   /// Pack text for the selector row; a bare unit ("kg") reads as "1 kg".
   static String _packLabel(ServiceItem s) {
@@ -428,13 +448,20 @@ class ProductCard extends ConsumerWidget {
     // corner and seats the Add button in it (with a soft white ring).
     final notch = showAddButton && showImage && service.inStock;
     final nW = notch ? _notchW : 0.0;
-    return Stack(
+    // Align first: grids hand the card a tight cell height that is a little
+    // taller than its content, which left the notch button (anchored to the
+    // Stack's bottom) hanging below the card. Loosening the height makes the
+    // Stack exactly as tall as the card, so the button always sits in the notch.
+    return Align(
+      alignment: Alignment.topCenter,
+      heightFactor: 1.0,
+      child: Stack(
       clipBehavior: Clip.none,
       children: [
         CustomPaint(
-          painter: _NotchedCardPainter(notch: notch),
+          painter: _NotchedCardPainter(notch: notch, style: style),
           child: ClipPath(
-            clipper: _NotchedCardClipper(notch: notch),
+            clipper: _NotchedCardClipper(notch: notch, radius: style?.radius ?? 18.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -755,9 +782,13 @@ class ProductCard extends ConsumerWidget {
             bottom: 0,
             width: _notchW,
             height: _notchH,
-            child: Center(child: _NotchAddButton(service: service)),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: _NotchAddButton(service: service),
+            ),
           ),
       ],
+    ),
     );
   }
 
@@ -927,13 +958,14 @@ const _addGradient = LinearGradient(
   colors: [Color(0xFF2FA354), Color(0xFF14612F)],
 );
 
-Path _notchedCardPath(Size s, bool notch) {
-  const r = 18.0, rn = 14.0;
+Path _notchedCardPath(Size s, bool notch, [double radius = 18.0]) {
+  final r = radius.clamp(0.0, s.shortestSide / 2).toDouble();
+  const rn = 14.0;
   final w = s.width, h = s.height;
   const nw = ProductCard._notchW, nh = ProductCard._notchH;
   final p = Path()..moveTo(r, 0);
   p.lineTo(w - r, 0);
-  p.arcToPoint(Offset(w, r), radius: const Radius.circular(r));
+  p.arcToPoint(Offset(w, r), radius: Radius.circular(r));
   if (notch) {
     p.lineTo(w, h - nh - rn);
     p.arcToPoint(Offset(w - rn, h - nh), radius: const Radius.circular(rn));
@@ -944,46 +976,60 @@ Path _notchedCardPath(Size s, bool notch) {
       clockwise: false,
     );
     p.lineTo(w - nw, h - r);
-    p.arcToPoint(Offset(w - nw - r, h), radius: const Radius.circular(r));
+    p.arcToPoint(Offset(w - nw - r, h), radius: Radius.circular(r));
   } else {
     p.lineTo(w, h - r);
-    p.arcToPoint(Offset(w - r, h), radius: const Radius.circular(r));
+    p.arcToPoint(Offset(w - r, h), radius: Radius.circular(r));
   }
   p.lineTo(r, h);
-  p.arcToPoint(Offset(0, h - r), radius: const Radius.circular(r));
+  p.arcToPoint(Offset(0, h - r), radius: Radius.circular(r));
   p.lineTo(0, r);
-  p.arcToPoint(Offset(r, 0), radius: const Radius.circular(r));
+  p.arcToPoint(Offset(r, 0), radius: Radius.circular(r));
   return p..close();
 }
 
 class _NotchedCardClipper extends CustomClipper<Path> {
-  const _NotchedCardClipper({required this.notch});
+  const _NotchedCardClipper({required this.notch, this.radius = 18.0});
   final bool notch;
+  final double radius;
   @override
-  Path getClip(Size size) => _notchedCardPath(size, notch);
+  Path getClip(Size size) => _notchedCardPath(size, notch, radius);
   @override
-  bool shouldReclip(_NotchedCardClipper old) => old.notch != notch;
+  bool shouldReclip(_NotchedCardClipper old) => old.notch != notch || old.radius != radius;
 }
 
 class _NotchedCardPainter extends CustomPainter {
-  const _NotchedCardPainter({required this.notch});
+  const _NotchedCardPainter({required this.notch, this.style});
   final bool notch;
+  final ProductCardStyle? style;
   @override
   void paint(Canvas canvas, Size size) {
-    final path = _notchedCardPath(size, notch);
-    canvas.drawShadow(path, const Color(0x400F172A), 5, false);
-    canvas.drawPath(path, Paint()..color = Colors.white);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = AppColors.divider,
-    );
+    final st = style;
+    final path = _notchedCardPath(size, notch, st?.radius ?? 18.0);
+    if (st == null || st.shadow) {
+      canvas.drawShadow(path, const Color(0x400F172A), 5, false);
+    }
+    canvas.drawPath(path, Paint()..color = st?.fillColor ?? Colors.white);
+    final bw = st?.borderWidth ?? 1.0;
+    if (bw > 0) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = bw
+          ..color = st?.borderColor ?? AppColors.divider,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(_NotchedCardPainter old) => old.notch != notch;
+  bool shouldRepaint(_NotchedCardPainter old) =>
+      old.notch != notch ||
+      old.style?.radius != style?.radius ||
+      old.style?.fillColor != style?.fillColor ||
+      old.style?.borderColor != style?.borderColor ||
+      old.style?.borderWidth != style?.borderWidth ||
+      old.style?.shadow != style?.shadow;
 }
 
 /// The Add button seated in the card's notch: a dark-green gradient pill with
@@ -1100,8 +1146,8 @@ class _NotchAddButton extends ConsumerWidget {
     }
     return Container(
       width: ProductCard._notchW - 4,
-      height: ProductCard._notchH - 4,
-      padding: const EdgeInsets.all(3),
+      height: ProductCard._notchH - 2,
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),

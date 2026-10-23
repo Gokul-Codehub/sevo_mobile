@@ -100,6 +100,14 @@ class ActiveQuoteCard extends ConsumerWidget {
               amount: quote.displayTotal,
               emphasize: true,
             ),
+            // Advance / balance exactly as the server quoted them (only shown
+            // when the quote carries a real advance; never computed here).
+            if (quote.advanceAmount != null && quote.advanceAmount! > Decimal.zero) ...[
+              const SizedBox(height: 4),
+              _AmountRow(label: 'Advance to pay after accepting', amount: quote.advanceAmount!),
+              if (quote.balanceAmount != null && quote.balanceAmount! > Decimal.zero)
+                _AmountRow(label: 'Balance after the work', amount: quote.balanceAmount!),
+            ],
             if (quote.isDeclined) ...[
               const SizedBox(height: 12),
               _InfoBanner(
@@ -190,8 +198,11 @@ class ActiveQuoteCard extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Accept Quotation?'),
         content: Text(
-          'You will be charged ₹${quote.displayTotal} for this work. '
-          'Once accepted, we\'ll create your service booking.',
+          (quote.advanceAmount != null && quote.advanceAmount! > Decimal.zero)
+              ? 'The quoted total is ₹${quote.displayTotal}. After accepting, pay the '
+                  '₹${quote.advanceAmount} advance so the technician can start; the rest is due after the work.'
+              : 'You will be charged ₹${quote.displayTotal} for this work. '
+                  'Once accepted, we\'ll create your service booking.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

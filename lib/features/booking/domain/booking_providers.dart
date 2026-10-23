@@ -127,6 +127,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
     String? serviceCategoryOverride,
     List<Map<String, dynamic>>? cartDataOverride,
     Map<String, dynamic>? extraPayload,
+    String? idempotencyKey,
   }) async {
     final List<CartItem> items = customItems ?? ref.read(cartProvider);
     final selectedAddress = ref.read(selectedAddressProvider);
@@ -187,6 +188,7 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       jobType: jobType,
       serviceCategoryOverride: serviceCategoryOverride,
       cartDataOverride: cartDataOverride,
+      idempotencyKey: idempotencyKey,
       // A held "a slot opened up" claim goes with the booking so the backend
       // counts it as this customer's own place on a full day.
       extraPayload: {
@@ -211,7 +213,9 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
         // rather than waiting for BookingNotificationWatcher's next poll.
         // See NotificationService's doc comment for what this can/can't do.
         final firstItem = items.firstOrNull;
-        NotificationService.instance.show(
+        // Pay Online bookings are only "placed" once the payment succeeds:
+        // PaymentScreen announces them then, so nothing is sent here.
+        if (paymentMethod.toUpperCase() != 'ONLINE') NotificationService.instance.show(
           title: 'Booking Placed',
           body: firstItem != null
               ? '${firstItem.service.title} has been booked successfully.'

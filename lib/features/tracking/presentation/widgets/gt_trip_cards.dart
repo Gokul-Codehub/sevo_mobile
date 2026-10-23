@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error.dart';
@@ -526,6 +527,1104 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// ── Rate the trip ────────────────────────────────────────────────────────────
+
+/// "Rate your trip" — shown once the server has issued a feedback token for a
+/// delivered Goods & Transport / Packers & Movers trip (the `feedback` block of
+/// the tracking payload). Opens the normal feedback screen with that token.
+class GtRateTripCard extends StatelessWidget {
+  const GtRateTripCard({
+    super.key,
+    required this.token,
+    this.submitted = false,
+    this.rating,
+  });
+
+  final String token;
+  final bool submitted;
+  final int? rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDeco(Colors.white, const Color(0xFFE6E8EE)),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF4D6),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.star_rounded, color: Color(0xFFF59E0B)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  submitted ? 'Thanks for your feedback' : 'Rate your trip',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  submitted
+                      ? (rating != null ? 'You rated this trip $rating/5.' : 'Your rating was received.')
+                      : 'How was your driver and delivery?',
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          if (!submitted)
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.navy),
+              onPressed: () => context.push('/feedback/$token'),
+              child: const Text('Rate', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Route / quote changes after booking + driver chat (web parity:
+// ChangeDropCard, PTLRequoteCard, StopsAmendmentCard, the My Bookings stops
+// editor and the tracking-page chat). The server previews and prices every
+// change; these widgets only send addresses / weights and echo its answers.
+// ════════════════════════════════════════════════════════════════════════════
+
+Map<String, dynamic>? _dataOf(dynamic body) {
+  if (body is Map && body['data'] is Map) {
+    return Map<String, dynamic>.from(body['data'] as Map);
+  }
+  return body is Map ? Map<String, dynamic>.from(body) : null;
+}
+
+String _money2(dynamic v) {
+  final n = double.tryParse('${v ?? ''}');
+  return n == null ? '${v ?? ''}' : n.toStringAsFixed(2);
+}
+
+/// The raw response body of a failed request (the error interceptor keeps it).
+Map<String, dynamic>? _errBody(Object e) {
+  if (e is DioException && e.response?.data is Map) {
+    return Map<String, dynamic>.from(e.response!.data as Map);
+  }
+  return null;
+}
+
+InputDecoration _fieldDeco(String label, {String? hint}) => InputDecoration(
+      labelText: label,
+      hintText: hint,
+      isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
+
+// ── Change drop (en-route destination change) ────────────────────────────────
+
+class GtChangeDropCard extends ConsumerStatefulWidget {
+  const GtChangeDropCard({super.key, required this.bookingId, this.onChanged});
+
+  final int bookingId;
+  final VoidCallback? onChanged;
+
+  @override
+  ConsumerState<GtChangeDropCard> createState() => _GtChangeDropCardState();
+}
+
+class _GtChangeDropCardState extends ConsumerState<GtChangeDropCard> {
+  final _address = TextEditingController();
+  bool _open = false;
+  bool _busy = false;
+  String _error = '';
+  Map<String, dynamic>? _preview;
+
+  @override
+  void dispose() {
+    _address.dispose();
+    super.dispose();
+  }
+
+  String get _path => '/booking/${widget.bookingId}/change-drop/';
+
+  Future<void> _check() async {
+    final text = _address.text.trim();
+    if (text.isEmpty || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = '';
+      _preview = null;
+    });
+    try {
+      final res = await ref
+          .read(apiClientProvider)
+          .get(_path, queryParameters: {'drop_address': text});
+      if (mounted) setState(() => _preview = _dataOf(res.data));
+    } catch (e) {
+      if (mounted) setState(() => _error = _errorText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirm() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    try {
+      await ref
+          .read(apiClientProvider)
+          .post(_path, data: {'drop_address': _address.text.trim()});
+      if (!mounted) return;
+      AppToast.show(context, 'Drop location updated. Your driver has been notified.');
+      setState(() {
+        _open = false;
+        _preview = null;
+        _address.clear();
+      });
+      widget.onChanged?.call();
+    } catch (e) {
+      if (mounted) setState(() => _error = _errorText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_open) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() => _open = true),
+            icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+            label: const Text('Change drop location'),
+          ),
+        ),
+      );
+    }
+    final p = _preview;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDeco(const Color(0xFFF8FAFC), const Color(0xFFBFDBFE)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _address,
+            minLines: 1,
+            maxLines: 3,
+            textInputAction: TextInputAction.done,
+            decoration: _fieldDeco('New drop address',
+                hint: 'Full address incl. area and city'),
+            onChanged: (_) => setState(() => _preview = null),
+          ),
+          if (p != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Route: ${p['old_distance_km']} km → ${p['new_distance_km']} km\n'
+              'Fare: ₹${p['old_payable']} → ₹${p['new_payable']}'
+              '${p['minimum_fare_applied'] == true ? ' (minimum fare)' : ''}',
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, height: 1.5),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Priced at your booked rate of ₹${p['rate_applied']}/km. The final fare is confirmed against the actual distance at drop.',
+              style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+            ),
+          ],
+          if (_error.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(_error, style: const TextStyle(color: AppColors.error, fontSize: 12.5)),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _busy || (p == null && _address.text.trim().isEmpty)
+                      ? null
+                      : (p == null ? _check : _confirm),
+                  child: Text(_busy
+                      ? 'Please wait…'
+                      : (p == null ? 'Check new fare' : 'Confirm & update driver')),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _busy
+                    ? null
+                    : () => setState(() {
+                          _open = false;
+                          _preview = null;
+                          _error = '';
+                        }),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Light PTL quote revision ─────────────────────────────────────────────────
+
+class GtPtlRequoteCard extends ConsumerStatefulWidget {
+  const GtPtlRequoteCard(
+      {super.key, required this.bookingId, this.currentWeightKg, this.onChanged});
+
+  final int bookingId;
+  final String? currentWeightKg;
+  final VoidCallback? onChanged;
+
+  @override
+  ConsumerState<GtPtlRequoteCard> createState() => _GtPtlRequoteCardState();
+}
+
+class _GtPtlRequoteCardState extends ConsumerState<GtPtlRequoteCard> {
+  late final TextEditingController _weight =
+      TextEditingController(text: widget.currentWeightKg ?? '');
+  final _address = TextEditingController();
+  bool _open = false;
+  bool _busy = false;
+  String _error = '';
+  Map<String, dynamic>? _preview;
+
+  @override
+  void dispose() {
+    _weight.dispose();
+    _address.dispose();
+    super.dispose();
+  }
+
+  String get _path => '/booking/${widget.bookingId}/ptl-requote/';
+
+  bool get _canPreview {
+    final w = _weight.text.trim();
+    final changed = w.isNotEmpty && w != (widget.currentWeightKg ?? '');
+    return (changed || _address.text.trim().isNotEmpty) &&
+        !((double.tryParse(w) ?? 1) <= 0);
+  }
+
+  String _err(Object e) {
+    if (e is DioException && (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
+      return 'Only the signed-in customer who made this booking can revise its quote.';
+    }
+    return _errorText(e);
+  }
+
+  Future<void> _check() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = '';
+      _preview = null;
+    });
+    try {
+      final res = await ref.read(apiClientProvider).get(_path, queryParameters: {
+        if (_weight.text.trim().isNotEmpty) 'declared_weight_kg': _weight.text.trim(),
+        if (_address.text.trim().isNotEmpty) 'drop_address': _address.text.trim(),
+      });
+      if (mounted) setState(() => _preview = _dataOf(res.data));
+    } catch (e) {
+      if (mounted) setState(() => _error = _err(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirm() async {
+    final p = _preview;
+    if (p == null || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    final body = <String, dynamic>{
+      'declared_weight_kg': p['declared_weight_kg'],
+      'quote_id': p['quote_id'],
+      'quote_hash': p['quote_hash'],
+      'expires_at': p['expires_at'],
+      'total_amount': p['total'],
+      if (_address.text.trim().isNotEmpty) ...{
+        'drop_latitude': p['drop_lat'],
+        'drop_longitude': p['drop_lng'],
+        'drop_address': _address.text.trim(),
+      },
+    };
+    try {
+      await ref.read(apiClientProvider).post(_path, data: body);
+      if (!mounted) return;
+      AppToast.show(context, 'Quote updated.');
+      setState(() {
+        _open = false;
+        _preview = null;
+        _address.clear();
+      });
+      widget.onChanged?.call();
+    } catch (e) {
+      if (mounted) setState(() => _error = _err(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_open) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() => _open = true),
+            icon: const Icon(Icons.scale_outlined, size: 18),
+            label: const Text('Revise quote (weight / drop)'),
+          ),
+        ),
+      );
+    }
+    final p = _preview;
+    final charged = p?['chargeable_weight_kg'];
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDeco(const Color(0xFFF8FAFC), const Color(0xFFBFDBFE)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Revise Part Truck Load quote',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _weight,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _fieldDeco('Declared weight (kg)'),
+            onChanged: (_) => setState(() => _preview = null),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _address,
+            minLines: 1,
+            maxLines: 3,
+            decoration: _fieldDeco('New drop address (optional)',
+                hint: 'Leave blank to keep the current drop'),
+            onChanged: (_) => setState(() => _preview = null),
+          ),
+          if (p != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Weight: ${p['declared_weight_kg']} kg'
+              '${charged != null && '$charged' != '${p['declared_weight_kg']}' ? ' (charged as $charged kg)' : ''}\n'
+              'Fare: ₹${p['old_payable']} → ₹${p['new_payable']}'
+              '${p['minimum_fare_applied'] == true ? ' (minimum fare)' : ''}',
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, height: 1.5),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '₹${p['rate_per_kg']}/kg. You load and unload the goods. This quote is valid for a limited time.',
+              style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+            ),
+          ],
+          if (_error.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(_error, style: const TextStyle(color: AppColors.error, fontSize: 12.5)),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _busy || (p == null && !_canPreview)
+                      ? null
+                      : (p == null ? _check : _confirm),
+                  child: Text(_busy
+                      ? 'Please wait…'
+                      : (p == null ? 'Check new price' : 'Confirm new quote')),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _busy
+                    ? null
+                    : () => setState(() {
+                          _open = false;
+                          _preview = null;
+                          _error = '';
+                        }),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Stops editor + fare amendment (paid bookings) ────────────────────────────
+
+class _StopDraft {
+  _StopDraft({String type = 'WAYPOINT', String address = '', String phone = '', this.name = '', this.notes = ''})
+      : type = type,
+        address = TextEditingController(text: address),
+        phone = TextEditingController(text: phone);
+
+  final String type;
+  final TextEditingController address;
+  final TextEditingController phone;
+  final String name;
+  final String notes;
+
+  Map<String, dynamic> toJson() => {
+        'stop_type': type,
+        'address': address.text.trim(),
+        'contact_name': name,
+        'contact_phone': phone.text.trim(),
+        'notes': notes,
+      };
+
+  void dispose() {
+    address.dispose();
+    phone.dispose();
+  }
+}
+
+/// "Manage stops" on a logistics booking: GET / PUT `/booking/<id>/stops/`.
+/// A paid booking whose fare would change answers AMENDMENT_REQUIRED; the
+/// [GtStopsAmendmentCard] below then carries the customer's decision.
+class GtStopsEditorCard extends ConsumerStatefulWidget {
+  const GtStopsEditorCard({super.key, required this.bookingId});
+
+  final int bookingId;
+
+  @override
+  ConsumerState<GtStopsEditorCard> createState() => _GtStopsEditorCardState();
+}
+
+class _GtStopsEditorCardState extends ConsumerState<GtStopsEditorCard> {
+  final List<_StopDraft> _draft = [];
+  bool _open = false;
+  bool _loading = false;
+  bool _saving = false;
+  String _error = '';
+  String _saved = '';
+  Map<String, dynamic>? _amendment;
+
+  String get _path => '/booking/${widget.bookingId}/stops/';
+
+  @override
+  void dispose() {
+    for (final d in _draft) {
+      d.dispose();
+    }
+    super.dispose();
+  }
+
+  void _setDraft(List<_StopDraft> next) {
+    for (final d in _draft) {
+      d.dispose();
+    }
+    _draft
+      ..clear()
+      ..addAll(next);
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    try {
+      final res = await ref.read(apiClientProvider).get(_path);
+      final body = res.data;
+      final list = body is Map ? body['data'] : body;
+      final stops = <_StopDraft>[
+        for (final s in (list is List ? list : const []))
+          if (s is Map)
+            _StopDraft(
+              type: (s['stop_type'] ?? 'WAYPOINT').toString(),
+              address: (s['address'] ?? '').toString(),
+              phone: (s['contact_phone'] ?? '').toString(),
+              name: (s['contact_name'] ?? '').toString(),
+              notes: (s['notes'] ?? '').toString(),
+            ),
+      ];
+      if (mounted) setState(() => _setDraft(stops));
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not load existing stops.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (_draft.any((d) => d.address.text.trim().isEmpty)) {
+      setState(() => _error = 'Every stop needs an address.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = '';
+      _saved = '';
+    });
+    try {
+      final res = await ref.read(apiClientProvider).put(
+        _path,
+        data: {'stops': [for (final d in _draft) d.toJson()]},
+      );
+      final body = res.data;
+      final pricing = body is Map && body['meta'] is Map ? (body['meta'] as Map)['pricing'] : null;
+      if (mounted) {
+        setState(() => _saved = pricing is Map
+            ? 'Stops saved. Fare updated to ₹${pricing['new_payable']} (was ₹${pricing['old_payable']}).'
+            : 'Stops saved.');
+      }
+    } catch (e) {
+      final err = _errBody(e)?['error'];
+      if (err is Map && err['code'] == 'AMENDMENT_REQUIRED' && err['amendment'] is Map) {
+        // Paid booking: the server changed nothing; the customer must approve.
+        if (mounted) {
+          setState(() {
+            _amendment = Map<String, dynamic>.from(err['amendment'] as Map);
+            _saved = 'This change alters your paid fare. Review and approve it below.';
+          });
+        }
+      } else if (mounted) {
+        setState(() => _error = err is Map && (err['message'] ?? '').toString().isNotEmpty
+            ? err['message'].toString()
+            : _errorText(e, 'Could not save stops.'));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: _cardDeco(Colors.white, const Color(0xFFE6E8EE)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() => _open = !_open);
+              if (_open) _load();
+            },
+            child: Row(
+              children: [
+                const Icon(Icons.alt_route_rounded, size: 18, color: AppColors.navy),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Manage stops',
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                ),
+                Icon(_open ? Icons.expand_less : Icons.expand_more, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+          if (_open) ...[
+            const SizedBox(height: 10),
+            if (_error.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(_error, style: const TextStyle(color: AppColors.error, fontSize: 12.5)),
+              ),
+            if (_saved.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(_saved, style: const TextStyle(color: Color(0xFF047857), fontSize: 12.5, fontWeight: FontWeight.w600)),
+              ),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('Loading stops…', style: TextStyle(color: AppColors.textSecondary)),
+              )
+            else ...[
+              if (_draft.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text('No extra stops yet - just the default pickup and drop.',
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                ),
+              for (var i = 0; i < _draft.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        margin: const EdgeInsets.only(top: 10, right: 8),
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(color: AppColors.navy, shape: BoxShape.circle),
+                        child: Text(_draft[i].type == 'PICKUP' ? 'P' : _draft[i].type == 'DROP' ? 'D' : '${i + 1}',
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            TextField(
+                              controller: _draft[i].address,
+                              minLines: 1,
+                              maxLines: 2,
+                              decoration: _fieldDeco('Address'),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _draft[i].phone,
+                              keyboardType: TextInputType.phone,
+                              decoration: _fieldDeco('Contact phone (optional)'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => setState(() {
+                          _draft.removeAt(i).dispose();
+                        }),
+                        icon: const Icon(Icons.close_rounded, color: AppColors.error, size: 20),
+                      ),
+                    ],
+                  ),
+                ),
+              Row(
+                children: [
+                  OutlinedButton(
+                    onPressed: () => setState(() => _draft.add(_StopDraft())),
+                    child: const Text('+ Add stop'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: Text(_saving ? 'Saving…' : 'Save stops'),
+                  ),
+                ],
+              ),
+              GtStopsAmendmentCard(
+                bookingId: widget.bookingId,
+                initialAmendment: _amendment,
+                onResolved: () {
+                  setState(() => _amendment = null);
+                  _load();
+                },
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Paid booking + a stop edit that changes the fare: the customer's explicit
+/// decision (approve / cancel) and, for an increase, the top-up payment. The
+/// route changes only once the server has recorded the payment.
+class GtStopsAmendmentCard extends ConsumerStatefulWidget {
+  const GtStopsAmendmentCard({
+    super.key,
+    required this.bookingId,
+    this.initialAmendment,
+    this.onResolved,
+  });
+
+  final int bookingId;
+  final Map<String, dynamic>? initialAmendment;
+  final VoidCallback? onResolved;
+
+  @override
+  ConsumerState<GtStopsAmendmentCard> createState() => _GtStopsAmendmentCardState();
+}
+
+class _GtStopsAmendmentCardState extends ConsumerState<GtStopsAmendmentCard> {
+  Map<String, dynamic>? _am;
+  bool _busy = false;
+  bool _mine = false;
+  String _msg = '';
+
+  String get _path => '/booking/${widget.bookingId}/stops/amendment/';
+
+  @override
+  void initState() {
+    super.initState();
+    _am = widget.initialAmendment;
+    if (_am == null) _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant GtStopsAmendmentCard old) {
+    super.didUpdateWidget(old);
+    if (widget.initialAmendment != old.initialAmendment) {
+      setState(() => _am = widget.initialAmendment);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _load() async {
+    try {
+      final res = await ref.read(apiClientProvider).get(_path);
+      final next = _dataOf(res.data);
+      if (mounted) setState(() => _am = next);
+      return next;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _decide(String action) async {
+    final am = _am;
+    if (am == null || _busy) return;
+    setState(() {
+      _busy = true;
+      _msg = '';
+    });
+    try {
+      final res = await ref
+          .read(apiClientProvider)
+          .post(_path, data: {'action': action, 'amendment_id': am['id']});
+      final d = _dataOf(res.data) ?? const <String, dynamic>{};
+      final status = (d['status'] ?? '').toString();
+      setState(() {
+        if (status == 'APPROVED_PENDING_PAYMENT') {
+          _msg = 'Approved. Pay ₹${_money2(d['top_up_amount'])} to apply the new route.';
+        } else if (status == 'APPLIED') {
+          _msg = d['refund'] != null
+              ? 'Route updated. The fare difference will be refunded after review.'
+              : 'Route updated.';
+        } else if (status == 'CANCELLED') {
+          _msg = 'Change cancelled. Your booking is unchanged.';
+        }
+      });
+      await _load();
+      widget.onResolved?.call();
+    } catch (e) {
+      if (mounted) setState(() => _msg = _errorText(e));
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pay() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _mine = true;
+      _msg = '';
+    });
+    try {
+      await _startServerPricedPayment(ref, widget.bookingId);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _mine = false;
+          _msg = _errorText(e, 'Payment could not be started.');
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<PaymentState>(paymentControllerProvider, (prev, next) async {
+      if (!_mine || !mounted) return;
+      if (next is PaymentSuccess || next is PaymentFailed) {
+        final ok = next is PaymentSuccess;
+        // Never assume success: re-read the server state.
+        final fresh = await _load();
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _mine = false;
+          _msg = ok
+              ? (fresh == null
+                  ? 'Payment received. Your route has been updated.'
+                  : 'Payment received. We are confirming it; your route updates as soon as it is recorded.')
+              : (next as PaymentFailed).errorMessage;
+        });
+        widget.onResolved?.call();
+      }
+    });
+
+    final am = _am;
+    if (am == null ||
+        !const {'PENDING_CUSTOMER_APPROVAL', 'APPROVED_PENDING_PAYMENT'}
+            .contains((am['status'] ?? '').toString())) {
+      return const SizedBox.shrink();
+    }
+    final diff = double.tryParse('${am['difference']}') ?? 0;
+    final increase = diff > 0;
+    final exp = DateTime.tryParse('${am['expires_at'] ?? ''}');
+    final expired = exp != null && !exp.isAfter(DateTime.now());
+    final status = (am['status'] ?? '').toString();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: _cardDeco(const Color(0xFFFFFBEB), const Color(0xFFFDE68A)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('This route change needs your approval',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF78350F))),
+          const SizedBox(height: 6),
+          Text(
+            'Paid fare: ₹${_money2(am['old_payable'])} · New fare: ₹${_money2(am['new_payable'])}\n'
+            '${increase ? 'You pay ₹${_money2(diff)} more before the new route is applied.' : 'Difference of ₹${_money2(diff.abs())} will be refunded after review.'}',
+            style: const TextStyle(fontSize: 12.5, height: 1.5),
+          ),
+          if ((double.tryParse('${am['new_distance_km']}') ?? 0) > 0)
+            Text('New distance: ${_money2(am['new_distance_km'])} km · Stops: ${am['stops']}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+          if (expired)
+            const Text('This offer has expired. Edit the stops again.',
+                style: TextStyle(fontSize: 11.5, color: AppColors.error)),
+          if (_msg.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_msg, style: const TextStyle(fontSize: 12.5, color: Color(0xFF92400E))),
+            ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (status == 'PENDING_CUSTOMER_APPROVAL' && !expired)
+                FilledButton(
+                  onPressed: _busy ? null : () => _decide('APPROVE'),
+                  child: Text(increase ? 'Approve & continue to payment' : 'Approve change'),
+                ),
+              if (status == 'APPROVED_PENDING_PAYMENT' && !expired)
+                FilledButton(
+                  onPressed: _busy ? null : _pay,
+                  child: Text(_busy ? 'Processing…' : 'Pay ₹${_money2(diff)} to apply the new route'),
+                ),
+              TextButton(
+                onPressed: _busy ? null : () => _decide('CANCEL'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('Cancel this change'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Chat with the driver / technician ────────────────────────────────────────
+
+class BookingChatCard extends ConsumerStatefulWidget {
+  const BookingChatCard({super.key, required this.bookingId, this.trackingToken});
+
+  final int bookingId;
+  final String? trackingToken;
+
+  @override
+  ConsumerState<BookingChatCard> createState() => _BookingChatCardState();
+}
+
+class _BookingChatCardState extends ConsumerState<BookingChatCard> {
+  final _input = TextEditingController();
+  final _scroll = ScrollController();
+  List<Map<String, dynamic>> _messages = const [];
+  Timer? _poll;
+  bool _open = false;
+  bool _sending = false;
+  bool _unavailable = false;
+
+  String get _path => '/booking/${widget.bookingId}/messages/';
+  Map<String, dynamic>? get _query =>
+      (widget.trackingToken ?? '').isEmpty ? null : {'token': widget.trackingToken};
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _open = !_open);
+    _poll?.cancel();
+    if (_open) {
+      _fetch();
+      _poll = Timer.periodic(const Duration(seconds: 10), (_) => _fetch());
+    }
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final res = await ref.read(apiClientProvider).get(_path, queryParameters: _query);
+      final body = res.data;
+      final raw = body is Map ? (body['data'] ?? body['results']) : body;
+      final list = <Map<String, dynamic>>[
+        for (final m in (raw is List ? raw : const []))
+          if (m is Map) Map<String, dynamic>.from(m),
+      ];
+      if (!mounted) return;
+      final grew = list.length != _messages.length;
+      setState(() => _messages = list);
+      if (grew) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        });
+      }
+    } on DioException catch (e) {
+      final c = e.response?.statusCode;
+      if ((c == 401 || c == 403) && mounted) setState(() => _unavailable = true);
+    } catch (_) {}
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref.read(apiClientProvider).post(
+            _path,
+            data: {'body': text, if ((widget.trackingToken ?? '').isNotEmpty) 'token': widget.trackingToken},
+            queryParameters: _query,
+          );
+      _input.clear();
+      await _fetch();
+    } on DioException catch (e) {
+      final c = e.response?.statusCode;
+      if (mounted) {
+        if (c == 401 || c == 403) {
+          setState(() => _unavailable = true);
+        } else {
+          AppToast.show(context, _errorText(e, 'Message could not be sent.'),
+              type: AppToastType.error);
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_unavailable) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: _cardDeco(Colors.white, const Color(0xFFE6E8EE)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: _toggle,
+            child: Row(
+              children: [
+                const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: AppColors.navy),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Chat with your driver',
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                ),
+                Icon(_open ? Icons.expand_less : Icons.expand_more, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+          if (_open) ...[
+            const SizedBox(height: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: _messages.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text('No messages yet. Say hello!',
+                          style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                    )
+                  : ListView.builder(
+                      controller: _scroll,
+                      shrinkWrap: true,
+                      itemCount: _messages.length,
+                      itemBuilder: (_, i) {
+                        final m = _messages[i];
+                        final mine = (m['sender_persona'] ?? '').toString().toLowerCase() == 'customer';
+                        return Align(
+                          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            constraints: const BoxConstraints(maxWidth: 260),
+                            decoration: BoxDecoration(
+                              color: mine ? AppColors.navy : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (!mine && (m['sender_name'] ?? '').toString().isNotEmpty)
+                                  Text(m['sender_name'].toString(),
+                                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                                Text((m['body'] ?? '').toString(),
+                                    style: TextStyle(fontSize: 13, color: mine ? Colors.white : AppColors.textPrimary)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    decoration: _fieldDeco('Type a message'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: _sending ? null : _send,
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

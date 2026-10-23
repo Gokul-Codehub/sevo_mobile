@@ -8,6 +8,7 @@ import '../../../../routing/app_router.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../../shared/widgets/banner_media.dart';
+import '../../../home/data/home_studio_repository.dart';
 import '../../../home/data/homepage_repository.dart';
 import '../widgets/sevo_gradient_splash.dart';
 
@@ -40,14 +41,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   /// The brand splash image always stays up this long (the original 2.2 s) ...
   /// (3.0 s now, so the full intro animation can play.)
-  static const _minDisplay = Duration(milliseconds: 3000);
+  // Must stay >= SevoGradientSplash.duration (2800 ms) so the intro always
+  // plays to the end (+400 ms hold). Lowering it cuts the animation short.
+  static const _minDisplay = Duration(milliseconds: 3200);
 
   /// Set once we have navigated (timer or the Continue pill) so only one wins.
   bool _navigated = false;
 
   /// ... and, if Home's first data is still loading after that, a little
   /// longer — never more than this in total — so Home opens filled in.
-  static const _maxWait = Duration(seconds: 6);
+  static const _maxWait = Duration(seconds: 7);
 
   @override
   void initState() {
@@ -55,6 +58,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
+      animationBehavior: AnimationBehavior.preserve,
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _animController.forward();
@@ -75,29 +79,38 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // is not handled specially, since home_screen.dart's own `.when()`
     // error/retry handling already covers it the moment Home itself reads
     // the same provider.
-    ref.read(homepageConfigProvider);
-    ref.read(categoriesProvider);
-    // Fixed 2026-10-08 ("the saved address has cleared automatically...
-    // that should be stored in that account"): the address itself was
-    // never actually lost on the backend — `selectedAddressProvider`
-    // (address_notifier.dart) is a plain in-memory `StateProvider` that
-    // always starts `null` on every cold start, and the ONLY code that
-    // ever re-populates it from the account's saved addresses is
-    // `AddressListNotifier.build()`'s auto-select-default logic — which
-    // only runs once something actually reads/watches `addressListProvider`.
-    // Nothing did that early: Home and Checkout both only ever watched
-    // `selectedAddressProvider` itself, never `addressListProvider`, so
-    // unless the customer happened to open the Addresses list screen
-    // first, the saved default address never got loaded back in for the
-    // rest of the session — reading as "my saved address disappeared"
-    // even though it was sitting untouched in their account the whole
-    // time. Reading it here (same fire-and-forget pattern as
-    // homepageConfigProvider/categoriesProvider just above — a guest
-    // session's `build()` returns `const []` immediately and does nothing
-    // further) starts that fetch-and-auto-select as early as possible on
-    // every cold start, so the account's saved address is back in
-    // `selectedAddressProvider` by the time Home/Checkout need it.
-    ref.read(addressListProvider);
+    // Prefetch starts just AFTER the intro's first frames so reading storage
+    // and parsing JSON can't make the opening animation stutter.
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      ref.read(homepageConfigProvider);
+      ref.read(categoriesProvider);
+      // Home Studio pages are what Home actually draws; start both now (they
+      // fall back to the copy saved on the phone, so this is usually instant).
+      ref.read(homeStudioPageProvider('grocery_home'));
+      ref.read(homeStudioPageProvider('services_home'));
+      // Fixed 2026-10-08 ("the saved address has cleared automatically...
+      // that should be stored in that account"): the address itself was
+      // never actually lost on the backend — `selectedAddressProvider`
+      // (address_notifier.dart) is a plain in-memory `StateProvider` that
+      // always starts `null` on every cold start, and the ONLY code that
+      // ever re-populates it from the account's saved addresses is
+      // `AddressListNotifier.build()`'s auto-select-default logic — which
+      // only runs once something actually reads/watches `addressListProvider`.
+      // Nothing did that early: Home and Checkout both only ever watched
+      // `selectedAddressProvider` itself, never `addressListProvider`, so
+      // unless the customer happened to open the Addresses list screen
+      // first, the saved default address never got loaded back in for the
+      // rest of the session — reading as "my saved address disappeared"
+      // even though it was sitting untouched in their account the whole
+      // time. Reading it here (same fire-and-forget pattern as
+      // homepageConfigProvider/categoriesProvider just above — a guest
+      // session's `build()` returns `const []` immediately and does nothing
+      // further) starts that fetch-and-auto-select as early as possible on
+      // every cold start, so the account's saved address is back in
+      // `selectedAddressProvider` by the time Home/Checkout need it.
+      ref.read(addressListProvider);
+    });
     _navTimer = Timer(_minDisplay, () async {
       if (!mounted || _navigated) return;
       // Hold the splash until the data Home needs has arrived, so the
@@ -107,6 +120,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         await Future.wait<Object?>([
           ref.read(homepageConfigProvider.future),
           ref.read(categoriesProvider.future),
+          ref.read(homeStudioPageProvider('grocery_home').future),
+          ref.read(homeStudioPageProvider('services_home').future),
         ]).timeout(_maxWait - _minDisplay);
       } catch (_) {}
       if (!mounted) return;
@@ -138,7 +153,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           await ref.read(secureStorageProvider).hasSeenOnboarding();
       if (!mounted || _navigated) return;
       _navigated = true;
-      context.go(hasSeenOnboarding ? AppRoutes.home : AppRoutes.onboarding);
+      // The three "next, next, next" intro slides were removed. A first
+      // launch now goes straight to the location prompt (and is marked as
+      // seen so it only happens once per install).
+      if (!hasSeenOnboarding) {
+        await ref.read(secureStorageProvider).setOnboardingSeen();
+        if (!mounted) return;
+        context.go(AppRoutes.locationAccess);
+        return;
+      }
+      context.go(AppRoutes.home);
     });
   }
 

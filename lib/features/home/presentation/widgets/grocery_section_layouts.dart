@@ -11,6 +11,7 @@ import '../../../catalog/presentation/widgets/product_card.dart';
 import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/grocery_section_layout.dart';
+import 'studio_title.dart';
 
 /// Grocery Home Section Builder — Layout Resolver.
 ///
@@ -66,13 +67,13 @@ class _ProductDrivenSection extends ConsumerWidget {
     // category-merge path, unchanged.
     final productsAsync = section.usesSpecificProducts
         ? ref.watch(marketplaceProductsByIdsProvider(section.productIds.join(',')))
-        : ref.watch(marketplaceMergedProductsProvider(([...section.categoryIds]..sort()).join(',')));
+        : ref.watch(marketplaceMergedProductsProvider(section.categoryIds.join(',')));
 
     return productsAsync.when(
       loading: () => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(section.title),
+          _SectionTitle(section.title, section: section),
           const SizedBox(height: 12),
           const SizedBox(height: 308, child: _HorizontalShimmerRow(height: 308)),
         ],
@@ -115,7 +116,7 @@ class _ProductDrivenSection extends ConsumerWidget {
           case GrocerySectionLayout.splitFeatured:
             return _SplitFeaturedLayout(section: section, items: items);
           case GrocerySectionLayout.masonry:
-            return _MasonryLayout(title: section.title, items: items);
+            return _MasonryLayout(title: section.title, section: section, items: items);
           case GrocerySectionLayout.horizontalCarousel:
           default:
             // Covers horizontalCarousel plus any future layout this mobile
@@ -264,10 +265,10 @@ class _SectionTitle extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: StudioTitle(
+              text: title,
+              imageUrl: section?.titleImageUrl ?? '',
+              font: section?.titleFont ?? '',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -693,7 +694,7 @@ class _FeaturedHeroLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section.title),
+        _SectionTitle(section.title, section: section),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -892,7 +893,7 @@ class _DealCardsLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section.title),
+        _SectionTitle(section.title, section: section),
         const SizedBox(height: 12),
         SizedBox(
           height: 308,
@@ -1118,7 +1119,7 @@ class _SplitFeaturedLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section.title),
+        _SectionTitle(section.title, section: section),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1157,10 +1158,11 @@ class _SplitFeaturedLayout extends StatelessWidget {
 /// height-aware masonry algorithm — called out as a known limitation in the
 /// implementation notes rather than left silent.
 class _MasonryLayout extends StatelessWidget {
-  const _MasonryLayout({required this.title, required this.items});
+  const _MasonryLayout({required this.title, required this.items, this.section});
 
   final String title;
   final List<ServiceItem> items;
+  final MobileGrocerySection? section;
 
   @override
   Widget build(BuildContext context) {
@@ -1184,7 +1186,7 @@ class _MasonryLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(title),
+        _SectionTitle(title, section: section),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1341,7 +1343,7 @@ class _CategoryDiscoverySection extends ConsumerWidget {
       loading: () => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(section.title),
+          _SectionTitle(section.title, section: section),
           const SizedBox(height: 12),
           const SizedBox(height: 108, child: _CategoryShimmerRow()),
         ],
@@ -1379,7 +1381,7 @@ class _CategoryTileGridLayout extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section.title),
+        _SectionTitle(section.title, section: section),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1456,7 +1458,7 @@ class _CircularCategoryRailLayout extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(section.title),
+        _SectionTitle(section.title, section: section),
         const SizedBox(height: 12),
         SizedBox(
           height: 108,

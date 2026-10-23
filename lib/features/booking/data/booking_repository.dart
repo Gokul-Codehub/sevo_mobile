@@ -96,6 +96,10 @@ class BookingRepository {
     // eway_bill_number, stops/waypoints, cargo_access. Null for every
     // non-logistics booking, so existing callers are unchanged.
     Map<String, dynamic>? extraPayload,
+    // Same key on a retry returns the SAME booking instead of creating a
+    // second one (sent as the `Idempotency-Key` header and in the body, like
+    // the web). Callers keep it until the booking is confirmed.
+    String? idempotencyKey,
   }) async {
     try {
       // Fixed 2026-10-01: these two checks used to be `assert()`s. An
@@ -242,10 +246,19 @@ class BookingRepository {
       if (extraPayload != null && extraPayload.isNotEmpty) {
         payload.addAll(extraPayload);
       }
+      if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
+        payload['idempotency_key'] = idempotencyKey;
+      }
 
       debugPrint(
           '[BookingRepository] POST /booking/ payload: categoryId=$categoryId, serviceId=${firstItem.service.id}, addressId=$addressId, date=$scheduledDate, slot=$scheduledTimeSlot, itemsCount=${items.length}, totalAmount=$totalAmount');
-      final response = await api.post('/booking/', data: payload);
+      final response = await api.post(
+        '/booking/',
+        data: payload,
+        options: (idempotencyKey != null && idempotencyKey.isNotEmpty)
+            ? Options(headers: {'Idempotency-Key': idempotencyKey})
+            : null,
+      );
       final createResult = ResponseNormalizer.extract(
         response,
         (data) => Booking.fromJson(
@@ -415,6 +428,22 @@ class BookingRepository {
           return Booking.fromJson(inner);
         },
       );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  // ── Pay after service (online) ────────────────────────────────────────────
+  /// POST /booking/<id>/settle-payment/ - settles a finished cash-on-service
+  /// booking online. Test gateway only for now; the server answers 503 once
+  /// the mock gateway is switched off.
+  Future<Result<bool>> settlePaymentOnline(int id) async {
+    try {
+      final response = await api.post(
+        '/booking/$id/settle-payment/',
+        data: {'method': 'online'},
+      );
+      return ResponseNormalizer.extract(response, (_) => true);
     } on Exception catch (e) {
       return Failure(_toError(e));
     }

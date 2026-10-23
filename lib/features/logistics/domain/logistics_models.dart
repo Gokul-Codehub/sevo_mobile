@@ -694,9 +694,22 @@ class TimeSlotDay {
     this.reason,
     this.futureRemaining,
     this.futureLimit,
+    this.sameDayBooking = true,
+    this.advanceBookingDays,
+    this.closedWeekdays = const [],
+    this.minNoticeMinutes,
   });
 
   final List<TimeSlot> slots;
+
+  /// Booking window facts from the server's slot engine (same ones the web
+  /// calendar uses): whether today can be booked, how many days ahead a
+  /// customer may book, the weekdays the service is closed (Monday = 0 ...
+  /// Sunday = 6, as the server sends them) and the minimum notice.
+  final bool sameDayBooking;
+  final int? advanceBookingDays;
+  final List<int> closedWeekdays;
+  final int? minNoticeMinutes;
   final bool isOpen;
   final String? reason;
 
@@ -717,7 +730,12 @@ class TimeSlot extends Equatable {
     required this.endTime,
     required this.label,
     this.isAvailable = true,
+    this.reason,
   });
+
+  /// Why the server marked the slot unavailable ("Slot full", "Requires 2h
+  /// notice", "Time has passed" ...). Null when available.
+  final String? reason;
 
   final String id;
   final String date; // YYYY-MM-DD
@@ -749,5 +767,79 @@ class TimeSlot extends Equatable {
       };
 
   @override
-  List<Object?> get props => [id, date, startTime, endTime, label, isAvailable];
+  List<Object?> get props => [id, date, startTime, endTime, label, isAvailable, reason];
+}
+
+
+/// One Packers & Movers add-on service (rope pulling, appliance install,
+/// electrician, carpenter, labour-only …) from
+/// `GET /api/logistics/packers-movers/addons/`. Prices are informational —
+/// the server always re-prices from the same table at booking time.
+class PmAddOn extends Equatable {
+  const PmAddOn({
+    required this.code,
+    required this.name,
+    this.description = '',
+    this.pricingMode = 'FLAT',
+    this.unitPrice = 0,
+    this.maxQuantity = 1,
+    this.isLabourOnly = false,
+  });
+
+  final String code;
+  final String name;
+  final String description;
+
+  /// `FLAT`, `PER_UNIT` or `PER_CFT`.
+  final String pricingMode;
+  final double unitPrice;
+  final int maxQuantity;
+  final bool isLabourOnly;
+
+  factory PmAddOn.fromJson(Map<String, dynamic> json) => PmAddOn(
+        code: (json['code'] ?? '').toString(),
+        name: (json['name'] ?? '').toString(),
+        description: (json['description'] ?? '').toString(),
+        pricingMode: (json['pricing_mode'] ?? 'FLAT').toString().toUpperCase(),
+        unitPrice: parseDoubleOrNull(json['unit_price']) ?? 0,
+        maxQuantity: parseIntOrNull(json['max_quantity']) ?? 1,
+        isLabourOnly: parseBoolOrDefault(json['is_labour_only'], false),
+      );
+
+  /// "₹499", "₹12/CFT" or "₹150 each" — same wording as the web picker.
+  String get priceLabel {
+    final p = unitPrice == unitPrice.roundToDouble()
+        ? unitPrice.toStringAsFixed(0)
+        : unitPrice.toString();
+    return switch (pricingMode) {
+      'FLAT' => '₹$p',
+      'PER_CFT' => '₹$p/CFT',
+      _ => '₹$p each',
+    };
+  }
+
+  @override
+  List<Object?> get props =>
+      [code, name, description, pricingMode, unitPrice, maxQuantity, isLabourOnly];
+}
+
+/// Result of `POST /api/settings/service-zones/check/` for a whole trip
+/// (pickup, drop and any stops) or a single end.
+class TripCoverage extends Equatable {
+  const TripCoverage({
+    this.inCoverage = true,
+    this.failedPoint,
+    this.failedStopIndex,
+    this.message,
+  });
+
+  final bool inCoverage;
+
+  /// `pickup`, `drop` or `stop`, as reported by the server.
+  final String? failedPoint;
+  final int? failedStopIndex;
+  final String? message;
+
+  @override
+  List<Object?> get props => [inCoverage, failedPoint, failedStopIndex, message];
 }

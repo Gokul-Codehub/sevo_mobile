@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/utils/input_validators.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_notifier.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Screen allowing newly registered customers to set their display name & optional email.
 class ProfileCompletionScreen extends ConsumerStatefulWidget {
@@ -60,12 +62,12 @@ class _ProfileCompletionScreenState
   }
 
   Future<void> _handleComplete() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateAndFocus(_formKey)) return;
 
     setState(() => _isLoading = true);
 
     final error = await ref.read(authProvider.notifier).completeProfile(
-          name: _nameController.text.trim(),
+          name: InputValidators.cleanName(_nameController.text),
           email: _emailController.text.trim().isEmpty
               ? null
               : _emailController.text.trim(),
@@ -144,17 +146,11 @@ class _ProfileCompletionScreenState
                   decoration: const InputDecoration(
                     labelText: 'Full Name *',
                     hintText: 'e.g. Rahul Sharma',
+                    counterText: '',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty) {
-                      return 'Please enter your full name';
-                    }
-                    if (val.trim().length < 2) {
-                      return 'Name must be at least 2 characters';
-                    }
-                    return null;
-                  },
+                  maxLength: 60,
+                  validator: InputValidators.fullName,
                 ),
                 const SizedBox(height: 16),
 
@@ -207,15 +203,7 @@ class _ProfileCompletionScreenState
                       hintText: 'For booking invoices and receipts',
                       prefixIcon: Icon(Icons.email_outlined),
                     ),
-                    validator: (val) {
-                      if (val != null && val.trim().isNotEmpty) {
-                        if (!RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$')
-                            .hasMatch(val.trim())) {
-                          return 'Enter a valid email address or leave blank';
-                        }
-                      }
-                      return null;
-                    },
+                    validator: (val) => InputValidators.email(val, required: false),
                   ),
 
                 if (_needsMobile) ...[
@@ -224,6 +212,7 @@ class _ProfileCompletionScreenState
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
                     maxLength: 10,
+                    inputFormatters: [IndianMobileFormatter()],
                     decoration: const InputDecoration(
                       labelText: 'Mobile Number *',
                       hintText: '10-digit mobile number',
@@ -231,14 +220,7 @@ class _ProfileCompletionScreenState
                       prefixText: '+91 ',
                       counterText: '',
                     ),
-                    validator: (val) {
-                      final v = (val ?? '').trim();
-                      if (v.isEmpty) return 'Mobile number is required';
-                      if (!RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
-                        return 'Enter a valid 10-digit mobile number';
-                      }
-                      return null;
-                    },
+                    validator: InputValidators.indianMobile,
                   ),
                 ],
 

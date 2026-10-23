@@ -28,6 +28,7 @@ import '../features/catalog/presentation/screens/combo_offers_screen.dart';
 import '../features/catalog/presentation/screens/category_detail_screen.dart';
 import '../features/catalog/presentation/screens/grocery_product_detail_screen.dart';
 import '../features/catalog/presentation/screens/recipe_detail_screen.dart';
+import '../features/catalog/presentation/screens/offer_listing_screen.dart';
 import '../features/catalog/presentation/screens/search_screen.dart';
 import '../features/catalog/presentation/screens/search_results_screen.dart';
 import '../features/catalog/domain/search_keywords.dart';
@@ -60,6 +61,9 @@ abstract final class AppRoutes {
   static const String home = '/';
   static const String categories = '/categories';
   static const String search = '/search';
+  // Offer landing page driven by a Home Studio "Offers page" destination
+  // (percent off / save ₹X / under ₹X), e.g. /offers?mode=percent&v=60.
+  static const String offers = '/offers';
   // Results pages for a submitted search, one per mode (see SearchScreen).
   static const String searchServices = '/search/services';
   static const String searchGroceries = '/search/groceries';
@@ -207,6 +211,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => SearchScreen(
               mode: SearchModeX.fromWire(state.uri.queryParameters['mode']),
             ),
+          ),
+          GoRoute(
+            path: AppRoutes.offers,
+            name: 'offers',
+            builder: (context, state) => OfferListingScreen(params: state.uri.queryParameters),
           ),
           GoRoute(
             path: AppRoutes.searchServices,
@@ -411,6 +420,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return PaymentScreen(
                 bookingId: bookingId,
                 paymentType: type,
+                fromCheckout: state.uri.queryParameters['from'] == 'checkout',
               );
             },
           ),

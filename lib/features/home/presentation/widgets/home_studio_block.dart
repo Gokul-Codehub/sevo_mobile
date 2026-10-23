@@ -13,10 +13,14 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../../../catalog/domain/catalog_models.dart';
 import '../../../catalog/domain/catalog_providers.dart';
+import '../../../catalog/presentation/widgets/product_card.dart';
 import '../../data/home_studio_repository.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/grocery_section_layout.dart';
 import 'grocery_section_layouts.dart';
+import 'offers_rail.dart';
+import 'studio_title.dart';
+import 'tabbed_showcase.dart';
 
 const _kGroceryPage = 'grocery_home';
 
@@ -82,7 +86,16 @@ class HomeStudioBlock extends ConsumerWidget {
 /// nothing to show (flag off, nothing published, still loading with no cache,
 /// network failure) so the caller renders the legacy sections instead.
 List<Widget>? homeStudioContentSlivers(WidgetRef ref, String pageKey, {Widget? footer}) {
-  final page = ref.watch(homeStudioPageProvider(pageKey)).valueOrNull;
+  final async = ref.watch(homeStudioPageProvider(pageKey));
+  final page = async.valueOrNull;
+  // First load with nothing saved: show a skeleton of the page instead of
+  // flashing the old layout and then jumping to the new one.
+  if (page == null && async.isLoading) {
+    return [
+      const SliverToBoxAdapter(child: _StudioPageSkeleton()),
+      if (footer != null) SliverToBoxAdapter(child: footer),
+    ];
+  }
   if (page == null || page.useLegacy || page.sections.isEmpty) return null;
   return [
     SliverToBoxAdapter(
@@ -122,9 +135,20 @@ void openStudioDestination(BuildContext context, StudioDestination d, String pag
       if (v.isNotEmpty) context.push('/baskets/$v');
     case 'search':
       context.push('/search?mode=${grocery ? 'groceries' : 'services'}${v.isEmpty ? '' : '&q=${Uri.encodeQueryComponent(v)}'}');
+    case 'offer':
+      context.push(_offerPath(v, grocery));
     default:
-      break; // none / offer: nothing to open
+      break; // none: nothing to open
   }
+}
+
+/// "Offers page" destination -> /offers route. The admin stores the rule as a
+/// query string in the destination value (mode=percent&v=60&cat=..&title=..).
+String _offerPath(String value, bool grocery) {
+  var q = value.trim();
+  if (q.startsWith('?')) q = q.substring(1);
+  if (!q.contains('scope=')) q = '${q.isEmpty ? '' : '$q&'}scope=${grocery ? 'grocery' : 'services'}';
+  return '/offers?$q';
 }
 
 /// Home Studio destination -> the raw link string the legacy banner CTA
@@ -149,6 +173,8 @@ String _destinationLink(StudioDestination d, {required bool grocery}) {
       return v.isEmpty ? '' : '/baskets/$v';
     case 'search':
       return '/search?mode=${grocery ? 'groceries' : 'services'}${v.isEmpty ? '' : '&q=${Uri.encodeQueryComponent(v)}'}';
+    case 'offer':
+      return _offerPath(v, grocery);
     default:
       return '';
   }
@@ -164,6 +190,9 @@ class StudioSectionView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (section.template == 'grocery_section' && section.settings['layout'] == 'cutout_panel') {
+      return _spaced(_CutoutPanel(section: section, pageKey: pageKey));
+    }
     switch (section.template) {
       case 'ad_carousel':
       case 'single_banner':
@@ -179,17 +208,23 @@ class StudioSectionView extends ConsumerWidget {
             _GroceryDriven(section: section),
           ],
         ));
+      case 'festival_showcase':
+        return _spaced(_FestivalShowcase(section: section, pageKey: pageKey));
+      case 'offers_rail':
+        return _spaced(OffersRail(section: section));
+      case 'tabbed_showcase':
+        return _spaced(TabbedShowcase(section: section, pageKey: pageKey));
       case 'bestseller_tiles':
         return _spaced(_BestsellerTiles(section: section, pageKey: pageKey));
       case 'service_category_grid':
         return _spaced(_ServiceCategoryGrid(section: section, pageKey: pageKey));
       case 'service_collection':
       case 'service_packages':
-        return _spaced(_ServiceDriven(section: section));
+        return _spaced(_ServiceDriven(section: section, pageKey: pageKey));
       default:
         final type = (section.content['type'] ?? '').toString();
         if (type == 'manual_services' || type == 'service_category') {
-          return _spaced(_ServiceDriven(section: section));
+          return _spaced(_ServiceDriven(section: section, pageKey: pageKey));
         }
         // Services page: category rails/grids must resolve against SERVICE
         // categories, never the grocery (Seller Hub) category tree.
@@ -278,8 +313,8 @@ class _StudioBannerCarouselState extends State<StudioBannerCarousel> {
   @override
   Widget build(BuildContext context) {
     if (_slides.isEmpty) return const SizedBox.shrink();
-    // Advertisement Carousel: coverflow style (big centre card, smaller
-    // neighbours tucked behind it). Other banner templates are unchanged.
+    // Advertisement Carousel: peek style (centre banner with the previous /
+    // next banners showing at the edges). Other banner templates are unchanged.
     if (widget.section.template == 'ad_carousel' && _slides.length >= 2) {
       return _StudioCoverflow(key: ValueKey('cf-${widget.section.id}'), section: widget.section, pageKey: widget.pageKey);
     }
@@ -344,11 +379,12 @@ class _StudioBannerCarouselState extends State<StudioBannerCarousel> {
   }
 }
 
-// ───────────────── coverflow ad carousel ─────────────────
+// ───────────────── peek ad carousel ─────────────────
 
-/// Advertisement Carousel animation: the centre card is large, the previous /
-/// next cards are smaller and sit partly behind it. Swiping or autoplay makes
-/// the cards scale and slide over each other. Loops endlessly.
+/// Advertisement Carousel animation: one banner is centred at (almost) full
+/// width and the previous / next banners peek in from the left and right
+/// edges, all the same size with a small gap and rounded corners. Swiping or
+/// autoplay slides the whole row. Loops endlessly.
 class _StudioCoverflow extends StatefulWidget {
   const _StudioCoverflow({super.key, required this.section, required this.pageKey});
 
@@ -360,9 +396,11 @@ class _StudioCoverflow extends StatefulWidget {
 }
 
 class _StudioCoverflowState extends State<_StudioCoverflow> {
-  static const double _fraction = 0.74; // card width as a share of the screen
-  static const double _sideScale = 0.84; // neighbour size relative to centre
-  static const double _tuck = 0.16; // how far neighbours slide behind centre
+  // Measured from the reference design: the centre banner is ~66% of the
+  // screen width and the neighbours are ~89% of its size, so a slice of each
+  // neighbour peeks in with a small gap and no padding between pages.
+  static const double _fraction = 0.66;
+  static const double _sideScale = 0.89;
 
   List<StudioSlide> get _slides => widget.section.slides;
   int get _n => _slides.length;
@@ -388,7 +426,7 @@ class _StudioCoverflowState extends State<_StudioCoverflow> {
       if (reduce) {
         _c.jumpToPage(_cur + 1);
       } else {
-        _c.nextPage(duration: const Duration(milliseconds: 650), curve: Curves.easeInOutCubic);
+        _c.nextPage(duration: const Duration(milliseconds: 600), curve: Curves.easeInOutCubic);
       }
     });
   }
@@ -400,131 +438,83 @@ class _StudioCoverflowState extends State<_StudioCoverflow> {
     super.dispose();
   }
 
-  Widget _card(int k, double page, double cardW, double cardH) {
-    final signed = k - page;
-    final double d = signed.abs().clamp(0.0, 1.0).toDouble();
-    final scale = 1 - (1 - _sideScale) * d;
-    final dx = signed * cardW - (signed == 0 ? 0 : signed.sign) * _tuck * cardW * d;
-    final slide = _slides[k % _n];
-    return Transform.translate(
-      offset: Offset(dx, 0),
-      child: Transform.scale(
-        scale: scale,
-        child: SizedBox(
-          width: cardW,
-          height: cardH,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.15 * (1 - d)), blurRadius: 14, offset: const Offset(0, 6))],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BannerMedia(url: slide.imageUrl, title: slide.title.isEmpty ? null : slide.title),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Coverflow cards are ~18% taller than the plain banner shape.
-    final double ratio = (_aspect(widget.section.settings['aspect']?.toString()) / 1.18).clamp(0.8, 2.4).toDouble();
+    // Reference card shape is ~1.45:1 for the standard banner size.
+    final double ratio = (_aspect(widget.section.settings['aspect']?.toString()) / 1.38).clamp(0.8, 2.2).toDouble();
+    final showDots = widget.section.flag('indicators', fallback: true);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         LayoutBuilder(
           builder: (context, box) {
-            final cardW = box.maxWidth * _fraction;
-            final cardH = cardW / ratio;
-            final fogW = (box.maxWidth - cardW) / 2 + box.maxWidth * 0.03;
+            final cardH = box.maxWidth * _fraction / ratio;
             return SizedBox(
-              height: cardH + 12,
+              height: cardH,
               child: Listener(
                 onPointerDown: (_) => _timer?.cancel(),
                 onPointerUp: (_) => _startAutoplay(),
-                child: Stack(
-                  clipBehavior: Clip.hardEdge,
-                  children: [
-                    Positioned.fill(
-                      child: AnimatedBuilder(
-                        animation: _c,
-                        builder: (context, _) {
-                          final page = (_c.hasClients && _c.position.haveDimensions)
-                              ? (_c.page ?? _initial.toDouble())
-                              : _initial.toDouble();
-                          final base = page.round();
-                          // Paint farthest first so the centre card is on top.
-                          final ks = [for (var k = base - 2; k <= base + 2; k++) k]
-                            ..sort((x, y) => (y - page).abs().compareTo((x - page).abs()));
-                          return Stack(
-                            alignment: Alignment.center,
-                            children: [for (final k in ks) _card(k, page, cardW, cardH)],
-                          );
+                child: PageView.builder(
+                  controller: _c,
+                  onPageChanged: (k) => setState(() => _cur = k),
+                  itemBuilder: (context, k) {
+                    final slide = _slides[k % _n];
+                    return Semantics(
+                      button: true,
+                      label: slide.alt.isNotEmpty ? slide.alt : slide.title,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (k == _cur) {
+                            openStudioDestination(context, slide.destination, widget.pageKey);
+                          } else {
+                            _c.animateToPage(k, duration: const Duration(milliseconds: 450), curve: Curves.easeInOutCubic);
+                          }
                         },
-                      ),
-                    ),
-                    // Soft fog at the far left / right: side cards keep their own
-                    // colours but dissolve toward the edges, so the front card
-                    // stands out.
-                    Positioned(
-                      left: 0, top: 0, bottom: 0, width: fogW,
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                              colors: [Colors.white.withOpacity(0.85), Colors.white.withOpacity(0)],
+                        child: AnimatedBuilder(
+                          animation: _c,
+                          builder: (context, child) {
+                            final page = (_c.hasClients && _c.position.haveDimensions)
+                                ? (_c.page ?? _initial.toDouble())
+                                : _initial.toDouble();
+                            final d = (k - page).abs().clamp(0.0, 1.0).toDouble();
+                            return Transform.scale(scale: 1 - (1 - _sideScale) * d, child: child);
+                          },
+                          child: Padding(
+                            padding: EdgeInsets.zero,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: BannerMedia(url: slide.imageUrl, title: slide.title.isEmpty ? null : slide.title),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      right: 0, top: 0, bottom: 0, width: fogW,
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.centerRight,
-                              end: Alignment.centerLeft,
-                              colors: [Colors.white.withOpacity(0.85), Colors.white.withOpacity(0)],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Invisible pages: swipe + tap handling only.
-                    Positioned.fill(
-                      child: PageView.builder(
-                        controller: _c,
-                        onPageChanged: (k) => setState(() => _cur = k),
-                        itemBuilder: (context, k) => Semantics(
-                          button: true,
-                          label: _slides[k % _n].alt.isNotEmpty ? _slides[k % _n].alt : _slides[k % _n].title,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              if (k == _cur) {
-                                openStudioDestination(context, _slides[k % _n].destination, widget.pageKey);
-                              } else {
-                                _c.animateToPage(k, duration: const Duration(milliseconds: 450), curve: Curves.easeInOutCubic);
-                              }
-                            },
-                            child: const SizedBox.expand(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
             );
           },
         ),
+        if (showDots && _n > 1) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < _n; i++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  height: 6,
+                  width: i == _cur % _n ? 18 : 6,
+                  decoration: BoxDecoration(
+                    color: i == _cur % _n ? const Color(0xFF1A1A1A) : const Color(0x551A1A1A),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -656,6 +646,7 @@ class _GroceryDriven extends ConsumerWidget {
     if (t == 'product_grid') layout = section.settings['columns']?.toString() == '3' ? 'grid' : 'grid_2';
     // "Grocery Section" template = the same 12 layouts as Mobile Grocery Sections.
     if (t == 'grocery_section') layout = (section.settings['layout'] ?? 'horizontal').toString();
+    if (t == 'festival_showcase') layout = section.settings['product_layout'] == 'grid' ? 'grid_2' : 'horizontal';
     layout ??= 'horizontal';
 
     final limit = int.tryParse((c['limit'] ?? '').toString()) ?? 10;
@@ -674,6 +665,8 @@ class _GroceryDriven extends ConsumerWidget {
       showProductPrice: section.flag('show_price', fallback: true),
       showProductDiscount: section.flag('show_discount', fallback: true),
       showAddButton: section.flag('show_add_button', fallback: true),
+      titleImageUrl: section.titleImage,
+      titleFont: section.titleFont,
       showCategoryImage: section.flag('show_category_image', fallback: true),
       showCategoryName: section.flag('show_category_name', fallback: true),
       showCategoryProductCount: section.flag('show_category_count', fallback: true),
@@ -689,6 +682,300 @@ class _GroceryDriven extends ConsumerWidget {
           : '',
     );
     return GrocerySectionResolver(section: mapped);
+  }
+}
+
+// ───────────────────────── festival showcase ─────────────────────────
+
+Color _hexColor(dynamic raw, Color fallback) {
+  final h = (raw ?? '').toString().trim().replaceAll('#', '');
+  if (h.length != 6 && h.length != 8) return fallback;
+  final v = int.tryParse(h, radix: 16);
+  if (v == null) return fallback;
+  return Color(h.length == 6 ? (0xFF000000 | v) : v);
+}
+
+/// Festive coloured panel: transparent cut-out image(s) stand out of the
+/// gradient, with the products / services listed beneath. Products and
+/// services are live (resolved by the existing Studio renderers).
+class _FestivalShowcase extends StatelessWidget {
+  const _FestivalShowcase({required this.section, required this.pageKey});
+
+  final StudioSection section;
+  final String pageKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final st = section.settings;
+    final start = _hexColor(st['background'], const Color(0xFFF59E0B));
+    final end = _hexColor(st['background_end'], const Color(0xFFB45309));
+    final dark = (st['text_color'] ?? 'light').toString() == 'dark';
+    final fg = dark ? const Color(0xFF1F2937) : Colors.white;
+    final pos = (st['hero_position'] ?? 'right').toString();
+    final title = section.title.isNotEmpty ? section.title : 'Festival Specials';
+    final subtitle = (st['subtitle'] ?? '').toString();
+    final badge = (st['badge_text'] ?? '').toString();
+    final dest = StudioDestination.fromJson(st['see_all_destination']);
+    final showSeeAll = section.flag('see_all', fallback: true) && dest.type != 'none';
+    final hero = section.slides.isNotEmpty ? section.slides.first : null;
+    final extras = section.slides.skip(1).take(2).toList();
+
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (badge.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(color: fg.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+            child: Text(badge.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: fg)),
+          ),
+        StudioTitle(text: title, imageUrl: section.titleImage, font: section.titleFont, maxLines: 3, imageHeight: 40, style: TextStyle(fontSize: 22, height: 1.1, fontWeight: FontWeight.w900, color: fg)),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(subtitle, style: TextStyle(fontSize: 12.5, color: fg.withOpacity(0.9))),
+        ],
+        if (showSeeAll) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => openStudioDestination(context, dest, pageKey),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: fg, borderRadius: BorderRadius.circular(20)),
+              child: Text('See all', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: dark ? Colors.white : end)),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    Widget cutout(StudioSlide? s, double h) => s == null
+        ? SizedBox(height: h)
+        : GestureDetector(
+            onTap: s.destination.type == 'none' ? null : () => openStudioDestination(context, s.destination, pageKey),
+            child: SizedBox(
+              height: h,
+              child: AppRemoteImage(imageUrl: s.imageUrl, fit: BoxFit.contain),
+            ),
+          );
+
+    final heroStack = Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.bottomCenter,
+      children: [
+        cutout(hero, pos == 'top' ? 150 : 130),
+        for (var i = 0; i < extras.length; i++)
+          Positioned(
+            left: i == 0 ? -14 : null,
+            right: i == 1 ? -8 : null,
+            bottom: i == 0 ? -4 : null,
+            top: i == 1 ? -10 : null,
+            child: SizedBox(width: 52, height: 52, child: AppRemoteImage(imageUrl: extras[i].imageUrl, fit: BoxFit.contain)),
+          ),
+      ],
+    );
+
+    final Widget header;
+    if (pos == 'top') {
+      header = Column(children: [Center(child: heroStack), const SizedBox(height: 10), Align(alignment: Alignment.centerLeft, child: text)]);
+    } else {
+      final heroBox = SizedBox(width: 128, child: heroStack);
+      header = Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: pos == 'left'
+            ? [heroBox, const SizedBox(width: 12), Expanded(child: text)]
+            : [Expanded(child: text), const SizedBox(width: 12), heroBox],
+      );
+    }
+
+    // The list reuses the live renderers; title / see-all are drawn by the panel.
+    final inner = StudioSection(
+      id: section.id,
+      template: section.template,
+      name: section.name,
+      settings: {...st, 'title': '', 'see_all': false},
+      slides: const [],
+      content: section.content,
+    );
+    final type = (section.content['type'] ?? '').toString();
+    final isService = type == 'manual_services' || type == 'service_category';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.fromLTRB(14, 16, 0, 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [start, end]),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(padding: const EdgeInsets.only(right: 14), child: header),
+          const SizedBox(height: 14),
+          isService ? _ServiceDriven(section: inner) : _GroceryDriven(section: inner),
+        ],
+      ),
+    );
+  }
+}
+
+// ───────────────────────── cut-out panel (grocery section layout) ─────────────────────────
+
+/// Grocery Section layout "Cut-out Panel": a transparent PNG on a gradient
+/// panel with the chosen products listed below (grid or multi-row rail), and
+/// fully admin-styled cards. Products are live, never frozen into the page.
+class _CutoutPanel extends ConsumerWidget {
+  const _CutoutPanel({required this.section, required this.pageKey});
+
+  final StudioSection section;
+  final String pageKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final st = section.settings;
+    final c = section.content;
+    final type = (c['type'] ?? '').toString();
+    final ids = _ints(c['ids']);
+    if (ids.isEmpty || (type != 'manual' && type != 'manual_categories')) return const SizedBox.shrink();
+    final limit = (int.tryParse((c['limit'] ?? '').toString()) ?? 12).clamp(1, 60).toInt();
+
+    final productsAsync = type == 'manual'
+        ? ref.watch(marketplaceProductsByIdsProvider(ids.join(',')))
+        : ref.watch(marketplaceMergedProductsProvider(ids.join(',')));
+
+    int iv(String k, int d, int lo, int hi) => (int.tryParse(st[k]?.toString() ?? '') ?? d).clamp(lo, hi).toInt();
+
+    final c1 = _hexColor(st['panel_color'], const Color(0xFFF59E0B));
+    final c2 = _hexColor(st['panel_color_end'], c1);
+    final dir = (st['panel_gradient'] ?? 'vertical').toString();
+    final begin = dir == 'horizontal' ? Alignment.centerLeft : (dir == 'diagonal' ? Alignment.topLeft : Alignment.topCenter);
+    final end = dir == 'horizontal' ? Alignment.centerRight : (dir == 'diagonal' ? Alignment.bottomRight : Alignment.bottomCenter);
+    final dark = (st['text_color'] ?? 'light').toString() == 'dark';
+    final fg = dark ? const Color(0xFF1F2937) : Colors.white;
+    final pad = iv('panel_padding', 14, 0, 32).toDouble();
+    final heroH = iv('hero_height', 170, 80, 320).toDouble();
+    final gap = iv('item_gap', 10, 4, 24).toDouble();
+    final vertical = (st['list_orientation'] ?? 'horizontal').toString() == 'vertical';
+    final cols = iv('grid_columns', 2, 2, 5);
+    final rows = iv('rail_rows', 1, 1, 5);
+    final cardW = iv('card_width', 150, 100, 220).toDouble();
+
+    final fill = (st['card_color'] ?? '').toString().trim().isEmpty ? Colors.white : _hexColor(st['card_color'], Colors.white);
+    final borderRaw = (st['card_border_color'] ?? '').toString().trim();
+    final style = ProductCardStyle(
+      radius: iv('card_radius', 18, 0, 32).toDouble(),
+      fillColor: fill,
+      borderColor: borderRaw.isEmpty ? null : _hexColor(borderRaw, AppColors.divider),
+      borderWidth: iv('card_border_width', 1, 0, 4).toDouble(),
+      shadow: section.flag('card_shadow', fallback: true),
+    );
+    final showImage = section.flag('show_image', fallback: true);
+    final showPrice = section.flag('show_price', fallback: true);
+    final showDiscount = section.flag('show_discount', fallback: true);
+    final showAdd = section.flag('show_add_button', fallback: true);
+
+    final hero = section.slides.isNotEmpty ? section.slides.first : null;
+    final title = section.title.isNotEmpty ? section.title : (hero?.title ?? '');
+
+    Widget card(ServiceItem it) => RepaintBoundary(
+          child: ProductCard(
+            service: it,
+            style: style,
+            showImage: showImage,
+            showPrice: showPrice,
+            showDiscount: showDiscount,
+            showAddButton: showAdd,
+          ),
+        );
+
+    Widget list(List<ServiceItem> items) {
+      if (vertical) {
+        return LayoutBuilder(builder: (context, cons) {
+          final w = (cons.maxWidth - gap * (cols - 1)) / cols;
+          final h = ProductCard.groceryCardHeight(cardWidth: w, showImage: showImage, showPrice: showPrice, showAddButton: showAdd);
+          return GridView.builder(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cols,
+              crossAxisSpacing: gap,
+              mainAxisSpacing: gap,
+              mainAxisExtent: h,
+            ),
+            itemBuilder: (_, i) => card(items[i]),
+          );
+        });
+      }
+      final cardH = ProductCard.groceryCardHeight(cardWidth: cardW, showImage: showImage, showPrice: showPrice, showAddButton: showAdd);
+      final usedRows = rows.clamp(1, items.length).toInt();
+      return SizedBox(
+        height: usedRows * cardH + (usedRows - 1) * gap + 6,
+        child: GridView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.zero,
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: usedRows,
+            crossAxisSpacing: gap,
+            mainAxisSpacing: gap,
+            mainAxisExtent: cardW,
+          ),
+          itemBuilder: (_, i) => card(items[i]),
+        ),
+      );
+    }
+
+    final dest = hero?.destination ?? const StudioDestination();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      padding: EdgeInsets.all(pad),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(iv('panel_radius', 22, 0, 40).toDouble()),
+        gradient: LinearGradient(begin: begin, end: end, colors: [c1, c2]),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hero != null)
+            GestureDetector(
+              onTap: dest.type == 'none' ? null : () => openStudioDestination(context, dest, pageKey),
+              child: SizedBox(height: heroH, child: AppRemoteImage(imageUrl: hero.imageUrl, fit: BoxFit.contain)),
+            ),
+          if (title.isNotEmpty || section.titleImage.isNotEmpty || (st['banner_subtitle'] ?? '').toString().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (title.isNotEmpty || section.titleImage.isNotEmpty) StudioTitle(text: title, imageUrl: section.titleImage, font: section.titleFont, maxLines: 3, imageHeight: 40, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, height: 1.1, color: fg)),
+                  if ((st['banner_subtitle'] ?? '').toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(st['banner_subtitle'].toString(), style: TextStyle(fontSize: 12.5, color: fg.withOpacity(0.9))),
+                    ),
+                ],
+              ),
+            )
+          else
+            const SizedBox(height: 10),
+          productsAsync.when(
+            loading: () => Container(
+              height: 160,
+              decoration: BoxDecoration(color: fg.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
+            ),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (products) {
+              if (products.isEmpty) return const SizedBox.shrink();
+              final items = products.take(limit).map((p) => p.toServiceItem()).toList();
+              return list(items);
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -729,8 +1016,10 @@ class _BestsellerTiles extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              section.title.isNotEmpty ? section.title : 'Bestsellers',
+            child: StudioTitle(
+              text: section.title.isNotEmpty ? section.title : 'Bestsellers',
+              imageUrl: section.titleImage,
+              font: section.titleFont,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.navy),
             ),
           ),
@@ -899,10 +1188,10 @@ class _ServiceCategoryGrid extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (section.title.isNotEmpty)
+              if (section.title.isNotEmpty || section.titleImage.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(section.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                  child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
                 ),
               if (circular)
                 SizedBox(
@@ -1006,25 +1295,48 @@ class _ServiceCategoryGrid extends ConsumerWidget {
 /// admin's picks (or a whole service category) resolved against the live
 /// service catalog, so price and availability are always current.
 class _ServiceDriven extends ConsumerWidget {
-  const _ServiceDriven({required this.section});
+  const _ServiceDriven({required this.section, this.pageKey = 'services_home'});
 
   final StudioSection section;
+  final String pageKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = section.content;
     final type = (c['type'] ?? '').toString();
     final limit = int.tryParse((c['limit'] ?? '').toString()) ?? 8;
+    final seeAllDest = StudioDestination.fromJson(section.settings['see_all_destination']);
+    final showSeeAll = section.flag('see_all') && seeAllDest.type != 'none';
+    // Admin "Show on each card" switches (all default on).
+    final showImage = section.flag('show_image', fallback: true);
+    final showName = section.flag('show_name', fallback: true);
+    final showPrice = section.flag('show_price', fallback: true);
+    final showButton = section.flag('show_add_button', fallback: true);
 
     Widget rail(List<_ServiceEntry> entries) {
       if (entries.isEmpty) return const SizedBox.shrink();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (section.title.isNotEmpty)
+          if (section.title.isNotEmpty || section.titleImage.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Text(section.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                  ),
+                  if (showSeeAll)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => openStudioDestination(context, seeAllDest, pageKey),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Text('See all', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0E7C5A))),
+                      ),
+                    ),
+                ],
+              ),
             ),
           SizedBox(
             height: 196,
@@ -1034,8 +1346,8 @@ class _ServiceDriven extends ConsumerWidget {
               itemCount: entries.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (_, i) => entries[i].item != null
-                  ? _ServiceCard(item: entries[i].item!, label: entries[i].label)
-                  : _ServiceCardLoader(slug: entries[i].slug, label: entries[i].label),
+                  ? _ServiceCard(item: entries[i].item!, label: entries[i].label, showImage: showImage, showName: showName, showPrice: showPrice, showButton: showButton)
+                  : _ServiceCardLoader(slug: entries[i].slug, label: entries[i].label, showImage: showImage, showName: showName, showPrice: showPrice, showButton: showButton),
             ),
           ),
         ],
@@ -1045,7 +1357,10 @@ class _ServiceDriven extends ConsumerWidget {
     if (type == 'service_category') {
       final slug = (c['category_slug'] ?? '').toString();
       if (slug.isEmpty) return const SizedBox.shrink();
-      final async = ref.watch(categoryServicesProvider(CategoryServicesParam(categorySlug: slug)));
+      final async = ref.watch(categoryServicesProvider(CategoryServicesParam(
+        categoryId: int.tryParse((c['category_id'] ?? '').toString()),
+        categorySlug: slug,
+      )));
       return async.maybeWhen(
         data: (items) => rail([for (final i in items.take(limit)) _ServiceEntry(slug: i.slug, item: i)]),
         orElse: () => const SizedBox.shrink(),
@@ -1075,18 +1390,29 @@ class _ServiceEntry {
 }
 
 class _ServiceCardLoader extends ConsumerWidget {
-  const _ServiceCardLoader({required this.slug, this.label = ''});
+  const _ServiceCardLoader({
+    required this.slug,
+    this.label = '',
+    this.showImage = true,
+    this.showName = true,
+    this.showPrice = true,
+    this.showButton = true,
+  });
   final String slug;
   final String label;
+  final bool showImage;
+  final bool showName;
+  final bool showPrice;
+  final bool showButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(serviceDetailProvider(slug));
     return async.when(
-      data: (item) => _ServiceCard(item: item, label: label),
+      data: (item) => _ServiceCard(item: item, label: label, showImage: showImage, showName: showName, showPrice: showPrice, showButton: showButton),
       loading: () => Container(
-        width: 150,
-        decoration: BoxDecoration(color: Colors.white54, borderRadius: BorderRadius.circular(14)),
+        width: _ServiceCard.cardWidth,
+        decoration: BoxDecoration(color: Colors.white54, borderRadius: BorderRadius.circular(26)),
       ),
       error: (_, __) => const SizedBox.shrink(),
     );
@@ -1094,45 +1420,140 @@ class _ServiceCardLoader extends ConsumerWidget {
 }
 
 class _ServiceCard extends StatelessWidget {
-  const _ServiceCard({required this.item, this.label = ''});
+  const _ServiceCard({
+    required this.item,
+    this.label = '',
+    this.showImage = true,
+    this.showName = true,
+    this.showPrice = true,
+    this.showButton = true,
+  });
   final ServiceItem item;
   final String label;
+  final bool showImage;
+  final bool showName;
+  final bool showPrice;
+  final bool showButton;
+
+  static const double cardWidth = 172;
 
   @override
   Widget build(BuildContext context) {
-    final title = label.isNotEmpty ? label : item.title;
+    final isGt = item.isGoodsTransport;
+    final title = label.isNotEmpty
+        ? label
+        : (isGt ? item.goodsTransportLabel : item.title);
+    final badge = item.isPopular
+        ? 'Best Seller'
+        : (item.rating >= 4.5 ? 'Top Rated' : '');
+    final imageUrl =
+        isGt ? (item.goodsTransportImageUrl ?? item.imageUrl) : item.imageUrl;
+    final price = '\u20B9${item.effectivePrice.toDouble().toStringAsFixed(0)}';
+
+    final imageStack = Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AppRemoteImage(imageUrl: imageUrl, fit: BoxFit.cover),
+        ),
+        if (badge.isNotEmpty)
+          Positioned(
+            left: 10,
+            top: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(badge,
+                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+          ),
+      ],
+    );
+
+    void open() => isGt
+        ? context.push(item.goodsTransportPath)
+        : context.push('/services/${item.slug}', extra: item);
+
     return SizedBox(
-      width: 150,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => context.push('/services/${item.slug}', extra: item),
+      width: cardWidth,
+      child: GestureDetector(
+        onTap: open,
         child: Container(
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: const [
+              BoxShadow(color: Color(0x14000000), blurRadius: 14, offset: Offset(0, 5)),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                height: 100,
-                width: double.infinity,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                  child: AppRemoteImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              if (showImage)
+                isGt
+                    ? Expanded(
+                        child: SizedBox(width: double.infinity, child: imageStack),
+                      )
+                    : SizedBox(height: 100, width: double.infinity, child: imageStack),
+              if (showName) Padding(
+                padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
-                    const SizedBox(height: 4),
-                    Text('From ₹${item.effectivePrice.toDouble().toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                    Text(title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13.5, height: 1.25, fontWeight: FontWeight.w800, color: Color(0xFF111111))),
+                  ],
+                ),
+              ),
+              if (!isGt) const Spacer() else const SizedBox(height: 8),
+              if (showPrice || showButton) Padding(
+                padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
+                child: Row(
+                  children: [
+                    if (!isGt && showPrice)
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F0F0),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(price,
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF111111))),
+                          ),
+                        ),
+                      ),
+                    if (isGt) const Spacer() else const SizedBox(width: 6),
+                    if (showButton) Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Book Now',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                          SizedBox(width: 6),
+                          CircleAvatar(
+                            radius: 7,
+                            backgroundColor: Colors.white,
+                            child: Icon(Icons.arrow_outward_rounded, size: 11, color: Colors.black),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1140,6 +1561,61 @@ class _ServiceCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Placeholder shown while the Home Studio page is loading for the first time.
+class _StudioPageSkeleton extends StatelessWidget {
+  const _StudioPageSkeleton();
+
+  Widget _rail({double h = 150, double w = 150}) => SizedBox(
+        height: h,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: 4,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (_, __) => ShimmerBox(width: w, height: h, borderRadius: 16),
+        ),
+      );
+
+  Widget _title() => const Padding(
+        padding: EdgeInsets.fromLTRB(16, 18, 16, 10),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: ShimmerBox(width: 150, height: 16, borderRadius: 6),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _title(),
+        _rail(h: 170, w: 160),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 18, 16, 0),
+          child: AspectRatio(aspectRatio: 16 / 6, child: ShimmerBox(borderRadius: 16)),
+        ),
+        _title(),
+        SizedBox(
+          height: 84,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: 6,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (_, __) => const ShimmerBox(width: 64, height: 64, shape: BoxShape.circle),
+          ),
+        ),
+        _title(),
+        _rail(h: 180, w: 170),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }

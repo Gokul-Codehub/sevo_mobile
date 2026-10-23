@@ -21,6 +21,7 @@ import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
 import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../widgets/coupon_bottom_sheet.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Added 2026-10-06 per explicit request ("Before checkout ask the user
 /// to select the delivery option below [Quick delivery, Slot booking
@@ -60,6 +61,8 @@ class GroceryCartScreen extends ConsumerStatefulWidget {
 }
 
 class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
+  // Scroll target for "choose a delivery slot first" - see revealField().
+  final _slotCardKey = GlobalKey(debugLabel: 'deliverySlot');
   /// The cart as the list shows it: loose products one by one, and each combo's
   /// products collapsed into ONE entry (at the position of its first product).
   static List<({int? index, String? comboKey})> _cartEntries(List<CartItem> items) {
@@ -79,8 +82,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   Address? _selectedAddress;
   bool _isSubmitting = false;
   String? _errorMessage;
-  bool _isCustomTipOpen = false;
-  final TextEditingController _customTipController = TextEditingController();
   // Added 2026-10-07 ("the promp/coupons model is not showing up"): this
   // whole grocery checkout flow never had ANY coupon entry point at all —
   // [_handlePlaceOrder] below creates the booking directly from this
@@ -145,7 +146,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
   @override
   void dispose() {
-    _customTipController.dispose();
     super.dispose();
   }
 
@@ -190,7 +190,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   Widget build(BuildContext context) {
     final cartItems = ref.watch(cartProvider);
     final cartSummary = ref.watch(cartSummaryProvider);
-    final selectedTip = ref.watch(deliveryTipProvider);
     final addressesAsync = ref.watch(addressListProvider);
 
     final addresses = addressesAsync.valueOrNull ?? const [];
@@ -914,7 +913,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             const SizedBox(height: 14),
 
             // ── Delivery slot card (inline, always visible) ──────────────────
-            _buildDeliverySlotCard(context),
+            KeyedSubtree(key: _slotCardKey, child: _buildDeliverySlotCard(context)),
             const SizedBox(height: 14),
 
             // ── Payment method (moved up from the fixed bottom bar) ──────────
@@ -1183,38 +1182,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     ),
                   ],
 
-                  if (selectedTip > Decimal.zero) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.volunteer_activism_outlined,
-                                size: 15, color: AppColors.textSecondary),
-                            SizedBox(width: 6),
-                            Text(
-                              'Rider Tip',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          '₹$selectedTip',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-
                   const SizedBox(height: 10),
 
                   // ── Apply Coupon / Promo Code ──
@@ -1316,138 +1283,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // ── Support Your Delivery Partner (Tips matching web) ────────────
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Support your delivery partner',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Add a tip to show appreciation. 100% of the tip goes directly to your rider.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildTipCard(
-                          label: '₹20',
-                          desc: 'Say Thanks',
-                          isSelected: selectedTip == Decimal.parse('20'),
-                          onTap: () {
-                            ref.read(deliveryTipProvider.notifier).setTip(
-                                  selectedTip == Decimal.parse('20')
-                                      ? Decimal.zero
-                                      : Decimal.parse('20'),
-                                );
-                            setState(() => _isCustomTipOpen = false);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildTipCard(
-                          label: '₹30',
-                          desc: 'Buy a Chai',
-                          isSelected: selectedTip == Decimal.parse('30'),
-                          onTap: () {
-                            ref.read(deliveryTipProvider.notifier).setTip(
-                                  selectedTip == Decimal.parse('30')
-                                      ? Decimal.zero
-                                      : Decimal.parse('30'),
-                                );
-                            setState(() => _isCustomTipOpen = false);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildTipCard(
-                          label: '₹50',
-                          desc: 'Show Love',
-                          isSelected: selectedTip == Decimal.parse('50'),
-                          onTap: () {
-                            ref.read(deliveryTipProvider.notifier).setTip(
-                                  selectedTip == Decimal.parse('50')
-                                      ? Decimal.zero
-                                      : Decimal.parse('50'),
-                                );
-                            setState(() => _isCustomTipOpen = false);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildTipCard(
-                          label: 'Custom',
-                          desc: 'Other',
-                          isSelected: _isCustomTipOpen,
-                          onTap: () {
-                            setState(() {
-                              _isCustomTipOpen = !_isCustomTipOpen;
-                              if (!_isCustomTipOpen) {
-                                ref
-                                    .read(deliveryTipProvider.notifier)
-                                    .setTip(Decimal.zero);
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_isCustomTipOpen) ...[
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _customTipController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: 'Enter custom tip amount (₹)',
-                        hintStyle: const TextStyle(fontSize: 11.5),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                      ),
-                      onChanged: (val) {
-                        final parsed = Decimal.tryParse(val) ?? Decimal.zero;
-                        ref.read(deliveryTipProvider.notifier).setTip(parsed);
-                      },
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -1588,50 +1423,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTipCard({
-    required String label,
-    required String desc,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.textPrimary : AppColors.background,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppColors.textPrimary : AppColors.border,
-            width: 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: isSelected ? Colors.white : AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              desc,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white70 : AppColors.textSecondary,
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1967,6 +1758,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         'Please choose a delivery slot first (Instant or a scheduled slot).',
         type: AppToastType.error,
       );
+      revealField(_slotCardKey);
       return;
     }
     _handlePlaceOrder(context, ref, activeAddress);
@@ -2080,7 +1872,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
 /// A single selectable row in [_GroceryCartScreenState._openDeliveryOptionSheet]
 /// — same selected/unselected visual language as
-/// [_GroceryCartScreenState._buildTipCard] (navy fill when selected,
+/// the cart chips (navy fill when selected,
 /// light surface otherwise), just icon + title + subtitle instead of a
 /// label + amount, since each delivery option needs a one-line
 /// explanation of what it actually means.

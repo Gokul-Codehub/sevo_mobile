@@ -66,9 +66,15 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
 
     // REST is the authoritative source of truth and always runs; WS is a
     // best-effort low-latency enhancement layered on top of it.
-    _pollOnce(arg);
-    _startRestPolling(arg);
-    _connectWebSocket(arg);
+    // Started AFTER build returns: these read `state`, which does not exist
+    // until build() has returned its initial value ("Tried to read the state
+    // of an uninitialized provider").
+    Future.microtask(() {
+      if (_isDisposed) return;
+      _pollOnce(arg);
+      _startRestPolling(arg);
+      _connectWebSocket(arg);
+    });
 
     return TrackingUpdate.initial();
   }

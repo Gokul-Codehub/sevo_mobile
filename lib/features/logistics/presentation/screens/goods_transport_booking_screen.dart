@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +20,7 @@ import '../../../booking/domain/cart_notifier.dart'
     show isUserAuthenticatedProvider;
 import '../../../catalog/domain/catalog_models.dart';
 import '../../../catalog/domain/catalog_providers.dart';
+import '../../../payment/data/payment_repository.dart';
 import '../../../../core/errors/api_error.dart';
 import '../../domain/gt_models.dart';
 import '../../domain/gt_providers.dart';
@@ -28,6 +31,7 @@ import '../widgets/gt_slot_picker.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Added 2026-09-19, REWRITTEN 2026-09-20 per explicit feedback after the
 /// first version shipped:
@@ -98,8 +102,28 @@ class _GoodsTransportBookingScreenState
   final _dropContactPhoneController = TextEditingController();
   final _declaredValueController = TextEditingController();
   final _consigneeRelationshipController = TextEditingController();
+  final _consigneeFocus = FocusNode();
+
+  // Scroll targets: when a required step is missing, _warn() scrolls here.
+  final Map<String, GlobalKey> _anchors = {};
+  GlobalKey _anchor(String name) => _anchors.putIfAbsent(name, () => GlobalKey(debugLabel: name));
 
   bool _isLoading = false;
+  bool _surveyBusy = false;
+
+  // One Idempotency-Key per distinct booking attempt: a retry of the SAME
+  // request (flaky network, double tap) returns the booking already made
+  // instead of creating a duplicate; changing anything gets a fresh key.
+  String? _attemptSig;
+  String? _attemptKey;
+  String _idemKey(String sig) {
+    if (_attemptSig != sig || _attemptKey == null) {
+      _attemptSig = sig;
+      _attemptKey =
+          'gt-${DateTime.now().microsecondsSinceEpoch}-${math.Random().nextInt(1 << 30)}';
+    }
+    return _attemptKey!;
+  }
   // 0 Cargo · 1 Locations · 2 Schedule · 3 Fare
   int _step = 0;
   bool _inventorySectionExpanded = true;
@@ -340,6 +364,7 @@ class _GoodsTransportBookingScreenState
     _dropContactPhoneController.dispose();
     _declaredValueController.dispose();
     _consigneeRelationshipController.dispose();
+    _consigneeFocus.dispose();
     super.dispose();
   }
 
@@ -374,7 +399,61 @@ class _GoodsTransportBookingScreenState
       loadingHelp: ref.read(loadingHelpProvider),
       cargo: cargo.isEmpty ? null : cargo,
       customerGstin: _effectiveGstin,
+      waypoints: _waypoints(),
     );
+  }
+
+  /// Pinned intermediate stops as quote waypoints.
+  List<Map<String, double>>? _waypoints() {
+    final stops = ref.read(gtStopsProvider);
+    if (stops.isEmpty) return null;
+    return [
+      for (final s in stops) {'lat': s.latitude, 'lng': s.longitude},
+    ];
+  }
+
+  /// Booking payload stops (web shape), also echoed under cart_data[0].
+  List<Map<String, dynamic>> _stopsPayload() {
+    final stops = ref.read(gtStopsProvider);
+    return [
+      for (var i = 0; i < stops.length; i++)
+        {
+          'stop_order': i + 1,
+          'stop_type': 'WAYPOINT',
+          'address': stops[i].address,
+          'latitude': stops[i].latitude,
+          'longitude': stops[i].longitude,
+        },
+    ];
+  }
+
+  Future<void> _handleAddStop() async {
+    final stops = ref.read(gtStopsProvider);
+    if (stops.length >= kMaxGtAdditionalStops) return;
+    final result = await context.push<PickedDropLocation>(
+      AppRoutes.dropLocationPicker,
+    );
+    if (result != null && mounted) {
+      ref.read(gtStopsProvider.notifier).state = [...stops, result];
+    }
+  }
+
+  Future<void> _handleEditStop(int index) async {
+    final stops = ref.read(gtStopsProvider);
+    final result = await context.push<PickedDropLocation>(
+      AppRoutes.dropLocationPicker,
+      extra: stops[index],
+    );
+    if (result != null && mounted) {
+      final next = [...ref.read(gtStopsProvider)];
+      next[index] = result;
+      ref.read(gtStopsProvider.notifier).state = next;
+    }
+  }
+
+  void _removeStop(int index) {
+    final next = [...ref.read(gtStopsProvider)]..removeAt(index);
+    ref.read(gtStopsProvider.notifier).state = next;
   }
 
   String _apiMsg(Object e) => e is ApiError ? e.message : e.toString();
@@ -417,7 +496,11 @@ class _GoodsTransportBookingScreenState
 
     final insurance = ref.read(insuranceOptInProvider) &&
         (_declaredValue?.toDouble() ?? 0) > 0;
-    final paymentMethod = insurance ? 'ONLINE' : 'COD';
+    // Cash / Pay online / SEVO wallet (wallet bookings are created ONLINE
+    // and settled from the wallet right after). Insurance always needs a
+    // paid booking.
+    final pick = ref.read(gtPaymentMethodProvider);
+    final paymentMethod = (insurance || pick != 'cod') ? 'ONLINE' : 'COD';
 
     Map<String, dynamic> line(double price, Map<String, dynamic> more) => {
           'id': bookingItem.id,
@@ -514,9 +597,17 @@ class _GoodsTransportBookingScreenState
     final cargo = ref.read(cargoDeclarationProvider);
     if (!cargo.isEmpty) extra.addAll(cargo.toPayload());
 
+    final stopsPayload = _stopsPayload();
+    if (stopsPayload.isNotEmpty) extra['stops'] = stopsPayload;
+
     return (
       error: null,
-      cart: [line(q.total, q.toCartEcho())],
+      cart: [
+        line(q.total, {
+          ...q.toCartEcho(),
+          if (stopsPayload.isNotEmpty) 'stops': stopsPayload,
+        }),
+      ],
       extra: extra,
       total: Decimal.parse(q.total.toStringAsFixed(2)),
       paymentMethod: paymentMethod,
@@ -568,6 +659,7 @@ class _GoodsTransportBookingScreenState
           ? null
           : ref.read(goodsItemsProvider(cargo.goodsCategoryId)).valueOrNull;
       parts.add(cargo.items.map((l) {
+        if (l.isCustom) return '${l.quantity} × ${l.customName}';
         final it = known?.where((i) => i.id == l.itemId).firstOrNull;
         return '${l.quantity} × ${it?.name ?? 'item'}';
       }).join(', '));
@@ -756,6 +848,9 @@ class _GoodsTransportBookingScreenState
               ? null
               : _dropContactPhoneController.text.trim(),
           serviceCategoryOverride: vehicleCategory.serviceCategoryValue,
+          idempotencyKey: _idemKey(
+            'gt|${prep.total}|${selectedTier.id}|${selectedAddress.latitude},${selectedAddress.longitude}|${dropLocation.latitude},${dropLocation.longitude}|$dateFormatted|${selectedSlot.label}|${prep.cart}|${prep.paymentMethod}',
+          ),
         );
 
     if (!mounted) return;
@@ -769,13 +864,151 @@ class _GoodsTransportBookingScreenState
         ),
       );
     } else if (result.booking != null) {
-      ref.read(selectedLogisticsTierProvider.notifier).state = null;
-      ref.read(dropLocationProvider.notifier).state = null;
+      await _afterBooked(result.booking!, online: prep.paymentMethod == 'ONLINE');
+    }
+  }
+
+  /// Shared tail of every successful booking: reset the form, then settle
+  /// payment the way the customer chose (wallet -> pay from wallet, with an
+  /// online top-up of any shortfall; online -> checkout; cash -> done).
+  Future<void> _afterBooked(Booking booking, {required bool online, bool pm = false}) async {
+    final pick = ref.read(gtPaymentMethodProvider);
+    _attemptSig = null;
+    _attemptKey = null;
+    ref.read(selectedLogisticsTierProvider.notifier).state = null;
+    ref.read(dropLocationProvider.notifier).state = null;
+    ref.read(gtStopsProvider.notifier).state = const [];
+    ref.read(gtPaymentMethodProvider.notifier).state = 'cod';
+    if (pm) {
+      ref.read(pmSelectedQuantitiesProvider.notifier).state = const {};
+      ref.read(pmHelpersRequestedProvider.notifier).state = 0;
+      ref.read(pmAddOnsSelectedProvider.notifier).state = const {};
+    }
+    final payUrl = '/checkout/payment?booking=${booking.id}&type=full&from=checkout';
+    if (pick == 'wallet') {
+      final r = await ref.read(paymentRepositoryProvider).payWithWallet(booking.id);
+      if (!mounted) return;
+      if (r.error != null) {
+        AppToast.show(context, '${r.error} Complete the payment to confirm.',
+            type: AppToastType.error);
+        context.go(payUrl);
+        return;
+      }
+      if (r.partial) {
+        final rest = r.remaining == null ? '' : ' (₹${r.remaining!.toStringAsFixed(0)} left)';
+        AppToast.show(context, 'Wallet applied$rest - pay the rest to confirm.');
+        context.go(payUrl);
+        return;
+      }
       AppToast.bookingSuccessful(context);
-      context.go(
-        '/bookings/success/${result.booking!.id}',
-        extra: result.booking,
-      );
+      context.go('/bookings/success/${booking.id}', extra: booking);
+      return;
+    }
+    if (online) {
+      AppToast.show(context, 'Almost done - complete your payment to confirm.');
+      context.go(payUrl);
+      return;
+    }
+    AppToast.bookingSuccessful(context);
+    context.go('/bookings/success/${booking.id}', extra: booking);
+  }
+
+  List<Map<String, dynamic>> _pmInventoryLines() {
+    final quantities = ref.read(pmSelectedQuantitiesProvider);
+    final all = ref
+            .read(packersMoversInventoryProvider)
+            .valueOrNull
+            ?.expand((c) => c.items)
+            .toList() ??
+        const <PmGoodsItem>[];
+    final lines = <Map<String, dynamic>>[];
+    for (final e in quantities.entries) {
+      if (e.value <= 0) continue;
+      final item = all.where((it) => it.id == e.key).firstOrNull;
+      if (item == null) continue;
+      lines.add({'goods_item_id': item.id, 'name': item.name, 'quantity': e.value});
+    }
+    return lines;
+  }
+
+  /// Asks whether to request a free pre-move survey when the move cannot be
+  /// priced instantly (web: survey modal), then submits the request.
+  Future<void> _offerSurvey(PackersMoversQuote quote) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pre-move survey needed'),
+        content: Text(
+          quote.estimateNotice ??
+              quote.reviewReason ??
+              'This move needs a quick survey before we can confirm the final price. Our team will call you to schedule it.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not now')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Request survey'),
+          ),
+        ],
+      ),
+    );
+    if (go == true && mounted) await _requestSurvey(quote: quote);
+  }
+
+  Future<void> _requestSurvey({PackersMoversQuote? quote}) async {
+    if (_surveyBusy) return;
+    if (!ref.read(isUserAuthenticatedProvider)) {
+      context.push('/login');
+      return;
+    }
+    final address = ref.read(selectedAddressProvider);
+    final drop = ref.read(dropLocationProvider);
+    final user = ref.read(currentUserProvider);
+    final slot = ref.read(selectedTimeSlotProvider);
+    final date = ref.read(selectedBookingDateProvider);
+    if (address == null || drop == null) {
+      _warn('Please choose the pickup address and drop-off location first.');
+      return;
+    }
+    final digits = (user?.phone ?? '').replaceAll(RegExp(r'\D'), '');
+    final phone = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+    if (phone.length != 10) {
+      _warn('Add a valid 10-digit mobile number to your profile to request a survey.');
+      return;
+    }
+    final lines = _pmInventoryLines();
+    final tier = ref.read(selectedLogisticsTierProvider);
+    final dateStr = DateFormat('yyyy-MM-dd').format(date);
+    final cft = quote?.inventorySummary?['total_cft'];
+    final payload = <String, dynamic>{
+      'customer_name': (user?.name ?? '').trim().isEmpty ? 'Customer' : user!.name,
+      'phone': phone,
+      'pickup_address': address.formattedAddress,
+      'drop_address': drop.address,
+      'preferred_date': dateStr,
+      'preferred_time_slot': slot?.label ?? 'Morning',
+      'volume_cft': cft ?? 0,
+      'inventory': lines,
+      'survey_reason': quote?.estimateNotice ??
+          quote?.reviewReason ??
+          'Pre-move survey required due to cargo volume or route estimation',
+      'notes':
+          'Relocation: ${ref.read(pmRelocationTypeProvider)}, Package: ${tier?.name ?? 'Standard'}, Floors: P${ref.read(pmPickupFloorProvider)}/D${ref.read(pmDropFloorProvider)}',
+      'estimated_amount': quote?.total ?? 0,
+      'quote_id': quote?.quoteId,
+    };
+    setState(() => _surveyBusy = true);
+    final res = await ref.read(logisticsRepositoryProvider).submitPackersMoversSurveyRequest(
+          payload,
+          idempotencyKey: _idemKey('survey|$dateStr|${slot?.label}|$lines|${drop.latitude}'),
+        );
+    if (!mounted) return;
+    setState(() => _surveyBusy = false);
+    switch (res) {
+      case Success():
+        AppToast.show(context, 'Survey request sent. Our team will call you to schedule it.');
+      case Failure(:final error):
+        AppToast.show(context, _apiMsg(error), type: AppToastType.error);
     }
   }
 
@@ -844,6 +1077,9 @@ class _GoodsTransportBookingScreenState
       dropFloor: ref.read(pmDropFloorProvider),
       dropHasLift: ref.read(pmDropHasLiftProvider),
       relocationType: ref.read(pmRelocationTypeProvider),
+      moveDate: dateFormatted,
+      moveTime: selectedSlot.label,
+      stops: _stopsPayload(),
     );
 
     PackersMoversQuote quote;
@@ -862,6 +1098,10 @@ class _GoodsTransportBookingScreenState
         quote.total == null) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+      if (quote.requiresSurvey || quote.requiresReview) {
+        await _offerSurvey(quote);
+        return;
+      }
       _warn(
         quote.estimateNotice ?? quote.reviewReason ?? 'This move needs a quick review before it can be booked instantly — please contact support to finalize it.',
       );
@@ -877,6 +1117,30 @@ class _GoodsTransportBookingScreenState
       categoryName: widget.category?.name ?? 'Goods & Transport',
       categorySlug: widget.category?.slug ?? 'goods_transports',
     );
+
+    // Extra helpers + add-on services are requested here and priced by the
+    // server; the total we send includes the add-on estimate exactly like
+    // the web (the server rejects a mismatching total).
+    final maxHelpers = ref.read(pmMaxHelpersProvider(city)).valueOrNull ?? 0;
+    final helpers = ref.read(pmHelpersRequestedProvider).clamp(0, maxHelpers);
+    final addOnSel = ref.read(pmAddOnsSelectedProvider);
+    final catalog = ref.read(pmAddOnsProvider(city)).valueOrNull ?? const <PmAddOn>[];
+    final addOnLines = <Map<String, dynamic>>[];
+    var addOnEstimate = 0.0;
+    final effCft = double.tryParse(
+            '${quote.inventorySummary?['effective_cft'] ?? quote.inventorySummary?['total_cft'] ?? 0}') ??
+        0;
+    for (final e in addOnSel.entries) {
+      final svc = catalog.where((c) => c.code == e.key).firstOrNull;
+      if (svc == null) continue;
+      final qty = svc.pricingMode == 'FLAT' ? 1 : e.value;
+      addOnLines.add({'code': svc.code, 'quantity': qty});
+      addOnEstimate += svc.pricingMode == 'PER_CFT' ? svc.unitPrice * effCft : svc.unitPrice * qty;
+    }
+    final grandTotal = double.parse((quote.total! + addOnEstimate).toStringAsFixed(2));
+    final stopsPayload = _stopsPayload();
+    final payPick = ref.read(gtPaymentMethodProvider);
+    final pmMethod = payPick == 'cod' ? 'COD' : 'ONLINE';
 
     // This cart_data[0] map is read verbatim by the backend's
     // `verify_packers_movers_quote` (via `resolve_logistics_fare_v2`) — it
@@ -896,6 +1160,10 @@ class _GoodsTransportBookingScreenState
         'drop_floor': param.dropFloor,
         'drop_has_lift': param.dropHasLift,
         'relocation_type': param.relocationType,
+        'helpers_requested': helpers,
+        if (addOnLines.isNotEmpty) 'pm_addons': addOnLines,
+        'date': dateFormatted,
+        'slot': selectedSlot.label,
       },
     ];
 
@@ -907,7 +1175,12 @@ class _GoodsTransportBookingScreenState
           slot: selectedSlot,
           // Matches quote.total exactly — the backend's verify step rejects a
           // submitted total that doesn't equal the verified quote's total.
-          totalAmount: Decimal.parse(quote.total!.toStringAsFixed(2)),
+          totalAmount: Decimal.parse(grandTotal.toStringAsFixed(2)),
+          paymentMethod: pmMethod,
+          extraPayload: {
+            if (stopsPayload.isNotEmpty) 'stops': stopsPayload,
+            if (quote.isEstimate) 'accept_estimated_distance': true,
+          },
           specialInstructions: _cargoDescription,
           contactPhone: currentUser?.phone,
           dropAddress: dropAddressFull,
@@ -927,6 +1200,9 @@ class _GoodsTransportBookingScreenState
           serviceCategoryOverride:
               LogisticsVehicleCategory.packersMovers.serviceCategoryValue,
           cartDataOverride: cartDataOverride,
+          idempotencyKey: _idemKey(
+            'pm|${quote.quoteId}|$grandTotal|$dateFormatted|${selectedSlot.label}|$helpers|$addOnLines|$stopsPayload|$pmMethod',
+          ),
         );
 
     if (!mounted) return;
@@ -940,14 +1216,7 @@ class _GoodsTransportBookingScreenState
         ),
       );
     } else if (result.booking != null) {
-      ref.read(selectedLogisticsTierProvider.notifier).state = null;
-      ref.read(dropLocationProvider.notifier).state = null;
-      ref.read(pmSelectedQuantitiesProvider.notifier).state = const {};
-      AppToast.bookingSuccessful(context);
-      context.go(
-        '/bookings/success/${result.booking!.id}',
-        extra: result.booking,
-      );
+      await _afterBooked(result.booking!, online: pmMethod == 'ONLINE', pm: true);
     }
   }
 
@@ -955,6 +1224,34 @@ class _GoodsTransportBookingScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: AppColors.warning),
     );
+    _revealFor(message);
+  }
+
+  /// Takes the customer to the part of the form the message is about
+  /// (and into the text box, for the consignee field).
+  void _revealFor(String message) {
+    final s = message.toLowerCase();
+    String? target;
+    FocusNode? focus;
+    if (s.contains('consignee')) {
+      target = 'Declared value';
+      focus = _consigneeFocus;
+    } else if (s.contains('vehicle')) {
+      target = 'Vehicle type';
+    } else if (s.contains('stop ')) {
+      target = 'Additional stops';
+    } else if (s.contains('pickup address') || s.contains('pickup location')) {
+      target = 'Pickup address';
+    } else if (s.contains('drop-off') || s.contains('drop off')) {
+      target = 'Drop-off location';
+    } else if (s.contains('slot')) {
+      target = 'Select date & slot';
+    } else if (s.contains('item to move')) {
+      target = 'Items to move';
+    } else if (s.contains('cargo') || s.contains('weight')) {
+      target = 'Cargo';
+    }
+    if (target != null) revealField(_anchor(target), focus: focus);
   }
 
   @override
@@ -1000,6 +1297,7 @@ class _GoodsTransportBookingScreenState
     ref.watch(loadingHelpProvider);
     ref.watch(cargoDeclarationProvider);
     ref.watch(customerGstinProvider);
+    final extraStops = ref.watch(gtStopsProvider);
     final ptlMode = ref.watch(ptlModeProvider) &&
         vehicleCategory == LogisticsVehicleCategory.truck;
 
@@ -1060,6 +1358,10 @@ class _GoodsTransportBookingScreenState
           dropFloor: ref.watch(pmDropFloorProvider),
           dropHasLift: ref.watch(pmDropHasLiftProvider),
           relocationType: ref.watch(pmRelocationTypeProvider),
+          moveDate: DateFormat('yyyy-MM-dd')
+              .format(ref.watch(selectedBookingDateProvider)),
+          moveTime: ref.watch(selectedTimeSlotProvider)?.label,
+          stops: _stopsPayload(),
         );
       }
     }
@@ -1118,6 +1420,8 @@ class _GoodsTransportBookingScreenState
             if (_step == 0) ...[
             // ── Vehicle category tabs (Truck / 2-Wheeler) ──
             _SectionCard(
+              anchorKey: _anchor('Vehicle type'),
+
               label: 'Vehicle type',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1186,6 +1490,8 @@ class _GoodsTransportBookingScreenState
             const SizedBox(height: 18),
             // ── Vehicle tier / package picker ──
             _SectionCard(
+              anchorKey: _anchor('Package'),
+
               label: 'Package',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1377,6 +1683,8 @@ class _GoodsTransportBookingScreenState
             // logistics_models.dart. Only ever shown for this category.
             if (isPackersMovers) ...[
               _SectionCard(
+                anchorKey: _anchor('Items to move'),
+
                 label: 'Items to move',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1472,6 +1780,8 @@ class _GoodsTransportBookingScreenState
             ),
               const SizedBox(height: 18),
               _SectionCard(
+                anchorKey: _anchor('Move details'),
+
                 label: 'Move details',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1633,6 +1943,8 @@ class _GoodsTransportBookingScreenState
                       onChanged: (v) =>
                           ref.read(pmDropHasLiftProvider.notifier).state = v,
                     ),
+                    const Divider(height: 20, color: AppColors.border),
+                    PmExtrasSection(city: selectedTier?.city ?? 'Hosur'),
                   ],
                 ),
               ),
@@ -1652,12 +1964,14 @@ class _GoodsTransportBookingScreenState
                 const SizedBox(height: 18),
               ],
               if (!ptlMode) ...[
-                GtCargoSection(city: selectedTier?.city ?? 'Hosur'),
+                KeyedSubtree(key: _anchor('Cargo'), child: GtCargoSection(city: selectedTier?.city ?? 'Hosur')),
                 const SizedBox(height: 18),
               ],
             ],
             // ── Declared value / consignee relationship ──
             _SectionCard(
+              anchorKey: _anchor('Declared value'),
+
               label: 'Declared value',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1691,6 +2005,7 @@ class _GoodsTransportBookingScreenState
                     const SizedBox(height: 12),
                     TextField(
                       controller: _consigneeRelationshipController,
+                      focusNode: _consigneeFocus,
                       decoration: _fieldDecoration(
                         'Your relationship to the consignee (required for high-value goods)',
                       ),
@@ -1711,6 +2026,8 @@ class _GoodsTransportBookingScreenState
             // picker — real coordinates are required here for the fare
             // engine, same as the drop-off pin below). ──
             _SectionCard(
+              anchorKey: _anchor('Pickup address'),
+
               label: 'Pickup address',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1815,9 +2132,112 @@ class _GoodsTransportBookingScreenState
                 lng: selectedAddress.longitude,
               ),
             const SizedBox(height: 18),
+            // ── Additional stops (optional, spot bookings only) ──
+            if (!ptlMode) ...[
+              _SectionCard(
+                anchorKey: _anchor('Additional stops'),
+
+                label: 'Additional stops',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Add stop (${extraStops.length}/$kMaxGtAdditionalStops)',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        if (extraStops.length < kMaxGtAdditionalStops)
+                          GestureDetector(
+                            onTap: _handleAddStop,
+                            child: const Text(
+                              '+ Add stop',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.navy,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (extraStops.isEmpty) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Need to stop somewhere on the way? Add up to 3 stops between pickup and drop-off. Extra stops may add to the fare.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                    for (var i = 0; i < extraStops.length; i++) ...[
+                      const Divider(height: 20, color: AppColors.border),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 10,
+                            backgroundColor: AppColors.navy,
+                            child: Text(
+                              '${i + 1}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => _handleEditStop(i),
+                              child: Text(
+                                extraStops[i].address,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _removeStop(i),
+                            child: const Padding(
+                              padding: EdgeInsets.only(left: 8),
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 18,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      _ServiceAreaBanner(
+                        label: 'Stop ${i + 1}',
+                        pincode: '',
+                        lat: extraStops[i].latitude,
+                        lng: extraStops[i].longitude,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
             // ── Drop-off location (map pick — required; see file-level
             // note on why free text alone can't work here). ──
             _SectionCard(
+              anchorKey: _anchor('Drop-off location'),
+
               label: 'Drop-off location',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1939,11 +2359,32 @@ class _GoodsTransportBookingScreenState
                 lat: dropLocation.latitude,
                 lng: dropLocation.longitude,
               ),
+            if (dropLocation != null &&
+                selectedAddress?.latitude != null &&
+                selectedAddress?.longitude != null &&
+                !ptlMode)
+              _CoverageBanner(
+                param: (
+                  slug: vehicleCategory.serviceCategoryValue,
+                  point: null,
+                  pickupLat: selectedAddress!.latitude,
+                  pickupLng: selectedAddress.longitude,
+                  dropLat: dropLocation.latitude,
+                  dropLng: dropLocation.longitude,
+                  stopsKey: extraStops
+                      .map((s) => '${s.latitude},${s.longitude}')
+                      .join('|'),
+                  vehicleClass: selectedTier?.vehicleClass,
+                  laneId: isPackersMovers ? null : ref.watch(selectedGtLaneProvider)?.id,
+                ),
+              ),
             const SizedBox(height: 18),
             ],
             if (_step == 2) ...[
             // ── Pickup date & time (server-driven slots) ──
             _SectionCard(
+              anchorKey: _anchor('Select date & slot'),
+
               label: 'Select date & slot',
               child: GtSlotPicker(
                 category: ptlMode ? 'ptl' : vehicleCategory.serviceCategoryValue,
@@ -1956,6 +2397,8 @@ class _GoodsTransportBookingScreenState
             // ── Live fare — "the frontend never determines the fare, it
             // renders what [the server] returns" (backend's own words). ──
             _SectionCard(
+              anchorKey: _anchor('Fare details'),
+
               label: 'Fare details',
               child: isPackersMovers
                   ? (pmQuoteParam == null
@@ -2005,7 +2448,11 @@ class _GoodsTransportBookingScreenState
                                     height: 1.4,
                                   ),
                                 ),
-                                data: (quote) => _PmFareQuoteView(quote: quote),
+                                data: (quote) => _PmFareQuoteView(
+                                  quote: quote,
+                                  surveyBusy: _surveyBusy,
+                                  onRequestSurvey: () => _requestSurvey(quote: quote),
+                                ),
                               );
                             },
                           ))
@@ -2074,6 +2521,24 @@ class _GoodsTransportBookingScreenState
                               );
                             },
                           )),
+            ),
+            const SizedBox(height: 18),
+            _SectionCard(
+              anchorKey: _anchor('Payment'),
+              label: 'Payment',
+              child: Consumer(
+                builder: (context, ref, _) {
+                  final pq = pmQuoteParam;
+                  final sq = quoteParam;
+                  double? total;
+                  if (isPackersMovers && pq != null) {
+                    total = ref.watch(pmQuoteProvider(pq)).valueOrNull?.total;
+                  } else if (sq != null) {
+                    total = ref.watch(logisticsQuoteProvider(sq)).valueOrNull?.total;
+                  }
+                  return GtPaymentMethodPicker(total: total);
+                },
+              ),
             ),
             const SizedBox(height: 18),
             GtPoliciesSection(
@@ -2203,6 +2668,20 @@ class _GoodsTransportBookingScreenState
       if (dropArea != null && !dropArea.isServiceable) {
         _warn('Your drop-off location is outside our service area.');
         return;
+      }
+      final stops = ref.read(gtStopsProvider);
+      for (var i = 0; i < stops.length; i++) {
+        final area = ref
+            .read(serviceabilityProvider((
+              pincode: '',
+              lat: stops[i].latitude,
+              lng: stops[i].longitude,
+            )))
+            .valueOrNull;
+        if (area != null && !area.isServiceable) {
+          _warn('Stop ${i + 1} is outside our service area.');
+          return;
+        }
       }
     } else if (_step == 2) {
       if (ref.read(selectedTimeSlotProvider) == null) {
@@ -2491,9 +2970,12 @@ class _FareRow extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.child, this.label});
+  const _SectionCard({required this.child, this.label, this.anchorKey});
 
   final Widget child;
+
+  /// Lets the screen scroll to this card (see `_revealFor`).
+  final GlobalKey? anchorKey;
 
   /// Small step caption shown above the card, like the numbered steps of the
   /// service booking flow ("STEP 2 · Package").
@@ -2501,6 +2983,11 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final w = _content();
+    return anchorKey == null ? w : KeyedSubtree(key: anchorKey, child: w);
+  }
+
+  Widget _content() {
     final card = _card();
     if (label == null) return card;
     return Column(
@@ -2691,9 +3178,15 @@ class _PmFloorStepper extends StatelessWidget {
 /// final but can't actually be booked yet (matching the backend's own
 /// `verify_packers_movers_quote`, which refuses the booking in that case).
 class _PmFareQuoteView extends StatelessWidget {
-  const _PmFareQuoteView({required this.quote});
+  const _PmFareQuoteView({
+    required this.quote,
+    this.onRequestSurvey,
+    this.surveyBusy = false,
+  });
 
   final PackersMoversQuote quote;
+  final VoidCallback? onRequestSurvey;
+  final bool surveyBusy;
 
   @override
   Widget build(BuildContext context) {
@@ -2747,6 +3240,23 @@ class _PmFareQuoteView extends StatelessWidget {
               ),
             ),
           ],
+          if (onRequestSurvey != null && (quote.requiresSurvey || quote.requiresReview)) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: surveyBusy ? null : onRequestSurvey,
+                icon: surveyBusy
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.fact_check_outlined, size: 18),
+                label: const Text('Request a free pre-move survey'),
+              ),
+            ),
+          ],
         ],
       );
     }
@@ -2784,6 +3294,42 @@ class _PmFareQuoteView extends StatelessWidget {
           style: TextStyle(fontSize: 11, color: AppColors.textHint),
         ),
       ],
+    );
+  }
+}
+
+/// Whole-trip coverage notice (pickup, drop and every stop, per vehicle class
+/// and lane) - same admin rules and messages as the web.
+class _CoverageBanner extends ConsumerWidget {
+  const _CoverageBanner({required this.param});
+
+  final TripCoverageParam param;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(tripCoverageProvider(param)).valueOrNull;
+    if (c == null || c.inCoverage) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.wrong_location_outlined, size: 18, color: AppColors.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              c.message ?? 'This trip is outside our service area.',
+              style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

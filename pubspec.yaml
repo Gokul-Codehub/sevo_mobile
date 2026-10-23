@@ -2,7 +2,7 @@ name: calservices_customer
 description: "CalServices Customer - Professional home services booking app"
 publish_to: 'none'
 
-version: 1.0.6+7
+version: 1.0.7+8
 
 environment:
   sdk: ^3.13.1
@@ -113,6 +113,7 @@ dependencies:
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
   url_launcher: ^6.3.1
+  webview_flutter: ^4.10.0
   share_plus: ^10.1.4
   cupertino_icons: ^1.0.8
 

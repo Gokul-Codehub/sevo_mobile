@@ -30,6 +30,7 @@ import '../../../catalog/presentation/widgets/product_card.dart';
 import '../../../catalog/presentation/screens/grocery_hub_category_screen.dart';
 import '../../../logistics/domain/logistics_providers.dart';
 import '../../../../shared/providers/bottom_nav_visibility_provider.dart';
+import '../../../../core/services/home_live_updates.dart';
 import '../../data/homepage_repository.dart';
 import '../../domain/home_flow_mode.dart';
 import '../widgets/grocery_section_layouts.dart';
@@ -173,9 +174,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Scrolling back to the top eases it back to 0.
   final _scroll = ScrollController();
   final _collapse = ValueNotifier<double>(0);
+  final _refreshKey = GlobalKey<RefreshIndicatorState>();
+  DateTime? _lastHomeTapAt;
 
-  static const _collapseStart = 120.0;
-  static const _collapseEnd = 220.0;
+  /// Home tab tapped while on Home: 1st tap -> scroll to top; a 2nd tap within
+  /// 2 seconds -> scroll to top and reload everything (same as pull-to-refresh).
+  void _onHomeTabTap() {
+    final now = DateTime.now();
+    final isSecond = _lastHomeTapAt != null &&
+        now.difference(_lastHomeTapAt!) < const Duration(seconds: 2);
+    _lastHomeTapAt = isSecond ? null : now;
+    ref.read(bottomNavVisibleProvider.notifier).state = true;
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (isSecond) {
+      Future<void>.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) _refreshKey.currentState?.show();
+      });
+    }
+  }
+
+  static const _collapseStart = 200.0;
+  static const _collapseEnd = 260.0;
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
@@ -229,6 +254,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(homeTabTapProvider, (_, __) => _onHomeTabTap());
     final groceryHubCategories = ref.watch(groceryHubCategoriesProvider);
     final popularServicesAsync = ref.watch(popularServicesProvider);
     final myBookingsAsync = ref.watch(myBookingsProvider(null));
@@ -251,6 +277,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // When the admin hasn't published anything there yet, fall back to the
     // original 2-item Groceries/Services list built from the live catalog,
     // so the row is never empty on a fresh install.
+    // Start the live-refresh socket (re-fetches Home when an admin publishes).
+    ref.watch(homeLiveUpdatesProvider);
     final homepageConfigForTopCards = ref.watch(homepageConfigProvider).valueOrNull;
     final adminTopCards = homepageConfigForTopCards?.topCards ?? const [];
     final quickAccessCards = adminTopCards.isNotEmpty
@@ -456,6 +484,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 return false;
               },
               child: RefreshIndicator(
+              key: _refreshKey,
               color: flowTheme.accent,
               // Added 2026-09-19, REDONE same day per explicit feedback
               // ("it supposed to be the reloading stating showing in
@@ -2453,7 +2482,9 @@ class _StickyHomeHeader extends StatelessWidget {
             child: Align(
               alignment: Alignment.bottomCenter,
               heightFactor: Curves.easeOut.transform(t),
-              child: Opacity(opacity: Curves.easeIn.transform(t), child: child),
+              // Solid (no fade): a see-through bar let the page's own header
+              // show through mid-scroll, doubling the search box and tabs.
+              child: child,
             ),
           ),
         );

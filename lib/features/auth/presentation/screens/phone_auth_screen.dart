@@ -8,9 +8,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/env.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/utils/input_validators.dart';
 import '../../../../shared/widgets/sevo_logo.dart';
 import '../../domain/auth_models.dart';
 import '../../domain/auth_notifier.dart';
+import '../../../../shared/utils/focus_first_error.dart';
 
 /// Screen 4: Login / Register
 /// Redesigned to match reference screen 4 with SEVO branding, mobile input, and navy CTA.
@@ -40,7 +42,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   }
 
   Future<void> _handleSendOtp() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateAndFocus(_formKey)) return;
 
     setState(() => _isLoading = true);
 
@@ -317,10 +319,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                           focusNode: _phoneFocusNode,
                           keyboardType: TextInputType.phone,
                           autofillHints: const [AutofillHints.telephoneNumber],
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(10),
-                          ],
+                          inputFormatters: [IndianMobileFormatter()],
                           textInputAction: TextInputAction.done,
                           style: const TextStyle(
                             fontSize: 14,
@@ -339,16 +338,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                               vertical: 16,
                             ),
                           ),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Please enter your mobile number';
-                            }
-                            if (v.trim().length != 10 ||
-                                !RegExp(r'^[6-9]\d{9}$').hasMatch(v.trim())) {
-                              return 'Enter a valid 10-digit mobile number';
-                            }
-                            return null;
-                          },
+                          validator: InputValidators.indianMobile,
                         ),
                       ),
                     ],
@@ -388,16 +378,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                         vertical: 16,
                       ),
                     ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Please enter your email address';
-                      }
-                      if (!RegExp(r'^[\w\.-]+@[\w\.-]+\.\w+$')
-                          .hasMatch(v.trim())) {
-                        return 'Enter a valid email address';
-                      }
-                      return null;
-                    },
+                    validator: InputValidators.email,
                   ),
                 ],
 

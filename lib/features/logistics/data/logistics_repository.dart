@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -123,25 +124,78 @@ class LogisticsRepository {
     required String date,
     String? serviceId,
     String? claimToken,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final first = await _getTimeSlotDayAt(
+      date: date,
+      serviceId: serviceId,
+      claimToken: claimToken,
+      latitude: latitude,
+      longitude: longitude,
+    );
+    if (first is Failure && serviceId != null && serviceId.trim().isNotEmpty) {
+      // The service's own slot endpoint failed (unknown slug, 4xx envelope...).
+      // Fall back to the default slot rules instead of a dead-end error.
+      final retry = await _getTimeSlotDayAt(
+        date: date,
+        serviceId: null,
+        claimToken: claimToken,
+        latitude: latitude,
+        longitude: longitude,
+      );
+      if (retry is Success) return retry;
+    }
+    return first;
+  }
+
+  Future<Result<TimeSlotDay>> _getTimeSlotDayAt({
+    required String date,
+    String? serviceId,
+    String? claimToken,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       final path = (serviceId != null && serviceId.trim().isNotEmpty)
           ? '/services/${Uri.encodeComponent(serviceId.trim())}/time-slots/'
           : '/services/resolve/time-slots/';
-      final response = await api.get(
-        path,
-        queryParameters: {
+      final qp = <String, dynamic>{
           'date': date,
           if (serviceId != null && serviceId.trim().isNotEmpty)
             'service': serviceId.trim(),
           if (claimToken != null && claimToken.isNotEmpty) 'claim_token': claimToken,
-        },
-      );
+          // Same-day availability is checked against the technician pool near
+          // the service address, so the server needs the address coordinates
+          // (the web sends them too). Without them same-day slots come back
+          // as "Select a service address ...".
+          if (latitude != null && longitude != null && (latitude != 0 || longitude != 0)) ...{
+            'latitude': latitude,
+            'longitude': longitude,
+          },
+        };
+      dynamic response;
+      try {
+        response = await api.get(path, queryParameters: qp);
+      } on Exception {
+        // The booked service's slug may not be a slot-configurable service
+        // (e.g. a package slug -> 404). Rather than showing "Unable to load
+        // slots", fall back to the default slot rules like checkout does.
+        if (path == '/services/resolve/time-slots/') rethrow;
+        qp.remove('service');
+        response = await api.get('/services/resolve/time-slots/', queryParameters: qp);
+      }
       return ResponseNormalizer.extract(response, (data) {
         final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
         final isOpen = map['is_open'];
         final remaining = int.tryParse('${map['future_daily_remaining'] ?? ''}');
         final limit = int.tryParse('${map['future_daily_limit'] ?? map['future_daily_booking_limit'] ?? ''}');
+        final advanceDays = int.tryParse('${map['advance_booking_days'] ?? ''}');
+        final minNotice = int.tryParse('${map['minimum_notice_minutes'] ?? ''}');
+        final sameDay = map['same_day_booking'] is bool ? map['same_day_booking'] as bool : true;
+        final closedWeekdays = map['closed_weekdays'] is List
+            ? (map['closed_weekdays'] as List).map((e) => int.tryParse('$e')).whereType<int>().toList()
+            : const <int>[];
         if (isOpen == false) {
           // Closed for this date (day off, holiday override, booking
           // disabled) — an empty list renders as "No Available Slots" in
@@ -152,6 +206,10 @@ class LogisticsRepository {
             reason: map['reason']?.toString(),
             futureRemaining: remaining,
             futureLimit: limit,
+            sameDayBooking: sameDay,
+            advanceBookingDays: advanceDays,
+            closedWeekdays: closedWeekdays,
+            minNoticeMinutes: minNotice,
           );
         }
 
@@ -175,6 +233,7 @@ class LogisticsRepository {
             endTime: end,
             label: (m['time'] ?? (start.isNotEmpty ? start : '')).toString(),
             isAvailable: m['available'] == true,
+            reason: m['available'] == true ? null : (m['reason'] ?? '').toString().trim().isEmpty ? null : m['reason'].toString(),
           );
         }).toList();
         return TimeSlotDay(
@@ -182,13 +241,16 @@ class LogisticsRepository {
           reason: map['reason']?.toString(),
           futureRemaining: remaining,
           futureLimit: limit,
+          sameDayBooking: sameDay,
+          advanceBookingDays: advanceDays,
+          closedWeekdays: closedWeekdays,
+          minNoticeMinutes: minNotice,
         );
       });
-    } on Exception catch (_) {
-      // Network/parsing failure — fall back to the generic hourly grid
-      // rather than leaving the customer with a blank/broken slot picker.
-      // This is a true network-error fallback now, not the everyday path.
-      return Success(TimeSlotDay(slots: _generateDefaultSlots(date)));
+    } catch (e) {
+      // Like the web: show "could not load slots" with a retry instead of
+      // inventing a slot grid the server would reject at booking time.
+      return Failure(_toError(e));
     }
   }
 
@@ -345,6 +407,13 @@ class LogisticsRepository {
     int dropFloor = 0,
     bool dropHasLift = true,
     String relocationType = 'Within City',
+    // Parity with the web quote: move date/time drive the admin peak-day and
+    // off-hours surcharges, stops/extra_stops price intermediate stops and
+    // lane_id prices a fixed corridor.
+    String? moveDate,
+    String? moveTime,
+    List<Map<String, dynamic>>? stops,
+    int? laneId,
   }) async {
     try {
       final response = await api.post(
@@ -365,6 +434,14 @@ class LogisticsRepository {
           'drop_floor': dropFloor,
           'drop_has_lift': dropHasLift,
           'relocation_type': relocationType,
+          'extra_stops': stops?.length ?? 0,
+          if (laneId != null) 'lane_id': laneId,
+          if (stops != null && stops.isNotEmpty) ...{
+            'stops': stops,
+            'waypoints': stops,
+          },
+          if (moveDate != null && moveDate.isNotEmpty) 'move_date': moveDate,
+          if (moveTime != null && moveTime.isNotEmpty) 'move_time': moveTime,
         },
       );
       return ResponseNormalizer.extract(
@@ -375,6 +452,126 @@ class LogisticsRepository {
       );
     } on Exception catch (e) {
       return Failure(_toError(e));
+    }
+  }
+
+  /// GET /api/logistics/packers-movers/inventory/?city= — the admin's
+  /// `max_helpers` limit (extra helpers a customer may request).
+  Future<int> getPackersMoversMaxHelpers(String city) async {
+    try {
+      final response = await api.get(
+        '/logistics/packers-movers/inventory/',
+        queryParameters: {'city': city},
+      );
+      final res = ResponseNormalizer.extract<int>(response, (data) {
+        final map = data is Map ? data : const {};
+        return parseIntOrNull(map['max_helpers']) ?? 0;
+      });
+      return res is Success<int> ? res.data : 0;
+    } on Exception {
+      return 0;
+    }
+  }
+
+  /// GET /api/logistics/packers-movers/addons/?city=
+  Future<Result<List<PmAddOn>>> getPackersMoversAddOns(String city) async {
+    try {
+      final response = await api.get(
+        '/logistics/packers-movers/addons/',
+        queryParameters: {if (city.isNotEmpty) 'city': city},
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        final list = _unwrapList(data, keys: const ['addons', 'results']);
+        return list
+            .whereType<Map>()
+            .map((m) => PmAddOn.fromJson(Map<String, dynamic>.from(m)))
+            .where((a) => a.code.isNotEmpty)
+            .toList();
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /api/logistics/packers-movers/survey-request/ — records a
+  /// pre-move survey lead when the move cannot be priced instantly.
+  /// Returns the new request id.
+  Future<Result<String>> submitPackersMoversSurveyRequest(
+    Map<String, dynamic> payload, {
+    String? idempotencyKey,
+  }) async {
+    try {
+      final response = await api.post(
+        '/logistics/packers-movers/survey-request/',
+        data: {
+          ...payload,
+          if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+        },
+        options: idempotencyKey == null
+            ? null
+            : Options(headers: {'Idempotency-Key': idempotencyKey}),
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        final map = data is Map ? data : const {};
+        final id = (map['request_id'] ?? map['id'] ?? '').toString();
+        if (id.isEmpty) {
+          throw const ValidationError('The survey request was not confirmed by the server.');
+        }
+        return id;
+      });
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /api/settings/service-zones/check/ for a whole trip. Fails open
+  /// (covered) on network errors — the quote and booking endpoints enforce
+  /// coverage server-side regardless, exactly like the web client.
+  Future<TripCoverage> checkTripCoverage({
+    required String serviceSlug,
+    double? pickupLat,
+    double? pickupLng,
+    double? dropLat,
+    double? dropLng,
+    List<Map<String, double>>? stops,
+    String? vehicleClass,
+    int? laneId,
+    String? point,
+  }) async {
+    try {
+      final single = point != null;
+      final lat = single ? (point == 'drop' ? dropLat : pickupLat) : pickupLat;
+      final lng = single ? (point == 'drop' ? dropLng : pickupLng) : pickupLng;
+      if (lat == null || lng == null) return const TripCoverage();
+      if (!single && (dropLat == null || dropLng == null)) return const TripCoverage();
+      final response = await api.post(
+        '/settings/service-zones/check/',
+        data: {
+          'lat': lat,
+          'lng': lng,
+          if (single) 'point': point else ...{'drop_lat': dropLat, 'drop_lng': dropLng},
+          'service_slug': serviceSlug,
+          if (!single && stops != null && stops.isNotEmpty) 'stops': stops,
+          if (vehicleClass != null && vehicleClass.isNotEmpty) 'vehicle_class': vehicleClass,
+          if (!single && laneId != null) 'lane_id': laneId,
+        },
+      );
+      final body = response.data;
+      final data = body is Map && body['data'] is Map ? body['data'] as Map : (body is Map ? body : const {});
+      if (data['in_zone'] == false) {
+        return TripCoverage(
+          inCoverage: false,
+          failedPoint: data['failed_point']?.toString() ?? point,
+          failedStopIndex: parseIntOrNull(data['failed_stop_index']),
+          message: data['message']?.toString() ??
+              (single
+                  ? 'This location is outside our service area.'
+                  : 'This trip is outside our service area.'),
+        );
+      }
+      return const TripCoverage();
+    } on Exception {
+      return const TripCoverage();
     }
   }
 

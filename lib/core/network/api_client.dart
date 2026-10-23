@@ -88,6 +88,20 @@ class ApiClient {
         options: options,
       );
 
+  // ── PUT ──────────────────────────────────────────────────────────────────
+  Future<Response<T>> put<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) =>
+      _dio.put<T>(
+        _normalizePath(path),
+        data: data,
+        queryParameters: queryParameters,
+        options: options,
+      );
+
   // ── PATCH ────────────────────────────────────────────────────────────────
   Future<Response<T>> patch<T>(
     String path, {

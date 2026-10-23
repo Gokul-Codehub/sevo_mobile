@@ -6,15 +6,18 @@ import 'package:location/location.dart' as loc;
 
 import '../../../core/errors/api_error.dart';
 import '../data/logistics_repository.dart';
+import '../../addresses/domain/address_notifier.dart' show selectedAddressProvider;
 import '../../notifications/domain/capacity_claim.dart';
+import '../../payment/data/payment_repository.dart';
 import 'gt_models.dart';
 import 'logistics_models.dart';
 
 /// Currently selected booking appointment date.
 final selectedBookingDateProvider = StateProvider<DateTime>((ref) {
-  final now = DateTime.now();
-  // If at or after 6 PM (18:00), same-day booking closes; default to tomorrow
-  return now.hour >= 18 ? now.add(const Duration(days: 1)) : now;
+  // Start on today. Whether today is still bookable (cut-off, notice, closed
+  // day) is decided by the server's slot engine, exactly like the web; the
+  // slot picker offers "next available day" when today has nothing left.
+  return DateTime.now();
 });
 
 /// Currently selected booking time slot.
@@ -33,12 +36,14 @@ final selectedBookingServiceIdProvider = StateProvider<String?>((ref) => null);
 /// One day's slots + day-level facts for a date (YYYY-MM-DD), service id/slug
 /// and (optionally) a held availability claim token.
 final timeSlotDayProvider = FutureProvider.autoDispose.family<TimeSlotDay,
-    ({String date, String? serviceId, String? claimToken})>((ref, params) async {
+    ({String date, String? serviceId, String? claimToken, double? latitude, double? longitude})>((ref, params) async {
   final repo = ref.watch(logisticsRepositoryProvider);
   final result = await repo.getTimeSlotDay(
     date: params.date,
     serviceId: params.serviceId,
     claimToken: params.claimToken,
+    latitude: params.latitude,
+    longitude: params.longitude,
   );
 
   return switch (result) {
@@ -51,7 +56,7 @@ final timeSlotDayProvider = FutureProvider.autoDispose.family<TimeSlotDay,
 final timeSlotsProvider = FutureProvider.autoDispose.family<List<TimeSlot>,
     ({String date, String? serviceId})>((ref, params) async {
   final day = await ref.watch(timeSlotDayProvider(
-          (date: params.date, serviceId: params.serviceId, claimToken: null))
+          (date: params.date, serviceId: params.serviceId, claimToken: null, latitude: null, longitude: null))
       .future);
   return day.slots;
 });
@@ -78,11 +83,29 @@ final currentSelectedDayProvider = FutureProvider.autoDispose<TimeSlotDay>((ref)
   final selectedDate = ref.watch(selectedBookingDateProvider);
   final serviceId = ref.watch(selectedBookingServiceIdProvider);
   final claim = ref.watch(activeCapacityClaimProvider);
+  final address = ref.watch(selectedAddressProvider);
   final dateString = DateFormat('yyyy-MM-dd').format(selectedDate);
-  return ref.watch(timeSlotDayProvider(
-          (date: dateString, serviceId: serviceId, claimToken: claim?.token))
-      .future);
+  return ref.watch(timeSlotDayProvider((
+    date: dateString,
+    serviceId: serviceId,
+    claimToken: claim?.token,
+    latitude: address?.latitude,
+    longitude: address?.longitude,
+  )).future).then((day) {
+    // Remember the booking window (closed weekdays, how far ahead, same-day)
+    // so the calendar can grey out days the server will refuse.
+    Future.microtask(() {
+      try {
+        ref.read(slotWindowProvider.notifier).state = day;
+      } catch (_) {}
+    });
+    return day;
+  });
 });
+
+/// Last booking-window facts the server sent (see [TimeSlotDay]); used by the
+/// calendar. Null until the first slot response arrives.
+final slotWindowProvider = StateProvider<TimeSlotDay?>((ref) => null);
 
 /// Convenience provider for slots of the currently selected date + service.
 final currentSelectedDateSlotsProvider = FutureProvider.autoDispose<List<TimeSlot>>((ref) async {
@@ -178,6 +201,12 @@ class PickedDropLocation {
 
 final dropLocationProvider = StateProvider<PickedDropLocation?>((ref) => null);
 
+/// Optional intermediate stops between pickup and drop-off, in order.
+/// Server cap is the tier's `max_additional_stops` (web default 3).
+const int kMaxGtAdditionalStops = 3;
+final gtStopsProvider =
+    StateProvider<List<PickedDropLocation>>((ref) => const []);
+
 /// Parameters that determine whether a live fare quote can be fetched, and
 /// what it should be for.
 class LogisticsQuoteParam {
@@ -192,6 +221,7 @@ class LogisticsQuoteParam {
     this.loadingHelp,
     this.cargo,
     this.customerGstin,
+    this.waypoints,
   });
 
   final int tierId;
@@ -208,6 +238,12 @@ class LogisticsQuoteParam {
   final CargoDeclaration? cargo;
   final String? customerGstin;
 
+  /// Intermediate stops as {lat, lng}, in order. Part of the key.
+  final List<Map<String, double>>? waypoints;
+
+  String get _waypointsKey =>
+      (waypoints ?? const []).map((w) => '${w['lat']},${w['lng']}').join('|');
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -222,12 +258,13 @@ class LogisticsQuoteParam {
           laneId == other.laneId &&
           loadingHelp == other.loadingHelp &&
           cargo == other.cargo &&
-          customerGstin == other.customerGstin;
+          customerGstin == other.customerGstin &&
+          _waypointsKey == other._waypointsKey;
 
   @override
   int get hashCode => Object.hash(tierId, serviceCategory, pickupLatitude,
       pickupLongitude, dropLatitude, dropLongitude, laneId, loadingHelp, cargo,
-      customerGstin);
+      customerGstin, _waypointsKey);
 }
 
 /// The live, authoritative fare for the currently selected tier + pickup +
@@ -248,6 +285,7 @@ final logisticsQuoteProvider = FutureProvider.autoDispose
     loadingHelp: param.loadingHelp,
     cargo: param.cargo,
     customerGstin: param.customerGstin,
+    waypoints: param.waypoints,
   );
 
   return switch (result) {
@@ -289,6 +327,87 @@ final pmPickupHasLiftProvider = StateProvider<bool>((ref) => true);
 final pmDropFloorProvider = StateProvider<int>((ref) => 0);
 final pmDropHasLiftProvider = StateProvider<bool>((ref) => true);
 
+/// How the customer wants to pay for a Goods Transport / Packers & Movers
+/// booking: `cod`, `online` or `wallet` (wallet bookings are created as
+/// ONLINE and settled from the SEVO wallet afterwards).
+final gtPaymentMethodProvider = StateProvider<String>((ref) => 'cod');
+
+final gtPaymentConfigProvider = FutureProvider.autoDispose<
+    ({bool onlineAvailable, bool walletPartPayment})>((ref) {
+  return ref.watch(paymentRepositoryProvider).getPaymentConfig();
+});
+
+/// SEVO wallet balance; null for guests.
+final gtWalletBalanceProvider = FutureProvider.autoDispose<double?>((ref) {
+  return ref.watch(paymentRepositoryProvider).getWalletBalance();
+});
+
+/// Extra helpers requested for the move (0..admin `max_helpers`).
+final pmHelpersRequestedProvider = StateProvider<int>((ref) => 0);
+
+/// Selected add-on services: add-on code -> quantity.
+final pmAddOnsSelectedProvider = StateProvider<Map<String, int>>((ref) => const {});
+
+/// Admin limit for extra helpers in [city].
+final pmMaxHelpersProvider = FutureProvider.family<int, String>((ref, city) {
+  return ref.watch(logisticsRepositoryProvider).getPackersMoversMaxHelpers(city);
+});
+
+/// Add-on catalogue configured for [city].
+final pmAddOnsProvider = FutureProvider.family<List<PmAddOn>, String>((ref, city) async {
+  final result = await ref.watch(logisticsRepositoryProvider).getPackersMoversAddOns(city);
+  return switch (result) {
+    Success(:final data) => data,
+    Failure() => const <PmAddOn>[],
+  };
+});
+
+/// Inputs for a service-zone coverage check.
+typedef TripCoverageParam = ({
+  String slug,
+  String? point,
+  double? pickupLat,
+  double? pickupLng,
+  double? dropLat,
+  double? dropLng,
+  String stopsKey,
+  String? vehicleClass,
+  int? laneId,
+});
+
+/// Is this trip (or one end of it) inside the admin's active coverage? Same
+/// rules and messages as the web (`checkRouteCoverage` / `checkPointCoverage`).
+final tripCoverageProvider =
+    FutureProvider.autoDispose.family<TripCoverage, TripCoverageParam>((ref, p) async {
+  // Debounce rapid changes (map pans, stop edits) like the web's 300 ms timer.
+  var cancelled = false;
+  ref.onDispose(() => cancelled = true);
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  if (cancelled) return const TripCoverage();
+  final stops = <Map<String, double>>[];
+  if (p.stopsKey.isNotEmpty) {
+    for (final pair in p.stopsKey.split('|')) {
+      final xy = pair.split(',');
+      if (xy.length == 2) {
+        final a = double.tryParse(xy[0]);
+        final b = double.tryParse(xy[1]);
+        if (a != null && b != null) stops.add({'lat': a, 'lng': b});
+      }
+    }
+  }
+  return ref.watch(logisticsRepositoryProvider).checkTripCoverage(
+        serviceSlug: p.slug,
+        point: p.point,
+        pickupLat: p.pickupLat,
+        pickupLng: p.pickupLng,
+        dropLat: p.dropLat,
+        dropLng: p.dropLng,
+        stops: stops,
+        vehicleClass: p.vehicleClass,
+        laneId: p.laneId,
+      );
+});
+
 /// Free-form on the backend (only checked for equality between quote and
 /// booking, never enumerated/validated) — offered as a simple two-way choice
 /// here since that's the only distinction the booking screen can usefully
@@ -315,6 +434,10 @@ class PmQuoteParam {
     required this.dropFloor,
     required this.dropHasLift,
     required this.relocationType,
+    this.moveDate,
+    this.moveTime,
+    this.stops = const [],
+    this.laneId,
   }) : _inventoryKey = (inventory
             .map((e) => '${e['goods_item_id']}:${e['quantity']}')
             .toList()
@@ -335,6 +458,18 @@ class PmQuoteParam {
   final int dropFloor;
   final bool dropHasLift;
   final String relocationType;
+
+  /// `yyyy-MM-dd` / slot label: admin peak-day and off-hours surcharges are
+  /// priced server-side from these.
+  final String? moveDate;
+  final String? moveTime;
+
+  /// Intermediate stops as `{address, latitude, longitude, stop_type}` maps.
+  final List<Map<String, dynamic>> stops;
+  final int? laneId;
+
+  String get _stopsKey =>
+      stops.map((s) => '${s['latitude']},${s['longitude']}').join('|');
 
   final List<String> _inventoryKey;
 
@@ -357,6 +492,10 @@ class PmQuoteParam {
           dropFloor == other.dropFloor &&
           dropHasLift == other.dropHasLift &&
           relocationType == other.relocationType &&
+          moveDate == other.moveDate &&
+          moveTime == other.moveTime &&
+          laneId == other.laneId &&
+          _stopsKey == other._stopsKey &&
           _inventoryKey.join(',') == other._inventoryKey.join(',');
 
   @override
@@ -375,6 +514,10 @@ class PmQuoteParam {
         dropFloor,
         dropHasLift,
         relocationType,
+        moveDate,
+        moveTime,
+        laneId,
+        _stopsKey,
         _inventoryKey.join(','),
       );
 }
@@ -397,6 +540,10 @@ final pmQuoteProvider = FutureProvider.autoDispose.family<PackersMoversQuote, Pm
     dropFloor: param.dropFloor,
     dropHasLift: param.dropHasLift,
     relocationType: param.relocationType,
+    moveDate: param.moveDate,
+    moveTime: param.moveTime,
+    stops: param.stops,
+    laneId: param.laneId,
   );
 
   return switch (result) {
@@ -545,10 +692,15 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
     }
   }
 
-  void setManualLocation(String address, String pincode) {
+  /// Sets the browsing location by hand (no account needed). [latitude] /
+  /// [longitude] are optional - pass them when the typed place was geocoded
+  /// so serviceability checks use the real point, not the previous one.
+  void setManualLocation(String address, String pincode, {double? latitude, double? longitude}) {
     state = state.copyWith(
       address: address,
       pincode: pincode,
+      latitude: latitude,
+      longitude: longitude,
       isDetected: false,
     );
   }
