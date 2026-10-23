@@ -2,7 +2,7 @@ name: calservices_customer
 description: "CalServices Customer - Professional home services booking app"
 publish_to: 'none'
 
-version: 1.0.7+8
+version: 1.0.8+9
 
 environment:
   sdk: ^3.13.1
