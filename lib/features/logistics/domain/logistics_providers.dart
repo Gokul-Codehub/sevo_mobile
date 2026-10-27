@@ -11,6 +11,7 @@ import '../../notifications/domain/capacity_claim.dart';
 import '../../payment/data/payment_repository.dart';
 import 'gt_models.dart';
 import 'logistics_models.dart';
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 
 /// Currently selected booking appointment date.
 final selectedBookingDateProvider = StateProvider<DateTime>((ref) {
@@ -595,7 +596,15 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
   // reads the real device position (respecting permission state) and
   // reverse-geocodes it, falling back to the previous state (never to fake
   // coordinates) if location is unavailable/denied.
-  Future<void> detectAndSetCurrentLocation() async {
+  ///
+  /// Returns true only when a real position was read and stored. A customer who
+  /// answers "No thanks" to the in-app "turn on location" prompt, or denies the
+  /// permission, gets false - and is NOT sent to the system Settings app (the
+  /// caller keeps them on the page to try again or enter a place by hand).
+  /// Settings is only opened when the in-app prompt could not be shown at all
+  /// (iOS, or Play Services unavailable), or - when [openSettingsIfBlocked] -
+  /// for a permanently denied permission, which has no other way back.
+  Future<bool> detectAndSetCurrentLocation({bool openSettingsIfBlocked = false}) async {
     try {
       // Fixed 2026-09-29 per explicit report ("if user clicks the user my
       // current location the android does not open the accessibility to
@@ -620,16 +629,23 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         var enabledNow = false;
+        var promptUnavailable = false;
         try {
           enabledNow = await loc.Location().requestService();
         } catch (_) {
-          enabledNow = false;
+          promptUnavailable = true;
         }
+        // iOS never lets an app flip the switch, so requestService() is always
+        // "false" there - that is not a refusal.
+        if (defaultTargetPlatform == TargetPlatform.iOS) promptUnavailable = true;
         if (!enabledNow) {
           final stillDisabled = !(await Geolocator.isLocationServiceEnabled());
           if (stillDisabled) {
-            await Geolocator.openLocationSettings();
-            return;
+            // "No thanks" (or still off): stay where we are.
+            if (promptUnavailable && openSettingsIfBlocked) {
+              await Geolocator.openLocationSettings();
+            }
+            return false;
           }
         }
       }
@@ -643,11 +659,11 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
         // the in-app permission dialog again from here on, so the only way
         // forward is the app's own permission settings page. openAppSettings()
         // jumps straight there, same fix pattern as the GPS-off case above.
-        await Geolocator.openAppSettings();
-        return;
+        if (openSettingsIfBlocked) await Geolocator.openAppSettings();
+        return false;
       }
       if (permission == LocationPermission.denied) {
-        return;
+        return false;
       }
 
       final position = await Geolocator.getCurrentPosition(
@@ -686,9 +702,11 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
         longitude: position.longitude,
         isDetected: true,
       );
+      return true;
     } catch (_) {
       // Leave state unchanged on any GPS failure rather than substituting
       // fake coordinates.
+      return false;
     }
   }
 

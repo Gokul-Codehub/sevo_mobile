@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 import '../../../logistics/domain/logistics_providers.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// "Enter location manually" for people who are not logged in.
 ///
@@ -35,12 +36,22 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
 
   Future<void> _useGps() async {
     setState(() => _busy = true);
+    var detected = false;
     try {
-      await ref.read(customerLocationProvider.notifier).detectAndSetCurrentLocation();
+      detected = await ref.read(customerLocationProvider.notifier).detectAndSetCurrentLocation(openSettingsIfBlocked: true);
     } catch (_) {}
     if (!mounted) return;
     setState(() => _busy = false);
-    context.pop(true);
+    if (detected) {
+      context.pop(true);
+    } else {
+      // Stay on this page so the place can be typed in instead.
+      AppToast.show(
+        context,
+        'Location is off. Turn it on, or enter your area and pincode below.',
+        type: AppToastType.error,
+      );
+    }
   }
 
   Future<void> _confirm() async {

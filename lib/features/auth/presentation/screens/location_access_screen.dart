@@ -6,6 +6,7 @@ import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../../../logistics/domain/logistics_providers.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Screen 3: Location Access
 /// Redesigned 2026-10-22: map-pin photo hero over a curved white sheet, same
@@ -37,16 +38,25 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
 
   Future<void> _handleUseCurrentLocation() async {
     setState(() => _isLoadingGps = true);
+    var detected = false;
     try {
       final notifier = ref.read(customerLocationProvider.notifier);
-      await notifier.detectAndSetCurrentLocation();
+      detected = await notifier.detectAndSetCurrentLocation(openSettingsIfBlocked: true);
     } catch (_) {
       // Fallback is handled safely inside notifier
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingGps = false);
-        _proceedFromLocation();
-      }
+    }
+    if (!mounted) return;
+    setState(() => _isLoadingGps = false);
+    if (detected) {
+      _proceedFromLocation();
+    } else {
+      // "No thanks" / permission denied: stay here so the customer can turn
+      // location on (tap the button again) or enter the place by hand.
+      AppToast.show(
+        context,
+        'Location is off. Turn it on, or enter your location manually.',
+        type: AppToastType.error,
+      );
     }
   }
 

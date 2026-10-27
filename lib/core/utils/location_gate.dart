@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:location/location.dart' as loc;
 
 import '../../shared/theme/app_colors.dart';
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 
 /// Prompts the customer to turn on device location (GPS) before booking a
 /// service or placing a grocery order — added 2026-09-19 per explicit
@@ -72,12 +73,16 @@ Future<void> ensureLocationEnabled(BuildContext context) async {
             // the in-app prompt fails for any other reason), rather than
             // leaving the customer with no way to proceed at all.
             var enabled = false;
+            var promptUnavailable = false;
             try {
               enabled = await loc.Location().requestService();
             } catch (_) {
-              enabled = false;
+              promptUnavailable = true;
             }
-            if (!enabled) {
+            if (defaultTargetPlatform == TargetPlatform.iOS) promptUnavailable = true;
+            if (!enabled && promptUnavailable) {
+              // Only when the in-app prompt cannot be shown at all (iOS / no
+              // Play Services). A customer who said "No thanks" stays here.
               final stillDisabled = !(await Geolocator.isLocationServiceEnabled());
               if (stillDisabled) {
                 await Geolocator.openLocationSettings();
