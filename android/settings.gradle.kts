@@ -23,6 +23,8 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
     // Firebase Google Services plugin
     id("com.google.gms.google-services") version "4.5.0" apply false
+    // Crashlytics: uploads symbol/mapping files so native crash traces are readable
+    id("com.google.firebase.crashlytics") version "3.0.6" apply false
 }
 
 include(":app")

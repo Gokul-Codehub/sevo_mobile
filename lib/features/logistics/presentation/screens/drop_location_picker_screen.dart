@@ -1,3 +1,4 @@
+import '../../../../core/permissions/permission_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -166,16 +167,9 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
         _showError('Location services are turned off. Please enable GPS and try again.');
         return;
       }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showError('Location permission was denied.');
-          return;
-        }
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _showError('Location permission is permanently denied. Enable it from app settings.');
+      if (!mounted) return;
+      if (!await PermissionManager.instance.ensure(context, AppPermission.location)) {
+        _showError('Location access is off. You can search or pin the drop point manually.');
         return;
       }
       final position = await Geolocator.getCurrentPosition(

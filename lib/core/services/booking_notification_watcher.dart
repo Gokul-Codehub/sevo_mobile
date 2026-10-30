@@ -1,3 +1,4 @@
+import '../foundation/foundation_controller.dart' show remoteConfigProvider;
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
@@ -54,7 +55,9 @@ class _BookingNotificationWatcherState
   /// 45 s normally; 15 s while a technician is assigned or on the way, so
   /// "On the way" / "Arrived" alerts are not a minute late.
   static const _idlePollInterval = Duration(seconds: 45);
-  static const _activePollInterval = Duration(seconds: 15);
+  /// Remote setting `booking_poll_seconds` (default 15), kept between 5 and 120 s.
+  Duration get _activePollInterval =>
+      Duration(seconds: ref.read(remoteConfigProvider).intSetting('booking_poll_seconds').clamp(5, 120));
   Duration _currentInterval = _idlePollInterval;
 
   // Rewritten 2026-10-28 (status audit): alerts follow the booking's STAGE

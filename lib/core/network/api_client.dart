@@ -6,6 +6,7 @@ import '../../config/env.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../features/auth/domain/auth_notifier.dart';
 import '../../features/app_update/data/app_version_repository.dart' show AppUpdateStore;
+import '../analytics/performance_monitor.dart';
 import 'auth_interceptor.dart';
 import 'error_interceptor.dart';
 import 'logging_interceptor.dart';
@@ -43,6 +44,8 @@ class ApiClient {
       ),
       // Retries GET/HEAD (and writes with an Idempotency-Key) on network/gateway errors, with back-off.
       RetryInterceptor(dio: _dio),
+      // API latency per endpoint template in Firebase Performance (no-op until Firebase is up).
+      PerformanceInterceptor(),
       ErrorInterceptor(),
       if (kDebugMode) LoggingInterceptor(),
     ]);
@@ -57,6 +60,15 @@ class ApiClient {
   late final Dio _dio;
 
   Dio get dio => _dio;
+
+  /// Applies the server-controlled timeouts (remote settings). Out-of-range values are ignored, so a
+  /// bad admin entry can never make every request time out instantly or hang for minutes.
+  void applyTimeouts({int? connectSeconds, int? receiveSeconds, int? uploadSeconds}) {
+    bool ok(int? v) => v != null && v >= 5 && v <= 120;
+    if (ok(connectSeconds)) _dio.options.connectTimeout = Duration(seconds: connectSeconds!);
+    if (ok(receiveSeconds)) _dio.options.receiveTimeout = Duration(seconds: receiveSeconds!);
+    if (ok(uploadSeconds)) _dio.options.sendTimeout = Duration(seconds: uploadSeconds!);
+  }
 
   static String _normalizePath(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;

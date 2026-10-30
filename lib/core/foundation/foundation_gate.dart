@@ -8,8 +8,12 @@ import '../../routing/app_router.dart' show rootNavigatorKey;
 import '../../shared/utils/app_toast.dart';
 import '../network/network_state.dart';
 import '../network/session_interceptors.dart';
+import '../network/api_client.dart' show apiClientProvider;
+import '../analytics/analytics_manager.dart';
 import 'announcement_host.dart';
+import 'crash_reporting.dart';
 import 'foundation_controller.dart';
+import 'foundation_models.dart' show FoundationConfig, MaintenanceInfo;
 import 'foundation_models.dart';
 
 /// Mounted above the routed app (main.dart). Loads the server config at start (cache first,
@@ -60,6 +64,25 @@ class _FoundationGateState extends ConsumerState<FoundationGate> with WidgetsBin
 
   @override
   Widget build(BuildContext context) {
+    // Remote switch: crash_reporting_enabled (consent / emergency off) without a release.
+    ref.listen<bool>(
+      foundationControllerProvider.select((s) => s.config.boolSetting('crash_reporting_enabled')),
+      (previous, next) => CrashReporting.instance.setRemoteEnabled(next),
+    );
+    // Remote settings that change app behaviour: network timeouts.
+    ref.listen<FoundationConfig>(remoteConfigProvider, (previous, next) {
+      try {
+        ref.read(apiClientProvider).applyTimeouts(
+              connectSeconds: next.intSetting('api_connect_timeout_s'),
+              receiveSeconds: next.intSetting('api_receive_timeout_s'),
+              uploadSeconds: next.intSetting('api_upload_timeout_s'),
+            );
+      } catch (_) {}
+    });
+    ref.listen<bool>(
+      foundationControllerProvider.select((s) => s.config.boolSetting('analytics_enabled')),
+      (previous, next) => AnalyticsManager.instance.setRemoteEnabled(next),
+    );
     final blocked = ref.watch(foundationControllerProvider.select((s) => s.maintenanceBlocksApp));
     final info = ref.watch(foundationControllerProvider.select((s) => s.config.maintenance));
     final hasAnnouncement = ref.watch(visibleAnnouncementsProvider.select((l) => l.isNotEmpty));

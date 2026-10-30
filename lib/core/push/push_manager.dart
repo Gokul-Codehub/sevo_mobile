@@ -9,12 +9,16 @@ import '../../features/app_update/data/app_version_repository.dart' show Install
 import '../../features/app_update/domain/app_update_controller.dart'
     show appUpdateControllerProvider, appUpdateStoreProvider, installedAppReaderProvider;
 import '../../features/app_update/domain/app_update_models.dart' show CheckReason;
+import '../../features/auth/domain/auth_notifier.dart' show authProvider;
 import '../../features/booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../../routing/app_router.dart' show rootNavigatorKey;
 import '../foundation/foundation_repository.dart' show FoundationRepository;
 import '../network/api_client.dart' show apiClientProvider;
+import '../network/session_interceptors.dart' show SessionNotice;
+import '../storage/secure_storage.dart' show secureStorageProvider;
 import '../services/notification_service.dart';
 import '../utils/app_logger.dart';
+import 'device_facts.dart';
 import 'push_messaging.dart';
 
 /// `POST/PATCH /api/app/devices/` - tells the server this install and its push token.
@@ -30,7 +34,13 @@ class PushRepository {
     extra: {'skipRetry': true},
   );
 
-  Future<bool> register({required String? token, required bool notificationsEnabled, required String version, required int build}) async {
+  Future<bool> register({
+    required String? token,
+    required bool notificationsEnabled,
+    required String version,
+    required int build,
+    DeviceFacts facts = const DeviceFacts(),
+  }) async {
     try {
       final id = await installId?.call();
       if (id == null || id.isEmpty) return false;
@@ -41,6 +51,8 @@ class PushRepository {
         'app_version': version,
         'build': build,
         'notifications_enabled': notificationsEnabled,
+        if (facts.model.isNotEmpty) 'model': facts.model,
+        if (facts.osVersion.isNotEmpty) 'os_version': facts.osVersion,
         if (token != null && token.isNotEmpty) 'fcm_token': token,
       }, options: _opts);
       return true;
@@ -73,16 +85,23 @@ class PushManager {
     required this.onAppUpdate,
     required this.onNavigate,
     required this.showLocal,
+    this.onForceLogout,
+    DeviceFactsReader? deviceFacts,
   })  : _messaging = messaging,
         _repo = repository,
-        _reader = installedReader;
+        _reader = installedReader,
+        _facts = deviceFacts ?? const DeviceInfoFactsReader();
 
   final PushMessaging _messaging;
   final PushRepository _repo;
   final InstalledAppReader _reader;
+  final DeviceFactsReader _facts;
   final void Function() onAppUpdate;
   final void Function(String route) onNavigate;
   final Future<void> Function(String title, String body, String? route) showLocal;
+
+  /// The server signed this phone out (admin or another device): clear the session and go to login.
+  final void Function()? onForceLogout;
 
   final List<StreamSubscription<dynamic>> _subs = [];
   bool _started = false;
@@ -93,7 +112,9 @@ class PushManager {
     _started = true;
     available = await _messaging.initialize();
     if (!available) {
+      // Push is off, but the device is still listed for admins (no token, notifications not allowed).
       AppLogger.d('[PUSH]', 'Firebase unavailable - push disabled');
+      await _register();
       return;
     }
     _subs
@@ -107,23 +128,32 @@ class PushManager {
 
   Future<void> _register() async {
     try {
-      final token = await _messaging.getToken();
-      final allowed = await _messaging.notificationsAllowed();
+      final token = available ? await _messaging.getToken() : null;
+      final allowed = available ? await _messaging.notificationsAllowed() : false;
       final installed = await _reader.read();
-      await _repo.register(token: token, notificationsEnabled: allowed, version: installed.versionName, build: installed.buildNumber);
+      final facts = await _facts.read();
+      await _repo.register(
+        token: token,
+        notificationsEnabled: allowed,
+        version: installed.versionName,
+        build: installed.buildNumber,
+        facts: facts,
+      );
     } catch (_) {}
   }
 
   /// After sign-in: links the device to the user and refreshes the permission state.
-  Future<void> onSignedIn() async {
-    if (available) await _register();
-  }
+  Future<void> onSignedIn() => _register();
 
   Future<void> onSignedOut() async {
-    if (available) await _repo.detachUser();
+    await _repo.detachUser();
   }
 
   void _onForeground(PushMessage m) {
+    if (m.type == 'force_logout') {
+      onForceLogout?.call();
+      return;
+    }
     if (m.type == 'APP_UPDATE') {
       onAppUpdate(); // the update dialog appears in the app; no duplicate system notification
       return;
@@ -133,6 +163,10 @@ class PushManager {
   }
 
   void handleTap(PushMessage m) {
+    if (m.type == 'force_logout') {
+      onForceLogout?.call();
+      return;
+    }
     if (m.type == 'APP_UPDATE') {
       onAppUpdate();
       return;
@@ -174,6 +208,13 @@ final pushManagerProvider = Provider<PushManager>((ref) {
       if (context != null) GoRouter.of(context).push(route);
     },
     showLocal: (title, body, route) => NotificationService.instance.show(title: title, body: body, routePayload: route),
+    onForceLogout: () async {
+      try {
+        await ref.read(secureStorageProvider).clearAll();
+      } catch (_) {}
+      SessionNotice.message.value = SessionNotice.revoked;
+      ref.read(authProvider.notifier).forceUnauthenticated();
+    },
   );
   ref.onDispose(manager.dispose);
   return manager;

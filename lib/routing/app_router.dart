@@ -40,7 +40,10 @@ import '../features/home/presentation/screens/home_screen.dart';
 import '../shared/theme/grocery_theme.dart';
 import '../features/logistics/presentation/screens/drop_location_picker_screen.dart';
 import '../features/ac_inspection/presentation/screens/ac_inspection_screen.dart';
+import '../core/analytics/analytics_manager.dart';
 import '../core/foundation/feature_guard.dart';
+import '../features/account_settings/presentation/account_settings_screens.dart';
+import '../features/account_settings/presentation/feedback_screen.dart';
 import '../features/logistics/presentation/screens/goods_transport_booking_screen.dart';
 import '../features/logistics/domain/logistics_models.dart'
     show LogisticsVehicleCategory;
@@ -108,6 +111,9 @@ abstract final class AppRoutes {
   static const String payment = '/checkout/payment';
   static const String support = '/support';
   static const String notifications = '/notifications';
+  static const String devices = '/devices';
+  static const String appFeedback = '/send-feedback';
+  static const String notificationSettings = '/notification-settings';
   static const String profile = '/profile';
   static const String bookingCheckout = '/checkout';
   // Added 2026-09-19 — see CatalogFlowType.logistics for why this route
@@ -138,6 +144,7 @@ final shellNavigatorKey = GlobalKey<NavigatorState>();
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
+    observers: [AnalyticsRouteObserver()],
     // The splash route (SplashScreen) renders the SEVO brand image first on
     // every cold start, then hands off to Home itself after a fixed delay —
     // see splash_screen.dart.
@@ -192,12 +199,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'cart',
             // Grocery routes are wrapped in GroceryTheme (green), everything else
             // uses the app default (Services navy/blue) — colour code 2026-10-27.
-            builder: (context, state) => const GroceryTheme(child: GroceryCartScreen()),
+            builder: (context, state) => const GuardedGroceryTheme(child: GroceryCartScreen()),
           ),
           GoRoute(
             path: AppRoutes.notifications,
             name: 'notifications',
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.appFeedback,
+            name: 'app-feedback',
+            builder: (context, state) => AppFeedbackScreen(bookingRef: state.uri.queryParameters['booking']),
+          ),
+          GoRoute(
+            path: AppRoutes.devices,
+            name: 'devices',
+            builder: (context, state) => const DevicesScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.notificationSettings,
+            name: 'notification-settings',
+            builder: (context, state) => const NotificationSettingsScreen(),
           ),
           GoRoute(
             path: AppRoutes.support,
@@ -219,7 +241,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 mode: SearchModeX.fromWire(state.uri.queryParameters['mode']),
               );
               return screen.mode == SearchMode.groceries
-                  ? GroceryTheme(child: screen)
+                  ? GuardedGroceryTheme(child: screen)
                   : screen;
             },
           ),
@@ -238,7 +260,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.searchGroceries,
             name: 'search-groceries',
-            builder: (context, state) => GroceryTheme(
+            builder: (context, state) => GuardedGroceryTheme(
               child: GrocerySearchResultsScreen(
                 query: state.uri.queryParameters['q'] ?? '',
               ),
@@ -270,7 +292,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             // tiles, via _handleAdminLinkTap in home_screen.dart) can open
             // straight into the right department instead of always
             // defaulting to the first one.
-            builder: (context, state) => GroceryTheme(
+            builder: (context, state) => GuardedGroceryTheme(
               child: SellerHubGroceriesScreen(
                 initialCategorySlug: state.uri.queryParameters['category'],
               ),
@@ -281,7 +303,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'seller-hub-vegetables',
             // Same `?category=<slug>` deep-link support as
             // seller-hub-groceries above.
-            builder: (context, state) => GroceryTheme(
+            builder: (context, state) => GuardedGroceryTheme(
               child: SellerHubVegetablesScreen(
                 initialCategorySlug: state.uri.queryParameters['category'],
               ),
@@ -307,7 +329,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final slug = state.pathParameters['slug'] ?? '';
               final extra = state.extra;
-              return GroceryTheme(
+              return GuardedGroceryTheme(
                 child: GroceryProductDetailScreen(
                   productSlug: slug,
                   initialProduct: extra is ServiceItem ? extra : null,
@@ -318,7 +340,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.recipeDetail,
             name: 'recipe-detail',
-            builder: (context, state) => GroceryTheme(
+            builder: (context, state) => GuardedGroceryTheme(
               child: RecipeDetailScreen(
                 recipeKey: state.pathParameters['key'] ?? '',
               ),
@@ -327,7 +349,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.baskets,
             name: 'baskets',
-            builder: (context, state) => const GroceryTheme(child: ComboOffersScreen()),
+            builder: (context, state) => const GuardedGroceryTheme(child: ComboOffersScreen()),
           ),
           GoRoute(
             path: AppRoutes.basketDetail,
@@ -335,7 +357,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
               final extra = state.extra;
-              return GroceryTheme(
+              return GuardedGroceryTheme(
                 child: BasketDetailScreen(
                   basketId: id,
                   initialBasket: extra is MarketplaceBasket ? extra : null,

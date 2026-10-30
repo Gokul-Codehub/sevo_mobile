@@ -47,10 +47,31 @@ Tests: backend `python manage.py test app_foundation` (39) ; Flutter `flutter te
 * Tests: `test/core/push/push_manager_test.dart` (12) - all pass; backend `app_foundation` 40 tests.
 * **Not verified on a real device**: no push has been sent yet. Needs the Firebase service-account key on the server (`FCM_SERVICE_ACCOUNT_FILE`).
 
+## Also built (round 5)
+
+* **Device name in admin**: the app sends model + OS (`device_info_plus`) and registers even when Firebase is unavailable; Admin → App Control → Devices shows it, with a **Sign out** button per device.
+* **Backend push** (`app_foundation/push.py`): every new inbox row (`service_requests/notifications._inbox`) also pushes to the customer's phones. No-op until the Firebase key is configured; respects `CustomerNotificationPreference` (promotions opt-in); records each attempt in `PushDelivery`; dead tokens cleared; never raises.
+* **Forced sign-out** (server side): `DeviceRegistration.revoked_at`; tokens issued before it are refused with `401 {code: SESSION_REVOKED}` for that device (`X-Device-Id`), including the refresh endpoint; web unaffected. Endpoints: admin `POST /api/admin/app/devices/<id>/revoke/`, `.../users/<id>/revoke-devices/`; customer `GET /api/app/sessions/`, `POST .../sessions/<device_id>/revoke/`, `POST .../sessions/revoke-all/`. A data push `force_logout` makes a running app sign out immediately (app handles it).
+* **Crash reporting**: `firebase_crashlytics` + Gradle plugin; fatal Flutter/async errors reported, off in debug, remote switch `crash_reporting_enabled`; keys only app/version/build. Debug APK builds.
+* Tests: backend `app_foundation` 68; Flutter core folders 61. Not run on a device; no crash/push seen in the Firebase console yet.
+
+**Deploy needed for the above**: backend `migrate` (settings_hub 0021, app_foundation 0001-0003) + env `FCM_SERVICE_ACCOUNT_FILE`; new app build.
+
+## Also built (round 6)
+
+* **Remote settings used**: network timeouts (`api_*_timeout_s`, clamped 5-120 s) and `booking_poll_seconds` now drive the app.
+* **Permission manager** (`lib/core/permissions`): explain -> ask -> Open-settings recovery for location/notifications/camera/photos; wired into the two address screens (permission_handler pinned to 12.x - 13.x needs Android SDK 37).
+* **Analytics + performance** (`lib/core/analytics`): typed event catalogue, PII sanitizer, automatic `screen_view` via the router observer, `app_open`, API latency per endpoint template; off in debug, remote switch `analytics_enabled`. Funnel events (booking_submitted, payment_*, ...) are defined but **not yet called from the booking/payment screens**.
+* **Account screens**: Profile -> *Notification settings* (per-category switches, existing API), *Your devices* (list / sign out one / sign out others), *Send feedback* (`/send-feedback`, new backend `AppFeedback` + admin Feedback tab).
+* **Admin**: Overview tab (active devices, push success rate, errors, versions, controls in effect), Feedback tab, Devices Sign-out.
+* **Booking reminders**: Celery task `app_foundation.send_booking_reminders` every 10 min -> 24 h and 1 h reminders as inbox rows + push (idempotent, reschedule-aware, respects preferences).
+* **Payment failure classification** (cancelled / bank declined / connection lost / timeout / gateway / unknown) with next steps in the payment error message; **rating prompt** (4-5 stars, never first rating, once per 90 days, flag `rating_prompt`); **Groceries** routes behind flag `groceries`.
+* Fixed along the way: route/class name clash with the existing post-service `FeedbackScreen`; analytics filter dropping `screen_name`.
+* Verified: backend 148 tests (foundation + update + push + GT switch), Flutter 175 tests in the owned folders, debug APK builds. Not verified on a device.
+
 ## Not done yet (honest list)
 
-* Kill switch is enforced server-side for **Goods Transport only** (booking create returns 409 `FEATURE_DISABLED`); other modules still need `flag_is_on` checks. A global 503 maintenance middleware was deliberately **not** added (it can lock out the whole API).
-* In the app only the Goods Transport route is guarded (`FeatureGuard`, also covers deep links). Home tiles are not hidden individually yet; other modules (groceries, wallet…) need their entry route wrapped the same way.
-* **Server side of session revocation**: the backend never returns `SESSION_REVOKED` yet (no `AppSession` model / admin sign-out); the app side is ready and unit-tested. Proactive token refresh (<2 min left) was not added - the existing single-flight 401 refresh already makes expiry invisible. The new interceptors are wired into `ApiClient` but only unit-tested in isolation (not run on a device). PermissionManager, DeepLinkManager, analytics, Crashlytics/FCM/Performance (**need the Firebase project**), integrity, lifecycle, feedback/help, reminders, payment recovery (Phase 2–3).
-* Device registration from the app uses the config call only (adds platform/version/build); OS version, model and FCM token are not sent yet (needs `device_info_plus` + Firebase).
-* Not committed; backend `migrate` (`settings_hub 0021`, `app_foundation 0001`) and web build not deployed.
+* **Needs outside input**: Play Integrity / App Attest (needs Google Cloud + Apple setup), iOS (Apple account, APNs key), deep-link verification files (`assetlinks.json` needs the release signing SHA-256), real push/crash/analytics delivery (needs the live backend + a build + the service-account key).
+* **Deliberately skipped**: a second deep-link handler (go_router + the manifest filters already open https/sevo links; no pending-link-after-login yet), background tasks (workmanager - battery cost, little need), a global 503 maintenance middleware (can lock out the API).
+* **Still open**: funnel analytics call sites, flags for the remaining modules (wallet, packers...) and their server-side checks, shared ErrorState/EmptyState/loading widgets and the SevoException family, a LocationManager wrapper (existing geolocator flows left as tuned), localization (ARB + Tamil/Hindi), proactive token refresh, payment-recovery UI beyond the clearer message (retry/other method/cash), operations alert rules (email/chat), release rollout percentage per AppRelease.
+* Not committed. Deploy: `migrate` (settings_hub 0021, app_foundation 0001-0004), env `FCM_SERVICE_ACCOUNT_FILE`, Celery beat reload, web build, new app build.

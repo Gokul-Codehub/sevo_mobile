@@ -1,3 +1,5 @@
+import '../../../../core/foundation/foundation_controller.dart' show featureFlagProvider;
+import '../../../../core/rating/rating_prompt.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -81,6 +83,11 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     switch (result) {
       case Success():
         setState(() => _isSubmitted = true);
+        // Store-rating prompt: only after a good rating, never the first time, at most every 90 days.
+        RatingPromptManager.instance.afterRating(
+          stars: _overallRating,
+          enabled: ref.read(featureFlagProvider('rating_prompt')),
+        );
       case Failure(:final error):
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

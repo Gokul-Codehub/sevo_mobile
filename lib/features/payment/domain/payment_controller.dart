@@ -1,3 +1,4 @@
+import 'payment_failure.dart';
 import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show MaterialPageRoute;
@@ -254,8 +255,10 @@ class PaymentController extends Notifier<PaymentState> {
 
   // ── Error Callback ────────────────────────────────────────────────────────
   void _handlePaymentError(PaymentFailureResponse response) {
+    // Plain-language reason + next step (cancelled / bank declined / connection lost / timeout / gateway).
+    final info = classifyPaymentFailure(code: response.code, message: response.message);
     state = PaymentFailed(
-      errorMessage: response.message ?? 'Payment was cancelled or unsuccessful.',
+      errorMessage: '${info.message} ${info.nextStep}',
       code: response.code,
     );
   }

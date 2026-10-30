@@ -1,3 +1,4 @@
+import '../../../../core/permissions/permission_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
@@ -114,18 +115,10 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         return;
       }
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showLocationError('Location permission was denied.');
-          return;
-        }
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _showLocationError(
-          'Location permission is permanently denied. Enable it from app settings.',
-        );
+      // Explain -> ask -> recover (Open settings), never a dead end.
+      if (!mounted) return;
+      if (!await PermissionManager.instance.ensure(context, AppPermission.location)) {
+        _showLocationError('Location access is off. You can enter your address manually.');
         return;
       }
 

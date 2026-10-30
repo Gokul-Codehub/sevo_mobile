@@ -318,6 +318,28 @@ void main() {
       expect(find.text('Goods & Transport is temporarily unavailable'), findsOneWidget);
     });
 
+
+    testWidgets('groceries flag off: grocery routes show the unavailable page', (tester) async {
+      repo.handler = () => ok(payload(flags: {'groceries': false}));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          foundationRepositoryProvider.overrideWithValue(repo),
+          foundationCacheProvider.overrideWithValue(FakeCache()),
+          installedAppReaderProvider.overrideWithValue(FakeInstalledReader(installedApp(10))),
+        ],
+        child: MaterialApp(
+          home: Consumer(builder: (context, ref, _) {
+            ref.read(foundationControllerProvider.notifier).start();
+            return const GuardedGroceryTheme(child: Scaffold(body: Text('Grocery screen')));
+          }),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Grocery screen'), findsNothing);
+      expect(find.text('Groceries is temporarily unavailable'), findsOneWidget);
+    });
+
     testWidgets('module-only maintenance also blocks it', (tester) async {
       repo.handler = () => ok(payload(maintenance: true, modules: ['goods_transport'], flags: {'goods_transport': true}));
       await pump(tester);

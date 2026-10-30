@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,9 @@ import 'core/services/booking_notification_watcher.dart';
 import 'core/services/customer_notification_watcher.dart';
 import 'core/utils/app_logger.dart';
 import 'core/utils/restart_widget.dart';
+import 'core/analytics/analytics_manager.dart';
+import 'core/analytics/performance_monitor.dart';
+import 'core/foundation/crash_reporting.dart';
 import 'core/foundation/error_reporter.dart';
 import 'core/foundation/foundation_gate.dart';
 import 'core/push/push_manager.dart';
@@ -81,6 +86,11 @@ void _installDiagnosticErrorHandlers() {
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   _installDiagnosticErrorHandlers();
+  // Crash reporting (Firebase Crashlytics): wraps the handlers above, in the background, never blocks start-up.
+  unawaited(CrashReporting.instance.initFromPlatform());
+  // Analytics + API performance (Firebase), also in the background; off in debug builds.
+  unawaited(AnalyticsManager.instance.init().then((_) => AnalyticsManager.instance.track(AnalyticsEvents.appOpen)));
+  unawaited(PerformanceMonitor.instance.init());
 
   // Lock to portrait orientation for mobile
   SystemChrome.setPreferredOrientations([

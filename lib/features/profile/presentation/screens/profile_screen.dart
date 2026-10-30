@@ -180,6 +180,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         label: 'Notifications',
                         onTap: () => context.push('/notifications'),
                       ),
+                      _MenuRow(
+                        icon: Icons.tune_rounded,
+                        label: 'Notification settings',
+                        onTap: () => context.push('/notification-settings'),
+                      ),
+                      _MenuRow(
+                        icon: Icons.devices_rounded,
+                        label: 'Your devices',
+                        onTap: () => context.push('/devices'),
+                      ),
                     ]),
 
                     const _SectionLabel('Preferences'),
@@ -213,6 +223,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         icon: Icons.help_outline_rounded,
                         label: 'Help Center',
                         onTap: () => context.push('/support'),
+                      ),
+                      _MenuRow(
+                        icon: Icons.rate_review_outlined,
+                        label: 'Send feedback',
+                        onTap: () => context.push('/send-feedback'),
                       ),
                       _MenuRow(
                         icon: Icons.article_outlined,

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:calservices_customer/core/push/device_facts.dart';
 import 'package:calservices_customer/core/push/push_manager.dart';
 import 'package:calservices_customer/core/push/push_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,9 +35,17 @@ class FakeMessaging implements PushMessaging {
 class FakeRepo extends PushRepository {
   FakeRepo() : super(api: null);
   final List<Map<String, Object?>> registered = [];
+  final List<DeviceFacts> factsSeen = [];
   int detached = 0;
   @override
-  Future<bool> register({required String? token, required bool notificationsEnabled, required String version, required int build}) async {
+  Future<bool> register({
+    required String? token,
+    required bool notificationsEnabled,
+    required String version,
+    required int build,
+    DeviceFacts facts = const DeviceFacts(),
+  }) async {
+    factsSeen.add(facts);
     registered.add({'token': token, 'enabled': notificationsEnabled, 'version': version, 'build': build});
     return true;
   }
@@ -54,6 +63,7 @@ void main() {
   late int updateChecks;
   late List<String> navigated;
   late List<List<String?>> shown;
+  late int forcedLogouts;
   late PushManager manager;
 
   PushManager make() => PushManager(
@@ -63,6 +73,8 @@ void main() {
         onAppUpdate: () => updateChecks++,
         onNavigate: navigated.add,
         showLocal: (t, b, r) async => shown.add([t, b, r]),
+        deviceFacts: _Facts(),
+        onForceLogout: () => forcedLogouts++,
       );
 
   setUp(() {
@@ -71,6 +83,7 @@ void main() {
     updateChecks = 0;
     navigated = [];
     shown = [];
+    forcedLogouts = 0;
     manager = make();
   });
 
@@ -78,14 +91,20 @@ void main() {
 
   Future<void> pump() => Future<void>.delayed(const Duration(milliseconds: 10));
 
-  test('Firebase unavailable: push is off, nothing is registered, nothing throws', () async {
+  test('Firebase unavailable: push is off, but the device is still listed (no token, not allowed)', () async {
     messaging.ok = false;
     await manager.start();
     expect(manager.available, isFalse);
-    expect(repo.registered, isEmpty);
+    expect(repo.registered.single, {'token': null, 'enabled': false, 'version': '1.0.9', 'build': 10});
     await manager.onSignedIn();
     await manager.onSignedOut();
-    expect(repo.detached, 0);
+    expect(repo.detached, 1);
+  });
+
+  test('the device name and OS are sent so admins can recognise the phone', () async {
+    await manager.start();
+    expect(repo.factsSeen.single.model, 'Samsung SM-A546E');
+    expect(repo.factsSeen.single.osVersion, 'Android 14');
   });
 
   test('registers the token with version, build and permission state', () async {
@@ -160,9 +179,24 @@ void main() {
     expect(navigated, isEmpty);
   });
 
+  test('a force_logout push signs the user out (running app, and when tapped)', () async {
+    await manager.start();
+    messaging.foreground.add(const PushMessage(data: {'type': 'force_logout'}));
+    messaging.opened.add(const PushMessage(data: {'type': 'force_logout'}));
+    await pump();
+    expect(forcedLogouts, 2);
+    expect(shown, isEmpty);
+    expect(navigated, isEmpty);
+  });
+
   test('start is idempotent', () async {
     await manager.start();
     await manager.start();
     expect(repo.registered, hasLength(1));
   });
+}
+
+class _Facts implements DeviceFactsReader {
+  @override
+  Future<DeviceFacts> read() async => const DeviceFacts(model: 'Samsung SM-A546E', osVersion: 'Android 14');
 }

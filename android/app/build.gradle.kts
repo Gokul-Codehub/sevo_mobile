@@ -6,6 +6,7 @@ plugins {
 
     // Google Services plugin for Firebase
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 
     // The Flutter Gradle Plugin must be applied after Android and Kotlin plugins.
     id("dev.flutter.flutter-gradle-plugin")

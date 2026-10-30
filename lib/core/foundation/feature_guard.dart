@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/grocery_theme.dart';
 import '../navigation/safe_back.dart';
 import 'foundation_controller.dart';
 
@@ -54,4 +55,15 @@ class FeatureGuard extends ConsumerWidget {
       ),
     );
   }
+}
+
+
+/// Every Groceries route: the green grocery theme, behind the server-controlled `groceries` flag.
+class GuardedGroceryTheme extends StatelessWidget {
+  const GuardedGroceryTheme({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      FeatureGuard(flag: 'groceries', label: 'Groceries', child: GroceryTheme(child: child));
 }

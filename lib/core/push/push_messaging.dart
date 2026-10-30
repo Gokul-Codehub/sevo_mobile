@@ -1,7 +1,9 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart' show Firebase;
 import 'package:firebase_messaging/firebase_messaging.dart';
+
+import '../foundation/firebase_bootstrap.dart';
 
 /// A push message reduced to plain Dart (the manager never sees Firebase types, so it is testable
 /// and the rest of the app does not depend on the Firebase SDK).
@@ -44,8 +46,7 @@ class FirebasePushMessaging implements PushMessaging {
   @override
   Future<bool> initialize() async {
     try {
-      // Android reads google-services.json through the Gradle plugin, so no options are needed.
-      if (Firebase.apps.isEmpty) await Firebase.initializeApp().timeout(const Duration(seconds: 6));
+      if (!await FirebaseBootstrap.ensure() || Firebase.apps.isEmpty) return false;
       FirebaseMessaging.onBackgroundMessage(sevoFirebaseBackgroundHandler);
       return true;
     } catch (_) {
