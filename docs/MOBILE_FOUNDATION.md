@@ -40,6 +40,13 @@ Tests: backend `python manage.py test app_foundation` (39) ; Flutter `flutter te
 * `SessionRevokedInterceptor`: a `401 {"code": "SESSION_REVOKED"}` clears tokens, routes to login and shows "You were signed out. Please sign in again." without attempting a token refresh.
 * Tests: `test/core/network/network_resilience_test.dart` (11).
 
+## Also built (round 4): push (FCM) client
+
+* `lib/core/push/`: guarded Firebase start (6 s budget; unavailable => push off, app unaffected), token + permission registration to `/api/app/devices/`, re-register on token refresh and sign-in, `detach_user` on sign-out, `APP_UPDATE` pushes trigger the update check, other pushes open their in-app `route` (URLs / `//` rejected), foreground pushes shown locally. `PushGate` is mounted in `main.dart`. Channel `sevo_updates` created.
+* Android: `google-services.json` + Google services plugin 4.5.0 configured by the owner; debug APK builds (needs Gradle metaspace > 512 MB on this machine - not changed in the repo).
+* Tests: `test/core/push/push_manager_test.dart` (12) - all pass; backend `app_foundation` 40 tests.
+* **Not verified on a real device**: no push has been sent yet. Needs the Firebase service-account key on the server (`FCM_SERVICE_ACCOUNT_FILE`).
+
 ## Not done yet (honest list)
 
 * Kill switch is enforced server-side for **Goods Transport only** (booking create returns 409 `FEATURE_DISABLED`); other modules still need `flag_is_on` checks. A global 503 maintenance middleware was deliberately **not** added (it can lock out the whole API).

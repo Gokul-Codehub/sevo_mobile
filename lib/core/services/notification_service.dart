@@ -86,6 +86,13 @@ class NotificationService {
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       await androidImpl?.createNotificationChannel(androidChannel);
+      // Channel named by the server's app-update pushes (FCM falls back to a default channel without it).
+      await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
+        'sevo_updates',
+        'App updates',
+        description: 'Reminders when a new version of SEVO is available',
+        importance: Importance.defaultImportance,
+      ));
       // Android 13+ (API 33) requires this explicit runtime request before
       // any notification can be shown; a no-op on older Android. iOS
       // permission is requested via DarwinInitializationSettings above.

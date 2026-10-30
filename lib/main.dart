@@ -9,6 +9,7 @@ import 'core/utils/app_logger.dart';
 import 'core/utils/restart_widget.dart';
 import 'core/foundation/error_reporter.dart';
 import 'core/foundation/foundation_gate.dart';
+import 'core/push/push_manager.dart';
 import 'features/app_update/presentation/app_update_gate.dart';
 import 'routing/app_router.dart';
 import 'shared/theme/app_theme.dart';
@@ -131,9 +132,12 @@ class CalServicesApp extends ConsumerWidget {
         child: FoundationGate(
           // Server-driven config: maintenance mode, feature flags, remote settings.
           child: AppUpdateGate(
-            child: BookingNotificationWatcher(
-              child: CustomerNotificationWatcher(
-                child: child ?? const SizedBox.shrink(),
+            // Push (Firebase): device token registration + update / booking notifications.
+            child: PushGate(
+              child: BookingNotificationWatcher(
+                child: CustomerNotificationWatcher(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),
