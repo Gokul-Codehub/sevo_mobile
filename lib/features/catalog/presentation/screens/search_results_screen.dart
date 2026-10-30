@@ -114,8 +114,9 @@ class _RefineBar extends ConsumerWidget {
               color: on ? Colors.white : AppColors.navy,
             ),
             backgroundColor: Colors.white,
-            selectedColor: AppColors.primary,
-            side: BorderSide(color: on ? AppColors.primary : AppColors.border),
+            // Mode colour: green under GroceryTheme, navy for services.
+            selectedColor: Theme.of(context).colorScheme.primary,
+            side: BorderSide(color: on ? Theme.of(context).colorScheme.primary : AppColors.border),
           ),
         );
 
@@ -181,7 +182,7 @@ class _RefineBar extends ConsumerWidget {
               ListTile(
                 title: Text(s.label),
                 trailing: ref.read(searchRefineProvider(keyArg)).sort == s
-                    ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                    ? Icon(Icons.check_rounded, color: Theme.of(context).colorScheme.primary)
                     : null,
                 onTap: () {
                   notifier.state = ref.read(searchRefineProvider(keyArg)).copyWith(sort: s);
@@ -520,10 +521,10 @@ class _DidYouMean extends ConsumerWidget {
                 '/search/${mode.wire}?q=${Uri.encodeQueryComponent(suggestion)}'),
             child: Text(
               suggestion,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: AppColors.primary,
+                color: Theme.of(context).colorScheme.primary,
                 decoration: TextDecoration.underline,
               ),
             ),

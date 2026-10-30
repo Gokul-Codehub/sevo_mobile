@@ -26,12 +26,22 @@ class InputValidators {
   static String? fullName(String? v) {
     final t = cleanName(v ?? '');
     if (t.isEmpty) return 'Please enter your full name';
+    // Same wording as the web (Cus 2026-10-28: names may not contain digits).
+    if (RegExp(r'\d').hasMatch(t)) return 'Numbers are not allowed in customer name.';
     if (t.length < 2) return 'Name must be at least 2 characters';
     if (t.length > 60) return 'Name must be 60 characters or fewer';
     if (!_name.hasMatch(t)) {
       return 'Use letters only (spaces, . \' - are fine)';
     }
     return null;
+  }
+
+  /// The name sent with a booking: digits removed (a phone number saved as
+  /// the account name must never reach the driver as "Customer 98765…"),
+  /// spaces collapsed. Null when nothing usable is left.
+  static String? bookingName(String? v) {
+    final t = cleanName((v ?? '').replaceAll(RegExp(r'[0-9]'), ''));
+    return t.isEmpty ? null : t;
   }
 
   /// [required] false → an empty value is fine, a filled one must be valid.
@@ -72,6 +82,31 @@ class IndianMobileFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: d,
       selection: TextSelection.collapsed(offset: d.length),
+    );
+  }
+}
+
+/// Blocks digits in a person's name as they are typed or pasted (web parity:
+/// the web booking forms strip 0-9 from the customer name field).
+class NoDigitsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (!RegExp(r'[0-9]').hasMatch(newValue.text)) return newValue;
+    final cleaned = newValue.text.replaceAll(RegExp(r'[0-9]'), '');
+    final removedBefore = newValue.selection.baseOffset < 0
+        ? 0
+        : RegExp(r'[0-9]')
+            .allMatches(newValue.text.substring(
+                0, newValue.selection.baseOffset.clamp(0, newValue.text.length)))
+            .length;
+    final offset = (newValue.selection.baseOffset - removedBefore)
+        .clamp(0, cleaned.length);
+    return TextEditingValue(
+      text: cleaned,
+      selection: TextSelection.collapsed(offset: offset),
     );
   }
 }

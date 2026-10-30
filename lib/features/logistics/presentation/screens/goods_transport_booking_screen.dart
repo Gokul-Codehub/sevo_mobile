@@ -10,6 +10,7 @@ import '../../../../core/utils/location_gate.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/utils/input_validators.dart';
 import '../../../addresses/domain/address_models.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../auth/domain/auth_models.dart';
@@ -495,8 +496,9 @@ class _GoodsTransportBookingScreenState
       extra['eway_bill_number'] = eway;
     }
 
-    final insurance = ref.read(insuranceOptInProvider) &&
-        (_declaredValue?.toDouble() ?? 0) > 0;
+    // Transit insurance is no longer offered at booking (owner decision
+    // 2026-10-28, same as the web) — never opted in from the app.
+    const insurance = false;
     // Cash / Pay online / SEVO wallet (wallet bookings are created ONLINE
     // and settled from the wallet right after). Insurance always needs a
     // paid booking.
@@ -700,8 +702,18 @@ class _GoodsTransportBookingScreenState
     final selectedTier = ref.read(selectedLogisticsTierProvider);
     final selectedAddress = ref.read(selectedAddressProvider);
     final dropLocation = ref.read(dropLocationProvider);
-    final selectedDate = ref.read(selectedBookingDateProvider);
-    final selectedSlot = ref.read(selectedTimeSlotProvider);
+    final isPtlTrip = ref.read(ptlModeProvider) &&
+        vehicleCategory == LogisticsVehicleCategory.truck;
+    final isSpotTrip = !isPtlTrip &&
+        vehicleCategory != LogisticsVehicleCategory.packersMovers;
+    // Goods & Transport has no booking time slots since the 2026-10-29
+    // backend change: a truck / 2-wheeler trip is dispatched immediately
+    // (today), Part Truck Load is date-only, Packers & Movers picks a date.
+    final selectedDate = isSpotTrip
+        ? DateTime.now()
+        : ref.read(selectedBookingDateProvider);
+    final selectedSlot = ref.read(selectedTimeSlotProvider) ??
+        (isPtlTrip ? _kFlexibleSlot : _kImmediateSlot);
     final currentUser = ref.read(currentUserProvider);
 
     final isAuthenticated = ref.read(isUserAuthenticatedProvider);
@@ -733,8 +745,14 @@ class _GoodsTransportBookingScreenState
       return;
     }
 
-    if (selectedSlot == null) {
-      _warn('Please select a pickup time slot.');
+    // Server rule (2026-10-27): a goods trip needs the drop address text and
+    // a real drop point — 0,0 is a GPS failure, never a drop.
+    if (dropLocation.address.trim().isEmpty) {
+      _warn('Please enter the drop address.');
+      return;
+    }
+    if (dropLocation.latitude.abs() < 1e-6 && dropLocation.longitude.abs() < 1e-6) {
+      _warn('The drop location is not valid. Please pick it on the map again.');
       return;
     }
 
@@ -788,7 +806,9 @@ class _GoodsTransportBookingScreenState
     // server-side from the tier + pickup/drop coordinates.
     final bookingItem = ServiceItem(
       id: selectedTier.id,
-      title: '${vehicleCategory.label} — ${selectedTier.name}',
+      // Booking title = the booked vehicle's name only, as the web sends it
+      // (2026-10-27); goods type and items travel as structured cargo data.
+      title: selectedTier.name,
       slug: selectedTier.slug ?? 'goods-transport-${selectedTier.id}',
       price: Decimal.parse((selectedTier.startingPrice ?? 0).toString()),
       categoryId: widget.category?.id,
@@ -832,7 +852,10 @@ class _GoodsTransportBookingScreenState
           paymentMethod: prep.paymentMethod,
           insuranceOptedIn: prep.insurance ? true : null,
           logisticsLane: prep.laneId,
-          specialInstructions: _cargoDescription,
+          // Notes are only what the customer wrote; this form has no notes
+          // field, so none is sent (web 2026-10-27). The cargo itself is
+          // sent as structured data (cargo payload / PTL weight).
+          specialInstructions: null,
           contactPhone: currentUser?.phone,
           dropAddress: dropAddressFull,
           dropLatitude: dropLocation.latitude,
@@ -864,6 +887,12 @@ class _GoodsTransportBookingScreenState
           backgroundColor: AppColors.error,
         ),
       );
+      // Server rule (2026-10-26): a GT booking needs an OTP-verified phone
+      // (403 PHONE_VERIFICATION_REQUIRED). Send the customer to sign in;
+      // the form keeps everything they entered.
+      if (result.error!.toLowerCase().contains('verify your phone')) {
+        context.push('/login');
+      }
     } else if (result.booking != null) {
       await _afterBooked(result.booking!, online: prep.paymentMethod == 'ONLINE');
     }
@@ -982,7 +1011,7 @@ class _GoodsTransportBookingScreenState
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
     final cft = quote?.inventorySummary?['total_cft'];
     final payload = <String, dynamic>{
-      'customer_name': (user?.name ?? '').trim().isEmpty ? 'Customer' : user!.name,
+      'customer_name': InputValidators.bookingName(user?.name) ?? 'Customer',
       'phone': phone,
       'pickup_address': address.formattedAddress,
       'drop_address': drop.address,
@@ -1216,6 +1245,12 @@ class _GoodsTransportBookingScreenState
           backgroundColor: AppColors.error,
         ),
       );
+      // Server rule (2026-10-26): a GT booking needs an OTP-verified phone
+      // (403 PHONE_VERIFICATION_REQUIRED). Send the customer to sign in;
+      // the form keeps everything they entered.
+      if (result.error!.toLowerCase().contains('verify your phone')) {
+        context.push('/login');
+      }
     } else if (result.booking != null) {
       await _afterBooked(result.booking!, online: pmMethod == 'ONLINE', pm: true);
     }
@@ -1617,11 +1652,27 @@ class _GoodsTransportBookingScreenState
                                       tier.capacityLabel!.isNotEmpty) ...[
                                     const SizedBox(height: 3),
                                     Text(
-                                      tier.capacityLabel!,
+                                      // Weight only — CFT is not shown to customers.
+                                      tier.capacityLabel!.replaceAll(
+                                        RegExp(r'\s*[•·,]\s*[\d.,]+\s*CFT', caseSensitive: false),
+                                        '',
+                                      ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 10.5,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                  if (tier.dimensionsText.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Size: ${tier.dimensionsText}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 10,
                                         color: AppColors.textSecondary,
                                       ),
                                     ),
@@ -2333,6 +2384,8 @@ class _GoodsTransportBookingScreenState
                       Expanded(
                         child: TextField(
                           controller: _dropContactNameController,
+                          inputFormatters: [NoDigitsFormatter()],
+                          textCapitalization: TextCapitalization.words,
                           decoration: _fieldDecoration(
                             'Receiver name (optional)',
                           ),
@@ -2360,10 +2413,14 @@ class _GoodsTransportBookingScreenState
                 lat: dropLocation.latitude,
                 lng: dropLocation.longitude,
               ),
+            // P&M "Between Cities" may go to any destination (only the origin
+            // is zone-checked), so the trip check runs for within-city moves only.
             if (dropLocation != null &&
                 selectedAddress?.latitude != null &&
                 selectedAddress?.longitude != null &&
-                !ptlMode)
+                !ptlMode &&
+                (!isPackersMovers ||
+                    ref.watch(pmRelocationTypeProvider) == 'Within City'))
               _CoverageBanner(
                 param: (
                   slug: vehicleCategory.serviceCategoryValue,
@@ -2386,11 +2443,14 @@ class _GoodsTransportBookingScreenState
             _SectionCard(
               anchorKey: _anchor('Select date & slot'),
 
-              label: 'Select date & slot',
-              child: GtSlotPicker(
-                category: ptlMode ? 'ptl' : vehicleCategory.serviceCategoryValue,
-                city: selectedTier?.city,
-              ),
+              label: (isPackersMovers || ptlMode) ? 'Select pickup date' : 'Dispatch',
+              child: (isPackersMovers || ptlMode)
+                  ? GtSlotPicker(
+                      category: ptlMode ? 'ptl' : vehicleCategory.serviceCategoryValue,
+                      city: selectedTier?.city,
+                      showSlots: false,
+                    )
+                  : const _ImmediateDispatchCard(),
             ),
             const SizedBox(height: 18),
             ],
@@ -2684,12 +2744,8 @@ class _GoodsTransportBookingScreenState
           return;
         }
       }
-    } else if (_step == 2) {
-      if (ref.read(selectedTimeSlotProvider) == null) {
-        _warn('Please select a pickup time slot.');
-        return;
-      }
     }
+    // Step 2 (schedule) needs no slot any more — see _handleSubmit.
     setState(() => _step = _step + 1);
   }
 
@@ -3422,6 +3478,66 @@ class _ServiceAreaBanner extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Booking time used for Goods & Transport now that the server has no slots.
+const TimeSlot _kImmediateSlot = TimeSlot(
+  id: 'immediate',
+  date: '',
+  startTime: '',
+  endTime: '',
+  label: 'Immediate',
+);
+const TimeSlot _kFlexibleSlot = TimeSlot(
+  id: 'flexible',
+  date: '',
+  startTime: '',
+  endTime: '',
+  label: 'Flexible (Anytime)',
+);
+
+/// Replaces the old slot picker for truck / 2-wheeler trips.
+class _ImmediateDispatchCard extends StatelessWidget {
+  const _ImmediateDispatchCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8EDF7),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.bolt_rounded, size: 20, color: AppColors.navy),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Dispatch: Immediate / On-Demand',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.navy,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'The nearest available driver is assigned right away. No time slot is needed.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -94,13 +94,16 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     setState(() => _leaving = true);
     await ref
         .read(bookingActionControllerProvider.notifier)
-        .cancelBooking(widget.bookingId, 'Online payment not completed');
+        .cancelBooking(widget.bookingId, kOnlinePaymentWithdrawnReason);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Payment cancelled. Your booking was not placed.')),
     );
     context.go('/');
   }
+
+  Color _accent = AppColors.navy;
+  Color _accentLight = AppColors.primaryLight;
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +115,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       if (next is PaymentSuccess) {
         // The booking is only announced once the payment has gone through.
         final svcTitle = bookingAsync.valueOrNull?.items.firstOrNull?.service.title;
-        const confirmedTitle = 'Booking Confirmed';
+        // Same title as the server inbox and BookingNotificationWatcher use,
+        // so the customer gets one "confirmed" alert, not two or three.
+        const confirmedTitle = 'Booking Confirmation';
         final confirmedBody = svcTitle != null
             ? '$svcTitle has been booked successfully.'
             : 'Your booking has been placed successfully.';
@@ -183,6 +188,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     });
 
     final booking = bookingAsync.valueOrNull;
+    // Colour by order type (2026-10-28): grocery orders pay in green,
+    // services (and goods transport) in navy.
+    final isGrocery = booking?.isGroceryBooking ?? false;
+    _accent = isGrocery ? AppColors.groceryGreen : AppColors.navy;
+    _accentLight = isGrocery ? AppColors.groceryGreenLight : AppColors.primaryLight;
     final amount = booking == null
         ? null
         : (widget.paymentType == 'advance'
@@ -257,7 +267,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: isSelected
-                              ? AppColors.primary
+                              ? _accent
                               : Colors.transparent,
                           width: 1.4,
                         ),
@@ -275,11 +285,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: AppColors.primaryLight,
+                              color: _accentLight,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(method.icon,
-                                color: AppColors.primary, size: 22),
+                                color: _accent, size: 22),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
@@ -312,7 +322,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: isSelected
-                                    ? AppColors.navy
+                                    ? _accent
                                     : AppColors.border,
                                 width: 1.6,
                               ),
@@ -322,8 +332,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                                     child: Container(
                                       width: 11,
                                       height: 11,
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.navy,
+                                      decoration: BoxDecoration(
+                                        color: _accent,
                                         shape: BoxShape.circle,
                                       ),
                                     ),
@@ -345,7 +355,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
+                      color: _accent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Row(
@@ -428,9 +438,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                           );
                     },
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.navy,
+                backgroundColor: _accent,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: AppColors.navy.withValues(alpha: 0.5),
+                disabledBackgroundColor: _accent.withValues(alpha: 0.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),

@@ -7,6 +7,9 @@ import '../../../core/network/response_normalizer.dart';
 import '../../../core/utils/image_url_helper.dart';
 import '../../addresses/domain/address_models.dart';
 import '../../catalog/domain/catalog_models.dart';
+import 'booking_status.dart';
+
+export 'booking_status.dart';
 
 /// Single item in the customer's cart.
 class CartItem extends Equatable {
@@ -114,6 +117,8 @@ class TechnicianInfo extends Equatable {
     this.currentLatitude,
     this.currentLongitude,
     this.trackingToken,
+    this.vehicleNumber,
+    this.vehicleType,
   });
 
   final int id;
@@ -130,6 +135,9 @@ class TechnicianInfo extends Equatable {
   final double? currentLatitude;
   final double? currentLongitude;
   final String? trackingToken;
+  // Goods-transport jobs: the assigned vehicle (Cus detail serializer).
+  final String? vehicleNumber;
+  final String? vehicleType;
 
   factory TechnicianInfo.fromJson(Map<String, dynamic> json) {
     return TechnicianInfo(
@@ -144,6 +152,8 @@ class TechnicianInfo extends Equatable {
       currentLatitude: parseDoubleOrNull(json['latitude'] ?? json['current_lat']),
       currentLongitude: parseDoubleOrNull(json['longitude'] ?? json['current_lng']),
       trackingToken: json['tracking_token']?.toString() ?? json['token']?.toString(),
+      vehicleNumber: _nonEmpty(json['vehicle_number']),
+      vehicleType: _nonEmpty(json['vehicle_type']),
     );
   }
 
@@ -157,6 +167,8 @@ class TechnicianInfo extends Equatable {
         if (currentLatitude != null) 'latitude': currentLatitude,
         if (currentLongitude != null) 'longitude': currentLongitude,
         if (trackingToken != null) 'tracking_token': trackingToken,
+        if (vehicleNumber != null) 'vehicle_number': vehicleNumber,
+        if (vehicleType != null) 'vehicle_type': vehicleType,
       };
 
   @override
@@ -170,7 +182,14 @@ class TechnicianInfo extends Equatable {
         currentLatitude,
         currentLongitude,
         trackingToken,
+        vehicleNumber,
+        vehicleType,
       ];
+}
+
+String? _nonEmpty(Object? v) {
+  final t = v?.toString().trim();
+  return (t == null || t.isEmpty) ? null : t;
 }
 
 /// One line item on a Painting/Masonry/AC-Inspection quotation
@@ -346,6 +365,7 @@ class Booking extends Equatable {
     this.paymentStatus = 'pending',
     this.paymentOrderId,
     this.availableActions = const [],
+    this.hasServerActions = false,
     this.items = const [],
     this.address,
     required this.scheduledDate,
@@ -360,7 +380,169 @@ class Booking extends Equatable {
     this.quoteNumber,
     this.quote,
     this.quotationHistory = const [],
+    this.serviceCategory,
+    this.paymentMethod,
+    this.startOtp,
+    this.deliveryOtp,
+    this.paymentConfirmationOtp,
+    this.dropAddress,
+    this.fareBreakdown,
+    this.logisticsTierName,
+    this.logisticsLaneName,
   });
+
+  /// Server `service_category` slug (e.g. `goods_transport_truck`, `plumbing`).
+  final String? serviceCategory;
+  final String? paymentMethod; // 'COD' | 'ONLINE'
+
+  /// Owner-only codes from the booking detail endpoint: the job/pickup start
+  /// OTP, the goods Delivery OTP (only while a trip is at the drop) and the
+  /// cash-collection confirmation code. Null whenever the server omits them.
+  final String? startOtp;
+  final String? deliveryOtp;
+  final String? paymentConfirmationOtp;
+
+  /// Goods Transport / Packers & Movers: where the goods go (`drop_address`).
+  final String? dropAddress;
+
+  /// Server fare breakdown of a logistics booking (`fare_breakdown`, a JSON
+  /// object — sometimes sent as a JSON string). Null for other bookings.
+  final Map<String, dynamic>? fareBreakdown;
+
+  /// Goods Transport: the vehicle tier and lane the server priced
+  /// (`logistics_tier_name` / `logistics_lane_name`, Cus 2026-10-28).
+  final String? logisticsTierName;
+  final String? logisticsLaneName;
+
+  /// Truck / two-wheeler fares are quoted GST-inclusive with no platform
+  /// fee (web 2026-10-27): GST is shown as "included", never added on top.
+  bool get isGtFareInclusive => const {
+        'goods_transport_truck',
+        'goods_transport_two_wheeler',
+      }.contains((serviceCategory ?? '').toLowerCase());
+
+  static double _fbNum(dynamic v) =>
+      v is num ? v.toDouble() : (double.tryParse(v?.toString() ?? '') ?? 0);
+
+  /// Nested Packers & Movers / PTL quote pricing (`fare_breakdown.pricing`).
+  Map<String, dynamic>? get _fbPricing {
+    final p = fareBreakdown?['pricing'];
+    return p is Map ? Map<String, dynamic>.from(p) : null;
+  }
+
+  /// Route length of the trip in km (0 when unknown). Web gtTripSummary
+  /// (Cus 2026-10-28): falls back to `route.distance_km`, then the
+  /// chargeable km.
+  double get tripDistanceKm {
+    final f = fareBreakdown;
+    if (f == null) return 0;
+    final route = f['route'] is Map ? f['route'] as Map : const {};
+    for (final v in [f['distance_km'], route['distance_km'], f['chargeable_km']]) {
+      final n = _fbNum(v);
+      if (n > 0) return n;
+    }
+    return 0;
+  }
+
+  /// Stops on the way. A vehicle fare's `stops` counts pickup + drop too; a
+  /// P&M / PTL quote's `pricing.additional_stops` is already the extra ones.
+  int get tripExtraStops {
+    final p = _fbPricing;
+    if (p != null) {
+      return _fbNum(fareBreakdown?['stops'] ?? p['additional_stops']).round();
+    }
+    final n = _fbNum(fareBreakdown?['stops']).round();
+    return n > 2 ? n - 2 : 0;
+  }
+
+  /// GST already included in a GST-inclusive goods fare (0 when none).
+  double get gstIncluded => _fbNum(fareBreakdown?['gst_included']);
+
+  /// Vehicle tier / lane the server priced (Cus 2026-10-28 serializers).
+  String? get vehicleLabel => logisticsTierName ?? technician?.vehicleType;
+
+  /// "How this fare was calculated" lines (label, rupees), only the
+  /// non-zero ones — same rows and order as the web booking card.
+  // Updated 2026-10-28 to the web's new gtFareLineRows: the distance label
+  // copes with a missing km/rate, and Packers & Movers / PTL quotes (nested
+  // `pricing`) are itemised too (packing, labour, dismantling, surcharges).
+  List<(String, double)> get gtFareLines {
+    final f = fareBreakdown;
+    if (f == null) return const [];
+    final rows = <(String, double)>[];
+    void add(String label, dynamic v) {
+      final n = _fbNum(v);
+      if (n > 0) rows.add((label, n));
+    }
+
+    // Fixed lane fare (Cus 2026-10-29) comes first when the route has one.
+    if (_fbNum(f['lane_fixed_fare']) > 0) {
+      final lane = _bkText(f['lane_label']) ?? '';
+      add(lane.isEmpty ? 'Route fixed fare' : 'Lane fixed fare ($lane)', f['lane_fixed_fare']);
+    }
+    add('Base fare', f['base_fare']);
+    if (_fbNum(f['distance_charge']) > 0) {
+      final km = _fbNum(f['chargeable_km'] ?? f['distance_km']);
+      final rate = _fbNum(f['rate_per_km']);
+      add(
+        km > 0 && rate > 0
+            ? 'Distance (${km.toStringAsFixed(1)} km chargeable × ₹${rate.toStringAsFixed(rate % 1 == 0 ? 0 : 2)}/km)'
+            : 'Distance charge',
+        f['distance_charge'],
+      );
+    }
+    add('Additional stops (${_fbNum(f['additional_stops']).round()})', f['additional_stop_charge']);
+    add('Loading / unloading', f['loading_unloading']);
+    add('Special handling', f['special_handling_charge'] ?? f['special_handling']);
+
+    final p = _fbPricing;
+    if (p != null) {
+      final hasBase = _fbNum(f['base_fare']) > 0;
+      final hasDistance = _fbNum(f['distance_charge']) > 0;
+      if (!hasBase) add('Transport base fare', p['transport_base_fare']);
+      if (!hasDistance) add('Transport distance charge', p['transport_distance_charge']);
+      if (!hasBase && !hasDistance && _fbNum(p['transport_base_fare']) <= 0) {
+        add('Transport charge', p['transport_total']);
+      }
+      add('Packing (${p['packing_label'] ?? p['packing_tier'] ?? 'Standard'})', p['packing_charge']);
+      add('Base labor charge', p['base_labor_charge']);
+      add('Floor / stairs labor charge', p['floor_labor_charge']);
+      if (_fbNum(p['base_labor_charge']) <= 0 && _fbNum(p['floor_labor_charge']) <= 0) {
+        add('Labor & handling', p['labor_total']);
+      }
+      add('Furniture dismantling & reassembly', p['dismantling_charge']);
+      add('Unpacking charge', p['unpacking_charge']);
+      if (_fbNum(f['additional_stop_charge']) <= 0) {
+        add('Additional stops (${_fbNum(p['additional_stops']).round()})', p['additional_stops_charge']);
+      }
+      add('Date / weekend surcharge', p['date_surcharge']);
+      add('Intercity permit / fee', p['intercity_fee']);
+      add('Toll allowance', p['toll_allowance']);
+    }
+    if (rows.isEmpty) {
+      final total = _fbNum(f['total'] ?? f['subtotal']);
+      if (total > 0) rows.add(('Standard transport fare', total));
+    }
+    return rows;
+  }
+
+  bool get minimumFareApplied => fareBreakdown?['minimum_fare_applied'] == true;
+
+  /// Goods Transport / Packers & Movers booking (driver wording, trip OTPs).
+  /// Same broad match as the web's isGtVehicleCategory (Cus 2026-10-28):
+  /// any goods / truck / two-wheeler / packers / movers / PTL category.
+  bool get isLogistics {
+    final c = (serviceCategory ?? '').trim().toLowerCase();
+    return c.startsWith('goods') ||
+        c.startsWith('gt') ||
+        c == 'ptl' ||
+        c == 'logistics' ||
+        c.contains('truck') ||
+        c.contains('wheeler') ||
+        c.contains('packer') ||
+        c.contains('mover') ||
+        c.contains('relocation');
+  }
 
   final int id;
   final String requestId; // e.g. "CAL-20260822-104"
@@ -370,7 +552,11 @@ class Booking extends Equatable {
   final Decimal balanceAmount;
   final String paymentStatus; // 'pending' | 'partially_paid' | 'paid' | 'refunded'
   final String? paymentOrderId; // Razorpay order ID
-  final List<String> availableActions; // 'cancel', 'reschedule', 'pay_advance', 'pay_balance', 'track', 'rate'
+  final List<String> availableActions; // 'cancel', 'reschedule', 'pay', 'track', 'give_feedback', 'request_refund'
+
+  /// The server sent an `available_actions` block (even if every flag was
+  /// false). When it did, it is the only authority for action buttons.
+  final bool hasServerActions;
   final List<CartItem> items;
   final Address? address;
   final String scheduledDate;
@@ -407,15 +593,32 @@ class Booking extends Equatable {
   bool get canReschedule => availableActions.contains('reschedule');
   bool get canPayAdvance => availableActions.contains('pay_advance');
   bool get canPayBalance => availableActions.contains('pay_balance');
-  bool get canTrack => availableActions.contains('track') || technician != null;
-  bool get canRate => availableActions.contains('rate') || status == 'completed';
+  // Fixed 2026-10-28 (status audit): `canTrack` was `... || technician !=
+  // null`, so every completed and cancelled booking that still carried its
+  // technician snapshot showed a Track button. `canRate` checked for a
+  // 'rate' action the server never sends (it sends `can_give_feedback`) and
+  // fell back to `status == 'completed'`, so a booking already rated still
+  // offered "Rate". The server flags win whenever they were sent; the status
+  // fallbacks only cover payloads without an actions block.
+  bool get canTrack {
+    if (isBookingFinished(status)) return false;
+    if (availableActions.contains('track')) return true;
+    if (hasServerActions) return technician != null && isBookingTrackable(status);
+    return isBookingTrackable(status);
+  }
 
-  bool get isUpcoming =>
-      status == 'new_request' ||
-      status == 'confirmed' ||
-      status == 'assigned' ||
-      status == 'in_progress';
-  bool get isCompleted => status == 'completed';
+  bool get canRate {
+    if (availableActions.contains('give_feedback') || availableActions.contains('rate')) {
+      return true;
+    }
+    return !hasServerActions && bookingStageOf(status) == BookingStage.completed;
+  }
+
+  BookingStage get stage => bookingStageOf(status);
+  String get statusLabel => bookingStatusLabel(status);
+
+  bool get isUpcoming => !isBookingFinished(status);
+  bool get isCompleted => stage == BookingStage.completed;
 
   /// Whether this booking is a grocery-supply order rather than a scheduled
   /// service (AC, electrician, plumbing, cleaning, etc). Derived from the
@@ -442,7 +645,7 @@ class Booking extends Equatable {
   /// actually derived.
   bool get isGroceryBooking =>
       items.isNotEmpty && items.every((i) => i.service.isGroceryFlow);
-  bool get isCancelled => status == 'cancelled';
+  bool get isCancelled => isBookingCancelled(status);
 
   factory Booking.fromJson(Map<String, dynamic> json) {
     // 1. Extract available_actions strictly according to Django DRF & Web reference
@@ -566,13 +769,15 @@ class Booking extends Equatable {
     return Booking(
       id: parseInt(json['id']),
       requestId: (json['request_id'] ?? json['booking_id'] ?? json['code'] ?? 'CAL-${json['id']}').toString(),
-      status: (json['status'] ?? 'new_request').toString().toLowerCase(),
+      // Normalised once here so every screen compares the same spelling.
+      status: normalizeBookingStatus(json['status'] ?? 'new_request'),
       totalAmount: total,
       advanceAmount: advance,
       balanceAmount: balance,
       paymentStatus: paymentStatusValue,
       paymentOrderId: json['payment_order_id']?.toString() ?? json['razorpay_order_id']?.toString(),
       availableActions: rawActions.map((a) => a.toString().toLowerCase()).toList(),
+      hasServerActions: actionsObj != null,
       items: parsedItems,
       address: json['address'] is Map
           ? Address.fromJson(Map<String, dynamic>.from(json['address'] as Map))
@@ -611,7 +816,32 @@ class Booking extends Equatable {
               .map((m) => QuoteSummary.fromJson(Map<String, dynamic>.from(m)))
               .toList()
           : const [],
+      serviceCategory: _bkStr(json['service_category']),
+      paymentMethod: _bkStr(json['payment_method']),
+      startOtp: _bkStr(json['start_otp']),
+      deliveryOtp: _bkStr(json['delivery_otp']),
+      paymentConfirmationOtp: _bkStr(json['payment_confirmation_otp']),
+      dropAddress: _bkStr(json['drop_address']),
+      fareBreakdown: _bkMap(json['fare_breakdown']),
+      logisticsTierName: _bkText(json['logistics_tier_name']),
+      logisticsLaneName: _bkText(json['logistics_lane_name']),
     );
+  }
+
+  static Map<String, dynamic>? _bkMap(dynamic v) {
+    if (v is Map) return Map<String, dynamic>.from(v);
+    if (v is String && v.trim().startsWith('{')) {
+      try {
+        final d = jsonDecode(v);
+        if (d is Map) return Map<String, dynamic>.from(d);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  static String? _bkStr(dynamic v) {
+    final s = v?.toString().trim();
+    return (s == null || s.isEmpty || s == 'null') ? null : s;
   }
 
   Map<String, dynamic> toJson() => {
@@ -636,6 +866,13 @@ class Booking extends Equatable {
         if (requestKind != null) 'request_kind': requestKind,
         if (parentRequestId != null) 'parent_request': parentRequestId,
         if (quoteNumber != null) 'quote_number': quoteNumber,
+        if (serviceCategory != null) 'service_category': serviceCategory,
+        if (paymentMethod != null) 'payment_method': paymentMethod,
+        if (dropAddress != null) 'drop_address': dropAddress,
+        if (fareBreakdown != null) 'fare_breakdown': fareBreakdown,
+        if (logisticsTierName != null) 'logistics_tier_name': logisticsTierName,
+        if (logisticsLaneName != null) 'logistics_lane_name': logisticsLaneName,
+        // OTPs are deliberately not cached.
       };
 
   @override
@@ -649,6 +886,7 @@ class Booking extends Equatable {
         paymentStatus,
         paymentOrderId,
         availableActions,
+        hasServerActions,
         items,
         address,
         scheduledDate,
@@ -663,5 +901,19 @@ class Booking extends Equatable {
         quoteNumber,
         quote,
         quotationHistory,
+        serviceCategory,
+        paymentMethod,
+        startOtp,
+        deliveryOtp,
+        paymentConfirmationOtp,
+        dropAddress,
+        fareBreakdown,
+        logisticsTierName,
+        logisticsLaneName,
       ];
+}
+
+String? _bkText(Object? v) {
+  final t = v?.toString().trim();
+  return (t == null || t.isEmpty || t == 'null') ? null : t;
 }

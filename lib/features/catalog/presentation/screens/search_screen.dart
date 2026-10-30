@@ -56,6 +56,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   bool get _isGroceries => _mode == SearchMode.groceries;
 
+  /// Mode colour (2026-10-27): grocery search is green, services navy.
+  Color get _accent => _isGroceries ? AppColors.groceryGreen : AppColors.primary;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -202,12 +205,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             height: 32 + (listening ? _level * 10 : 0),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primary.withValues(alpha: listening ? 0.18 + _level * 0.2 : 0.1),
+              color: _accent.withValues(alpha: listening ? 0.18 + _level * 0.2 : 0.1),
             ),
             child: Icon(
               _voice == _VoiceState.processing ? Icons.more_horiz_rounded : Icons.mic_rounded,
               size: 20,
-              color: AppColors.primary,
+              color: _accent,
             ),
           ),
         ),
@@ -273,7 +276,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ? AppColors.textHint
                     : (_voice == _VoiceState.error || _voice == _VoiceState.unavailable
                         ? AppColors.textSecondary
-                        : AppColors.primary),
+                        : _accent),
               ),
               prefixIcon: _voice == _VoiceState.processing
                   ? const Padding(
@@ -429,7 +432,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             children: [
               for (final k in popular)
                 ActionChip(
-                  avatar: const Icon(Icons.trending_up_rounded, size: 16, color: AppColors.primary),
+                  avatar: Icon(Icons.trending_up_rounded, size: 16, color: _accent),
                   label: Text(k),
                   backgroundColor: Colors.white,
                   side: const BorderSide(color: AppColors.border),

@@ -250,9 +250,6 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
     final customWeight = cargo.items
         .where((l) => l.isCustom)
         .fold<double>(0, (s, l) => s + (l.weightKg ?? 0) * l.quantity);
-    final customCft = cargo.items
-        .where((l) => l.isCustom)
-        .fold<double>(0, (s, l) => s + (l.cft ?? 0) * l.quantity);
 
     return _card(
       Column(
@@ -533,9 +530,6 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                 if (customWeight > 0)
                   _summaryPill(Icons.scale_outlined,
                       'Unlisted ${customWeight.toStringAsFixed(customWeight % 1 == 0 ? 0 : 1)} kg'),
-                if (customCft > 0)
-                  _summaryPill(Icons.view_in_ar_outlined,
-                      '${customCft.toStringAsFixed(1)} CFT'),
               ],
             ),
           ],
@@ -573,9 +567,9 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
 }
 
 const _kSizePresets = <String, ({String label, double w, double c, double l, double wd, double h})>{
-  'small': (label: 'Small (~10kg, 1.5 CFT)', w: 10, c: 1.5, l: 40, wd: 30, h: 25),
-  'medium': (label: 'Medium (~30kg, 6 CFT)', w: 30, c: 6, l: 60, wd: 50, h: 45),
-  'large': (label: 'Large (~75kg, 18 CFT)', w: 75, c: 18, l: 90, wd: 75, h: 70),
+  'small': (label: 'Small (~10 kg)', w: 10, c: 1.5, l: 40, wd: 30, h: 25),
+  'medium': (label: 'Medium (~30 kg)', w: 30, c: 6, l: 60, wd: 50, h: 45),
+  'large': (label: 'Large (~75 kg)', w: 75, c: 18, l: 90, wd: 75, h: 70),
   'extra_large': (label: 'XL / Oversized (~150kg)', w: 150, c: 35, l: 120, wd: 90, h: 85),
 };
 
@@ -605,6 +599,10 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
   String? _photo;
   String? _err;
 
+  /// Fields the customer typed themselves; a size preset never overwrites them
+  /// (web QA Pass 7: switching Small -> Medium used to keep Small's numbers).
+  final Set<TextEditingController> _edited = {};
+
   @override
   void dispose() {
     for (final c in [_name, _qty, _weight, _l, _w, _h]) {
@@ -626,10 +624,14 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
     final p = _kSizePresets[key]!;
     setState(() {
       _size = key;
-      if (_weight.text.isEmpty) _weight.text = _n(p.w);
-      if (_l.text.isEmpty) _l.text = _n(p.l);
-      if (_w.text.isEmpty) _w.text = _n(p.wd);
-      if (_h.text.isEmpty) _h.text = _n(p.h);
+      void put(TextEditingController c, double v) {
+        if (!(_edited.contains(c) && c.text.trim().isNotEmpty)) c.text = _n(v);
+      }
+
+      put(_weight, p.w);
+      put(_l, p.l);
+      put(_w, p.wd);
+      put(_h, p.h);
     });
   }
 
@@ -718,13 +720,14 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
       _fragile = false;
       _photo = null;
       _err = null;
+      _edited.clear();
     });
   }
 
   Widget _numField(TextEditingController c, String hint) => TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        onChanged: (_) => setState(() {}),
+        onChanged: (_) => setState(() => _edited.add(c)),
         decoration: _decoration(hint),
       );
 
@@ -732,7 +735,6 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
   Widget build(BuildContext context) {
     final qty = int.tryParse(_qty.text.trim()) ?? 1;
     final totalW = _num(_weight) * (qty < 1 ? 1 : qty);
-    final cft = _cftFromDims;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -863,11 +865,6 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
           const SizedBox(width: 6),
           Expanded(child: _numField(_h, 'Height (cm)')),
         ]),
-        if (cft > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text('≈ $cft CFT per unit from dimensions', style: _hintStyle),
-          ),
         const SizedBox(height: 4),
         CheckboxListTile(
           value: _fragile,
@@ -930,7 +927,7 @@ class _CustomLineTile extends StatelessWidget {
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
               ),
               TextSpan(
-                text: ' · ${line.weightKg} kg · ${line.cft} CFT each'
+                text: ' · ${line.weightKg} kg each'
                     '${line.isFragile ? ' · Fragile' : ''}',
                 style: _hintStyle,
               ),
@@ -1580,29 +1577,9 @@ class GtOptionsSection extends ConsumerStatefulWidget {
 class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
   final _gstinController = TextEditingController();
   final _ewayController = TextEditingController();
-  Timer? _debounce;
-  double? _settledValue;
-
-  @override
-  void initState() {
-    super.initState();
-    _settledValue = widget.declaredValue;
-  }
-
-  @override
-  void didUpdateWidget(covariant GtOptionsSection old) {
-    super.didUpdateWidget(old);
-    if (old.declaredValue != widget.declaredValue) {
-      _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: 600), () {
-        if (mounted) setState(() => _settledValue = widget.declaredValue);
-      });
-    }
-  }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _gstinController.dispose();
     _ewayController.dispose();
     super.dispose();
@@ -1611,9 +1588,7 @@ class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
   @override
   Widget build(BuildContext context) {
     final loadingHelp = ref.watch(loadingHelpProvider);
-    final insured = ref.watch(insuranceOptInProvider);
     final ptl = ref.watch(ptlModeProvider);
-    final value = _settledValue;
 
     return _card(
       Column(
@@ -1632,43 +1607,9 @@ class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
               value: loadingHelp,
               onChanged: (v) => ref.read(loadingHelpProvider.notifier).state = v,
             ),
-          if (value != null && value > 0)
-            Consumer(
-              builder: (context, ref, _) {
-                final terms = ref.watch(insuranceTermsProvider(value));
-                return terms.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (e, _) => const SizedBox.shrink(),
-                  data: (t) {
-                    if (!t.offered) {
-                      if (insured) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          ref.read(insuranceOptInProvider.notifier).state = false;
-                        });
-                      }
-                      return const SizedBox.shrink();
-                    }
-                    return SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: Text(
-                        'Add transit insurance'
-                        '${t.premium != null ? ' (₹${t.premium!.toStringAsFixed(2)})' : ''}',
-                        style: _titleStyle,
-                      ),
-                      subtitle: Text(
-                        'Covers up to ₹${(t.liabilityCap ?? 0).toStringAsFixed(0)}. '
-                        'Requires online payment.',
-                        style: _hintStyle,
-                      ),
-                      value: insured,
-                      onChanged: (v) =>
-                          ref.read(insuranceOptInProvider.notifier).state = v,
-                    );
-                  },
-                );
-              },
-            ),
+          // Transit insurance is no longer offered at booking (owner
+          // decision 2026-10-28; the web booking pages dropped the option and
+          // the policy text no longer mentions it), so there is no opt-in here.
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(

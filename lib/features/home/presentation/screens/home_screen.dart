@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/theme/color_contrast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/banner_media.dart';
 import '../../../../shared/widgets/common_widgets.dart';
@@ -570,13 +571,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Container(
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
-                            color: flowTheme.accent.withValues(alpha: 0.12),
+                            color: flowTheme.headerIcon.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             Icons.location_on_rounded,
                             size: 16,
-                            color: flowTheme.accent,
+                            color: flowTheme.headerIcon,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -593,14 +594,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 0.6,
-                                      color: flowTheme.accent,
+                                      color: flowTheme.headerAccentText,
                                     ),
                                   ),
                                   const SizedBox(width: 2),
                                   Icon(
                                     Icons.keyboard_arrow_down_rounded,
                                     size: 14,
-                                    color: flowTheme.accent,
+                                    color: flowTheme.headerIcon,
                                   ),
                                 ],
                               ),
@@ -608,10 +609,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 displayLocation.isNotEmpty
                                     ? displayLocation
                                     : 'Select delivery address',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
-                                  color: AppColors.navy,
+                                  color: flowTheme.headerText,
                                   height: 1.15,
                                 ),
                                 maxLines: 1,
@@ -621,7 +622,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ),
                         // Notification bell with the unread count (opens the inbox).
-                        NotificationBell(color: flowTheme.accent),
+                        NotificationBell(color: flowTheme.headerIcon),
                       ],
                     ),
                   ),
@@ -722,6 +723,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               collapse: _collapse,
               flowMode: flowMode,
               flowTheme: flowTheme,
+              adminTheme: adminTheme,
               switcherCards: switcherCards,
               onModeCardTap: (card) {
                 final mode = _flowModeForCard(card);
@@ -2030,10 +2032,7 @@ class _UnifiedActiveModeBody extends StatelessWidget {
     final groceriesGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        themeGroceries.cardColorTop ?? const Color(0xFFF9C93A),
-        themeGroceries.cardColorBottom ?? const Color(0xFFFFE98A),
-      ],
+      colors: HomeFlowTheme.panelColors(HomeFlowMode.groceries, themeGroceries),
     );
     // Light-blue Services container (2026-10-09, "shall we use light
     // blue for services as like uploaded reference image?") — replaces
@@ -2042,11 +2041,13 @@ class _UnifiedActiveModeBody extends StatelessWidget {
     final servicesGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        themeServices.cardColorTop ?? const Color(0xFF8EC3F2),
-        themeServices.cardColorBottom ?? const Color(0xFFE4F1FE),
-      ],
+      colors: HomeFlowTheme.panelColors(HomeFlowMode.services, themeServices),
     );
+    // 2026-10-27: the panel colours are the admin's; text on them is kept
+    // readable whatever they pick (ColorContrast keeps the colour as-is
+    // when it already reads well).
+    final panelMiddle = ColorContrast.middle(
+        (isGroceries ? groceriesGradient : servicesGradient).colors);
 
     final groceriesShadow = const Color(0xFFD99A00).withValues(alpha: 0.28);
     // Darker shade of each mode's header colour — the outline round the tab
@@ -2055,13 +2056,20 @@ class _UnifiedActiveModeBody extends StatelessWidget {
     final servicesOutline = themeServices.cardOutlineColor ?? const Color(0xFF3F86D6); // deeper blue, from the sky blue
     // Active tab label: a deeper shade still, so it reads on the coloured tab.
     final activeTheme = isGroceries ? themeGroceries : themeServices;
-    final activeLabel = activeTheme.cardTextColor ?? (isGroceries ? const Color(0xFF7A4F00) : const Color(0xFF1D4ED8));
+    final activeLabel = ColorContrast.readable(
+      activeTheme.cardTextColor ?? (isGroceries ? const Color(0xFF7A4F00) : const Color(0xFF1D4ED8)),
+      panelMiddle,
+    );
     final servicesShadow = const Color(0xFF1D6FD6).withValues(alpha: 0.18);
 
     // Near-black on Groceries' yellow, dark navy on Services' light blue —
     // white text only ever worked on the old dark containers.
-    final textOnContainer = activeTheme.cardTextColor ??
-        (isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy);
+    final textOnContainer = activeTheme.cardTextColor != null
+        ? ColorContrast.readable(activeTheme.cardTextColor!, panelMiddle)
+        : ColorContrast.inkOn(
+            panelMiddle,
+            dark: isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy,
+          );
 
     // Resolve Groceries on left and Services on right
     final groceriesCard = switcherCards.firstWhere(
@@ -2107,7 +2115,8 @@ class _UnifiedActiveModeBody extends StatelessWidget {
           : (isGroceries
               ? const ['Shop', 'Cook', 'Eat Fresh', 'Save']
               : const ['Book', 'Fix', 'Clean', 'Relax']),
-      accentColor: flowTheme.accent,
+      // Large headline text — 3:1 is the readability minimum for it.
+      accentColor: ColorContrast.readable(flowTheme.accent, panelMiddle, minRatio: 3.0),
       textColor: textOnContainer,
     );
 
@@ -2289,6 +2298,7 @@ class _StickyHomeHeader extends StatelessWidget {
     required this.collapse,
     required this.flowMode,
     required this.flowTheme,
+    required this.adminTheme,
     required this.switcherCards,
     required this.onModeCardTap,
     required this.topCategoryTiles,
@@ -2297,6 +2307,11 @@ class _StickyHomeHeader extends StatelessWidget {
   final ValueListenable<double> collapse;
   final HomeFlowMode flowMode;
   final HomeFlowTheme flowTheme;
+
+  /// The admin's colours for this mode — the collapsed header uses the same
+  /// panel colours as the full header (it used to hard-code yellow / sky
+  /// blue, ignoring the admin's choice).
+  final MobileHomeTheme adminTheme;
   final List<MobileTopCardItem> switcherCards;
   final ValueChanged<MobileTopCardItem> onModeCardTap;
   final List<({String label, String? image, String? slug, VoidCallback onTap})> topCategoryTiles;
@@ -2359,10 +2374,15 @@ class _StickyHomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGroceries = flowMode == HomeFlowMode.groceries;
-    final ink = isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy;
-    final colors = isGroceries
-        ? const [Color(0xFFF9C93A), Color(0xFFFFE98A)]
-        : const [Color(0xFF8EC3F2), Color(0xFFE4F1FE)];
+    final colors = HomeFlowTheme.panelColors(flowMode, adminTheme);
+    // Admin's text colour if set (nudged only if unreadable); otherwise
+    // dark ink on light panels, white on dark ones.
+    final ink = adminTheme.cardTextColor != null
+        ? ColorContrast.readable(adminTheme.cardTextColor!, ColorContrast.middle(colors))
+        : ColorContrast.inkOn(
+            ColorContrast.middle(colors),
+            dark: isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy,
+          );
     final groceriesCard = switcherCards.firstWhere(
       (c) => _flowModeForCard(c) == HomeFlowMode.groceries,
       orElse: () => switcherCards.first,
@@ -2590,19 +2610,19 @@ class _HomeFooter extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFA7F3D0), width: 0.8),
+              border: Border.all(color: theme.accent.withValues(alpha: 0.35), width: 0.8),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.verified_rounded, size: 14, color: AppColors.primary),
-                SizedBox(width: 6),
+                Icon(Icons.verified_rounded, size: 14, color: theme.accent),
+                const SizedBox(width: 6),
                 Text(
                   '100% assured \u00b7 Secure payments \u00b7 Real support',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                    color: theme.accent,
                   ),
                 ),
               ],

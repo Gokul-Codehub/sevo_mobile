@@ -84,6 +84,14 @@ class Env {
   // ── Payment Gateway ──
   static const String defaultRazorpayKeyId = 'rzp_live_caldimservices';
 
+  // ── Maps ──
+  /// Optional Google Cloud Map ID (Cloud console > Map Management) with the
+  /// SEVO map style attached. Empty = use the built-in SEVO style
+  /// (lib/shared/maps/sevo_map_style.dart). Can be set per build with
+  /// `--dart-define=SEVO_MAP_ID=xxxxxxxx`.
+  static const String sevoMapId =
+      String.fromEnvironment('SEVO_MAP_ID', defaultValue: '');
+
   // ── Official Legal & Policy URLs ──
   static const String privacyPolicyUrl = 'https://sevo.co.in/privacy/sevo/';
   static const String accountDeletionUrl = 'https://sevo.co.in/account-deletion/';

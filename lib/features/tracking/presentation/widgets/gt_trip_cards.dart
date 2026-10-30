@@ -11,7 +11,8 @@ import '../../../../core/errors/api_error.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
-import '../../../booking/domain/booking_providers.dart';
+import '../../../booking/data/booking_repository.dart';
+import '../../../booking/domain/booking_models.dart';
 import '../../../payment/domain/payment_controller.dart';
 import '../../../payment/domain/payment_models.dart';
 import '../../domain/tracking_models.dart';
@@ -50,7 +51,17 @@ BoxDecoration _cardDeco(Color bg, Color border) => BoxDecoration(
 /// balance / survey top-up). Resolves the booking first because the payment
 /// controller needs it for the checkout description.
 Future<void> _startServerPricedPayment(WidgetRef ref, int bookingId) async {
-  final booking = await ref.read(bookingDetailProvider(bookingId).future);
+  // Fetched directly: `ref.read(...future)` on the auto-disposed detail
+  // provider can be disposed (and its request dropped) before it resolves
+  // when no screen is watching it.
+  final result = await ref.read(bookingRepositoryProvider).getBookingDetail(bookingId);
+  final Booking booking;
+  switch (result) {
+    case Success(:final data):
+      booking = data;
+    case Failure(:final error):
+      throw error;
+  }
   await ref.read(paymentControllerProvider.notifier).startPayment(
         booking: booking,
         amount: Decimal.zero, // ignored: PaymentInitiateView decides the amount
@@ -312,6 +323,7 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
       if (d is Map && d['data'] is Map) d = d['data'];
       final m = d is Map ? d : const {};
       final status = (m['status'] ?? '').toString();
+      if (!mounted) return;
       setState(() {
         if (status == 'APPROVED_PENDING_PAYMENT') {
           _msg = 'Quote approved. Pay ₹${m['top_up_amount']} to release your move.';
@@ -1317,6 +1329,7 @@ class _GtStopsAmendmentCardState extends ConsumerState<GtStopsAmendmentCard> {
           .post(_path, data: {'action': action, 'amendment_id': am['id']});
       final d = _dataOf(res.data) ?? const <String, dynamic>{};
       final status = (d['status'] ?? '').toString();
+      if (!mounted) return;
       setState(() {
         if (status == 'APPROVED_PENDING_PAYMENT') {
           _msg = 'Approved. Pay ₹${_money2(d['top_up_amount'])} to apply the new route.';
@@ -1450,10 +1463,18 @@ class _GtStopsAmendmentCardState extends ConsumerState<GtStopsAmendmentCard> {
 // ── Chat with the driver / technician ────────────────────────────────────────
 
 class BookingChatCard extends ConsumerStatefulWidget {
-  const BookingChatCard({super.key, required this.bookingId, this.trackingToken});
+  const BookingChatCard({
+    super.key,
+    required this.bookingId,
+    this.trackingToken,
+    this.isLogistics = true,
+  });
 
   final int bookingId;
   final String? trackingToken;
+
+  /// Goods trip → "driver"; any other service → "technician".
+  final bool isLogistics;
 
   @override
   ConsumerState<BookingChatCard> createState() => _BookingChatCardState();
@@ -1556,9 +1577,9 @@ class _BookingChatCardState extends ConsumerState<BookingChatCard> {
               children: [
                 const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: AppColors.navy),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('Chat with your driver',
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                Expanded(
+                  child: Text(widget.isLogistics ? 'Chat with your driver' : 'Chat with your technician',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
                 ),
                 Icon(_open ? Icons.expand_less : Icons.expand_more, color: AppColors.textSecondary),
               ],

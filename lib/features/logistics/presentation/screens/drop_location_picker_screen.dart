@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/logistics_providers.dart';
+import '../../../../shared/maps/sevo_map_style.dart';
 
 /// Drop-off location picker for Goods & Transport.
 ///
@@ -345,6 +346,9 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
         children: [
           Positioned.fill(
             child: GoogleMap(
+              // SEVO map look (or the cloud Map ID when one is set).
+              style: SevoMap.style,
+              cloudMapId: SevoMap.cloudMapId,
               initialCameraPosition: CameraPosition(target: target, zoom: 16),
               onMapCreated: (c) => _mapController = c,
               mapType: _satellite ? MapType.hybrid : MapType.normal,

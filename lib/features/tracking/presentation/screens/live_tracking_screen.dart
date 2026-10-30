@@ -17,6 +17,7 @@ import '../widgets/gt_trip_cards.dart';
 import '../widgets/tracking_markers.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../shared/widgets/motion.dart';
+import '../../../../shared/maps/sevo_map_style.dart';
 
 /// Route line color — changed 2026-09-16 from AppColors.primary (the app's
 /// brand green, 0xFF05A357) to a dedicated blue per explicit request, and
@@ -60,6 +61,11 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   List<LatLng> _roadRoute = const [];
   bool _hasRoadGeometry = false;
   LatLng? _lastRouteFetchPos;
+
+  /// Last technician position the camera followed. The camera used to be
+  /// re-animated on EVERY rebuild (each poll, each OTP "copied" tick), which
+  /// yanked the map back whenever the customer panned or zoomed.
+  LatLng? _lastCameraTarget;
   DateTime? _lastRouteFetchTime;
   bool _routeFetchInFlight = false;
 
@@ -81,6 +87,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   // rendered once and reused for every position update.
   BitmapDescriptor? _bikeIcon;
   BitmapDescriptor? _lollipopIcon;
+  BitmapDescriptor? _pickupIcon;
 
   @override
   void initState() {
@@ -91,10 +98,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   Future<void> _loadMarkerIcons() async {
     final bike = await TrackingMarkers.technicianIcon();
     final lollipop = await TrackingMarkers.destinationLollipop();
+    final pickup = await TrackingMarkers.pickupIcon();
     if (!mounted) return;
     setState(() {
       _bikeIcon = bike;
       _lollipopIcon = lollipop;
+      _pickupIcon = pickup;
     });
   }
 
@@ -212,53 +221,63 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
     final technicianPhoto = tracking.technicianPhoto ?? technician?.profilePictureUrl;
 
     if (hasLiveData && techPos != null) {
-      _mapController?.animateCamera(CameraUpdate.newLatLng(techPos));
+      if (_lastCameraTarget != techPos) {
+        _lastCameraTarget = techPos;
+        _mapController?.animateCamera(CameraUpdate.newLatLng(techPos));
+      }
     }
 
-    final effectiveStatus = (tracking.status.isNotEmpty
-            ? tracking.status
-            : (widget.booking?.status ?? 'new_request'))
-        .toLowerCase();
-    final currentStep = switch (effectiveStatus) {
-      'draft' ||
-      'new_request' ||
-      'pending_payment' ||
-      'waiting_for_payment' ||
-      'unassigned' ||
-      'requested' ||
-      'rescheduled' =>
-        0,
-      'confirmed' || 'reviewed' || 'vendor_confirmed' => 1,
-      'assigned' || 'received' || 'accepted' || 'technician_assigned' => 1,
-      'on_the_way' ||
-      'arrived' ||
-      'en_route' ||
-      'technician_on_the_way' ||
-      'technician_arrived' =>
-        2,
-      'in_progress' ||
-      'proof_submitted' ||
-      'inspection_in_progress' ||
-      'inspection_completed' ||
-      'quotation_sent' ||
-      'customer_approved' ||
-      'unable_to_complete' ||
-      'awaiting_verification' ||
-      'verified' ||
-      'feedback_pending' ||
-      'feedback_received' ||
-      'rework_requested' ||
-      'follow_up_required' =>
-        3,
-      'completed' || 'closed' || 'estimation_closed' || 'customer_rejected' => 4,
-      _ => 0,
+    final effectiveStatus = normalizeTrackingStatus(tracking.status.isNotEmpty
+        ? tracking.status
+        : (widget.booking?.status ?? 'new_request'));
+    // Inside the 35 m arrival radius (or the server says "arrived"): the
+    // "On the Way" step reads "Arrived".
+    final arrived = tracking.hasArrived ||
+        (kTrackingTransitStatuses.contains(effectiveStatus) &&
+            !tracking.locationLost &&
+            techPos != null &&
+            destPos != null &&
+            haversineMeters(techPos.latitude, techPos.longitude, destPos.latitude,
+                    destPos.longitude) <=
+                kArrivalRadiusMeters);
+    // Shared stage table (booking_status.dart) — the same one the booking
+    // chip, list and detail tracker use, so the two trackers always agree.
+    final currentStep = switch (bookingStageOf(effectiveStatus)) {
+      BookingStage.requested => 0,
+      BookingStage.confirmed || BookingStage.assigned => 1,
+      BookingStage.onTheWay => 2,
+      BookingStage.inProgress => 3,
+      BookingStage.completed => 4,
+      BookingStage.ended || BookingStage.cancelled => -1,
     };
 
     // Cancel visibility is driven strictly by the server's `available_actions`
     // on the Booking passed into this screen (calservices-mobile skill
     // guardrail #9) — never derived from status here, and only offered when
     // a real Booking (with a real numeric id) is available.
-    final canCancel = widget.booking != null && widget.booking!.canCancel;
+    //
+    // 2026-10-28: the Booking handed over by navigation is a snapshot from
+    // whenever the customer tapped Track, so "Cancel Booking" stayed on
+    // screen after the technician accepted and was on the way (the server
+    // then refuses the cancel). The fresh, self-refreshing booking detail is
+    // used when available, and cancel is never offered once a technician has
+    // accepted according to the live feed.
+    final bookingId = widget.booking?.id;
+    final freshBooking = (bookingId != null && bookingId > 0)
+        ? ref.watch(bookingDetailProvider(bookingId)).valueOrNull
+        : null;
+    final actionBooking = freshBooking ?? widget.booking;
+    // 2026-10-29 (Cus): cancelling is allowed any time before the work /
+    // trip starts — after the free window the server applies its fee (the
+    // cancel dialog shows the fee/refund preview first).
+    const lockedLegs = {
+      'LOADING', 'IN_TRANSIT', 'EN_ROUTE_DROP', 'DROP_ARRIVED', 'UNLOADING',
+      'DELIVERED', 'COMPLETED', 'PACKING', 'DISMANTLING',
+    };
+    final canCancel = actionBooking != null &&
+        actionBooking.canCancel &&
+        bookingStageOf(effectiveStatus).index < BookingStage.inProgress.index &&
+        !lockedLegs.contains((tracking.logisticsLeg ?? '').toUpperCase());
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4EF),
@@ -331,7 +350,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             flex: 4,
             child: Stack(
               children: [
-                if (!hasLiveData || techPos == null)
+                // 2026-10-28: without a live technician position the map is
+                // still shown when the service address is known (pin only,
+                // no technician marker / route), with the status on top.
+                // The full-screen waiting state is only for bookings with
+                // no usable address coordinates.
+                if ((!hasLiveData || techPos == null) && destPos == null)
                   // No real position has arrived yet — show an honest
                   // waiting state rather than a fake pin.
                   Container(
@@ -342,7 +366,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         children: [
                           SearchingPulse(
                             size: 130,
-                            icon: tracking.technicianAssigned ? Icons.engineering_rounded : Icons.person_search_rounded,
+                            icon: tracking.hasDriver ? Icons.engineering_rounded : Icons.person_search_rounded,
                             color: AppColors.primary,
                           ),
                           const SizedBox(height: 12),
@@ -364,21 +388,29 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                   )
                 else
                   GoogleMap(
+                    // SEVO map look (or the cloud Map ID when one is set).
+                    style: SevoMap.style,
+                    cloudMapId: SevoMap.cloudMapId,
                     initialCameraPosition: CameraPosition(
-                      target: techPos,
-                      zoom: 15.0,
+                      target: techPos ?? destPos!,
+                      zoom: techPos != null ? 15.0 : 14.5,
                     ),
                     onMapCreated: (controller) {
                       _mapController = controller;
                     },
                     markers: {
+                      if (techPos != null)
                       Marker(
                         markerId: const MarkerId('technician'),
                         position: techPos,
                         // Rapido-style vehicle badge that rotates to face the
                         // real live heading; `flat: true` also tilts it with
                         // the camera like a real ground-facing vehicle icon.
-                        icon: _bikeIcon ??
+                        icon: (TrackingMarkers.usesPickupIcon(
+                                    tracking.serviceCategory ??
+                                        widget.booking?.serviceCategory)
+                                ? _pickupIcon
+                                : _bikeIcon) ??
                             BitmapDescriptor.defaultMarkerWithHue(
                               BitmapDescriptor.hueOrange,
                             ),
@@ -386,7 +418,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         anchor: const Offset(0.5, 0.5),
                         flat: true,
                         infoWindow: InfoWindow(
-                          title: technicianName ?? 'Technician',
+                          title: technicianName ??
+                              (tracking.isLogistics ? 'Driver' : 'Technician'),
                           snippet: (_roadRouteEtaMinutes ?? tracking.etaMinutes) != null
                               ? '${_roadRouteEtaMinutes ?? tracking.etaMinutes} mins away'
                               : 'On the way',
@@ -404,10 +437,24 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                 BitmapDescriptor.hueAzure,
                               ),
                           anchor: const Offset(0.5, 0.9),
-                          infoWindow: const InfoWindow(
-                            title: 'Service Address',
-                            snippet: 'Your scheduled service location',
+                          infoWindow: InfoWindow(
+                            title: tracking.isLogistics ? 'Destination' : 'Service Address',
+                            snippet: tracking.isLogistics ? 'Trip destination' : 'Your scheduled service location',
                           ),
+                        ),
+                    },
+                    // Arrival "radar": the same 35 m geofence the web map
+                    // draws; turns solid green once the technician is in.
+                    circles: {
+                      if (destPos != null && !tracking.isTerminal)
+                        Circle(
+                          circleId: const CircleId('arrival-radius'),
+                          center: destPos,
+                          radius: kArrivalRadiusMeters,
+                          strokeWidth: 2,
+                          strokeColor: const Color(0xFF10B981),
+                          fillColor: const Color(0xFF10B981)
+                              .withValues(alpha: arrived ? 0.30 : 0.15),
                         ),
                     },
                     polylines: {
@@ -416,7 +463,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       // to a dashed straight line only while no route has
                       // been resolved yet (first few seconds, or if every
                       // routing mirror is unreachable).
-                      if (_hasRoadGeometry && _roadRoute.length > 1)
+                      if (techPos != null && _hasRoadGeometry && _roadRoute.length > 1)
                         Polyline(
                           polylineId: const PolylineId('road-route'),
                           points: _roadRoute,
@@ -430,7 +477,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           startCap: Cap.roundCap,
                           endCap: Cap.roundCap,
                         )
-                      else if (destPos != null)
+                      else if (techPos != null && destPos != null)
                         Polyline(
                           polylineId: const PolylineId('fallback-route'),
                           points: [techPos, destPos],
@@ -441,6 +488,49 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     },
                     myLocationButtonEnabled: false,
                     zoomControlsEnabled: false,
+                  ),
+
+                // Map shown with only the address pin: say why there is no
+                // technician / driver marker yet (waiting, or signal lost).
+                if ((!hasLiveData || techPos == null) && destPos != null)
+                  Positioned(
+                    top: 14,
+                    left: 20,
+                    right: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x1A0F172A), blurRadius: 12, offset: Offset(0, 4)),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            tracking.locationLost
+                                ? Icons.location_disabled_rounded
+                                : (tracking.hasDriver
+                                    ? Icons.engineering_rounded
+                                    : Icons.person_search_rounded),
+                            size: 20,
+                            color: tracking.locationLost ? AppColors.warning : AppColors.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              tracking.statusMessage,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
 
                 // Floating ETA / Distance Banner. Prefers the OSRM
@@ -454,6 +544,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 // "1.5 km / 4 min"). Falls back to the backend figures only
                 // until a road route has been resolved.
                 if (hasLiveData &&
+                    !(tracking.isLogistics && tracking.isPostDelivery) &&
                     ((_roadRouteDistanceKm ?? tracking.distanceKm) != null ||
                         (_roadRouteEtaMinutes ?? tracking.etaMinutes) != null))
                   Positioned(
@@ -552,10 +643,18 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     // only ever populated once the technician has accepted
                     // AND the booking is active (never a client-side guess;
                     // see TrackingUpdate.fromJson / _build_tracking_payload).
-                    if (tracking.startOtp != null) ...[
+                    // Goods Transport / Packers & Movers: the same server code is
+                    // the PICKUP OTP, and is hidden once the goods are loaded
+                    // (matches the Booking Details screen).
+                    if (tracking.startOtp != null &&
+                        !(tracking.isLogistics &&
+                            const {'in_progress', 'started', 'service_started', 'proof_submitted'}
+                                .contains(tracking.status.toLowerCase()))) ...[
                       _OtpCard(
-                        label: 'WORK START OTP',
-                        hint: 'Share this code with the technician to begin service',
+                        label: tracking.isLogistics ? 'PICKUP OTP' : 'WORK START OTP',
+                        hint: tracking.isLogistics
+                            ? 'Share this code with the driver at pickup to start the trip'
+                            : 'Share this code with the technician to begin service',
                         otp: tracking.startOtp!,
                         color: const Color(0xFF92400E),
                         background: AppColors.warningLight,
@@ -571,7 +670,9 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     if (tracking.paymentConfirmationOtp != null) ...[
                       _OtpCard(
                         label: 'CASH PAYMENT OTP',
-                        hint: 'Share with technician to confirm cash collection',
+                        hint: tracking.isLogistics
+                            ? 'Share with the driver to confirm cash collection'
+                            : 'Share with technician to confirm cash collection',
                         otp: tracking.paymentConfirmationOtp!,
                         color: AppColors.navy,
                         background: const Color(0xFFE8EDF7),
@@ -647,6 +748,40 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       BookingChatCard(
                         bookingId: (tracking.bookingId ?? widget.booking?.id)!,
                         trackingToken: widget.booking?.trackingIdentifier,
+                        isLogistics: tracking.isLogistics ||
+                            (widget.booking?.isLogistics ?? false),
+                      ),
+
+                    // Goods trips: how the trip is paid, from the persisted
+                    // booking (web "Payment" receipt line).
+                    if (tracking.isLogistics && tracking.gtPaymentLabel != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('PAYMENT',
+                                style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF475569))),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${tracking.totalAmount != null ? '₹${tracking.totalAmount!.toStringAsFixed(tracking.totalAmount! % 1 == 0 ? 0 : 2)} · ' : ''}${tracking.gtPaymentLabel}',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.navy),
+                            ),
+                          ],
+                        ),
                       ),
 
                     // Delivered Goods & Transport trips get a rating token from
@@ -700,7 +835,10 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  technicianName ?? 'Technician not yet assigned',
+                                  technicianName ??
+                                      (tracking.isLogistics
+                                          ? 'Driver not yet assigned'
+                                          : 'Technician not yet assigned'),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
                                     fontSize: 13.5,
@@ -774,9 +912,9 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    const Text(
-                      'Service Status',
-                      style: TextStyle(
+                    Text(
+                      tracking.isLogistics ? 'Trip Status' : 'Service Status',
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
                         color: AppColors.navy,
@@ -791,26 +929,42 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       isActive: currentStep == 0,
                     ),
                     _TimelineStep(
-                      title: 'Technician Assigned',
-                      subtitle: 'Expert professional allocated',
+                      title: tracking.isLogistics ? 'Driver Assigned' : 'Technician Assigned',
+                      subtitle: (currentStep == 1 && !tracking.hasDriver)
+                          ? (tracking.isLogistics
+                              ? 'Finding the nearest available driver'
+                              : 'Finding the nearest available professional')
+                          : (tracking.isLogistics
+                              ? 'A driver and vehicle are allocated'
+                              : 'Expert professional allocated'),
                       isCompleted: currentStep > 1,
                       isActive: currentStep == 1,
                     ),
                     _TimelineStep(
-                      title: 'On the Way',
-                      subtitle: 'Technician is en route to your address',
+                      title: arrived ? 'Arrived' : 'On the Way',
+                      subtitle: arrived
+                          ? (tracking.isLogistics
+                              ? 'Driver has reached the pickup point'
+                              : 'Technician has reached your address')
+                          : (tracking.isLogistics
+                              ? 'Driver is on the way to the pickup'
+                              : 'Technician is en route to your address'),
                       isCompleted: currentStep > 2,
                       isActive: currentStep == 2,
                     ),
                     _TimelineStep(
-                      title: 'Service in Progress',
-                      subtitle: 'OTP verification & work begins',
+                      title: tracking.isLogistics ? 'Goods in Transit' : 'Service in Progress',
+                      subtitle: tracking.isLogistics
+                          ? 'Pickup OTP verified, goods on the way'
+                          : 'OTP verification & work begins',
                       isCompleted: currentStep > 3,
                       isActive: currentStep == 3,
                     ),
                     _TimelineStep(
-                      title: 'Completed',
-                      subtitle: 'Service finished & final invoice',
+                      title: tracking.isLogistics ? 'Delivered' : 'Completed',
+                      subtitle: tracking.isLogistics
+                          ? 'Goods delivered & payment settled'
+                          : 'Service finished & final invoice',
                       isCompleted: currentStep >= 4,
                       isActive: currentStep == 4,
                       isLast: true,
@@ -833,7 +987,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          onPressed: () => _showCancelDialog(context, ref, widget.booking!),
+                          onPressed: () => _showCancelDialog(context, ref, actionBooking!),
                           icon: const Icon(Icons.cancel_outlined),
                           label: const Text('Cancel Booking'),
                         ),

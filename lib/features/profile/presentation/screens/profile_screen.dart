@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/env.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/utils/input_validators.dart';
 import '../../../auth/domain/auth_models.dart';
 import '../../../auth/domain/auth_notifier.dart';
 
@@ -448,6 +449,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: nameController,
+              // Web parity (Cus 2026-10-28): no digits in a customer name.
+              inputFormatters: [NoDigitsFormatter()],
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(labelText: 'Full Name'),
             ),
             const SizedBox(height: 14),
@@ -461,6 +465,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               height: 50,
               child: ElevatedButton(
                 onPressed: () async {
+                  final nameError = InputValidators.fullName(nameController.text);
+                  if (nameError != null) {
+                    AppToast.show(ctx, nameError, type: AppToastType.error);
+                    return;
+                  }
                   Navigator.pop(ctx);
                   // Fixed 2026-08-27: this previously showed "Profile updated
                   // successfully!" unconditionally, even when the backend
@@ -469,7 +478,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   final error = await ref
                       .read(authProvider.notifier)
                       .completeProfile(
-                        name: nameController.text.trim(),
+                        name: InputValidators.cleanName(nameController.text),
                         email: emailController.text.trim().isNotEmpty
                             ? emailController.text.trim()
                             : null,

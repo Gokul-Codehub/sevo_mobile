@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../features/booking/domain/booking_status.dart';
 import '../theme/app_colors.dart';
 import 'status_page.dart';
 
@@ -377,47 +378,30 @@ class BookingStatusChip extends StatelessWidget {
 
   final String status;
 
-  // Fixed 2026-08-27: only 7 of the real 23 ServiceRequest statuses had a
-  // friendly label/color — every other real status (unassigned, arrived,
-  // on_the_way, accepted, received, reviewed, rejected, etc.) fell back to
-  // displaying the raw snake_case string in a neutral gray chip. That
-  // fallback was honest (never a fabricated label) but not polished, so
-  // it's extended here to cover the full documented lifecycle
-  // (backend/service_requests/state_machine.py), bucketed by similarity to
-  // the closest status that already had styling.
-  static const _statusConfig = <String, (Color, Color, String)>{
-    'draft': (Color(0xFFDDEDFF), AppColors.statusNewRequest, 'Draft'),
-    'new_request': (Color(0xFFDDEDFF), AppColors.statusNewRequest, 'New'),
-    'pending_payment': (Color(0xFFDDEDFF), AppColors.statusNewRequest, 'Pending Payment'),
-    'waiting_for_payment': (Color(0xFFDDEDFF), AppColors.statusNewRequest, 'Awaiting Payment'),
-    'unassigned': (Color(0xFFDDEDFF), AppColors.statusNewRequest, 'Unassigned'),
-    'rescheduled': (Color(0xFFDDEDFF), AppColors.statusNewRequest, 'Rescheduled'),
-    'confirmed': (Color(0xFFE8EDF7), AppColors.navy, 'Confirmed'),
-    'reviewed': (Color(0xFFE8EDF7), AppColors.navy, 'Reviewed'),
-    'assigned': (Color(0xFFF3E8FF), AppColors.statusAssigned, 'Assigned'),
-    'received': (Color(0xFFF3E8FF), AppColors.statusAssigned, 'Received'),
-    'accepted': (Color(0xFFF3E8FF), AppColors.statusAssigned, 'Accepted'),
-    'on_the_way': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'On the Way'),
-    'arrived': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Arrived'),
-    'in_progress': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'In Progress'),
-    'awaiting_verification': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Awaiting Verification'),
-    'verified': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Verified'),
-    'feedback_pending': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Feedback Pending'),
-    'feedback_received': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Feedback Received'),
-    'rework_requested': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Rework Requested'),
-    'follow_up_required': (Color(0xFFFFF7E6), AppColors.statusInProgress, 'Follow-up Required'),
-    'completed': (Color(0xFFE8EDF7), AppColors.navy, 'Completed'),
-    'closed': (Color(0xFFE8EDF7), AppColors.navy, 'Closed'),
-    'cancelled': (AppColors.errorLight, AppColors.statusCancelled, 'Cancelled'),
-    'rejected': (AppColors.errorLight, AppColors.statusCancelled, 'Rejected'),
-    'refund_requested': (AppColors.warningLight, AppColors.statusRefundRequested, 'Refund Requested'),
-  };
+  // Rewritten 2026-10-28 (status audit): colour comes from the booking's
+  // stage and the label from the shared status table (booking_status.dart),
+  // so every status the server can send — including vendor spellings like
+  // "ON_THE_WAY" or `en_route` — gets a friendly label instead of raw
+  // snake_case, and the chip always agrees with the trackers.
+  static (Color, Color) _colorsFor(BookingStage stage) => switch (stage) {
+        BookingStage.requested => (const Color(0xFFDDEDFF), AppColors.statusNewRequest),
+        BookingStage.confirmed => (const Color(0xFFE8EDF7), AppColors.navy),
+        BookingStage.assigned => (const Color(0xFFF3E8FF), AppColors.statusAssigned),
+        BookingStage.onTheWay ||
+        BookingStage.inProgress =>
+          (const Color(0xFFFFF7E6), AppColors.statusInProgress),
+        BookingStage.completed => (const Color(0xFFE8EDF7), AppColors.navy),
+        BookingStage.ended => (AppColors.shimmerBase, AppColors.textSecondary),
+        BookingStage.cancelled => (AppColors.errorLight, AppColors.statusCancelled),
+      };
 
   @override
   Widget build(BuildContext context) {
-    final config = _statusConfig[status] ??
-        (AppColors.shimmerBase, AppColors.textSecondary, status);
-    final (bgColor, textColor, label) = config;
+    final normalized = normalizeBookingStatus(status);
+    final (bgColor, textColor) = normalized == 'refund_requested'
+        ? (AppColors.warningLight, AppColors.statusRefundRequested)
+        : _colorsFor(bookingStageOf(normalized));
+    final label = bookingStatusLabel(normalized);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

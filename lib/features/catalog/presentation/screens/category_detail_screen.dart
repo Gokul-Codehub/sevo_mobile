@@ -639,6 +639,42 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           ),
         ),
         const VerticalDivider(width: 1, thickness: 0.8),
+        Expanded(child: _withSubDescription(subs, body)),
+      ],
+    );
+  }
+
+  /// Web parity (Cus 2026-10-28, ModernServiceCatalogView): the selected
+  /// sub-service's short description (admin-entered) sits above its
+  /// packages. Nothing is shown when "All" is selected or none was entered.
+  Widget _withSubDescription(List<Subcategory> subs, Widget body) {
+    final slug = _selectedSubcategorySlug;
+    if (slug == null) return body;
+    Subcategory? sub;
+    for (final s in subs) {
+      if (s.slug == slug) {
+        sub = s;
+        break;
+      }
+    }
+    final text = (sub?.description ?? '').trim();
+    if (text.isEmpty) return body;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
         Expanded(child: body),
       ],
     );

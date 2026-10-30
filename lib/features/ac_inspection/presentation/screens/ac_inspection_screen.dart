@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/errors/api_error.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/utils/input_validators.dart';
 import '../../../addresses/domain/address_models.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../auth/domain/auth_notifier.dart';
@@ -117,7 +118,7 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
           address: address,
           date: date,
           timeSlot: slot.label,
-          customerName: user.name ?? 'Customer',
+          customerName: InputValidators.bookingName(user.name) ?? 'Customer',
           phone: phone,
           email: user.email,
           photoBytes: _photo,

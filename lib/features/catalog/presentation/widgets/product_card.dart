@@ -263,11 +263,12 @@ class ProductCard extends ConsumerWidget {
                         vertical: 2.5,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        // Mode colour (green on grocery screens).
+                        color: Theme.of(context).colorScheme.primary,
                         borderRadius: BorderRadius.circular(6),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.35),
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
                             blurRadius: 4,
                             offset: const Offset(0, 1),
                           ),

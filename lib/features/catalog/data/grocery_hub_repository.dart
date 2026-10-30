@@ -1,6 +1,5 @@
 import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../config/env.dart';
@@ -10,6 +9,7 @@ import '../../../core/network/response_normalizer.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../domain/catalog_models.dart';
+import 'marketplace_catalog_repository.dart';
 
 /// Vendor Grocery Hub — Public Storefront integration.
 ///
@@ -70,7 +70,35 @@ class GroceryHubProduct {
     this.discountPercent = 0,
     this.unit,
     this.inStock = true,
+    this.marketplaceItem,
   });
+
+  /// When set, this tile is backed by an approved Seller Hub Marketplace
+  /// product, and [toServiceItem] returns that item as-is so ADD / cart /
+  /// checkout use the marketplace ids (see MarketplaceProduct) rather than
+  /// the legacy Grocery Hub range.
+  final ServiceItem? marketplaceItem;
+
+  /// Builds a Bestsellers tile from an approved marketplace product.
+  factory GroceryHubProduct.fromMarketplace(MarketplaceProduct p) {
+    final hasMrp = p.hasStrikeThroughMrp;
+    final price = p.sellingPrice.toDouble();
+    final mrp = p.mrp?.toDouble();
+    return GroceryHubProduct(
+      id: p.id,
+      name: p.title,
+      category: (p.categoryName ?? '').trim(),
+      image: p.galleryImages.isNotEmpty ? p.galleryImages.first : p.primaryImage,
+      price: price,
+      mrp: hasMrp ? mrp : null,
+      discountPercent: hasMrp && mrp != null && mrp > 0
+          ? (((mrp - price) / mrp) * 100).round()
+          : 0,
+      unit: p.packSize ?? p.unit,
+      inStock: p.inStock,
+      marketplaceItem: p.toServiceItem(),
+    );
+  }
 
   final int id;
   final String name;
@@ -110,6 +138,8 @@ class GroceryHubProduct {
   /// "Chips & Namkeen", which wouldn't otherwise match the grocery
   /// keyword check).
   ServiceItem toServiceItem() {
+    final override = marketplaceItem;
+    if (override != null) return override;
     final hasMrp = hasStrikeThroughMrp;
     return ServiceItem(
       id: _cartIdOffset + id,
@@ -351,86 +381,56 @@ final groceryHubRepositoryProvider = Provider<GroceryHubRepository>((ref) {
   return GroceryHubRepository(api: ref.watch(apiClientProvider));
 });
 
-/// Never throws to its watchers — an unreachable/misconfigured vendor hub
-/// should never blank Home; it just means the Bestsellers section quietly
-/// doesn't render (see [groceryHubCategoriesProvider]), same "fail open"
-/// convention as [homepageConfigProvider].
+/// Legacy public Grocery Hub storefront (`/api/workforce/public/stores/`).
+///
+/// Disabled 2026-10-28 per the SEVO data-source verification (gap G3): that
+/// endpoint reads a different table that ignores the platform admin's
+/// approval, category-active and company-active rules, so a product the
+/// admin had hidden could still reach customers through it. Home's
+/// Bestsellers now come from the approved Seller Hub Marketplace instead
+/// (see [groceryHubCategoriesProvider]). The repository methods above are
+/// kept only so they can be re-enabled if the vendor adds the same checks.
 final groceryHubStoresProvider = FutureProvider<List<GroceryHubStoreSummary>>((ref) async {
-  final repo = ref.watch(groceryHubRepositoryProvider);
-  final result = await repo.getStores();
-  final stores = switch (result) {
-    Success(:final data) => data,
-    Failure() => const <GroceryHubStoreSummary>[],
-  };
-  // Debug-only diagnostic — added 2026-09-19 after "no data shown, no
-  // error either" turned out to need a log line to actually pin down.
-  // Same [API →]/[API ←] convention LoggingInterceptor already uses, so
-  // it shows up right next to those in `flutter logs`/Logcat.
-  if (kDebugMode) {
-    switch (result) {
-      case Success():
-        debugPrint('[GROCERY-HUB] stores fetched: ${stores.length} '
-            '(${stores.map((s) => s.storeSlug).toList()})');
-      case Failure(:final error):
-        debugPrint('[GROCERY-HUB] getStores FAILED: ${error.message}');
-    }
-  }
-  return stores;
+  return const <GroceryHubStoreSummary>[];
 });
 
-/// This app has no multi-store picker yet, so it auto-picks the first
-/// store the hub returns and shows its live catalog — reasonable for a
-/// single-vendor rollout; revisit if/when more than one seller goes live.
+/// See [groceryHubStoresProvider] — no longer calls the legacy endpoint.
 final primaryGroceryHubStoreProvider = FutureProvider<GroceryHubStoreDetail?>((ref) async {
-  final stores = await ref.watch(groceryHubStoresProvider.future);
-  if (stores.isEmpty) {
-    if (kDebugMode) {
-      debugPrint('[GROCERY-HUB] no stores returned — nothing to show on Home.');
-    }
-    return null;
-  }
-  final repo = ref.watch(groceryHubRepositoryProvider);
-  final chosenSlug = stores.first.storeSlug;
-  final result = await repo.getStoreDetail(chosenSlug);
-  if (kDebugMode) {
-    switch (result) {
-      case Success(:final data):
-        debugPrint('[GROCERY-HUB] store "$chosenSlug" detail fetched: '
-            '${data.products.length} in-stock products, '
-            '${data.products.map((p) => p.category).toSet().length} distinct categories, '
-            'isAcceptingOrders=${data.isAcceptingOrders}');
-      case Failure(:final error):
-        debugPrint('[GROCERY-HUB] getStoreDetail("$chosenSlug") FAILED: ${error.message}');
-    }
-  }
+  return null;
+});
+
+/// Approved, in-stock marketplace products for the Home "Bestsellers"
+/// fallback: first page (100) of `GET /api/marketplace/products/`, which
+/// the vendor already filters by status APPROVED, active category chain,
+/// active company, price and sellable stock.
+final _bestsellerMarketplaceProductsProvider =
+    FutureProvider.autoDispose<List<MarketplaceProduct>>((ref) async {
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final result = await repo.getProducts(pageSize: 100);
   return switch (result) {
-    Success(:final data) => data,
-    Failure() => null,
+    Success(:final data) => data.products.where((p) => p.inStock).toList(),
+    Failure() => const <MarketplaceProduct>[],
   };
 });
 
-/// Real Grocery Hub products grouped by category, in first-seen order —
-/// this is what drives Home's "Bestsellers" tiles. Empty (never an error
-/// state) whenever the hub has nothing to show, so Home simply omits the
-/// section rather than showing a broken/empty placeholder.
+/// Approved marketplace products grouped by department name, in first-seen
+/// order — drives Home's "Bestsellers" tiles when the admin has not set up
+/// their own. Empty (never an error) whenever there is nothing to show, so
+/// Home simply omits the section.
 final groceryHubCategoriesProvider = Provider<List<GroceryHubCategoryGroup>>((ref) {
-  final detail = ref.watch(primaryGroceryHubStoreProvider).valueOrNull;
-  if (detail == null || detail.products.isEmpty) return const [];
+  final products = ref.watch(_bestsellerMarketplaceProductsProvider).valueOrNull ?? const [];
+  if (products.isEmpty) return const [];
 
   final byCategory = <String, List<GroceryHubProduct>>{};
-  for (final p in detail.products) {
-    if (p.category.trim().isEmpty) continue;
-    byCategory.putIfAbsent(p.category, () => []).add(p);
+  for (final p in products) {
+    final item = GroceryHubProduct.fromMarketplace(p);
+    if (item.category.isEmpty) continue;
+    byCategory.putIfAbsent(item.category, () => []).add(item);
   }
 
-  final groups = byCategory.entries
+  return byCategory.entries
       .map((e) => GroceryHubCategoryGroup(name: e.key, products: e.value))
       .toList();
-  if (kDebugMode) {
-    debugPrint('[GROCERY-HUB] Bestsellers groups built: ${groups.length} '
-        '(${groups.map((g) => "${g.name}:${g.products.length}").toList()})');
-  }
-  return groups;
 });
 
 /// The id this app sends as `customer_id` on Grocery Hub cart calls — the

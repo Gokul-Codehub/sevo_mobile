@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,8 +11,11 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../tracking/domain/tracking_models.dart';
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/theme/grocery_theme.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../catalog/data/catalog_repository.dart';
@@ -44,7 +48,7 @@ class BookingDetailScreen extends ConsumerWidget {
     final bookingAsync = ref.watch(bookingDetailProvider(bookingId));
     final booking = bookingAsync.valueOrNull ?? initialBooking;
 
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Booking Details'),
@@ -77,6 +81,11 @@ class BookingDetailScreen extends ConsumerWidget {
               data: (b) => _buildContent(context, ref, theme, b),
             ),
     );
+    // Colour by order type (2026-10-28): a grocery order's detail screen
+    // uses the green grocery theme; services / goods transport stay navy.
+    return (booking?.isGroceryBooking ?? false)
+        ? GroceryTheme(child: scaffold)
+        : scaffold;
   }
 
   Widget _buildContent(
@@ -195,10 +204,39 @@ class BookingDetailScreen extends ConsumerWidget {
                         : '${booking.address!.addressType[0].toUpperCase()}${booking.address!.addressType.substring(1)}',
                   ),
                   _BillRow(
-                    label: 'Service Address',
+                    label: _isLogisticsBooking(booking) ? 'Pickup Address' : 'Service Address',
                     amount: booking.address!.formattedAddress,
                     multiline: true,
                   ),
+                ],
+                // GT / P&M (web 2026-10-27): show where the goods go and how
+                // far, not just the pickup.
+                if (_isLogisticsBooking(booking) && booking.vehicleLabel != null)
+                  _BillRow(
+                    label: 'Vehicle',
+                    amount: [
+                      booking.vehicleLabel!,
+                      if (booking.logisticsLaneName != null) booking.logisticsLaneName!,
+                    ].join(' · '),
+                    multiline: true,
+                  ),
+                if (_isLogisticsBooking(booking) && (booking.dropAddress ?? '').isNotEmpty) ...[
+                  _BillRow(
+                    label: 'Drop Address',
+                    amount: booking.dropAddress!,
+                    multiline: true,
+                  ),
+                  if (booking.tripDistanceKm > 0 || booking.tripExtraStops > 0)
+                    _BillRow(
+                      label: 'Trip',
+                      amount: [
+                        if (booking.tripDistanceKm > 0)
+                          '${booking.tripDistanceKm.toStringAsFixed(1)} km',
+                        if (booking.tripExtraStops > 0)
+                          '${booking.tripExtraStops} stop${booking.tripExtraStops > 1 ? 's' : ''} on the way',
+                      ].join(' · '),
+                      multiline: true,
+                    ),
                 ],
                 if (note.isNotEmpty)
                   _BillRow(label: 'Special Instructions', amount: note, multiline: true),
@@ -228,6 +266,19 @@ class BookingDetailScreen extends ConsumerWidget {
                 // reflect the booking's real `payment_status` only — a
                 // 'paid' booking claims an amount paid, everything else is
                 // shown as owed / refunded, never an invented advance.
+                // Truck / two-wheeler fares are GST-inclusive with no
+                // platform fee: show how the fare was built and the GST
+                // already inside it — never add anything on top.
+                // Itemised for every goods booking now — P&M / PTL quotes
+                // carry their lines in `fare_breakdown.pricing` (web
+                // gtFareLineRows, 2026-10-28).
+                if (_isLogisticsBooking(booking) && booking.gtFareLines.isNotEmpty)
+                  _GtFareLines(booking: booking),
+                if (booking.isGtFareInclusive && booking.gstIncluded > 0)
+                  _BillRow(
+                    label: 'GST (included in fare)',
+                    amount: '₹${booking.gstIncluded.toStringAsFixed(2)}',
+                  ),
                 ..._paymentSummaryRows(booking),
                 const _BdDivider(),
                 _BillRow(
@@ -261,6 +312,11 @@ class BookingDetailScreen extends ConsumerWidget {
                 'closed',
                 'feedback_pending',
                 'feedback_received',
+                // Goods already delivered: stops can no longer change.
+                'proof_submitted',
+                'cash_pending',
+                'waiting_for_payment',
+                'payment_pending',
               }.contains(booking.status.toLowerCase())) ...[
             GtStopsEditorCard(bookingId: booking.id),
           ],
@@ -273,13 +329,13 @@ class BookingDetailScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Service Status Tracker',
+                  _isLogisticsBooking(booking) ? 'Trip Status Tracker' : 'Service Status Tracker',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 16),
-                _TimelineTracker(currentStatus: booking.status),
+                _LiveTimelineTracker(booking: booking),
               ],
             ),
           ),
@@ -320,9 +376,11 @@ class BookingDetailScreen extends ConsumerWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'ASSIGNED TECHNICIAN',
-                                      style: TextStyle(
+                                    Text(
+                                      _isLogisticsBooking(booking)
+                                          ? 'ASSIGNED DRIVER'
+                                          : 'ASSIGNED TECHNICIAN',
+                                      style: const TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.primaryDark,
@@ -364,6 +422,21 @@ class BookingDetailScreen extends ConsumerWidget {
                                             ),
                                         ],
                                       ),
+                                    if (booking.technician!.vehicleNumber != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 3),
+                                        child: Text(
+                                          [
+                                            if (booking.technician!.vehicleType != null)
+                                              booking.technician!.vehicleType!,
+                                            booking.technician!.vehicleNumber!,
+                                          ].join(' · '),
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
@@ -382,7 +455,9 @@ class BookingDetailScreen extends ConsumerWidget {
                                       launchUrl(uri);
                                     },
                                     icon: const Icon(Icons.call, size: 16),
-                                    label: const Text('Call Pro'),
+                                    label: Text(_isLogisticsBooking(booking)
+                                        ? 'Call Driver'
+                                        : 'Call Pro'),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -413,14 +488,17 @@ class BookingDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                 ],
 
+                // Owner-only codes from the booking detail (web My Bookings):
+                // pickup / service start OTP, the goods Delivery OTP while the
+                // trip is at the drop, and the cash confirmation code.
+                ..._otpCards(booking),
+
                 // Track Service — shown even before a technician is assigned
                 // (the technician card above carries its own Live Track).
                 if (booking.technician == null &&
-                    !const {
-                      'cancelled', 'rejected', 'closed', 'completed',
-                      'verified', 'feedback_pending', 'feedback_received',
-                      'draft', 'waiting_for_payment', 'pending_payment',
-                    }.contains(booking.status)) ...[
+                    !isBookingFinished(booking.status) &&
+                    !const {'draft', 'waiting_for_payment', 'pending_payment'}
+                        .contains(booking.status)) ...[
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -430,7 +508,9 @@ class BookingDetailScreen extends ConsumerWidget {
                         context.push('/track/$identifier', extra: booking);
                       },
                       icon: const Icon(Icons.location_on, size: 18),
-                      label: const Text('Track Service'),
+                      label: Text(_isLogisticsBooking(booking)
+                          ? 'Finding Driver - Track'
+                          : 'Track Service'),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -529,7 +609,7 @@ class BookingDetailScreen extends ConsumerWidget {
                 // called it. Mirrors the backend's own restriction
                 // (service_requests/payment_views.py InvoiceDownloadView):
                 // not available for a cancelled or rejected booking.
-                if (booking.status != 'cancelled' && booking.status != 'rejected') ...[
+                if (!booking.isCancelled) ...[
                   OutlinedButton.icon(
                     onPressed: () => _downloadInvoice(context, ref, booking),
                     icon: const Icon(Icons.receipt_long_outlined),
@@ -586,11 +666,17 @@ class BookingDetailScreen extends ConsumerWidget {
   // Preset cancellation reasons shown as selectable options, with a final
   // "Other" option that reveals a free-text field -- replaces the old
   // single open TextField per the user's request for a pick-list.
+  //
+  // Worded so the server's keyword mapping (CustomerBookingCancelView, Cus
+  // 2026-10-28: plan / mistake / faster / wrong / alternative / price) files
+  // each under its real cancellation category instead of "Other".
   static const _cancelReasonOptions = <String>[
     'Plans changed',
     'Booked by mistake',
+    'Selected wrong service, date or address',
     'Found a better price elsewhere',
-    'Taking too long to get assigned',
+    'Expected faster service — taking too long to get assigned',
+    'Found an alternative / solved it myself',
     'Need to reschedule instead',
   ];
 
@@ -866,70 +952,121 @@ class BookingDetailScreen extends ConsumerWidget {
   }
 }
 
+/// Live tracking snapshot for the detail screen's status tracker.
+///
+/// Added 2026-10-28: the tracker used to read only the booking's own
+/// `status`, fetched once when the screen opened, so a job the technician
+/// had already started showed "Requested" here while Live Tracking showed
+/// "On the Way". This reads the same `/live-location/` payload the tracking
+/// screen uses and refreshes every 10 s while the job is still active.
+final _bookingLiveSnapshotProvider = FutureProvider.autoDispose
+    .family<TrackingUpdate?, ({int id, String? token})>((ref, args) async {
+  try {
+    final token = (args.token ?? '').trim();
+    final response = await ref.read(apiClientProvider).get(
+          '/booking/${args.id}/live-location/',
+          queryParameters: token.isNotEmpty ? {'token': token} : null,
+        );
+    final data = response.data;
+    if (data is! Map) return null;
+    final map = Map<String, dynamic>.from(data);
+    final inner = map['data'] is Map ? Map<String, dynamic>.from(map['data'] as Map) : map;
+    final snap = TrackingUpdate.fromJson(inner, isWs: false);
+    if (!snap.isTerminal) {
+      final timer = Timer(const Duration(seconds: 10), ref.invalidateSelf);
+      ref.onDispose(timer.cancel);
+    }
+    return snap;
+  } catch (_) {
+    // Tracking not available for this booking (or offline): fall back to
+    // the booking's own status, retry a little later.
+    final timer = Timer(const Duration(seconds: 20), ref.invalidateSelf);
+    ref.onDispose(timer.cancel);
+    return null;
+  }
+});
+
+class _LiveTimelineTracker extends ConsumerWidget {
+  const _LiveTimelineTracker({required this.booking});
+
+  final Booking booking;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final own = normalizeBookingStatus(booking.status);
+    // Nothing live to ask about before payment or once the booking is over.
+    if (isBookingFinished(own) ||
+        const {'draft', 'pending_payment', 'waiting_for_payment'}.contains(own)) {
+      return _TimelineTracker(currentStatus: own);
+    }
+    final live = ref
+        .watch(_bookingLiveSnapshotProvider((id: booking.id, token: booking.trackingIdentifier)))
+        .valueOrNull;
+    final liveStatus = normalizeBookingStatus(live?.status);
+    // Never go backwards: show whichever source is further along. A
+    // finished live status (cancelled / completed) always wins.
+    final useLive = liveStatus.isNotEmpty &&
+        (isBookingFinished(liveStatus) ||
+            _TimelineTracker.indexFor(liveStatus) > _TimelineTracker.indexFor(own));
+    final status = useLive ? liveStatus : own;
+    return _TimelineTracker(
+      currentStatus: status,
+      arrived: (live?.hasArrived ?? false) || isBookingArrivedStatus(status),
+    );
+  }
+}
+
 class _TimelineTracker extends StatelessWidget {
-  const _TimelineTracker({required this.currentStatus});
+  const _TimelineTracker({required this.currentStatus, this.arrived = false});
 
   final String currentStatus;
 
-  // Fixed 2026-08-27: the real ServiceRequest lifecycle has 23 statuses
-  // (backend/service_requests/state_machine.py), but this tracker only
-  // recognized 5 of them — every other real status (arrived, on_the_way,
-  // accepted, received, reviewed, unassigned, etc.) silently fell through
-  // to the default `_ => 0`, so a booking that had genuinely progressed to
-  // "arrived" still rendered as if it were freshly "Requested". Widened to
-  // a 6-step tracker covering every documented status, bucketed by how far
-  // along the job actually is.
+  /// Technician inside the 35 m arrival radius: "On the Way" reads "Arrived".
+  final bool arrived;
+
+  // Steps come from the shared stage table (booking_status.dart) — the
+  // same one the chip, the list and live tracking use. Before 2026-10-28
+  // this kept its own copy, which put feedback_pending / verified at
+  // "In Progress" while the list had already filed them under History.
   static const _steps = [
-    ('new_request', 'Requested'),
-    ('confirmed', 'Confirmed'),
-    ('assigned', 'Assigned'),
-    ('on_the_way', 'On the Way'),
-    ('in_progress', 'In Progress'),
-    ('completed', 'Completed'),
+    'Requested',
+    'Confirmed',
+    'Assigned',
+    'On the Way',
+    'In Progress',
+    'Completed',
   ];
 
-  static const _terminalStatuses = {'cancelled', 'refund_requested', 'rejected'};
+  int get _currentIndex => indexFor(currentStatus);
 
-  int get _currentIndex {
-    return switch (currentStatus) {
-      'draft' ||
-      'new_request' ||
-      'pending_payment' ||
-      'waiting_for_payment' ||
-      'rescheduled' ||
-      'requested' ||
-      'unassigned' =>
-        0,
-      'confirmed' || 'reviewed' || 'vendor_confirmed' => 1,
-      'assigned' || 'received' || 'accepted' || 'technician_assigned' => 2,
-      'on_the_way' ||
-      'arrived' ||
-      'technician_on_the_way' ||
-      'technician_arrived' =>
-        3,
-      'in_progress' ||
-      'proof_submitted' ||
-      'inspection_in_progress' ||
-      'inspection_completed' ||
-      'quotation_sent' ||
-      'customer_approved' ||
-      'unable_to_complete' ||
-      'awaiting_verification' ||
-      'verified' ||
-      'feedback_pending' ||
-      'feedback_received' ||
-      'rework_requested' ||
-      'follow_up_required' =>
-        4,
-      'completed' || 'closed' || 'estimation_closed' || 'customer_rejected' => 5,
-      'cancelled' || 'refund_requested' || 'rejected' => -1,
-      _ => 0,
-    };
-  }
+  /// Step index for a status; -1 for a booking that ended without the
+  /// service (cancelled, rejected, unable to complete, quote declined).
+  static int indexFor(String rawStatus) => switch (bookingStageOf(rawStatus)) {
+        BookingStage.requested => 0,
+        BookingStage.confirmed => 1,
+        BookingStage.assigned => 2,
+        BookingStage.onTheWay => 3,
+        BookingStage.inProgress => 4,
+        BookingStage.completed => 5,
+        BookingStage.ended || BookingStage.cancelled => -1,
+      };
+
+  static String _endedMessage(String status) => switch (normalizeBookingStatus(status)) {
+        'refund_requested' => 'Booking Cancelled — Refund in Progress',
+        'refunded' => 'Booking Cancelled — Refunded',
+        'rejected' => 'This booking was rejected',
+        'expired' => 'This booking expired before it was confirmed',
+        'unable_to_complete' => 'The job could not be completed',
+        'customer_rejected' => 'You declined the quotation',
+        'estimation_closed' => 'This estimate was closed',
+        _ => 'This booking has been cancelled',
+      };
 
   @override
   Widget build(BuildContext context) {
-    if (_terminalStatuses.contains(currentStatus)) {
+    // Mode colour: green for grocery orders (GroceryTheme), navy otherwise.
+    final accent = Theme.of(context).colorScheme.primary;
+    if (indexFor(currentStatus) < 0) {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -941,11 +1078,7 @@ class _TimelineTracker extends StatelessWidget {
             const Icon(Icons.cancel, color: AppColors.error, size: 20),
             const SizedBox(width: 10),
             Text(
-              currentStatus == 'refund_requested'
-                  ? 'Booking Cancelled — Refund in Progress'
-                  : currentStatus == 'rejected'
-                      ? 'This booking was rejected'
-                      : 'This booking has been cancelled',
+              _endedMessage(currentStatus),
               style: const TextStyle(
                 color: AppColors.error,
                 fontWeight: FontWeight.w600,
@@ -968,7 +1101,7 @@ class _TimelineTracker extends StatelessWidget {
           return Expanded(
             child: Container(
               height: 2.5,
-              color: isCompleted ? AppColors.primary : AppColors.divider,
+              color: isCompleted ? accent : AppColors.divider,
             ),
           );
         }
@@ -976,7 +1109,7 @@ class _TimelineTracker extends StatelessWidget {
         final stepIndex = index ~/ 2;
         final isCompleted = stepIndex < activeIndex;
         final isCurrent = stepIndex == activeIndex;
-        final label = _steps[stepIndex].$2;
+        final label = (stepIndex == 3 && arrived) ? 'Arrived' : _steps[stepIndex];
 
         return Column(
           children: [
@@ -986,13 +1119,13 @@ class _TimelineTracker extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isCompleted
-                    ? AppColors.primary
+                    ? accent
                     : isCurrent
                         ? AppColors.primaryLight
                         : AppColors.surface,
                 border: Border.all(
                   color: (isCompleted || isCurrent)
-                      ? AppColors.primary
+                      ? accent
                       : AppColors.border,
                   width: isCurrent ? 2.5 : 1.5,
                 ),
@@ -1004,9 +1137,9 @@ class _TimelineTracker extends StatelessWidget {
                         ? Container(
                             width: 8,
                             height: 8,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.primary,
+                              color: accent,
                             ),
                           )
                         : null,
@@ -1023,7 +1156,7 @@ class _TimelineTracker extends StatelessWidget {
                 color: isCurrent
                     ? AppColors.navy
                     : isCompleted
-                        ? AppColors.primary
+                        ? accent
                         : AppColors.textSecondary,
               ),
             ),
@@ -1402,8 +1535,106 @@ class _PayAfterServiceCardState extends ConsumerState<_PayAfterServiceCard> {
   }
 }
 
+/// The OTP cards the web My Bookings page shows, with its GT rules: the pickup
+/// OTP disappears once the trip is under way, the Delivery OTP is shown only
+/// while the server returns it, and the cash code only while cash is pending.
+List<Widget> _otpCards(Booking b) {
+  final s = b.status;
+  if (isBookingFinished(s)) return const [];
+  final gt = _isLogisticsBooking(b);
+  final out = <Widget>[];
+  void add(String label, String hint, String code, Color fg, Color bg) {
+    out
+      ..add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: fg.withValues(alpha: 0.45)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          color: fg,
+                          letterSpacing: 0.5)),
+                  const SizedBox(height: 2),
+                  Text(hint,
+                      style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.85), height: 1.3)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: fg.withValues(alpha: 0.35)),
+              ),
+              child: SelectableText(code,
+                  style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3,
+                      color: fg)),
+            ),
+          ],
+        ),
+      ))
+      ..add(const SizedBox(height: 12));
+  }
+
+  final start = b.startOtp;
+  final active = const {'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'proof_submitted'}
+      .contains(s);
+  final hideStart = (gt && const {'in_progress', 'proof_submitted'}.contains(s)) ||
+      (b.deliveryOtp != null && s == 'in_progress');
+  if (start != null && active && !hideStart) {
+    add(
+      gt ? 'PICKUP OTP' : 'SERVICE START OTP',
+      gt
+          ? 'Share this code with the driver at pickup to start the trip'
+          : 'Share this code with your technician on arrival to begin work',
+      start,
+      const Color(0xFFC2410C),
+      const Color(0xFFFFF7ED),
+    );
+  }
+  if (gt && b.deliveryOtp != null) {
+    add(
+      'DELIVERY OTP',
+      'Share this code with the driver only after your goods have been delivered',
+      b.deliveryOtp!,
+      const Color(0xFF047857),
+      const Color(0xFFECFDF5),
+    );
+  }
+  if (b.paymentConfirmationOtp != null) {
+    add(
+      'CASH PAYMENT OTP',
+      gt
+          ? 'Driver reported cash collection. Share this code with your driver to confirm the payment.'
+          : 'Technician reported cash collection. Share this code to confirm the payment.',
+      b.paymentConfirmationOtp!,
+      const Color(0xFF1E3A8A),
+      const Color(0xFFE8EDF7),
+    );
+  }
+  return out;
+}
+
 /// Goods Transport / Packers & Movers bookings (the only ones with editable stops).
 bool _isLogisticsBooking(Booking b) {
+  if (b.isLogistics) return true;
   for (final i in b.items) {
     final slug = (i.service.categorySlug ?? '').toLowerCase();
     final title = i.service.title.toLowerCase();
@@ -1414,4 +1645,61 @@ bool _isLogisticsBooking(Booking b) {
     }
   }
   return false;
+}
+
+/// "How this fare was calculated" for a Goods Transport booking (web
+/// booking card, 2026-10-27): the non-zero lines of the server's
+/// `fare_breakdown`. Display only — the total stays the server's amount.
+class _GtFareLines extends StatelessWidget {
+  const _GtFareLines({required this.booking});
+
+  final Booking booking;
+
+  @override
+  Widget build(BuildContext context) {
+    final km = booking.tripDistanceKm;
+    const muted = TextStyle(fontSize: 11.5, color: AppColors.textSecondary);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(left: 10),
+      decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: AppColors.border, width: 2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            km > 0
+                ? 'HOW THIS FARE WAS CALCULATED · ${km.toStringAsFixed(1)} KM ROUTE'
+                : 'HOW THIS FARE WAS CALCULATED',
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          for (final line in booking.gtFareLines)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1.5),
+              child: Row(
+                children: [
+                  Expanded(child: Text(line.$1, style: muted)),
+                  Text(
+                    '₹${line.$2.toStringAsFixed(line.$2 % 1 == 0 ? 0 : 2)}',
+                    style: muted.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+            ),
+          if (booking.minimumFareApplied)
+            const Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: Text('Minimum fare applied', style: muted),
+            ),
+        ],
+      ),
+    );
+  }
 }

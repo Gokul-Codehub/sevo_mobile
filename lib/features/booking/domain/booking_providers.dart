@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:decimal/decimal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../shared/utils/input_validators.dart';
 import '../../addresses/domain/address_notifier.dart';
 import '../../auth/domain/auth_notifier.dart';
 import '../../logistics/domain/logistics_models.dart';
@@ -12,6 +14,14 @@ import '../data/booking_repository.dart';
 import '../data/quote_repository.dart';
 import 'booking_models.dart';
 import 'cart_notifier.dart';
+
+/// Bookings the customer withdrew by leaving the online-payment screen
+/// without paying. They were never really placed, so they are hidden from
+/// My Bookings and never announced as "Booking Cancelled".
+final withdrawnBookingIdsProvider = StateProvider<Set<int>>((ref) => <int>{});
+
+/// The reason text sent when an unpaid online booking is withdrawn.
+const String kOnlinePaymentWithdrawnReason = 'Online payment not completed';
 
 /// Provider for list of customer bookings filtered by status ('active', 'completed', or null).
 ///
@@ -72,14 +82,31 @@ final myBookingsProvider =
 /// fresh) correctly showed the booking's real, current status. Always fetch
 /// live now; `BookingDetailScreen`'s `initialBooking` param already handles
 /// instant-paint UX from whatever the caller navigated with.
+///
+/// 2026-10-28: while the booking is still in flight the detail refreshes
+/// itself every 15 s (quietly — the previous data stays on screen), so the
+/// status chip, tracker, OTPs and Cancel / Reschedule buttons follow the
+/// job instead of freezing at whatever it was when the screen opened.
 final bookingDetailProvider = FutureProvider.autoDispose
     .family<Booking, int>((ref, id) async {
   final repo = ref.watch(bookingRepositoryProvider);
   final result = await repo.getBookingDetail(id);
 
   return switch (result) {
-    Success(:final data) => data,
-    Failure(:final error) => throw error,
+    Success(:final data) => (() {
+        if (!isBookingFinished(data.status)) {
+          final timer = Timer(const Duration(seconds: 15), ref.invalidateSelf);
+          ref.onDispose(timer.cancel);
+        }
+        return data;
+      })(),
+    Failure(:final error) => (() {
+        // Offline / server hiccup: the last good booking stays on screen
+        // (valueOrNull keeps it); try again shortly.
+        final timer = Timer(const Duration(seconds: 20), ref.invalidateSelf);
+        ref.onDispose(timer.cancel);
+        throw error;
+      })(),
   };
 });
 
@@ -170,7 +197,9 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
       specialInstructions: specialInstructions,
       contactPhone: validPhone,
       paymentMethod: paymentMethod,
-      customerName: currentUser?.name ?? 'Customer',
+      // Digits stripped (web parity, Cus 2026-10-28): a phone number saved
+      // as the account name must not be sent as the customer's name.
+      customerName: InputValidators.bookingName(currentUser?.name) ?? 'Customer',
       customerEmail: currentUser?.email,
       photoBytes: photoBytes,
       photoFileName: photoFileName,
@@ -237,6 +266,11 @@ class BookingActionController extends Notifier<AsyncValue<Booking?>> {
 
   // ── Cancel booking ────────────────────────────────────────────────────────
   Future<String?> cancelBooking(int id, String reason) async {
+    // Mark a withdrawn unpaid online booking BEFORE the request, so the
+    // status watcher (which sees the change on its next poll) stays silent.
+    if (reason == kOnlinePaymentWithdrawnReason) {
+      ref.read(withdrawnBookingIdsProvider.notifier).update((s) => {...s, id});
+    }
     final result = await _repo.cancelBooking(id: id, reason: reason);
     switch (result) {
       case Success(:final data):

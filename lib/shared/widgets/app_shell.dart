@@ -47,8 +47,8 @@ class AppShell extends ConsumerStatefulWidget {
     // an unrelated path; it is otherwise unused for this tab.
     _TabItem(
       // Renamed 2026-10-08 per explicit request ("Change the AI bot name
-      // from 'AI Mitra' to 'Ask Apta'").
-      label: 'Ask Apta',
+      // from 'AI Mitra' to 'Ask AI'").
+      label: 'Ask AI',
       icon: Icons.auto_awesome_outlined,
       activeIcon: Icons.auto_awesome_rounded,
       route: AppRoutes.support,

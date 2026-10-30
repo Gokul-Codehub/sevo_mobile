@@ -4,18 +4,34 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 /// SEVO / CalServices Material 3 theme matching reference mobile design.
+///
+/// Colour code (2026-10-27):
+/// * [light] — the app-wide default = Services: all navy (buttons, links,
+///   focus, selection — 2026-10-28). Logistics (Goods Transport, Packers &
+///   Movers) is a service and uses this too.
+/// * [grocery] — Groceries & Vegetables: green main buttons, links and
+///   selection. Applied to the grocery screens through `GroceryTheme`
+///   (see app_router.dart), so default widgets turn green there without
+///   each screen setting colours by hand.
+/// The Home page header colours are NOT decided here — the admin sets
+/// them (Mobile App Theme); see HomeFlowTheme / ColorContrast.
 abstract final class AppTheme {
   AppTheme._();
 
-  static ThemeData get light => ThemeData(
+  static ThemeData get light => _build(_FlowSwatch.services);
+
+  /// Cached — the grocery routes wrap themselves in this on every build.
+  static final ThemeData grocery = _build(_FlowSwatch.groceries);
+
+  static ThemeData _build(_FlowSwatch s) => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
+          seedColor: s.primary,
           brightness: Brightness.light,
-          primary: AppColors.primary,
+          primary: s.primary,
           onPrimary: AppColors.textOnPrimary,
-          primaryContainer: AppColors.primaryLight,
-          onPrimaryContainer: AppColors.primaryDark,
+          primaryContainer: s.container,
+          onPrimaryContainer: s.onContainer,
           secondary: AppColors.navy,
           onSecondary: AppColors.textOnPrimary,
           error: AppColors.error,
@@ -27,14 +43,15 @@ abstract final class AppTheme {
         scaffoldBackgroundColor: AppColors.background,
         textTheme: _textTheme,
         appBarTheme: _appBarTheme,
-        elevatedButtonTheme: _elevatedButtonTheme,
-        filledButtonTheme: _filledButtonTheme,
-        outlinedButtonTheme: _outlinedButtonTheme,
-        textButtonTheme: _textButtonTheme,
-        inputDecorationTheme: _inputDecorationTheme,
+        elevatedButtonTheme: _elevatedButtonTheme(s),
+        filledButtonTheme: _filledButtonTheme(s),
+        outlinedButtonTheme: _outlinedButtonTheme(s),
+        textButtonTheme: _textButtonTheme(s),
+        inputDecorationTheme: _inputDecorationTheme(s),
         cardTheme: _cardTheme,
-        chipTheme: _chipTheme,
-        bottomNavigationBarTheme: _bottomNavTheme,
+        chipTheme: _chipTheme(s),
+        bottomNavigationBarTheme: _bottomNavTheme(s),
+        progressIndicatorTheme: ProgressIndicatorThemeData(color: s.primary),
         dividerTheme: const DividerThemeData(
           color: AppColors.divider,
           thickness: 0.8,
@@ -141,10 +158,10 @@ abstract final class AppTheme {
   );
 
   // ── Buttons ─────────────────────────────────────────────────────────────────
-  static ElevatedButtonThemeData get _elevatedButtonTheme =>
+  static ElevatedButtonThemeData _elevatedButtonTheme(_FlowSwatch s) =>
       ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: s.cta,
           foregroundColor: AppColors.textOnPrimary,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
@@ -158,10 +175,10 @@ abstract final class AppTheme {
         ),
       );
 
-  static FilledButtonThemeData get _filledButtonTheme =>
+  static FilledButtonThemeData _filledButtonTheme(_FlowSwatch s) =>
       FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: s.cta,
           foregroundColor: AppColors.textOnPrimary,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
@@ -175,15 +192,15 @@ abstract final class AppTheme {
         ),
       );
 
-  static OutlinedButtonThemeData get _outlinedButtonTheme =>
+  static OutlinedButtonThemeData _outlinedButtonTheme(_FlowSwatch s) =>
       OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: s.primary,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          side: const BorderSide(color: AppColors.primary, width: 1.5),
+          side: BorderSide(color: s.primary, width: 1.5),
           textStyle: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -191,9 +208,9 @@ abstract final class AppTheme {
         ),
       );
 
-  static TextButtonThemeData get _textButtonTheme => TextButtonThemeData(
+  static TextButtonThemeData _textButtonTheme(_FlowSwatch s) => TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: s.primary,
           textStyle: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -202,36 +219,36 @@ abstract final class AppTheme {
       );
 
   // ── Inputs ──────────────────────────────────────────────────────────────────
-  static const InputDecorationTheme _inputDecorationTheme =
+  static InputDecorationTheme _inputDecorationTheme(_FlowSwatch s) =>
       InputDecorationTheme(
     filled: true,
     fillColor: AppColors.surface,
-    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    border: OutlineInputBorder(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    border: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.border),
     ),
-    enabledBorder: OutlineInputBorder(
+    enabledBorder: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-      borderSide: BorderSide(color: AppColors.primary, width: 2),
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      borderSide: BorderSide(color: s.primary, width: 2),
     ),
-    errorBorder: OutlineInputBorder(
+    errorBorder: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.error),
     ),
-    focusedErrorBorder: OutlineInputBorder(
+    focusedErrorBorder: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
       borderSide: BorderSide(color: AppColors.error, width: 2),
     ),
-    hintStyle: TextStyle(
+    hintStyle: const TextStyle(
       color: AppColors.textHint,
       fontSize: 13,
     ),
-    errorStyle: TextStyle(color: AppColors.error, fontSize: 11.5),
+    errorStyle: const TextStyle(color: AppColors.error, fontSize: 11.5),
   );
 
   // ── Cards ───────────────────────────────────────────────────────────────────
@@ -248,19 +265,19 @@ abstract final class AppTheme {
   );
 
   // ── Chips ───────────────────────────────────────────────────────────────────
-  static final ChipThemeData _chipTheme = ChipThemeData(
+  static ChipThemeData _chipTheme(_FlowSwatch s) => ChipThemeData(
     backgroundColor: AppColors.surface,
-    selectedColor: AppColors.primaryLight,
+    selectedColor: s.container,
     disabledColor: AppColors.divider,
     labelStyle: const TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w500,
       color: AppColors.textPrimary,
     ),
-    secondaryLabelStyle: const TextStyle(
+    secondaryLabelStyle: TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w600,
-      color: AppColors.primaryDark,
+      color: s.onContainer,
     ),
     side: const BorderSide(color: AppColors.border, width: 0.8),
     shape: const RoundedRectangleBorder(
@@ -271,15 +288,51 @@ abstract final class AppTheme {
   );
 
   // ── Bottom Navigation ───────────────────────────────────────────────────────
-  static const BottomNavigationBarThemeData _bottomNavTheme =
+  static BottomNavigationBarThemeData _bottomNavTheme(_FlowSwatch s) =>
       BottomNavigationBarThemeData(
     backgroundColor: AppColors.surface,
-    selectedItemColor: AppColors.primary,
+    selectedItemColor: s.primary,
     unselectedItemColor: AppColors.textSecondary,
     selectedLabelStyle:
-        TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-    unselectedLabelStyle: TextStyle(fontSize: 11),
+        const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+    unselectedLabelStyle: const TextStyle(fontSize: 11),
     type: BottomNavigationBarType.fixed,
     elevation: 8,
+  );
+}
+
+/// One flow's colours. Every pair here passes 4.5:1 with its text.
+class _FlowSwatch {
+  const _FlowSwatch({
+    required this.primary,
+    required this.cta,
+    required this.container,
+    required this.onContainer,
+  });
+
+  /// Links, focus rings, selected states, spinners.
+  final Color primary;
+
+  /// Main (filled) button background — white text on it.
+  final Color cta;
+
+  /// Selected chip / tinted background, and the text on it.
+  final Color container;
+  final Color onContainer;
+
+  /// Services (and logistics): all navy (2026-10-28).
+  static const services = _FlowSwatch(
+    primary: AppColors.primary, // navy 0xFF0D253A — 15.6:1 on white
+    cta: AppColors.navy, // 15.6:1 with white text
+    container: AppColors.primaryLight,
+    onContainer: AppColors.primaryDark,
+  );
+
+  /// Groceries & Vegetables: green buttons and accents.
+  static const groceries = _FlowSwatch(
+    primary: AppColors.groceryGreen, // 0xFF15803D — 5.0:1 on white
+    cta: AppColors.groceryGreen,
+    container: AppColors.groceryGreenLight,
+    onContainer: AppColors.groceryGreenDark,
   );
 }

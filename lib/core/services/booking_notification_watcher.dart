@@ -51,35 +51,55 @@ class _BookingNotificationWatcherState
   final Map<int, String> _lastKnownStatus = {};
   bool _seeded = false;
 
-  static const _pollInterval = Duration(seconds: 45);
+  /// 45 s normally; 15 s while a technician is assigned or on the way, so
+  /// "On the way" / "Arrived" alerts are not a minute late.
+  static const _idlePollInterval = Duration(seconds: 45);
+  static const _activePollInterval = Duration(seconds: 15);
+  Duration _currentInterval = _idlePollInterval;
 
-  // Only these transitions are worth interrupting the customer for — the
-  // rest of the 23-status lifecycle (draft, pending_payment,
-  // waiting_for_payment, reviewed, received, accepted, awaiting_
-  // verification, verified, feedback_pending/received, rework_requested,
-  // follow_up_required) is either pre-booking, too granular, or not
-  // something the backend actually surfaces as customer-facing yet.
-  static const _notifiableStatuses = {
-    'confirmed',
-    'assigned',
-    'on_the_way',
-    'arrived',
-    'in_progress',
-    'completed',
-    'closed',
-    'cancelled',
-    'rejected',
-    'rescheduled',
-  };
+  // Rewritten 2026-10-28 (status audit): alerts follow the booking's STAGE
+  // (booking_status.dart), not its raw status string. Before, vendor
+  // spellings (`en_route`, `technician_arrived`, "ON_THE_WAY") never matched
+  // the list and were silently skipped, `accepted` (the moment the customer
+  // actually has a technician) never alerted, and a status that flapped
+  // between two polls (e.g. arrived -> on_the_way -> arrived) alerted again
+  // each time. Now: one alert per step forward, plus cancelled / ended /
+  // rescheduled.
+  final Map<int, int> _highestNotifiedStep = {};
+
+  static int _step(String status) => switch (bookingStageOf(status)) {
+        BookingStage.requested => 0,
+        BookingStage.confirmed => 1,
+        BookingStage.assigned => 2,
+        BookingStage.onTheWay => isBookingArrivedStatus(status) ? 4 : 3,
+        BookingStage.inProgress => 5,
+        BookingStage.completed => 6,
+        BookingStage.ended || BookingStage.cancelled => 7,
+      };
+
+  void _schedulePoll(List<Booking>? bookings) {
+    final busy = bookings != null &&
+        bookings.any((b) {
+          final st = bookingStageOf(b.status);
+          return st == BookingStage.assigned ||
+              st == BookingStage.onTheWay ||
+              st == BookingStage.inProgress;
+        });
+    final wanted = busy ? _activePollInterval : _idlePollInterval;
+    if (_pollTimer != null && wanted == _currentInterval) return;
+    _currentInterval = wanted;
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(wanted, (_) {
+      ref.invalidate(myBookingsProvider(null));
+    });
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     NotificationService.instance.initialize();
-    _pollTimer = Timer.periodic(_pollInterval, (_) {
-      ref.invalidate(myBookingsProvider(null));
-    });
+    _schedulePoll(null);
   }
 
   @override
@@ -96,35 +116,47 @@ class _BookingNotificationWatcherState
     super.dispose();
   }
 
-  String _titleFor(String status) => switch (status) {
-        'confirmed' => 'Booking Confirmed',
-        'assigned' => 'Technician Assigned',
-        'on_the_way' => 'Technician On The Way',
-        'arrived' => 'Technician Has Arrived',
-        'in_progress' => 'Service In Progress',
-        'completed' || 'closed' => 'Service Completed',
-        'cancelled' || 'rejected' => 'Booking Cancelled',
-        'rescheduled' => 'Booking Rescheduled',
-        _ => 'Booking Update',
-      };
+  // Titles match the server's inbox titles (service_requests/
+  // notifications.py) so NotificationsController.hasRecent() recognises the
+  // same event and the customer is not alerted twice.
+  String _titleFor(Booking booking) {
+    final s = booking.status;
+    final driver = (booking.serviceCategory ?? '').contains('goods') ||
+        (booking.serviceCategory ?? '').contains('packers');
+    final who = driver ? 'Driver' : 'Technician';
+    return switch (bookingStageOf(s)) {
+      BookingStage.confirmed => 'Booking Confirmation',
+      BookingStage.assigned => '$who Assigned',
+      BookingStage.onTheWay => isBookingArrivedStatus(s) ? '$who Has Arrived' : '$who On The Way',
+      BookingStage.inProgress => driver ? 'Trip In Progress' : 'Service In Progress',
+      BookingStage.completed => driver ? 'Goods Delivered' : 'Service Completed',
+      BookingStage.ended => 'Booking Closed',
+      BookingStage.cancelled => 'Booking Cancelled',
+      BookingStage.requested =>
+        normalizeBookingStatus(s) == 'rescheduled' ? 'Booking Rescheduled' : 'Booking Update',
+    };
+  }
 
-  String _bodyFor(Booking booking, String status) {
+  String _bodyFor(Booking booking) {
+    final s = booking.status;
     final label =
         booking.items.isNotEmpty ? booking.items.first.service.title : 'Your booking';
     final tech = booking.technician?.name;
-    return switch (status) {
-      'confirmed' => '$label has been confirmed.',
-      'assigned' => tech != null
+    return switch (bookingStageOf(s)) {
+      BookingStage.confirmed => '$label is confirmed.',
+      BookingStage.assigned => tech != null
           ? '$tech has been assigned to $label.'
-          : 'A technician has been assigned to $label.',
-      'on_the_way' =>
-        tech != null ? '$tech is on the way for $label.' : 'Your technician is on the way.',
-      'arrived' => 'Your technician has arrived for $label.',
-      'in_progress' => '$label is now in progress.',
-      'completed' || 'closed' => '$label has been completed. Rate your experience!',
-      'cancelled' || 'rejected' => '$label was cancelled.',
-      'rescheduled' => '$label has been rescheduled.',
-      _ => '$label status updated to ${status.replaceAll('_', ' ')}.',
+          : 'A professional has been assigned to $label.',
+      BookingStage.onTheWay => isBookingArrivedStatus(s)
+          ? '${tech ?? 'Your professional'} has arrived for $label.'
+          : '${tech ?? 'Your professional'} is on the way for $label.',
+      BookingStage.inProgress => '$label is now in progress.',
+      BookingStage.completed => '$label has been completed. Rate your experience!',
+      BookingStage.ended => '$label was closed: ${bookingStatusLabel(s)}.',
+      BookingStage.cancelled => '$label was cancelled.',
+      BookingStage.requested => normalizeBookingStatus(s) == 'rescheduled'
+          ? '$label has been rescheduled.'
+          : '$label status: ${bookingStatusLabel(s)}.',
     };
   }
 
@@ -134,9 +166,12 @@ class _BookingNotificationWatcherState
       final bookings = next.valueOrNull;
       if (bookings == null) return;
 
+      _schedulePoll(bookings);
+
       if (!_seeded) {
         for (final b in bookings) {
           _lastKnownStatus[b.id] = b.status;
+          _highestNotifiedStep[b.id] = _step(b.status);
         }
         _seeded = true;
         return;
@@ -155,10 +190,19 @@ class _BookingNotificationWatcherState
           continue;
         }
         if (previousStatus == booking.status) continue;
-        if (!_notifiableStatuses.contains(booking.status)) continue;
+        final step = _step(booking.status);
+        final rescheduled = normalizeBookingStatus(booking.status) == 'rescheduled';
+        final highest = _highestNotifiedStep[booking.id] ?? _step(previousStatus);
+        // Only a real step forward (or a reschedule) is worth an alert —
+        // never the same step twice, never a step backwards.
+        if (!rescheduled && (step <= highest || step == 0)) continue;
+        _highestNotifiedStep[booking.id] = rescheduled ? 0 : step;
+        // An unpaid online booking the customer backed out of was never
+        // placed: no "Booking Cancelled" alert for it.
+        if (ref.read(withdrawnBookingIdsProvider).contains(booking.id)) continue;
 
-        final title = _titleFor(booking.status);
-        final body = _bodyFor(booking, booking.status);
+        final title = _titleFor(booking);
+        final body = _bodyFor(booking);
         final inbox = ref.read(notificationsControllerProvider.notifier);
         // The server now records these events in the inbox too; if it (or an
         // earlier pass) already did, don't alert a second time.

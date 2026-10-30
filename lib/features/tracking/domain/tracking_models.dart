@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:equatable/equatable.dart';
+
+import '../../booking/domain/booking_status.dart';
 
 /// Statuses the backend treats as final — no more position updates, OTP, or
 /// cancellation will ever apply once here (mirrors
@@ -14,6 +18,33 @@ const kTrackingTerminalStatuses = {
   'rejected',
 };
 
+/// Arrival geofence around the customer's address, in metres — the same
+/// 35 m "radar" circle the web tracker draws (CustomerTrackingMap.jsx).
+const double kArrivalRadiusMeters = 35.0;
+
+/// Statuses in which the technician/driver is travelling to the customer.
+const kTrackingTransitStatuses = {
+  'accepted',
+  'on_the_way',
+  'en_route',
+  'technician_on_the_way',
+};
+
+/// Server statuses arrive in several spellings ("ON_THE_WAY", "On the way",
+/// "on-the-way"). Every status comparison in the app goes through this.
+String normalizeTrackingStatus(Object? raw) => normalizeBookingStatus(raw);
+
+/// Great-circle distance in metres.
+double haversineMeters(double lat1, double lng1, double lat2, double lng2) {
+  const r = 6371000.0;
+  double rad(double d) => d * math.pi / 180.0;
+  final dLat = rad(lat2 - lat1);
+  final dLng = rad(lng2 - lng1);
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(rad(lat1)) * math.cos(rad(lat2)) * math.sin(dLng / 2) * math.sin(dLng / 2);
+  return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+}
+
 double? _asDouble(dynamic v) {
   if (v == null) return null;
   if (v is num) return v.toDouble();
@@ -26,6 +57,20 @@ int? _asInt(dynamic v) {
   if (v is num) return v.round();
   return int.tryParse(v.toString());
 }
+
+/// `_build_tracking_payload` fills an unknown technician rating with 4.9 and
+/// an unknown job count with 12 (views.py: `tech_rating or 4.9`,
+/// `tech_jobs or 12`). That pair is a placeholder, not a review anyone gave,
+/// so it is dropped; the UI then shows no rating instead of an invented one.
+bool _isPlaceholderRating(Map<String, dynamic> tech, Map<String, dynamic> json) =>
+    _asDouble(tech['rating'] ?? json['technician_rating']) == 4.9 &&
+    (_asInt(tech['jobs_completed']) ?? 12) == 12;
+
+double? _realRating(Map<String, dynamic> tech, Map<String, dynamic> json) =>
+    _isPlaceholderRating(tech, json) ? null : _asDouble(tech['rating'] ?? json['technician_rating']);
+
+int? _realJobs(Map<String, dynamic> tech, Map<String, dynamic> json) =>
+    _isPlaceholderRating(tech, json) ? null : _asInt(tech['jobs_completed']);
 
 String? _asNonEmptyString(dynamic v) {
   final s = v?.toString().trim();
@@ -84,6 +129,9 @@ class TrackingUpdate extends Equatable {
     this.ptlRequoteEligible = false,
     this.ptlWeightKg,
     this.stops = const [],
+    this.paymentMethod,
+    this.totalAmount,
+    this.logisticsLeg,
     required this.updatedAt,
     this.isLiveWs = false,
   });
@@ -147,6 +195,48 @@ class TrackingUpdate extends Equatable {
   /// Whole route as TripStops (PICKUP, each WAYPOINT, DROP).
   final List<TrackingStop> stops;
 
+  final String? paymentMethod;
+  final double? totalAmount;
+
+  /// Current logistics leg (e.g. `DELIVERED`), from `logistics.leg`.
+  final String? logisticsLeg;
+
+  /// Goods Transport / Packers & Movers trip (driver wording).
+  bool get isLogistics {
+    final c = (serviceCategory ?? '').toLowerCase();
+    return (logisticsLeg ?? '').isNotEmpty ||
+        const ['goods', 'truck', 'two_wheeler', 'packers', 'transport'].any(c.contains);
+  }
+
+  /// A named technician / driver actually holds the job. The server's
+  /// `technician_assigned` flag is also true while the job is only OFFERED to
+  /// the pool (status `assigned` / a workforce job exists), so it must not be
+  /// read as "a driver is assigned" — that produced "Driver assigned" on the
+  /// banner next to "Driver not yet assigned" on the card.
+  bool get hasDriver => isAccepted || (technicianName ?? '').trim().isNotEmpty;
+
+  /// The driver has finished: live distance / ETA no longer apply.
+  bool get isPostDelivery => const {
+        'proof_submitted',
+        'cash_pending',
+        'waiting_for_payment',
+        'payment_pending',
+        'completed',
+        'closed',
+        'feedback_pending',
+        'feedback_received',
+      }.contains(status.toLowerCase());
+
+  /// Customer-facing payment line for a goods trip (web `gtPaymentLabel`).
+  String? get gtPaymentLabel {
+    final method = (paymentMethod ?? '').toUpperCase();
+    final pay = (paymentStatus ?? '').toLowerCase();
+    if (method != 'COD' && method != 'CASH') return method.isEmpty ? null : 'Paid online';
+    if (pay == 'paid' || pay == 'cash_collected') return 'Cash on delivery - paid to driver';
+    if (pay == 'cash_pending') return 'Cash on delivery - awaiting your confirmation code';
+    return 'Cash on delivery - pay the driver at delivery';
+  }
+
   /// Intermediate stops only (pickup and drop have their own rows).
   List<TrackingStop> get intermediateStops => stops
       .where((s) => s.stopType != 'PICKUP' && s.stopType != 'DROP')
@@ -163,7 +253,96 @@ class TrackingUpdate extends Equatable {
   /// technician marker at all.
   bool get hasLiveData => technicianLat != null && technicianLng != null;
 
+  /// The server reports the live position as lost / unavailable (it then
+  /// also withholds the coordinates — backend 2026-10-27), so the map shows
+  /// no moving marker instead of a stale one.
+  bool get locationLost => const {'LOCATION_LOST', 'UNAVAILABLE'}
+      .contains(freshness.toUpperCase());
+
   bool get isTerminal => kTrackingTerminalStatuses.contains(status.toLowerCase());
+
+  /// Straight-line distance from the live technician position to the
+  /// customer's address, or null while either point is unknown.
+  double? get distanceToDestinationMeters {
+    if (technicianLat == null || technicianLng == null) return null;
+    if (destinationLat == null || destinationLng == null) return null;
+    return haversineMeters(technicianLat!, technicianLng!, destinationLat!, destinationLng!);
+  }
+
+  /// The technician/driver is at the customer's address: either the server
+  /// says so, or a live position is inside the 35 m arrival radius while the
+  /// job is still in transit (the server status can lag a few seconds behind
+  /// the GPS, and some technicians never tap "Arrived").
+  bool get hasArrived {
+    final s = normalizeTrackingStatus(status);
+    if (s == 'arrived' || s == 'technician_arrived') return true;
+    if (!kTrackingTransitStatuses.contains(s)) return false;
+    if (locationLost) return false;
+    final d = distanceToDestinationMeters;
+    return d != null && d <= kArrivalRadiusMeters;
+  }
+
+  /// Merges an incoming snapshot onto this one.
+  ///
+  /// WebSocket events (technician_location_updated, employee_on_the_way, …)
+  /// carry only part of the payload — no OTPs, often no is_accepted — and
+  /// used to replace the whole state, so the OTP cards vanished on every WS
+  /// frame and came back on the next REST poll (the "blinking" OTPs). For a
+  /// [partial] frame every missing field keeps its previous value. For a
+  /// full REST snapshot the server is authoritative, except that an OTP is
+  /// only cleared once the job is terminal (or, for the cash OTP, paid).
+  TrackingUpdate mergedWith(TrackingUpdate next, {required bool partial}) {
+    final status = next.status.isNotEmpty ? next.status : this.status;
+    final terminal = kTrackingTerminalStatuses.contains(status);
+    final pay = (next.paymentStatus ?? paymentStatus ?? '').toLowerCase();
+    final paid = pay == 'paid' || pay == 'cash_collected';
+    T? keep<T>(T? n, T? p) => n ?? (terminal ? null : p);
+    T? pick<T>(T? n, T? p) => partial ? (n ?? p) : n;
+    return TrackingUpdate(
+      status: status,
+      freshness: next.freshness.isNotEmpty || !partial ? next.freshness : freshness,
+      isAccepted: !terminal &&
+          (next.isAccepted || ((partial || next.technicianAssigned) && isAccepted)),
+      technicianAssigned: next.technicianAssigned || (partial && technicianAssigned),
+      technicianLat: pick(next.technicianLat, technicianLat),
+      technicianLng: pick(next.technicianLng, technicianLng),
+      technicianHeading: pick(next.technicianHeading, technicianHeading),
+      technicianSpeed: pick(next.technicianSpeed, technicianSpeed),
+      technicianName: next.technicianName ?? technicianName,
+      technicianPhone: next.technicianPhone ?? technicianPhone,
+      technicianPhoto: next.technicianPhoto ?? technicianPhoto,
+      technicianRating: next.technicianRating ?? technicianRating,
+      technicianJobsCompleted: next.technicianJobsCompleted ?? technicianJobsCompleted,
+      destinationLat: next.destinationLat ?? destinationLat,
+      destinationLng: next.destinationLng ?? destinationLng,
+      destinationAddress: next.destinationAddress ?? destinationAddress,
+      etaMinutes: pick(next.etaMinutes, etaMinutes),
+      distanceKm: pick(next.distanceKm, distanceKm),
+      startOtp: keep(next.startOtp, startOtp),
+      paymentConfirmationOtp:
+          next.paymentConfirmationOtp ?? (terminal || paid ? null : paymentConfirmationOtp),
+      paymentStatus: next.paymentStatus ?? paymentStatus,
+      balanceDue: pick(next.balanceDue, balanceDue),
+      extraCharges: partial && next.extraCharges.isEmpty ? extraCharges : next.extraCharges,
+      deliveryException: pick(next.deliveryException, deliveryException),
+      deliveryOtp: keep(next.deliveryOtp, deliveryOtp),
+      feedbackToken: next.feedbackToken ?? feedbackToken,
+      feedbackSubmitted: next.feedbackSubmitted || feedbackSubmitted,
+      feedbackRating: next.feedbackRating ?? feedbackRating,
+      requestId: next.requestId ?? requestId,
+      bookingId: next.bookingId ?? bookingId,
+      serviceCategory: next.serviceCategory ?? serviceCategory,
+      hasPtl: next.hasPtl || (partial && hasPtl),
+      ptlRequoteEligible: partial ? (next.ptlRequoteEligible || ptlRequoteEligible) : next.ptlRequoteEligible,
+      ptlWeightKg: next.ptlWeightKg ?? ptlWeightKg,
+      stops: partial && next.stops.isEmpty ? stops : next.stops,
+      paymentMethod: next.paymentMethod ?? paymentMethod,
+      totalAmount: next.totalAmount ?? totalAmount,
+      logisticsLeg: next.logisticsLeg ?? logisticsLeg,
+      updatedAt: next.updatedAt,
+      isLiveWs: next.isLiveWs,
+    );
+  }
 
   /// Human-readable placeholder shown while there is no live position yet
   /// (mirrors the web app's `getFreshnessBadge()` text, simplified).
@@ -172,15 +351,43 @@ class TrackingUpdate extends Equatable {
     if (isTerminal) {
       return s == 'cancelled' || s == 'rejected'
           ? 'This booking has been cancelled.'
-          : 'Service completed successfully.';
+          : (isLogistics ? 'Goods delivered successfully.' : 'Service completed successfully.');
+    }
+    if (isLogistics) {
+      final leg = (logisticsLeg ?? '').toUpperCase();
+      if (leg == 'DELIVERED' && s == 'in_progress') {
+        return 'Goods delivered - awaiting driver proof.';
+      }
+      if (const {'proof_submitted', 'cash_pending', 'waiting_for_payment', 'payment_pending'}
+          .contains(s)) {
+        return 'Goods delivered - awaiting payment confirmation.';
+      }
+      if (s == 'arrived') return 'Driver has arrived at the pickup.';
+      if (s == 'in_progress') return 'Your goods are on the trip.';
+      if (!hasDriver) {
+        return technicianAssigned
+            ? 'Request sent to nearby drivers - waiting for one to accept...'
+            : 'Finding a driver for your trip...';
+      }
+      if (!isAccepted) return 'Driver assigned - waiting for confirmation...';
+      if (!hasLiveData && locationLost) {
+        return "Driver's live location is temporarily unavailable - it will update when the signal returns.";
+      }
+      if (!hasLiveData) return 'Driver assigned - waiting for live location...';
+      return 'Driver is on the way.';
     }
     if (s == 'in_progress') return 'Technician is servicing your request.';
     if (s == 'arrived') return 'Technician has arrived at your location.';
-    if (!technicianAssigned) {
-      return 'Finding your service professional…';
+    if (!hasDriver) {
+      return technicianAssigned
+          ? 'Request sent to nearby professionals — waiting for one to accept…'
+          : 'Finding your service professional…';
     }
     if (!isAccepted) {
       return 'Technician assigned — waiting for confirmation…';
+    }
+    if (!hasLiveData && locationLost) {
+      return "Technician's live location is temporarily unavailable — it will update when the signal returns.";
     }
     if (!hasLiveData) {
       return 'Technician assigned — waiting for live location…';
@@ -208,8 +415,8 @@ class TrackingUpdate extends Equatable {
       // No status in the payload => '' (the screen then falls back to the
       // booking's own status) rather than a fake 'new_request', which pushed a
       // completed booking's tracker back to the first step.
-      status: (json['status'] ?? '').toString(),
-      freshness: (json['freshness'] ?? '').toString(),
+      status: normalizeTrackingStatus(json['status']),
+      freshness: (json['freshness'] ?? json['freshness_state'] ?? '').toString(),
       isAccepted: json['is_accepted'] == true || json['technician_accepted'] == true,
       technicianAssigned: json['technician_assigned'] == true || tech.isNotEmpty,
       technicianLat: techLat,
@@ -219,8 +426,8 @@ class TrackingUpdate extends Equatable {
       technicianName: _asNonEmptyString(tech['name'] ?? json['technician_name']),
       technicianPhone: _asNonEmptyString(tech['phone'] ?? json['technician_phone']),
       technicianPhoto: _asNonEmptyString(tech['photo'] ?? json['technician_photo']),
-      technicianRating: _asDouble(tech['rating'] ?? json['technician_rating']),
-      technicianJobsCompleted: _asInt(tech['jobs_completed']),
+      technicianRating: _realRating(tech, json),
+      technicianJobsCompleted: _realJobs(tech, json),
       destinationLat: _asDouble(dest['latitude']),
       destinationLng: _asDouble(dest['longitude']),
       destinationAddress: _asNonEmptyString(dest['address']),
@@ -265,6 +472,11 @@ class TrackingUpdate extends Equatable {
               .map((e) => TrackingStop.fromJson(Map<String, dynamic>.from(e)))
               .toList()
           : const [],
+      paymentMethod: _asNonEmptyString(json['payment_method']),
+      totalAmount: _asDouble(json['total_amount']),
+      logisticsLeg: json['logistics'] is Map
+          ? _asNonEmptyString((json['logistics'] as Map)['leg'])
+          : _asNonEmptyString(json['logistics_leg']),
       updatedAt: DateTime.now(),
       isLiveWs: isWs,
     );
@@ -316,6 +528,9 @@ class TrackingUpdate extends Equatable {
         ptlRequoteEligible: ptlRequoteEligible,
         ptlWeightKg: ptlWeightKg,
         stops: stops,
+        paymentMethod: paymentMethod,
+        totalAmount: totalAmount,
+        logisticsLeg: logisticsLeg,
         updatedAt: updatedAt,
         isLiveWs: isLiveWs ?? this.isLiveWs,
       );
@@ -357,6 +572,9 @@ class TrackingUpdate extends Equatable {
         ptlRequoteEligible,
         ptlWeightKg,
         stops,
+        paymentMethod,
+        totalAmount,
+        logisticsLeg,
         updatedAt,
         isLiveWs,
       ];

@@ -150,6 +150,7 @@ class _ProfileCompletionScreenState
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                   maxLength: 60,
+                  inputFormatters: [NoDigitsFormatter()],
                   validator: InputValidators.fullName,
                 ),
                 const SizedBox(height: 16),

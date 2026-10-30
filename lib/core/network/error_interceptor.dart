@@ -79,6 +79,16 @@ class ErrorInterceptor extends Interceptor {
             (data['message'] as String).isNotEmpty) {
           return _parseValidationError(data);
         }
+        // 503 = a feature that is switched off / not set up on the server
+        // (e.g. payment/initiate: "Online payment is not configured."). Its
+        // plain `message` is meant for the customer — show it instead of
+        // "Something went wrong", which hid the real reason.
+        if (code == 503 &&
+            data is Map &&
+            data['message'] is String &&
+            (data['message'] as String).trim().isNotEmpty) {
+          return ServerError((data['message'] as String).trim());
+        }
         return const ServerError();
       default:
         return const UnknownError();

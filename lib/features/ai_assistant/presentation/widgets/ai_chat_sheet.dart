@@ -27,8 +27,8 @@ const Color _kAiInk = Color(0xFF0D253A);
 /// (x) to close there is the interaction between user and AI chat bot"):
 /// a 3/4-screen-height modal sheet, its own (x) close button, talking to
 /// the real backend AI Assistant gateway (`/api/ai/chat/`).
-/// True while the Ask Apta chat sheet is open — the bottom bar reads this to
-/// highlight the Ask Apta tab instead of the page underneath.
+/// True while the Ask AI chat sheet is open — the bottom bar reads this to
+/// highlight the Ask AI tab instead of the page underneath.
 final ValueNotifier<bool> aiChatOpen = ValueNotifier<bool>(false);
 
 Future<void> showAiChatSheet(BuildContext context) {
@@ -288,8 +288,8 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
           const Expanded(
             child: Text(
               // Renamed 2026-10-08 per explicit request ("Change the AI bot
-              // name from 'AI Mitra' to 'Ask Apta'").
-              'Ask Apta',
+              // name from 'AI Mitra' to 'Ask AI'").
+              'Ask AI',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
@@ -402,7 +402,7 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
                   data: (list) {
                     if (list.isEmpty) {
                       return message(Icons.chat_bubble_outline_rounded, 'No saved conversations',
-                          'Your chats with Apta will appear here.');
+                          'Your chats with Ask AI will appear here.');
                     }
                     final currentId = ref.watch(aiChatControllerProvider).conversationId;
                     return ListView.separated(
@@ -1218,7 +1218,7 @@ class _TypingIndicatorBubble extends StatelessWidget {
 }
 
 
-/// Round white avatar holding the Ask Apta robot animation.
+/// Round white avatar holding the Ask AI robot animation.
 class _BotAvatar extends StatelessWidget {
   const _BotAvatar({required this.size});
   final double size;

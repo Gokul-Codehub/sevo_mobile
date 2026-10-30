@@ -194,7 +194,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       currentCode: _appliedCouponCode,
     );
 
-    if (applied != null) {
+    if (applied != null && mounted) {
       setState(() {
         _appliedCouponCode = applied.code;
         _couponDiscountAmount = applied.discountAmount.toDouble().round();

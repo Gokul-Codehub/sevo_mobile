@@ -11,6 +11,7 @@ import '../../domain/address_models.dart';
 import '../../domain/address_notifier.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../shared/utils/focus_first_error.dart';
+import '../../../../shared/maps/sevo_map_style.dart';
 
 /// Screen to create or edit a customer address with live map pin & service zone check.
 class AddEditAddressScreen extends ConsumerStatefulWidget {
@@ -365,6 +366,9 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         children: [
           Positioned.fill(
             child: GoogleMap(
+              // SEVO map look (or the cloud Map ID when one is set).
+              style: SevoMap.style,
+              cloudMapId: SevoMap.cloudMapId,
               initialCameraPosition: CameraPosition(target: target, zoom: 16),
               onMapCreated: (c) => _mapController = c,
               mapType: _satellite ? MapType.hybrid : MapType.normal,
@@ -853,6 +857,9 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                             Positioned.fill(
                               child: IgnorePointer(
                                 child: GoogleMap(
+                                  // SEVO map look (or the cloud Map ID when one is set).
+                                  style: SevoMap.style,
+                                  cloudMapId: SevoMap.cloudMapId,
                                   key: ValueKey('mini_${_currentLat}_$_currentLng'),
                                   initialCameraPosition:
                                       CameraPosition(target: target, zoom: 15.5),

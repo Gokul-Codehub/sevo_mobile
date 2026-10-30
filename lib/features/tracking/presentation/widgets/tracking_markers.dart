@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../../shared/theme/app_colors.dart';
 
@@ -22,9 +23,69 @@ class TrackingMarkers {
 
   static BitmapDescriptor? _bikeIcon;
   static BitmapDescriptor? _lollipopIcon;
+  static BitmapDescriptor? _pickupIcon;
+
+  /// Only Packers & Movers and mini-truck Goods Transport trips show the
+  /// pickup-truck marker; every other service keeps the scooter.
+  static bool usesPickupIcon(String? serviceCategory) {
+    final c = (serviceCategory ?? '').toLowerCase();
+    return c == 'packers_movers' || c.startsWith('packers_movers') || c == 'goods_transport_truck';
+  }
+
+  static Future<BitmapDescriptor> pickupIcon() async {
+    if (_pickupIcon != null) return _pickupIcon!;
+    try {
+      return _pickupIcon = await _fromAsset('assets/images/sevo_pickup_top.png', logicalHeight: 64);
+    } catch (_) {
+      return _pickupIcon = await technicianIcon();
+    }
+  }
+
+  static Future<BitmapDescriptor> _fromAsset(String path, {double? logicalWidth, double? logicalHeight}) async {
+    final data = await rootBundle.load(path);
+    final probe = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    final first = (await probe.getNextFrame()).image;
+    final aspect = first.width / first.height;
+    final w = logicalWidth ?? logicalHeight! * aspect;
+    final h = logicalHeight ?? logicalWidth! / aspect;
+    final codec = await ui.instantiateImageCodec(
+      data.buffer.asUint8List(),
+      targetWidth: (w * 3).round(),
+    );
+    final img = (await codec.getNextFrame()).image;
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List(), width: w, height: h);
+  }
 
   static Future<BitmapDescriptor> technicianIcon() async {
-    return _bikeIcon ??= await _drawBikeMarker();
+    if (_bikeIcon != null) return _bikeIcon!;
+    // SEVO's own top-down scooter-and-rider artwork; falls back to the drawn
+    // badge if the asset ever fails to load.
+    try {
+      return _bikeIcon = await _scooterFromAsset();
+    } catch (_) {
+      return _bikeIcon = await _drawBikeMarker();
+    }
+  }
+
+  /// Top-down scooter (front pointing up). Sized by width; height follows
+  /// the artwork's aspect ratio. Rotated at runtime by `Marker.rotation`.
+  static Future<BitmapDescriptor> _scooterFromAsset() async {
+    const double logicalWidth = 34;
+    final data = await rootBundle.load('assets/images/sevo_scooter_top.png');
+    final codec = await ui.instantiateImageCodec(
+      data.buffer.asUint8List(),
+      targetWidth: (logicalWidth * 3).round(),
+    );
+    final frame = await codec.getNextFrame();
+    final img = frame.image;
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    final logicalHeight = logicalWidth * img.height / img.width;
+    return BitmapDescriptor.bytes(
+      byteData!.buffer.asUint8List(),
+      width: logicalWidth,
+      height: logicalHeight,
+    );
   }
 
   static Future<BitmapDescriptor> destinationLollipop() async {

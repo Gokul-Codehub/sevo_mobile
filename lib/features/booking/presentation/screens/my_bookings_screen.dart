@@ -31,6 +31,8 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final TabController _tabController;
   _BookingCategoryFilter _categoryFilter = _BookingCategoryFilter.all;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
@@ -42,6 +44,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -62,49 +65,61 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     }
   }
 
-  /// Statuses where the booking's life-cycle is over (or only a rating /
-  /// refund trail remains) — these belong to History. EVERY other status
-  /// (pending_payment, reviewed, received, accepted, on_the_way, arrived,
-  /// awaiting_verification, rework_requested, follow_up_required,
-  /// rescheduled, unassigned, ...) is still in flight and stays Active.
-  /// The old rule only treated 4 statuses as Active, so a booking that was
-  /// e.g. "On the Way" or "Awaiting Payment" was wrongly filed in History.
-  static const Set<String> _historyStatuses = {
-    'completed',
-    'verified',
-    'feedback_pending',
-    'feedback_received',
-    'closed',
-    'cancelled',
-    'canceled',
-    'rejected',
-    'refund_requested',
-    'refunded',
-    'expired',
-  };
-
-  static String _norm(String s) =>
-      s.trim().toLowerCase().replaceAll(RegExp(r'[\s\-]+'), '_');
-
-  static bool _isActive(Booking b) => !_historyStatuses.contains(_norm(b.status));
+  /// History = the booking's life-cycle is over (completed, ended without
+  /// service, cancelled); everything else is still in flight and stays
+  /// Active. The rule lives in booking_status.dart so the list, the chip and
+  /// the trackers can never disagree about a status again.
+  static bool _isActive(Booking b) => !isBookingFinished(b.status);
 
   static DateTime _when(Booking b) =>
       DateTime.tryParse(b.scheduledDate) ??
       b.createdAt ??
       DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Splits into (active, history). Active: soonest visit first. History:
+  /// Active ordering: jobs happening right now first (technician on the way,
+  /// arrived, in progress), then accepted / assigned / confirmed jobs, then
+  /// everything else still in flight.
+  static int _activeRank(Booking b) => bookingActiveRank(b.status);
+
+  /// Splits into (active, history). Active: running jobs first, then
+  /// accepted ones, then the rest, each group soonest visit first. History:
   /// most recent first.
   static (List<Booking>, List<Booking>) _partition(List<Booking> all) {
     final active = all.where(_isActive).toList()
-      ..sort((a, b) => _when(a).compareTo(_when(b)));
+      ..sort((a, b) {
+        final r = _activeRank(a).compareTo(_activeRank(b));
+        return r != 0 ? r : _when(a).compareTo(_when(b));
+      });
     final history = all.where((b) => !_isActive(b)).toList()
       ..sort((a, b) => _when(b).compareTo(_when(a)));
     return (active, history);
   }
 
+  /// True when [b] matches the search text: booking number, service or
+  /// product name, status, technician, address or date.
+  bool _matchesQuery(Booking b) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    final haystack = <String>[
+      b.requestId,
+      b.id.toString(),
+      b.status.replaceAll('_', ' '),
+      bookingStatusLabel(b.status),
+      b.scheduledDate,
+      b.scheduledTimeSlot,
+      b.technician?.name ?? '',
+      b.address?.formattedAddress ?? '',
+      for (final i in b.items) i.service.title,
+    ].join(' ').toLowerCase();
+    return q.split(RegExp(r'\s+')).every(haystack.contains);
+  }
+
   List<Booking> _applyFilter(List<Booking> all) {
-    final visible = all.where((b) => !b.isQuotedWorkBooking).toList();
+    final withdrawn = ref.watch(withdrawnBookingIdsProvider);
+    final visible = all
+        .where((b) => !b.isQuotedWorkBooking && !withdrawn.contains(b.id))
+        .where(_matchesQuery)
+        .toList();
     return switch (_categoryFilter) {
       _BookingCategoryFilter.all => visible,
       _BookingCategoryFilter.services =>
@@ -275,7 +290,42 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: TextField(
+            controller: _searchController,
+            textInputAction: TextInputAction.search,
+            onChanged: (v) => setState(() => _query = v),
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Search bookings, services, technician…',
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
+              isDense: true,
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE3E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFE3E8F0)),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
           child: Row(
             children: [
               _CategoryFilterChip(
@@ -312,14 +362,18 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
             children: [
               _BookingListView(
                 bookings: upcoming,
-                emptyTitle: 'No Active Bookings',
-                emptySubtitle: 'Book a service today and enjoy hassle-free home maintenance.',
+                emptyTitle: _query.trim().isEmpty ? 'No Active Bookings' : 'No matching bookings',
+                emptySubtitle: _query.trim().isEmpty
+                    ? 'Book a service today and enjoy hassle-free home maintenance.'
+                    : 'Try a different name, booking number or status.',
                 onRefresh: () => ref.refresh(myBookingsProvider(null).future),
               ),
               _BookingListView(
                 bookings: history,
-                emptyTitle: 'No Past Bookings',
-                emptySubtitle: 'Your completed or cancelled bookings will appear here.',
+                emptyTitle: _query.trim().isEmpty ? 'No Past Bookings' : 'No matching bookings',
+                emptySubtitle: _query.trim().isEmpty
+                    ? 'Your completed or cancelled bookings will appear here.'
+                    : 'Try a different name, booking number or status.',
                 onRefresh: () => ref.refresh(myBookingsProvider(null).future),
               ),
             ],

@@ -173,7 +173,27 @@ class LogisticsTier extends Equatable {
     this.maxCft,
     this.duration,
     this.isActive = true,
+    this.bodyLengthCm,
+    this.bodyWidthCm,
+    this.bodyHeightCm,
   });
+
+  /// Cargo-body size in cm (admin-entered; null = unknown).
+  final double? bodyLengthCm;
+  final double? bodyWidthCm;
+  final double? bodyHeightCm;
+
+  /// The vehicle size a customer should see (web `tierDimensionsText`): the
+  /// admin's display label when set, otherwise the structured cargo-body size
+  /// as "L x W x H cm". Empty when neither is configured - nothing is guessed.
+  String get dimensionsText {
+    final label = (dimensionsLabel ?? '').trim();
+    if (label.isNotEmpty) return label;
+    final l = bodyLengthCm, w = bodyWidthCm, h = bodyHeightCm;
+    if (l == null || w == null || h == null || l <= 0 || w <= 0 || h <= 0) return '';
+    String f(double x) => x == x.roundToDouble() ? x.toStringAsFixed(0) : x.toStringAsFixed(1);
+    return '${f(l)} x ${f(w)} x ${f(h)} cm';
+  }
 
   final int id;
 
@@ -233,6 +253,9 @@ class LogisticsTier extends Equatable {
       maxCft: parseDoubleOrNull(json['max_cft']),
       duration: json['duration']?.toString(),
       isActive: parseBoolOrDefault(json['is_active'], true),
+      bodyLengthCm: parseDoubleOrNull(json['body_length_cm']),
+      bodyWidthCm: parseDoubleOrNull(json['body_width_cm']),
+      bodyHeightCm: parseDoubleOrNull(json['body_height_cm']),
     );
   }
 
@@ -257,6 +280,9 @@ class LogisticsTier extends Equatable {
         maxCft,
         duration,
         isActive,
+        bodyLengthCm,
+        bodyWidthCm,
+        bodyHeightCm,
       ];
 }
 
@@ -813,7 +839,6 @@ class PmAddOn extends Equatable {
         : unitPrice.toString();
     return switch (pricingMode) {
       'FLAT' => '₹$p',
-      'PER_CFT' => '₹$p/CFT',
       _ => '₹$p each',
     };
   }

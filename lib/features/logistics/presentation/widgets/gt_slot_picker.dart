@@ -27,10 +27,21 @@ import '../../domain/logistics_providers.dart';
 /// [category]: "goods_transport_truck" | "goods_transport_two_wheeler" |
 /// "packers_movers" | "ptl".
 class GtSlotPicker extends ConsumerStatefulWidget {
-  const GtSlotPicker({super.key, required this.category, this.city});
+  const GtSlotPicker({
+    super.key,
+    required this.category,
+    this.city,
+    this.showSlots = true,
+  });
 
   final String category;
   final String? city;
+
+  /// Goods & Transport is on-demand since the 2026-10-29 backend change (no
+  /// booking time slots). With [showSlots] false only the pickup DATE is
+  /// asked for (Packers & Movers, Part Truck Load) and the booking carries
+  /// "Immediate" / "Flexible (Anytime)" as its time.
+  final bool showSlots;
 
   @override
   ConsumerState<GtSlotPicker> createState() => _GtSlotPickerState();
@@ -69,6 +80,12 @@ class _GtSlotPickerState extends ConsumerState<GtSlotPicker> {
     }
 
     if (_dates == null) {
+      if (!widget.showSlots && slotsAsync.hasError) {
+        // The date list is a convenience here — never block the booking on it.
+        return _FallbackDateRow(
+          minDays: widget.category == 'ptl' ? 1 : 0,
+        );
+      }
       return slotsAsync.when(
         loading: () => const Column(
           children: [
@@ -133,16 +150,17 @@ class _GtSlotPickerState extends ConsumerState<GtSlotPicker> {
           ),
         ),
         const SizedBox(height: 12),
-        slotsAsync.when(
-          loading: () => const ShimmerCard(height: 120),
-          error: (err, _) => ErrorStateWidget(
-            message: err is Exception
-                ? 'Unable to load slots. Tap to retry.'
-                : 'Unable to load slots.',
-            onRetry: () => ref.invalidate(gtSlotsProvider),
+        if (widget.showSlots)
+          slotsAsync.when(
+            loading: () => const ShimmerCard(height: 120),
+            error: (err, _) => ErrorStateWidget(
+              message: err is Exception
+                  ? 'Unable to load slots. Tap to retry.'
+                  : 'Unable to load slots.',
+              onRetry: () => ref.invalidate(gtSlotsProvider),
+            ),
+            data: (r) => _buildSlots(r, selectedSlot, dateStr),
           ),
-          data: (r) => _buildSlots(r, selectedSlot, dateStr),
-        ),
       ],
     );
   }
@@ -156,10 +174,30 @@ class _GtSlotPickerState extends ConsumerState<GtSlotPicker> {
       );
     }
 
+    // Same rules as the web pickers: one tile per slot label, and for today
+    // only the slots that can still be booked.
+    final isToday =
+        dateStr == DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final seen = <String>{};
+    final slots = <GtSlot>[
+      for (final s in res.allSlots)
+        if (s.label.trim().isNotEmpty &&
+            (!isToday || s.isAvailable) &&
+            seen.add(s.label.trim().toLowerCase()))
+          s,
+    ];
+    if (slots.isEmpty) {
+      return const EmptyStateWidget(
+        title: 'No Available Slots',
+        subtitle: 'No slots are open for this date. Please select another date.',
+        emoji: '📅',
+      );
+    }
+
     final morning = <GtSlot>[];
     final afternoon = <GtSlot>[];
     final evening = <GtSlot>[];
-    for (final s in res.allSlots) {
+    for (final s in slots) {
       final h = _slotHour(s);
       if (h < 12) {
         morning.add(s);
@@ -316,13 +354,20 @@ class _SlotTile extends StatelessWidget {
                     color: const Color(0xFFFDECEC),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.lock_rounded, size: 10, color: AppColors.error),
-                      SizedBox(width: 3),
-                      Text('Slot full',
-                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.error)),
+                      const Icon(Icons.lock_rounded, size: 10, color: AppColors.error),
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          (slot.reason ?? '').trim().isNotEmpty ? slot.reason!.trim() : 'Slot full',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.error),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -505,6 +550,52 @@ class _MonthCalendarState extends State<_MonthCalendar> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Plain date chooser used when the server's bookable-date list is not
+/// available and no time slot is needed.
+class _FallbackDateRow extends ConsumerWidget {
+  const _FallbackDateRow({required this.minDays});
+
+  final int minDays;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(selectedBookingDateProvider);
+    final today = DateUtils.dateOnly(DateTime.now());
+    final first = today.add(Duration(days: minDays));
+    final shown = selected.isBefore(first) ? first : selected;
+    return Row(
+      children: [
+        const Icon(Icons.event_rounded, size: 20, color: AppColors.navy),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Pickup date: ${DateFormat('EEE, d MMM yyyy').format(shown)}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.navy,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: shown,
+              firstDate: first,
+              lastDate: first.add(const Duration(days: 60)),
+            );
+            if (picked != null) {
+              ref.read(selectedBookingDateProvider.notifier).state = picked;
+            }
+          },
+          child: const Text('Change'),
+        ),
+      ],
     );
   }
 }

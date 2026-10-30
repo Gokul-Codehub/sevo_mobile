@@ -4,11 +4,21 @@ import 'package:flutter/material.dart';
 /// Extracted from the reference mobile application design.
 abstract final class AppColors {
   // ── Primary brand ──
-  static const Color primary = Color(0xFF05A357);
-  static const Color primaryDark = Color(0xFF038043);
-  static const Color primaryLight = Color(0xFFE8F8F0);
-  static const Color primaryTint = Color(0xFFF0FAF5);
-  static const Color accent = Color(0xFF10B981);
+  // Changed 2026-10-27 (colour-code plan): the app-wide default used to be
+  // a green (0xFF05A357), so every screen that didn't pick its own colour —
+  // services checkout, booking detail, login links — showed green, clashing
+  // with "blue + navy = Services". The default is now the Services blue;
+  // grocery screens get green through AppTheme.grocery / GroceryTheme.
+  // Logistics (Goods Transport, Packers & Movers) is a service, so it uses
+  // this same colour.
+  // 2026-10-28: Services is ALL NAVY (Divya's choice) — links, selection,
+  // focus and spinners are navy too, not blue. Light tints are a cool
+  // navy-grey so selected chips still stand out.
+  static const Color primary = Color(0xFF0D253A);
+  static const Color primaryDark = Color(0xFF0A192F);
+  static const Color primaryLight = Color(0xFFEAEFF5);
+  static const Color primaryTint = Color(0xFFF4F6F9);
+  static const Color accent = Color(0xFF1E3A5F);
 
   // ── Flow accent: Services = Blue, Groceries = Green ──
   // Blinkit/Amazon/Flipkart-style split so the customer can tell at a
@@ -18,13 +28,18 @@ abstract final class AppColors {
   // (ServiceItem.flowType / Category.flowType) — never a global override,
   // so shared screens (Home shell, nav bar) stay on the neutral brand
   // color and only flow-specific surfaces switch.
-  static const Color serviceBlue = Color(0xFF2563EB);
-  static const Color serviceBlueDark = Color(0xFF1D4ED8);
-  static const Color serviceBlueLight = Color(0xFFEFF6FF);
-  static const Color serviceBlueTint = Color(0xFFDBEAFE);
+  // 2026-10-28: Services is all navy — these keep their old names (used
+  // across the services screens) but now hold the navy family.
+  static const Color serviceBlue = Color(0xFF0D253A);
+  static const Color serviceBlueDark = Color(0xFF0A192F);
+  static const Color serviceBlueLight = Color(0xFFF4F6F9);
+  static const Color serviceBlueTint = Color(0xFFEAEFF5);
 
-  static const Color groceryGreen = Color(0xFF16A34A);
-  static const Color groceryGreenDark = Color(0xFF15803D);
+  // Darkened 2026-10-27: white text on the old 0xFF16A34A was 3.3:1 (below
+  // the 4.5:1 readability minimum); 0xFF15803D is 5.0:1. The dark shade
+  // reads at 4.6:1 even on the yellow Groceries header.
+  static const Color groceryGreen = Color(0xFF15803D);
+  static const Color groceryGreenDark = Color(0xFF166534);
   static const Color groceryGreenLight = Color(0xFFF0FDF4);
   static const Color groceryGreenTint = Color(0xFFDCFCE7);
 
@@ -86,8 +101,10 @@ abstract final class AppColors {
   static const Color shimmerHighlight = Color(0xFFF8FAFC);
 
   // ── Price display ──
-  /// Bold primary-colored price (₹ amount) — used wherever the final price is shown.
-  static const Color priceColor = Color(0xFF05A357);
+  /// Bold price (₹ amount) — used wherever the final price is shown.
+  // Dark in every mode (was green — 3.3:1 on white, hard to read).
+  // Only the discount is coloured.
+  static const Color priceColor = Color(0xFF0F172A);
   /// Struck-through MRP (original price before discount).
   static const Color priceMrp = Color(0xFF94A3B8);
 

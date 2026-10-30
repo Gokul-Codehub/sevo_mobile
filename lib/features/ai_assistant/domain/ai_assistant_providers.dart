@@ -230,13 +230,23 @@ class AiChatController extends StateNotifier<AiChatState> {
         );
       },
       failure: (ApiError error) {
+        final lastUser = state.messages.lastWhere(
+          (m) => m.sender == AiChatSender.user,
+          orElse: () => const AiChatMessage(sender: AiChatSender.user, content: ''),
+        );
+        final isOrderQuery = RegExp(r'order|booking|technician|driver|status|track|where|assigned',
+                caseSensitive: false)
+            .hasMatch(lastUser.content);
         state = state.copyWith(
           messages: [
             ...state.messages,
             AiChatMessage(
               sender: AiChatSender.assistant,
-              content: error.message,
+              content: isOrderQuery
+                  ? "I couldn't retrieve your order status right now. Please check your My Bookings page or try again in a moment."
+                  : error.message,
               isError: true,
+              navigateTo: isOrderQuery ? '/bookings' : null,
             ),
           ],
           isSending: false,

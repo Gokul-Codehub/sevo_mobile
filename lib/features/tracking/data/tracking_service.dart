@@ -36,7 +36,12 @@ import '../domain/tracking_models.dart';
 ///    indefinitely. REST polling now always runs as a safety net, exactly
 ///    like the reference web app's `useCustomerTracking` hook (WS is an
 ///    enhancement for low-latency pushes, REST is the source of truth).
-class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
+///
+/// 2026-10-28: auto-disposed. It used to be a plain family provider, so the
+/// WebSocket, heartbeat and 2.5 s REST poll for every booking ever opened
+/// kept running after the customer left the tracking screen — for the rest
+/// of the session, one set per booking viewed (battery, data, server load).
+class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, TrackingArgs> {
   WebSocketChannel? _channel;
   StreamSubscription? _channelSub;
   Timer? _heartbeatTimer;
@@ -137,7 +142,12 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
       // otp_verification_success all follow this same {event, data} shape).
       final data = map['data'];
       if (data is Map) {
-        state = TrackingUpdate.fromJson(Map<String, dynamic>.from(data), isWs: true);
+        // WS frames are often partial (no OTPs, no is_accepted) — merge,
+        // never replace; the REST poll stays the authoritative snapshot.
+        state = state.mergedWith(
+          TrackingUpdate.fromJson(Map<String, dynamic>.from(data), isWs: true),
+          partial: true,
+        );
       }
     } catch (e) {
       debugPrint('[Tracking WS] Failed to parse message: $e');
@@ -178,21 +188,38 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
   // ── 3. REST Polling Safety Net ─────────────────────────────────────────────
   void _startRestPolling(TrackingArgs arg) {
     _pollingTimer?.cancel();
-    // Every 5s, matching the reference web app's fallback cadence
-    // (useCustomerTracking.js polls every 5s while not WS-connected).
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (state.isTerminal) {
-        _pollingTimer?.cancel();
-        return;
-      }
-      // Socket is healthy (a frame in the last 20 s) → poll only every 4th
-      // tick (~20 s) as a consistency check; otherwise poll every tick.
-      final last = _lastWsFrame;
-      final wsHealthy = last != null && DateTime.now().difference(last) < const Duration(seconds: 20);
+    _scheduleNextPoll(arg);
+  }
+
+  /// Polling cadence, same as the web tracker (useCustomerTracking.js,
+  /// 2026-10-27): while the technician/driver is actually moving the map
+  /// refreshes every 3.5 s even with a healthy socket (2.5 s without one),
+  /// so the marker moves without delay; otherwise 15 s / 5 s.
+  Duration _pollInterval() {
+    final last = _lastWsFrame;
+    final wsHealthy = last != null && DateTime.now().difference(last) < const Duration(seconds: 20);
+    final activeTransit = const {
+      'accepted',
+      'on_the_way',
+      'en_route',
+      'arrived',
+    }.contains(state.status.toLowerCase());
+    if (wsHealthy) return Duration(milliseconds: activeTransit ? 3500 : 15000);
+    return Duration(milliseconds: activeTransit ? 2500 : 5000);
+  }
+
+  void _scheduleNextPoll(TrackingArgs arg) {
+    if (_isDisposed) return;
+    late final Timer timer;
+    timer = Timer(_pollInterval(), () async {
+      if (_isDisposed || state.isTerminal) return;
       _pollTick++;
-      if (wsHealthy && _pollTick % 4 != 0) return;
-      _pollOnce(arg);
+      await _pollOnce(arg);
+      // Only the latest chain continues (a restart while this poll was in
+      // flight already started a new one).
+      if (identical(_pollingTimer, timer)) _scheduleNextPoll(arg);
     });
+    _pollingTimer = timer;
   }
 
   Future<void> _pollOnce(TrackingArgs arg) async {
@@ -207,7 +234,7 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
       if (data is Map) {
         final map = Map<String, dynamic>.from(data);
         final inner = map['data'] is Map ? Map<String, dynamic>.from(map['data'] as Map) : map;
-        state = TrackingUpdate.fromJson(inner, isWs: false);
+        state = state.mergedWith(TrackingUpdate.fromJson(inner, isWs: false), partial: false);
       }
     } catch (e) {
       debugPrint('[Tracking REST] Polling error: $e');
@@ -231,7 +258,7 @@ class TrackingNotifier extends FamilyNotifier<TrackingUpdate, TrackingArgs> {
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────────
-final trackingProvider =
-    NotifierProvider.family<TrackingNotifier, TrackingUpdate, TrackingArgs>(
+final trackingProvider = NotifierProvider.autoDispose
+    .family<TrackingNotifier, TrackingUpdate, TrackingArgs>(
   TrackingNotifier.new,
 );
