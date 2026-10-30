@@ -88,23 +88,41 @@ class ActiveQuoteCard extends ConsumerWidget {
               ),
               const Divider(height: 20),
             ],
-            if (quote.subtotal != null) _AmountRow(label: 'Subtotal', amount: quote.subtotal!),
+            if (quote.isWithoutPrice)
+              const _InfoBanner(
+                icon: Icons.fact_check_outlined,
+                color: AppColors.navy,
+                text: 'This is a scope approval. Approve the work and your technician will send the priced quotation next.',
+              ),
+            if (!quote.isWithoutPrice && quote.subtotal != null) _AmountRow(label: 'Subtotal', amount: quote.subtotal!),
             if (quote.discountAmount != null && quote.discountAmount! > Decimal.zero)
               _AmountRow(label: 'Discount', amount: quote.discountAmount!, isNegative: true),
             if (quote.taxAmount != null) _AmountRow(label: 'Tax', amount: quote.taxAmount!),
             if (quote.inspectionFee != null && quote.inspectionFee! > Decimal.zero)
               _AmountRow(label: 'Inspection fee adjustment', amount: quote.inspectionFee!, isNegative: true),
+            if (!quote.isWithoutPrice) ...[
             const Divider(height: 20),
             _AmountRow(
               label: quote.netPayable != null ? 'Net Payable' : 'Total',
               amount: quote.displayTotal,
               emphasize: true,
             ),
+            ],
             // Advance / balance exactly as the server quoted them (only shown
             // when the quote carries a real advance; never computed here).
-            if (quote.advanceAmount != null && quote.advanceAmount! > Decimal.zero) ...[
+            if (!quote.isWithoutPrice && quote.advanceAmount != null && quote.advanceAmount! > Decimal.zero) ...[
               const SizedBox(height: 4),
               _AmountRow(label: 'Advance to pay after accepting', amount: quote.advanceAmount!),
+              if (quote.alreadyPaidAdvance != null && quote.alreadyPaidAdvance! > Decimal.zero)
+                _AmountRow(label: 'Already paid', amount: quote.alreadyPaidAdvance!, isNegative: true),
+              if (quote.advanceFullyCovered)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text('Your earlier payment already covers the advance.',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                )
+              else if (quote.additionalAdvanceDue != null && quote.additionalAdvanceDue! > Decimal.zero)
+                _AmountRow(label: 'Advance due now', amount: quote.additionalAdvanceDue!, emphasize: true),
               if (quote.balanceAmount != null && quote.balanceAmount! > Decimal.zero)
                 _AmountRow(label: 'Balance after the work', amount: quote.balanceAmount!),
             ],
@@ -196,11 +214,15 @@ class ActiveQuoteCard extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Accept Quotation?'),
+        title: Text(quote.isWithoutPrice ? 'Approve the scope?' : 'Accept Quotation?'),
         content: Text(
-          (quote.advanceAmount != null && quote.advanceAmount! > Decimal.zero)
-              ? 'The quoted total is ₹${quote.displayTotal}. After accepting, pay the '
-                  '₹${quote.advanceAmount} advance so the technician can start; the rest is due after the work.'
+          quote.isWithoutPrice
+              ? 'Your technician will prepare the priced quotation once you approve the scope of work.'
+              : (quote.advanceAmount != null && quote.advanceAmount! > Decimal.zero)
+              ? (quote.advanceFullyCovered
+                  ? 'The quoted total is ₹${quote.displayTotal}. Your earlier payment already covers the advance.'
+                  : 'The quoted total is ₹${quote.displayTotal}. After accepting, pay the '
+                      '₹${quote.additionalAdvanceDue != null && quote.additionalAdvanceDue! > Decimal.zero ? quote.additionalAdvanceDue : quote.advanceAmount} advance so the technician can start; the rest is due after the work.')
               : 'You will be charged ₹${quote.displayTotal} for this work. '
                   'Once accepted, we\'ll create your service booking.',
         ),

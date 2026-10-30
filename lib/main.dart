@@ -7,6 +7,9 @@ import 'core/services/booking_notification_watcher.dart';
 import 'core/services/customer_notification_watcher.dart';
 import 'core/utils/app_logger.dart';
 import 'core/utils/restart_widget.dart';
+import 'core/foundation/error_reporter.dart';
+import 'core/foundation/foundation_gate.dart';
+import 'features/app_update/presentation/app_update_gate.dart';
 import 'routing/app_router.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/connectivity_gate.dart';
@@ -34,17 +37,26 @@ void _installDiagnosticErrorHandlers() {
     AppLogger.d('[P0-CRASH]', 'Widget build threw: ${details.exceptionAsString()}');
     AppLogger.d('[P0-CRASH]', 'Library: ${details.library}, context: ${details.context}');
     if (kReleaseMode) {
-      // In release mode, show the real error instead of a blank box so it
-      // can be screenshotted and reported — never silently blank.
-      return Material(
-        color: const Color(0xFFFFF3F3),
+      // Release: a friendly card (never a stack trace or a blank box). The error is queued and
+      // reported to the server (ErrorReporter) when the connection allows.
+      ErrorReporter.record(details.exception, screen: details.library ?? '');
+      return const Material(
+        color: Colors.white,
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: SingleChildScrollView(
-            child: Text(
-              'Screen error (please screenshot this):\n\n'
-              '${details.exceptionAsString()}',
-              style: const TextStyle(color: Color(0xFFB00020), fontSize: 12),
+          padding: EdgeInsets.all(20),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFF0D253A)),
+                SizedBox(height: 10),
+                Text('Something went wrong here',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0D253A))),
+                SizedBox(height: 6),
+                Text('Please go back and try again. We have been notified.',
+                    textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.black54)),
+              ],
             ),
           ),
         ),
@@ -60,6 +72,7 @@ void _installDiagnosticErrorHandlers() {
 
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     AppLogger.d('[P0-CRASH]', 'Uncaught async error: $error');
+    ErrorReporter.record(error, level: 'fatal');
     return false; // still forward to the default platform handler
   };
 }
@@ -113,9 +126,16 @@ class CalServicesApp extends ConsumerWidget {
       // instead of customers only discovering they're offline when an
       // individual screen's API call happens to fail.
       builder: (context, child) => ConnectivityGate(
-        child: BookingNotificationWatcher(
-          child: CustomerNotificationWatcher(
-            child: child ?? const SizedBox.shrink(),
+        // App update management: optional prompt / mandatory update screen
+        // (checked in the background; startup never waits on it).
+        child: FoundationGate(
+          // Server-driven config: maintenance mode, feature flags, remote settings.
+          child: AppUpdateGate(
+            child: BookingNotificationWatcher(
+              child: CustomerNotificationWatcher(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
           ),
         ),
       ),

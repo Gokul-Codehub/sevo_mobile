@@ -557,16 +557,24 @@ class BookingRepository {
   // long as the logged-in user is the booking's own customer -- no extra
   // token/param needed. Returns the raw PDF bytes for the caller to
   // save/share.
-  Future<Result<Uint8List>> downloadInvoice(int bookingId) async {
+  Future<Result<Uint8List>> downloadInvoice(int bookingId) =>
+      _downloadPdf('/booking/$bookingId/invoice/', 'Invoice is not available for this booking yet.');
+
+  /// GET /api/booking/<id>/receipt/ - the advance-payment receipt PDF (the web's
+  /// "Advance receipt"). The server answers 404 with a plain message while the
+  /// advance has not been paid, which is surfaced as-is.
+  Future<Result<Uint8List>> downloadAdvanceReceipt(int bookingId) =>
+      _downloadPdf('/booking/$bookingId/receipt/', 'The advance receipt is not available for this booking yet.');
+
+  Future<Result<Uint8List>> _downloadPdf(String path, String emptyMessage) async {
     try {
       final response = await api.get<List<int>>(
-        '/booking/$bookingId/invoice/',
+        path,
         options: Options(responseType: ResponseType.bytes),
       );
       final data = response.data;
       if (data == null || data.isEmpty) {
-        return const Failure(
-            ValidationError('Invoice is not available for this booking yet.'));
+        return Failure(ValidationError(emptyMessage));
       }
       return Success(Uint8List.fromList(data));
     } on DioException catch (e) {

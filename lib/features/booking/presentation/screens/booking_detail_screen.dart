@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -616,6 +617,16 @@ class BookingDetailScreen extends ConsumerWidget {
                     label: const Text('Download Invoice'),
                   ),
                   const SizedBox(height: 16),
+                  // Advance-payment receipt (web parity): only for bookings that
+                  // carry an advance (quoted work / inspections).
+                  if (booking.advanceAmount > Decimal.zero) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => _downloadReceipt(context, ref, booking),
+                      icon: const Icon(Icons.receipt_outlined),
+                      label: const Text('Download Advance Receipt'),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ],
 
           const SizedBox(height: 40),
@@ -651,6 +662,38 @@ class BookingDetailScreen extends ConsumerWidget {
           if (context.mounted) {
             messenger.showSnackBar(const SnackBar(
               content: Text('Could not open the invoice. Please try again.'),
+              backgroundColor: AppColors.error,
+            ));
+          }
+        }
+      case Failure(:final error):
+        messenger.showSnackBar(SnackBar(
+          content: Text(error.message),
+          backgroundColor: AppColors.error,
+        ));
+    }
+  }
+
+  Future<void> _downloadReceipt(
+      BuildContext context, WidgetRef ref, Booking booking) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Preparing receipt…')));
+    final result = await ref.read(bookingRepositoryProvider).downloadAdvanceReceipt(booking.id);
+    if (!context.mounted) return;
+    switch (result) {
+      case Success(:final data):
+        try {
+          final dir = await getTemporaryDirectory();
+          final file = File('${dir.path}/Receipt-${booking.requestId}.pdf');
+          await file.writeAsBytes(data, flush: true);
+          await Share.shareXFiles(
+            [XFile(file.path, mimeType: 'application/pdf')],
+            subject: 'Advance receipt ${booking.requestId}',
+          );
+        } catch (_) {
+          if (context.mounted) {
+            messenger.showSnackBar(const SnackBar(
+              content: Text('Could not open the receipt. Please try again.'),
               backgroundColor: AppColors.error,
             ));
           }

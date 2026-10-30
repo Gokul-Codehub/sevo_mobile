@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "711654589535",
+    "project_id": "sevo-a1798",
+    "storage_bucket": "sevo-a1798.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:711654589535:android:a0747c82a2da0021b187ea",
+        "android_client_info": {
+          "package_name": "com.caldim.sevo_customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcdv6RT1y6jabHCljGyrJmgnoSFcxq1E8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -266,7 +266,33 @@ class QuoteSummary extends Equatable {
     this.declineReason,
     this.customerNotes,
     this.items = const [],
+    this.isWithoutPrice = false,
+    this.requiresAdvance = false,
+    this.advancePercent,
+    this.alreadyPaidAdvance,
+    this.additionalAdvanceDue,
+    this.advanceFullyCovered = false,
   });
+
+  /// Scope-approval quotation (no prices yet): the customer approves the work
+  /// and the priced quotation follows.
+  final bool isWithoutPrice;
+
+  /// Advance rules exactly as the server quoted them (`pricing_summary` on the web).
+  final bool requiresAdvance;
+  final Decimal? advancePercent;
+  final Decimal? alreadyPaidAdvance;
+
+  /// What is still to pay now (the advance minus what the customer already paid).
+  final Decimal? additionalAdvanceDue;
+
+  /// An earlier payment (e.g. the inspection fee) already covers the advance.
+  final bool advanceFullyCovered;
+
+  static Map<String, dynamic> _ps(Map<String, dynamic> json) =>
+      json['pricing_summary'] is Map ? Map<String, dynamic>.from(json['pricing_summary'] as Map) : const {};
+
+  static bool _truthy(Object? v) => v == true || v?.toString().toLowerCase() == 'true' || v?.toString() == '1';
 
   final String status; // upper-cased: SENT_TO_CUSTOMER, CUSTOMER_ACCEPTED, DECLINED, CHANGE_REQUESTED, EXPIRED, SUPERSEDED, CONVERTED, DRAFT...
   final int? id;
@@ -326,8 +352,20 @@ class QuoteSummary extends Equatable {
       taxAmount: parseMoneyOrNull(json['tax_amount'] ?? json['tax']),
       totalAmount: parseMoneyOrNull(json['total_amount'] ?? json['grand_total']),
       netPayable: parseMoneyOrNull(json['net_payable']),
-      advanceAmount: parseMoneyOrNull(json['advance_amount']),
-      balanceAmount: parseMoneyOrNull(json['balance_amount']),
+      advanceAmount: parseMoneyOrNull(json['advance_amount'] ?? _ps(json)['advance_amount']),
+      balanceAmount: parseMoneyOrNull(json['balance_amount'] ?? _ps(json)['balance_amount']),
+      isWithoutPrice: _truthy(json['is_without_price']) ||
+          json['has_price'] == false ||
+          (json['quotation_mode'] ?? json['pricing_mode'] ?? json['quote_mode'] ?? '').toString().toUpperCase() ==
+              'WITHOUT_PRICE',
+      requiresAdvance: _truthy(_ps(json)['requires_50_percent_advance'] ??
+          _ps(json)['requires_advance_payment'] ??
+          json['requires_50_percent_advance'] ??
+          json['requires_advance_payment']),
+      advancePercent: parseMoneyOrNull(_ps(json)['advance_percent'] ?? json['advance_percent']),
+      alreadyPaidAdvance: parseMoneyOrNull(_ps(json)['already_paid_advance'] ?? json['already_paid_advance']),
+      additionalAdvanceDue: parseMoneyOrNull(_ps(json)['additional_advance_due'] ?? json['additional_advance_due']),
+      advanceFullyCovered: _truthy(_ps(json)['advance_fully_covered'] ?? json['advance_fully_covered']),
       inspectionFee: parseMoneyOrNull(json['inspection_fee']),
       declineReason: json['decline_reason']?.toString(),
       customerNotes: json['customer_notes']?.toString(),
@@ -350,6 +388,10 @@ class QuoteSummary extends Equatable {
         totalAmount,
         netPayable,
         items,
+        isWithoutPrice,
+        requiresAdvance,
+        additionalAdvanceDue,
+        advanceFullyCovered,
       ];
 }
 

@@ -5,9 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/env.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../features/auth/domain/auth_notifier.dart';
+import '../../features/app_update/data/app_version_repository.dart' show AppUpdateStore;
 import 'auth_interceptor.dart';
 import 'error_interceptor.dart';
 import 'logging_interceptor.dart';
+import 'retry_interceptor.dart';
+import 'session_interceptors.dart';
 
 /// Singleton Dio client for CalServices API.
 /// All HTTP requests go through this client — never instantiate Dio elsewhere.
@@ -30,11 +33,16 @@ class ApiClient {
     );
 
     _dio.interceptors.addAll([
+      // Server ended this session: sign out, no token refresh (must run before AuthInterceptor).
+      SessionRevokedInterceptor(storage: storage, onRevoked: onAuthFailure),
+      DeviceIdInterceptor(AppUpdateStore().installId),
       AuthInterceptor(
         storage: storage,
         dio: _dio,
         onAuthFailure: onAuthFailure,
       ),
+      // Retries GET/HEAD (and writes with an Idempotency-Key) on network/gateway errors, with back-off.
+      RetryInterceptor(dio: _dio),
       ErrorInterceptor(),
       if (kDebugMode) LoggingInterceptor(),
     ]);

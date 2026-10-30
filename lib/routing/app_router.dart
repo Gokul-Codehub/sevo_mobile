@@ -40,6 +40,7 @@ import '../features/home/presentation/screens/home_screen.dart';
 import '../shared/theme/grocery_theme.dart';
 import '../features/logistics/presentation/screens/drop_location_picker_screen.dart';
 import '../features/ac_inspection/presentation/screens/ac_inspection_screen.dart';
+import '../core/foundation/feature_guard.dart';
 import '../features/logistics/presentation/screens/goods_transport_booking_screen.dart';
 import '../features/logistics/domain/logistics_models.dart'
     show LogisticsVehicleCategory;
@@ -404,9 +405,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 'packers_movers' || 'packers-movers' => LogisticsVehicleCategory.packersMovers,
                 _ => null,
               };
-              return GoodsTransportBookingScreen(
-                category: extra is Category ? extra : null,
-                initialVehicleCategory: initialVehicleCat,
+              // Server-controlled kill switch / module maintenance (flag "goods_transport").
+              return FeatureGuard(
+                flag: 'goods_transport',
+                label: 'Goods & Transport',
+                child: GoodsTransportBookingScreen(
+                  category: extra is Category ? extra : null,
+                  initialVehicleCategory: initialVehicleCat,
+                ),
               );
             },
           ),

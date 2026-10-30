@@ -126,11 +126,15 @@ class AppRemoteImage extends StatelessWidget {
 
     Widget imageContent;
 
+    // The server sent no image at all (any URL tried below is only a stock
+    // fallback): if that fallback fails too, the placeholder icon is right.
+    final serverSentNothing = ((imageUrl ?? rawPath) ?? '').trim().isEmpty;
+
     if (resolvedUrl == null || resolvedUrl.isEmpty) {
       // The server returned no image at all: only now is the placeholder icon shown.
       imageContent = _buildPlaceholder();
     } else if (_isKnownBad(resolvedUrl)) {
-      imageContent = _buildSkeleton();
+      imageContent = serverSentNothing ? _buildPlaceholder() : _buildSkeleton();
     } else {
       // Fixed 2026-09-18 (performance pass, "the application is getting
       // lag"): without memCacheWidth/memCacheHeight, CachedNetworkImage
@@ -172,8 +176,9 @@ class AppRemoteImage extends StatelessWidget {
             debugPrint('  -> Using semantic placeholder (will retry after ${_failureCooldown.inSeconds}s)');
           }
           _recentlyFailedUrls[url] = DateTime.now();
-          // A bad response keeps the plain skeleton (never the icon).
-          return _buildSkeleton();
+          // A bad response keeps the plain skeleton; the icon is only for
+          // items the server sent no image for.
+          return serverSentNothing ? _buildPlaceholder() : _buildSkeleton();
         },
       );
     }

@@ -556,6 +556,8 @@ class _GoodsTransportBookingScreenState
             if ((q.expiresAt ?? '').isNotEmpty) 'expires_at': q.expiresAt,
             'declared_weight_kg': weight,
             'load_assist': assist,
+            // The server reads the declared cargo from cart_data (GT-TITLE-1).
+            'goods_type': 'Part Truck Load',
           }),
         ],
         extra: extra,
@@ -603,11 +605,26 @@ class _GoodsTransportBookingScreenState
     final stopsPayload = _stopsPayload();
     if (stopsPayload.isNotEmpty) extra['stops'] = stopsPayload;
 
+    // Server rule (GT-TITLE-1): a truck / two-wheeler booking must declare its
+    // cargo INSIDE cart_data[0] (goods_type / cargo_items / goods_items) -
+    // that is what the "please describe what you're moving" check reads, as
+    // the web's cart_data does. Without it the booking is rejected even though
+    // items were chosen in step 1.
+    final goodsCat = cargo.goodsCategoryId == null
+        ? null
+        : ref.read(goodsCategoriesProvider).valueOrNull?.where((c) => c.id == cargo.goodsCategoryId).firstOrNull;
+    final cargoLines = cargo.items.map((e) => e.toJson()).toList();
+    final cargoCart = <String, dynamic>{
+      if (goodsCat != null) 'goods_type': goodsCat.name,
+      if (cargoLines.isNotEmpty) ...{'cargo_items': cargoLines, 'goods_items': cargoLines},
+    };
+
     return (
       error: null,
       cart: [
         line(q.total, {
           ...q.toCartEcho(),
+          ...cargoCart,
           if (stopsPayload.isNotEmpty) 'stops': stopsPayload,
         }),
       ],
