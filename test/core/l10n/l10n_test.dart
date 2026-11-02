@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:calservices_customer/core/l10n/locale_controller.dart';
@@ -7,9 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, dynamic> arb(String code) => jsonDecode(File('lib/l10n/app_$code.arb').readAsStringSync()) as Map<String, dynamic>;
-
 class MemStore extends LocaleStore {
+  MemStore([this.saved]);
   String? saved;
   @override
   Future<String?> read() async => saved;
@@ -18,62 +16,70 @@ class MemStore extends LocaleStore {
 }
 
 void main() {
-  test('Hindi and Tamil have every key English has, with no empty strings', () {
-    final en = arb('en').keys.where((k) => !k.startsWith('@')).toSet();
-    for (final code in ['hi', 'ta']) {
-      final other = arb(code);
-      for (final k in en) {
-        expect(other.containsKey(k), isTrue, reason: '$code is missing $k');
-        expect((other[k] as String).trim(), isNotEmpty, reason: '$code.$k is empty');
-      }
+  test('English is the only language: the list and the supported locales both say so', () {
+    expect(kLanguages.keys.toList(), ['en']);
+    expect(AppLocalizations.supportedLocales.map((l) => l.languageCode).toList(), ['en']);
+  });
+
+  test('no Hindi or Tamil translation files are left behind', () {
+    for (final f in ['app_hi.arb', 'app_ta.arb', 'app_localizations_hi.dart', 'app_localizations_ta.dart']) {
+      expect(File('lib/l10n/$f').existsSync(), isFalse, reason: f);
     }
   });
 
-  test('placeholders are preserved in translations', () {
-    for (final code in ['hi', 'ta']) {
-      expect((arb(code)['unavailableTitle'] as String).contains('{label}'), isTrue, reason: code);
-    }
-  });
-
-  test('the language list matches the supported locales', () {
-    expect(kLanguages.keys.toSet(), AppLocalizations.supportedLocales.map((l) => l.languageCode).toSet());
-  });
-
-  test('English until the customer chooses; the choice is remembered and bad codes are ignored', () async {
+  test('English until chosen; only English can be chosen; other codes are ignored', () async {
     final store = MemStore();
     final c = LocaleController(store);
     await Future<void>.delayed(Duration.zero);
     expect(c.state, const Locale('en'));
     await c.choose('hi');
-    expect(c.state, const Locale('hi'));
-    expect(store.saved, 'hi');
+    await c.choose('ta');
     await c.choose('xx');
-    expect(c.state, const Locale('hi'));
-    final again = LocaleController(store);
-    await Future<void>.delayed(Duration.zero);
-    expect(again.state, const Locale('hi'));
+    expect(c.state, const Locale('en'));
+    expect(store.saved, isNull); // nothing odd was saved
   });
 
-  testWidgets('screens render in the chosen language', (tester) async {
-    Future<void> pump(Locale locale) async {
-      await tester.pumpWidget(ProviderScope(
-        child: MaterialApp(
-          locale: locale,
-          supportedLocales: AppLocalizations.supportedLocales,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          home: Scaffold(body: Builder(builder: (c) => Column(children: [Text(c.l10n.tryAgain), Text(c.l10n.unavailableTitle('Groceries'))]))),
-        ),
+  test('a Hindi or Tamil choice saved by an older version is dropped: the app stays in English', () async {
+    for (final old in ['hi', 'ta']) {
+      final store = MemStore(old);
+      final c = LocaleController(store);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(c.state, const Locale('en'), reason: old);
+      expect(store.saved, 'en', reason: '$old is replaced by English in storage');
+    }
+  });
+
+  testWidgets('a phone set to Hindi or Tamil still gets the English app', (tester) async {
+    for (final code in ['hi', 'ta']) {
+      await tester.pumpWidget(MaterialApp(
+        locale: Locale(code),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(body: Builder(builder: (c) => Text(c.l10n.tryAgain))),
       ));
       await tester.pumpAndSettle();
+      expect(find.text('Try again'), findsOneWidget, reason: code);
     }
+  });
 
-    await pump(const Locale('en'));
-    expect(find.text('Try again'), findsOneWidget);
-    expect(find.text('Groceries is temporarily unavailable'), findsOneWidget);
-    await pump(const Locale('hi'));
-    expect(find.text('फिर से कोशिश करें'), findsOneWidget);
-    await pump(const Locale('ta'));
-    expect(find.text('மீண்டும் முயற்சிக்கவும்'), findsOneWidget);
+  testWidgets('the Language sheet lists English only and says why', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [localeStoreProvider.overrideWithValue(MemStore())],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Consumer(builder: (context, ref, _) => ElevatedButton(onPressed: () => showLanguageSheet(context, ref), child: const Text('open'))),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('हिन्दी'), findsNothing);
+    expect(find.text('தமிழ்'), findsNothing);
+    expect(find.textContaining('only language available'), findsOneWidget);
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget); // English is the selected one
   });
 
   testWidgets('l10n extension falls back to English with no localization installed', (tester) async {

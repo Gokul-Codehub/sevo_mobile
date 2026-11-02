@@ -11,7 +11,9 @@ extension L10nContext on BuildContext {
 }
 
 /// Languages offered in Profile -> Language: code -> name written in its own script.
-const Map<String, String> kLanguages = {'en': 'English', 'hi': 'हिन्दी', 'ta': 'தமிழ்'};
+/// English only for now: Hindi and Tamil were removed, and every notification the server sends is in English too.
+/// Adding a language later means adding its `app_<code>.arb`, regenerating, and listing it here.
+const Map<String, String> kLanguages = {'en': 'English'};
 
 class LocaleStore {
   LocaleStore([FlutterSecureStorage? storage])
@@ -44,6 +46,8 @@ class LocaleController extends StateNotifier<Locale> {
   Future<void> _load() async {
     final code = await _store.read();
     if (code != null && kLanguages.containsKey(code) && mounted) state = Locale(code);
+    // A language chosen in an older version (Hindi / Tamil) is no longer offered: forget it, the app stays in English.
+    if (code != null && !kLanguages.containsKey(code)) await _store.write('en');
   }
 
   Future<void> choose(String code) async {
@@ -79,6 +83,14 @@ Future<void> showLanguageSheet(BuildContext context, WidgetRef ref) {
                 Navigator.of(ctx).pop();
               },
             ),
+          // One language only, for now: say so instead of leaving a one-item list unexplained.
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 4, 24, 16),
+            child: Text(
+              'English is the only language available right now. Notifications are sent in English too.',
+              style: TextStyle(fontSize: 12.5, color: Colors.black54, height: 1.35),
+            ),
+          ),
         ],
       ),
     ),
