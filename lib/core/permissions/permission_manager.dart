@@ -1,3 +1,4 @@
+import '../l10n/locale_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
@@ -139,7 +140,7 @@ class PermissionManager {
     final ok = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => _Sheet(icon: r.icon, title: r.title, body: r.body, primary: 'Continue', secondary: 'Not now'),
+      builder: (ctx) => _Sheet(icon: r.icon, title: r.title, body: r.body, primary: ctx.l10n.permContinue, secondary: ctx.l10n.permNotNow),
     );
     return ok == true;
   }
@@ -148,7 +149,7 @@ class PermissionManager {
     final ok = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => _Sheet(icon: Icons.settings_rounded, title: 'Permission needed', body: r.settingsHint, primary: 'Open settings', secondary: 'Cancel'),
+      builder: (ctx) => _Sheet(icon: Icons.settings_rounded, title: ctx.l10n.permNeeded, body: r.settingsHint, primary: ctx.l10n.permOpenSettings, secondary: ctx.l10n.permCancel),
     );
     return ok == true;
   }

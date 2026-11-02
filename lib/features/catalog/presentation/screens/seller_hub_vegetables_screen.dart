@@ -9,6 +9,7 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/marketplace_catalog_repository.dart';
+import '../widgets/delivery_zone_banner.dart';
 import '../widgets/product_card.dart';
 
 /// Browse Fresh Vegetables & Fruits by the admin's real Seller Hub category
@@ -79,6 +80,7 @@ class _SellerHubVegetablesScreenState extends ConsumerState<SellerHubVegetablesS
             foregroundColor: AppColors.textPrimary,
             elevation: 0.5,
           ),
+          const DeliveryZoneBanner(),
           Expanded(
             child: treeAsync.when(
               loading: () => const Padding(
@@ -269,13 +271,16 @@ class _DepartmentProductGrid extends ConsumerWidget {
       data: (page) {
         final items = page.products.map((p) => p.toServiceItem()).toList();
         if (items.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
+          final outOfArea = ref.watch(deliveryZoneProvider).valueOrNull?.status == DeliveryZoneStatus.unserviceable;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
               child: EmptyStateWidget(
-                title: 'Nothing Here Yet',
-                subtitle: 'No products in this department right now.',
-                emoji: '📦',
+                title: outOfArea ? 'We do not deliver here yet' : 'Nothing Here Yet',
+                subtitle: outOfArea
+                    ? 'Choose a different delivery address to see what is available.'
+                    : 'No products in this department right now.',
+                emoji: outOfArea ? '📍' : '📦',
               ),
             ),
           );

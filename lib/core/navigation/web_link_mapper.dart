@@ -83,6 +83,8 @@ AppLink resolveWebLink(String rawUrl, {Set<String>? knownCategorySlugs}) {
   if (path == '/vegetables' || path == '/groceries' || path == '/grocery') {
     return const AppLink(groceriesHome: true);
   }
+  // A grocery order's own page (the delivery-OTP notification links here).
+  if (RegExp(r'^/grocery-orders/[A-Za-z0-9_-]+$').hasMatch(path)) return AppLink(route: path);
   if (path == '/bookings' || path == '/my-bookings' || path == '/customer/bookings') {
     return const AppLink(route: '/bookings');
   }

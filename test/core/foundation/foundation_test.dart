@@ -357,7 +357,12 @@ void main() {
           installedAppReaderProvider.overrideWithValue(FakeInstalledReader(installedApp(10))),
           announcementStoreProvider.overrideWithValue(_MemoryAnnouncements()),
         ],
-        child: const MaterialApp(home: FoundationGate(child: Scaffold(body: Text('App content')))),
+        // Same placement as main.dart: the gate (and its banner) sits ABOVE the Navigator, so there is no
+        // Overlay for it - a Tooltip inside would crash with "No Overlay widget found".
+        child: MaterialApp(
+          builder: (context, child) => FoundationGate(child: child ?? const SizedBox.shrink()),
+          home: const Scaffold(body: Text('App content')),
+        ),
       ));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
@@ -370,7 +375,7 @@ void main() {
       await pump(tester);
       expect(find.text('Diwali hours'), findsOneWidget);
       expect(find.text('App content'), findsOneWidget);
-      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.tap(find.byIcon(Icons.close));
       await tester.pump();
       expect(find.text('Diwali hours'), findsNothing);
     });

@@ -1,3 +1,4 @@
+import '../../../core/analytics/analytics_manager.dart';
 import 'payment_failure.dart';
 import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart';
@@ -57,6 +58,7 @@ class PaymentController extends Notifier<PaymentState> {
     _activeBookingId = booking.id;
     state = const PaymentProcessing(statusMessage: 'Preparing secure checkout...');
 
+    AnalyticsManager.instance.track(AnalyticsEvents.paymentStarted, {'payment_type': paymentType.toString()});
     // 1. Create a real payment order on the backend. No fallback — see
     //    the critical rule in this method's doc comment above.
     final orderResult = await _repo.createPaymentOrder(
@@ -234,6 +236,7 @@ class PaymentController extends Notifier<PaymentState> {
 
     switch (verifyResult) {
       case Success():
+        AnalyticsManager.instance.track(AnalyticsEvents.paymentSucceeded);
         state = PaymentSuccess(
           paymentId: paymentId,
           orderId: orderId,
@@ -257,9 +260,11 @@ class PaymentController extends Notifier<PaymentState> {
   void _handlePaymentError(PaymentFailureResponse response) {
     // Plain-language reason + next step (cancelled / bank declined / connection lost / timeout / gateway).
     final info = classifyPaymentFailure(code: response.code, message: response.message);
+    AnalyticsManager.instance.track(AnalyticsEvents.paymentFailed, {'reason': info.kind.name});
     state = PaymentFailed(
       errorMessage: '${info.message} ${info.nextStep}',
       code: response.code,
+      info: info,
     );
   }
 

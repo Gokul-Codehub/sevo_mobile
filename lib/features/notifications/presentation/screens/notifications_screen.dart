@@ -19,6 +19,13 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  String? _filter; // null = all
+
+  static const _groups = <(String, String)>[('BOOKING', 'Bookings'), ('PAYMENT', 'Payments'), ('SUPPORT', 'Support'), ('OFFER', 'Offers')];
+
+  /// Orders count as bookings; account notices are shown under All only.
+  static String _group(String category) => category == 'ORDER' ? 'BOOKING' : category;
+
   @override
   void initState() {
     super.initState();
@@ -148,13 +155,40 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               ],
             );
           }
+          final shown = _filter == null ? state.items : state.items.where((n) => _group(n.category) == _filter).toList();
+          int unread(String group) => state.items.where((n) => !n.isRead && _group(n.category) == group).length;
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(12, 12, 12, 24 + MediaQuery.paddingOf(context).bottom),
-            itemCount: state.items.length,
+            padding: EdgeInsets.fromLTRB(12, 8, 12, 24 + MediaQuery.paddingOf(context).bottom),
+            itemCount: shown.length + 1,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
-              final n = state.items[i];
+              if (i == 0) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(children: [
+                    for (final g in [(null as String?, 'All'), ..._groups])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          key: Key('filter_${g.$1 ?? 'all'}'),
+                          label: Text(g.$1 != null && unread(g.$1!) > 0 ? '${g.$2} (${unread(g.$1!)})' : g.$2),
+                          selected: _filter == g.$1,
+                          selectedColor: AppColors.navy,
+                          labelStyle: TextStyle(color: _filter == g.$1 ? Colors.white : AppColors.navy, fontWeight: FontWeight.w700, fontSize: 12.5),
+                          onSelected: (_) => setState(() => _filter = g.$1),
+                        ),
+                      ),
+                  ]),
+                );
+              }
+              if (shown.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 60),
+                  child: Center(child: Text('Nothing here yet.', style: TextStyle(color: AppColors.textSecondary))),
+                );
+              }
+              final n = shown[i - 1];
               return FadeSlideIn(
                 key: ValueKey('n-${n.id}'),
                 index: i,

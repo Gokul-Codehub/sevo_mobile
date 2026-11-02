@@ -16,6 +16,7 @@ import '../../data/recipe_models.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
 import '../widgets/product_card.dart';
+import '../widgets/product_reviews_section.dart';
 import '../../../../core/navigation/safe_back.dart';
 
 // Product page palette (matches the redesigned cart / bookings / services).
@@ -161,6 +162,8 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
     final switched = selectedVariant != null && selectedVariant.id != enrichedProduct!.id;
     final ServiceItem product = switched ? _variantItem(selectedVariant!, base) : base;
     final MarketplaceProduct? activeSource = switched ? selectedVariant : enrichedProduct;
+    // Reviews belong to the real Seller Hub product; any size in the family resolves to the same reviews.
+    final int? reviewProductId = activeSource?.id ?? (product.id > 800000000 && product.id <= 899999999 ? product.id - 800000000 : null);
     var galleryUrls = activeSource?.galleryImages ?? const <String>[];
     if (galleryUrls.isEmpty && (product.imageUrl ?? '').isNotEmpty) galleryUrls = [product.imageUrl!];
 
@@ -487,6 +490,12 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
                         if (enrichedProduct != null && enrichedProduct.showRecipes && enrichedProduct.recipes.isNotEmpty) ...[
                           const SizedBox(height: 26),
                           _RecipesRail(productTitle: product.title, recipes: enrichedProduct.recipes),
+                        ],
+
+                        // Ratings & reviews of the real Seller Hub product (not the cart id, which is offset).
+                        if (reviewProductId != null) ...[
+                          const SizedBox(height: 26),
+                          ProductReviewsSection(productId: reviewProductId),
                         ],
 
                         if (relatedAsync != null) ...[

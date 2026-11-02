@@ -119,14 +119,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       return AppShell._tabs.indexWhere((t) => t.route == AppRoutes.profile);
     }
 
-    for (int i = 0; i < AppShell._tabs.length; i++) {
-      final tab = AppShell._tabs[i];
-      if (tab.isAiTab) continue;
-      if (location == tab.route || (i > 0 && location.startsWith(tab.route))) {
-        return i;
-      }
-    }
-    return 0;
+    return appShellTabIndexForLocation(location);
   }
 
   /// Returns true once the second back press lands inside the window,
@@ -507,4 +500,21 @@ class _NavPalette {
   });
 
   final Color bar, ring, pill, onPill, idle, outline;
+}
+
+/// Which bottom-bar tab a route belongs to. Pages that open from a tab without being a tab themselves count as part
+/// of it - a grocery order (and its return page) belongs to Bookings. Anything unknown falls back to Home.
+@visibleForTesting
+int appShellTabIndexForLocation(String location) {
+  if (location == AppRoutes.groceryOrders || location.startsWith('${AppRoutes.groceryOrders}/')) {
+    return AppShell._tabs.indexWhere((t) => t.route == AppRoutes.myBookings);
+  }
+  for (int i = 0; i < AppShell._tabs.length; i++) {
+    final tab = AppShell._tabs[i];
+    if (tab.isAiTab) continue;
+    if (location == tab.route || (i > 0 && location.startsWith(tab.route))) {
+      return i;
+    }
+  }
+  return 0;
 }

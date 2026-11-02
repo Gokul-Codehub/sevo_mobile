@@ -405,12 +405,17 @@ class ServiceItem extends Equatable {
     this.packageOptions = const [],
     this.selectedOption,
     this.reviews = const [],
+    this.warehouseId,
   });
 
   final int id;
   final String title;
   final String slug;
   final Decimal price;
+
+  /// Seller Hub fulfilment warehouse this product ships from (null for services). The grocery cart asks for
+  /// delivery slots of THIS warehouse - same as the web cart - instead of relying on a server default.
+  final int? warehouseId;
   final Decimal? discountedPrice;
   final String? unit;
   final String? shortDescription;
@@ -604,6 +609,7 @@ class ServiceItem extends Equatable {
       packageOptions: packageOptions,
       selectedOption: option,
       reviews: reviews,
+      warehouseId: warehouseId,
     );
   }
 
@@ -900,6 +906,7 @@ class ServiceItem extends Equatable {
       gstRate: parseDoubleOrNull(json['gst_rate']),
       platformFee: parseMoneyOrNull(json['platform_fee']),
       status: json['status']?.toString(),
+      warehouseId: int.tryParse(json['warehouse_id']?.toString() ?? ''),
       tag: _nonEmpty(json['tag']),
       packageOptions: (json['options'] as List? ?? const [])
           .whereType<Map>()
@@ -954,6 +961,7 @@ class ServiceItem extends Equatable {
         if (gstRate != null) 'gst_rate': gstRate,
         if (platformFee != null) 'platform_fee': platformFee.toString(),
         if (status != null) 'status': status,
+        if (warehouseId != null) 'warehouse_id': warehouseId,
       };
 
   @override
@@ -962,6 +970,7 @@ class ServiceItem extends Equatable {
         title,
         slug,
         price,
+        warehouseId,
         discountedPrice,
         shortDescription,
         description,

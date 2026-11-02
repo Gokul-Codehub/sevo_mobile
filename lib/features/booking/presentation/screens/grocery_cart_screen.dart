@@ -4,6 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../domain/cart_warehouse.dart';
+import '../../domain/combo_key.dart';
+import '../../domain/marketplace_cart.dart';
+import '../../domain/marketplace_cart_refresh.dart';
+import '../../../orders/data/grocery_orders_repository.dart';
+import '../../../orders/data/marketplace_online_payment.dart' show paymentLauncherProvider;
+import '../../../../core/errors/api_error.dart';
+import '../../../../core/errors/error_manager.dart';
 import '../../../../core/utils/image_url_helper.dart';
 import '../../../../core/utils/location_gate.dart';
 import '../../../../routing/app_router.dart';
@@ -16,7 +24,6 @@ import '../../../auth/domain/auth_notifier.dart';
 import '../../../logistics/domain/logistics_models.dart';
 import '../../../home/domain/home_flow_mode.dart';
 import '../../domain/booking_models.dart';
-import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
 import '../../../catalog/data/marketplace_catalog_repository.dart';
@@ -150,6 +157,71 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     super.dispose();
   }
 
+  /// One key per order attempt: a retry of the same attempt (double tap, flaky network) returns the same order
+  /// instead of placing it twice. Cleared once the order is placed.
+  String? _orderKey;
+
+  /// Places the order through the marketplace checkout, exactly like the web store: the order goes to the seller to
+  /// pack, Seller Hub stock is reserved, and it is tracked on its own order page (also listed in My Bookings).
+  Future<void> _placeMarketplaceOrder(BuildContext context, List<CartItem> items, Address? address) async {
+    final addr = address ?? ref.read(selectedAddressProvider);
+    if (addr == null) {
+      AppToast.show(context, 'Please choose a delivery address first.', type: AppToastType.error);
+      return;
+    }
+    final user = ref.read(currentUserProvider);
+    final instant = _deliveryOption == _DeliveryOption.quick;
+    final slot = _selectedSlot;
+    _orderKey ??= 'app-${DateTime.now().microsecondsSinceEpoch}';
+    final online = _paymentMethod == 'ONLINE';
+    final checkout = MarketplaceCheckout(
+            paymentMethod: online ? 'UPI' : 'COD',
+            address: addr.formattedAddress,
+            name: user?.name ?? '',
+            phone: user?.phone ?? '',
+            email: user?.email ?? '',
+            lat: addr.latitude,
+            lng: addr.longitude,
+            instant: instant,
+            slotId: slot?.id,
+            slotLabel: slot == null ? null : (slot.label.isNotEmpty ? slot.label : _slotTimeRangeLabel(slot)),
+            slotDate: _selectedSlotDate,
+            slotStart: slot?.startTime,
+            slotEnd: slot?.endTime,
+            idempotencyKey: _orderKey!,
+          );
+    final repo = ref.read(groceryOrdersRepositoryProvider);
+    final result = online
+        ? await repo.payOnline(items, checkout, launcher: ref.read(paymentLauncherProvider))
+        : await repo.place(items, checkout);
+    if (!context.mounted) return;
+    switch (result) {
+      case Success(:final data):
+        _orderKey = null;
+        ref.read(cartProvider.notifier).removeMarketplaceLines();
+        ref.invalidate(groceryOrdersProvider);
+        AppToast.show(context, online ? 'Payment received. Order placed!' : 'Order placed! Pay in cash on delivery.', type: AppToastType.success);
+        // Land on Bookings (where grocery orders are listed) and open the order on top of it, so the Bookings tab is the
+        // active one and Back returns to the list instead of leaving the customer somewhere unrelated.
+        context.go('/bookings');
+        if (data.length == 1) context.push('/grocery-orders/${data.first.orderNumber}');
+      case Failure(:final error):
+        // A failed attempt may be retried with a different cart, so it must not reuse the key.
+        if (error is! NetworkError) _orderKey = null;
+        var msg = ErrorManager.present(error).body;
+        // The shelf moved under the cart (sold out, price changed): bring the cart in line with it, like the web does,
+        // so the customer can review and order again instead of hitting the same error.
+        if (isCartStaleError(error)) {
+          final server = (error as ValidationError).message;
+          await refreshMarketplaceCart(ref);
+          msg = '${server.trim().isEmpty ? 'Some items in your cart changed.' : server.trim()} We have updated your cart - please review it and place the order again.';
+          if (!context.mounted) return;
+        }
+        if (mounted) setState(() => _errorMessage = msg);
+        AppToast.show(context, msg, type: AppToastType.error);
+    }
+  }
+
   /// Opens the real [CouponBottomSheet] (live coupons from the backend,
   /// "No coupons available right now." when there are none) and applies
   /// whatever it returns — mirrors checkout_screen.dart's own
@@ -189,8 +261,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cartItems = ref.watch(cartProvider);
+    // Only Seller Hub groceries are sold here (like the web store); a service that happens to be in the shared cart
+    // is not part of a grocery order.
+    final cartItems = marketplaceLines(ref.watch(cartProvider));
     final cartSummary = ref.watch(cartSummaryProvider);
+    // Seller Hub carts are charged exactly the items (no fees, no coupon), so those rows and the free-delivery
+    // progress card are not shown.
+    final mkt = cartItems.isNotEmpty;
     final addressesAsync = ref.watch(addressListProvider);
 
     final addresses = addressesAsync.valueOrNull ?? const [];
@@ -485,6 +562,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             const SizedBox(height: 14),
 
             // ── Free Delivery Incentive Card ────────────────────────────────
+            if (!mkt) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -577,6 +655,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               ),
             ),
             const SizedBox(height: 14),
+            ],
 
             // ── Cart Items List (template: one card per item) ────────────────
             Container(
@@ -1076,6 +1155,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   ),
                   const SizedBox(height: 10),
 
+                  if (!mkt) ...[
                   // Delivery charge
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1258,6 +1338,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         ),
                       ],
                     ),
+                  ],
                   ],
 
                   const Divider(height: 22, color: AppColors.border),
@@ -1514,6 +1595,22 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     final pickedDate = _inlineSlotDate ?? dates.first;
     final pickedStr = _formatDateForBooking(pickedDate);
     final todayStr = _formatDateForBooking(dates.first);
+    // Slots of the warehouse the cart's products ship from (same rule as the web cart). Looked up from the
+    // product when the cart line does not carry it (items saved before the app recorded it).
+    final warehouseAsync = ref.watch(cartWarehouseIdProvider);
+    if (warehouseAsync.isLoading) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+        child: const Row(children: [
+          SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
+          Text('Loading delivery slots...', style: TextStyle(fontSize: 12)),
+        ]),
+      );
+    }
+    final warehouseId = warehouseAsync.valueOrNull;
+    SlotQuery slotQuery(String date) => (date: date, warehouseId: warehouseId);
 
     Widget label(String t) => Text(
           t,
@@ -1529,14 +1626,14 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               ),
             ),
             TextButton(
-              onPressed: () => ref.invalidate(marketplaceDeliverySlotsForDateProvider(date)),
+              onPressed: () => ref.invalidate(marketplaceDeliverySlotsForDateProvider((date: date, warehouseId: warehouseId))),
               child: const Text('Retry', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
             ),
           ],
         );
 
-    final todayAsync = ref.watch(marketplaceDeliverySlotsForDateProvider(todayStr));
-    final slotsAsync = ref.watch(marketplaceDeliverySlotsForDateProvider(pickedStr));
+    final todayAsync = ref.watch(marketplaceDeliverySlotsForDateProvider(slotQuery(todayStr)));
+    final slotsAsync = ref.watch(marketplaceDeliverySlotsForDateProvider(slotQuery(pickedStr)));
 
     // Earliest still-upcoming, available slot today -> "Instant" delivery.
     DeliverySlotOption? instantSlot;
@@ -1769,7 +1866,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     WidgetRef ref,
     Address? activeAddress,
   ) async {
-    final cartItems = ref.read(cartProvider);
+    final cartItems = marketplaceLines(ref.read(cartProvider));
 
     if (cartItems.isEmpty) return;
 
@@ -1797,67 +1894,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     });
 
     try {
-      // Fixed 2026-10-07 ("the slots for grocery/vegetale of should from
-      // the seller hub-delivery slot as per the uploaded image"): every
-      // grocery order used to submit a hardcoded window (a fake "10-15
-      // Min Express Delivery" or a fixed daily "6:00 PM - 8:00 PM") with
-      // no connection to any real delivery capacity. Now it submits
-      // whichever REAL Seller Hub DeliverySlot the picker resolved
-      // (_openDeliveryOptionSheet, above) for either option.
-      // `_selectedSlot`/`_selectedSlotDate` defaulting here too is just a
-      // defensive fallback — _onProceedToPayTapped never reaches this
-      // call with either still null.
-      final slotDateStr = _selectedSlotDate ?? _formatDateForBooking(DateTime.now());
-      final chosenSlot = _selectedSlot;
-      final slot = chosenSlot != null
-          ? TimeSlot(
-              id: 'seller_hub_slot_${chosenSlot.id}_$slotDateStr',
-              date: slotDateStr,
-              startTime: chosenSlot.startTime,
-              endTime: chosenSlot.endTime,
-              label: chosenSlot.label.isNotEmpty
-                  ? chosenSlot.label
-                  : _slotTimeRangeLabel(chosenSlot),
-            )
-          : TimeSlot(
-              id: 'express_${DateTime.now().millisecondsSinceEpoch}',
-              date: slotDateStr,
-              startTime: '10:00',
-              endTime: '10:15',
-              label: '10-15 Min Express Delivery',
-            );
-
-      final result = await ref
-          .read(bookingActionControllerProvider.notifier)
-          .createBooking(
-            date: slotDateStr,
-            slot: slot,
-            specialInstructions: 'Quick Commerce Vegetable Order',
-            contactPhone: ref.read(currentUserProvider)?.phone,
-            // Fixed 2026-10-07: now sends the coupon-discounted total (see
-            // `_effectiveGrandTotal`) instead of the full `cartSummary.total`
-            // — otherwise an applied coupon would show correctly in the
-            // Bill Details card above but the customer would still be
-            // charged the full, undiscounted amount at the actual booking
-            // step, which is the one place that matters.
-            totalAmount: _effectiveGrandTotal(ref.read(cartSummaryProvider)),
-            paymentMethod: _paymentMethod,
-          );
-
-      if (!context.mounted) return;
-
-      if (result.error != null) {
-        if (mounted) {
-          setState(() => _errorMessage = result.error);
-        }
-        AppToast.show(context, result.error!, type: AppToastType.error);
-      } else if (result.booking != null) {
-        AppToast.bookingSuccessful(context);
-        context.go(
-          '/bookings/success/${result.booking!.id}',
-          extra: result.booking,
-        );
-      }
+      // Every grocery / vegetable order goes through the marketplace checkout, exactly like the web store: the seller
+      // receives it, stock is reserved, and it is tracked on its own page. (The old booking path for in-house
+      // catalog groceries is gone - those items are not sold any more.)
+      await _placeMarketplaceOrder(context, cartItems, activeAddress);
     } catch (e) {
       if (mounted) {
         setState(() => _errorMessage = e.toString());
@@ -2178,7 +2218,7 @@ class _ComboCartGroup extends ConsumerWidget {
     final first = members.first;
     final cart = ref.read(cartProvider.notifier);
     final count = (first.quantity / first.comboUnitQty).round().clamp(1, 99);
-    final total = members.fold<Decimal>(Decimal.zero, (sum, m) => sum + m.totalPrice);
+    final total = comboGroupTotal(members);
 
     return Container(
       decoration: BoxDecoration(

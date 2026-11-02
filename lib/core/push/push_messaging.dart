@@ -1,3 +1,4 @@
+import '../../features/app_update/domain/store_info.dart';
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart' show Firebase;
@@ -48,6 +49,10 @@ class FirebasePushMessaging implements PushMessaging {
     try {
       if (!await FirebaseBootstrap.ensure() || Firebase.apps.isEmpty) return false;
       FirebaseMessaging.onBackgroundMessage(sevoFirebaseBackgroundHandler);
+      if (StoreInfo.isIos) {
+        // iOS: let the system banner show while the app is open (Android shows a local notification instead).
+        await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+      }
       return true;
     } catch (_) {
       return false;

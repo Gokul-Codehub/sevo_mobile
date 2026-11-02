@@ -10,6 +10,9 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../../auth/domain/auth_notifier.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
+import '../../domain/booking_status.dart' show bookingStatusLabel;
+import '../../../orders/data/grocery_orders_repository.dart';
+import '../../../orders/presentation/grocery_orders_screens.dart' show OrderCard;
 import 'booking_detail_screen.dart' show bookingItemImageProvider;
 import '../../../../shared/utils/date_utils.dart';
 import '../../../../shared/widgets/motion.dart';
@@ -62,6 +65,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(myBookingsProvider);
+      ref.invalidate(groceryOrdersProvider);
     }
   }
 
@@ -114,6 +118,32 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     return q.split(RegExp(r'\s+')).every(haystack.contains);
   }
 
+  /// Grocery orders placed through the marketplace checkout (the web store's flow) are listed here with the
+  /// bookings, split into Active / History by their delivery status. Services have none, so that filter hides them.
+  (List<GroceryOrder>, List<GroceryOrder>) _orders() {
+    if (_categoryFilter == _BookingCategoryFilter.services) return (const [], const []);
+    final all = ref.watch(groceryOrdersProvider).valueOrNull ?? const <GroceryOrder>[];
+    final q = _query.trim().toLowerCase();
+    bool matches(GroceryOrder o) {
+      if (q.isEmpty) return true;
+      final haystack = [
+        o.orderNumber,
+        stageTitle(o.stage),
+        o.statusLabel,
+        o.sellerName,
+        o.slot,
+        'grocery',
+        for (final i in o.items) i.title,
+      ].join(' ').toLowerCase();
+      return q.split(RegExp(r'\s+')).every(haystack.contains);
+    }
+
+    int newestFirst(GroceryOrder a, GroceryOrder b) =>
+        (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+    final shown = all.where(matches).toList();
+    return (shown.where((o) => o.isActive).toList()..sort(newestFirst), shown.where((o) => !o.isActive).toList()..sort(newestFirst));
+  }
+
   List<Booking> _applyFilter(List<Booking> all) {
     final withdrawn = ref.watch(withdrawnBookingIdsProvider);
     final visible = all
@@ -135,6 +165,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     final bookingsAsync = ref.watch(myBookingsProvider(null));
     final cached = bookingsAsync.valueOrNull;
     final counts = cached == null ? null : _partition(_applyFilter(cached));
+    final (activeOrders, pastOrders) = _orders();
 
     if (user == null) {
       return Scaffold(
@@ -204,11 +235,11 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
                   Tab(
                       text: counts == null
                           ? 'Active'
-                          : 'Active (${counts.$1.length})'),
+                          : 'Active (${counts.$1.length + activeOrders.length})'),
                   Tab(
                       text: counts == null
                           ? 'History'
-                          : 'History (${counts.$2.length})'),
+                          : 'History (${counts.$2.length + pastOrders.length})'),
                 ],
               ),
             ),
@@ -286,6 +317,11 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
 
     final filteredBookings = _applyFilter(visibleBookings);
     final (upcoming, history) = _partition(filteredBookings);
+    final (activeOrders, pastOrders) = _orders();
+    Future<void> refresh() async {
+      ref.invalidate(groceryOrdersProvider);
+      await ref.refresh(myBookingsProvider(null).future);
+    }
 
     return Column(
       children: [
@@ -361,20 +397,22 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
             controller: _tabController,
             children: [
               _BookingListView(
+                orders: activeOrders,
                 bookings: upcoming,
                 emptyTitle: _query.trim().isEmpty ? 'No Active Bookings' : 'No matching bookings',
                 emptySubtitle: _query.trim().isEmpty
                     ? 'Book a service today and enjoy hassle-free home maintenance.'
                     : 'Try a different name, booking number or status.',
-                onRefresh: () => ref.refresh(myBookingsProvider(null).future),
+                onRefresh: refresh,
               ),
               _BookingListView(
+                orders: pastOrders,
                 bookings: history,
                 emptyTitle: _query.trim().isEmpty ? 'No Past Bookings' : 'No matching bookings',
                 emptySubtitle: _query.trim().isEmpty
                     ? 'Your completed or cancelled bookings will appear here.'
                     : 'Try a different name, booking number or status.',
-                onRefresh: () => ref.refresh(myBookingsProvider(null).future),
+                onRefresh: refresh,
               ),
             ],
           ),
@@ -427,12 +465,14 @@ class _CategoryFilterChip extends StatelessWidget {
 
 class _BookingListView extends StatelessWidget {
   const _BookingListView({
+    this.orders = const [],
     required this.bookings,
     required this.emptyTitle,
     required this.emptySubtitle,
     required this.onRefresh,
   });
 
+  final List<GroceryOrder> orders;
   final List<Booking> bookings;
   final String emptyTitle;
   final String emptySubtitle;
@@ -440,7 +480,7 @@ class _BookingListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (bookings.isEmpty) {
+    if (bookings.isEmpty && orders.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -504,10 +544,13 @@ class _BookingListView extends StatelessWidget {
       onRefresh: onRefresh,
       child: ListView.separated(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
-        itemCount: bookings.length,
+        itemCount: orders.length + bookings.length,
         separatorBuilder: (context, index) => const SizedBox(height: 14),
         itemBuilder: (context, index) {
-          final booking = bookings[index];
+          if (index < orders.length) {
+            return FadeSlideIn(key: ValueKey('o-${orders[index].orderNumber}'), index: index, child: OrderCard(order: orders[index]));
+          }
+          final booking = bookings[index - orders.length];
           return FadeSlideIn(key: ValueKey('b-${booking.id}'), index: index, child: _BookingCard(booking: booking));
         },
       ),
@@ -604,7 +647,7 @@ class _BookingCard extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    BookingStatusChip(status: booking.status),
+                    BookingStatusChip(status: booking.status, grocery: booking.isGroceryBooking),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -707,7 +750,7 @@ class _BookingCard extends ConsumerWidget {
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    'Tech: ${booking.technician!.name}',
+                                    '${booking.isGroceryBooking ? 'Delivery' : 'Tech'}: ${booking.technician!.name}',
                                     style: const TextStyle(
                                       fontSize: 11.5,
                                       fontWeight: FontWeight.w600,
@@ -747,6 +790,11 @@ class _BookingCard extends ConsumerWidget {
                         if (booking.canTrack) ...[
                           OutlinedButton.icon(
                             onPressed: () {
+                              // Grocery orders are tracked on their status page (no map).
+                              if (booking.isGroceryBooking) {
+                                context.push('/bookings/${booking.id}', extra: booking);
+                                return;
+                              }
                               final identifier = booking.trackingIdentifier ??
                                   '${booking.id}';
                               context.push('/track/$identifier',

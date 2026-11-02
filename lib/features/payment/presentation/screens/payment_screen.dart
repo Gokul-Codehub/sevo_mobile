@@ -1,3 +1,4 @@
+import '../../domain/payment_failure.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -251,6 +252,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Recovery: why it failed + what to do next (retry / another method / support) ──
+                if (paymentState is PaymentFailed)
+                  _PaymentRecoveryCard(
+                    failed: paymentState,
+                    onTryAgain: () => ref.read(paymentControllerProvider.notifier).reset(),
+                    onSupport: () => context.push('/support'),
+                  ),
                 // ── Method cards ──
                 ...List.generate(_paymentMethods.length, (index) {
                   final method = _paymentMethods[index];
@@ -522,3 +530,46 @@ class _PaymentMethodOption {
   final IconData icon;
 }
 
+
+
+/// Shown above the payment methods after a failed or interrupted payment. The booking is not lost:
+/// the customer can retry, pick another method below, or contact support.
+class _PaymentRecoveryCard extends StatelessWidget {
+  const _PaymentRecoveryCard({required this.failed, required this.onTryAgain, required this.onSupport});
+  final PaymentFailed failed;
+  final VoidCallback onTryAgain;
+  final VoidCallback onSupport;
+
+  @override
+  Widget build(BuildContext context) {
+    final info = failed.info ?? classifyPaymentFailure(code: failed.code, message: failed.errorMessage);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF3C6C0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(info.title, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.error, fontSize: 15))),
+          ]),
+          const SizedBox(height: 6),
+          Text('${info.message} ${info.nextStep}', style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87)),
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            FilledButton(onPressed: onTryAgain, child: const Text('Try again')),
+            OutlinedButton(onPressed: onTryAgain, child: const Text('Choose another method')),
+            TextButton(onPressed: onSupport, child: const Text('Contact support')),
+          ]),
+        ],
+      ),
+    );
+  }
+}

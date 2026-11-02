@@ -69,6 +69,31 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
             ),
             const SizedBox(height: 16),
 
+            // ── Raise a request and follow the reply in the app ─────────────
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.border)),
+              child: Column(children: [
+                ListTile(
+                  leading: const Icon(Icons.edit_note_rounded, color: AppColors.navy),
+                  title: const Text('Raise a support request', style: TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: const Text('Booking, payment, refund or delivery problem'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/support/new'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.forum_outlined, color: AppColors.navy),
+                  title: const Text('My support requests', style: TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: const Text('Follow replies and status'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/support/requests'),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+
             Row(
               children: [
                 _ContactCard(

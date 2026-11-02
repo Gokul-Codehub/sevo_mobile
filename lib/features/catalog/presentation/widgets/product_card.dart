@@ -213,6 +213,7 @@ class ProductCard extends ConsumerWidget {
                     fit: BoxFit.cover,
                   ),
                 ),
+                if (service.rating > 0)
                 Positioned(
                   top: 8,
                   left: 8,

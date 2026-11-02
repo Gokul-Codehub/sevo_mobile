@@ -47,6 +47,18 @@ class NotificationService {
   bool _initialized = false;
   int _nextId = 0;
 
+  /// Event keys already shown on this device, so the same event (a push AND the 45-second inbox poll) never alerts twice.
+  final List<String> _recentKeys = [];
+
+  /// True the first time [key] is seen; remembers the last 100.
+  bool claim(String? key) {
+    if (key == null || key.isEmpty) return true;
+    if (_recentKeys.contains(key)) return false;
+    _recentKeys.add(key);
+    if (_recentKeys.length > 100) _recentKeys.removeAt(0);
+    return true;
+  }
+
   static const _channelId = 'booking_updates';
   static const _channelName = 'Booking Updates';
   static const _channelDescription =
@@ -93,6 +105,16 @@ class NotificationService {
         description: 'Reminders when a new version of SEVO is available',
         importance: Importance.defaultImportance,
       ));
+      // One channel per kind of notification (matches the channel ids the server sends), so each can be muted alone.
+      for (final c in const [
+        ('payments', 'Payments & refunds', 'Payment receipts and refund progress', Importance.high),
+        ('support_updates', 'Support', 'Replies to your support requests', Importance.high),
+        ('promotions', 'Offers & promotions', 'Coupons and deals (only if you opted in)', Importance.low),
+      ]) {
+        await androidImpl?.createNotificationChannel(
+          AndroidNotificationChannel(c.$1, c.$2, description: c.$3, importance: c.$4),
+        );
+      }
       // Android 13+ (API 33) requires this explicit runtime request before
       // any notification can be shown; a no-op on older Android. iOS
       // permission is requested via DarwinInitializationSettings above.
@@ -133,7 +155,9 @@ class NotificationService {
     required String title,
     required String body,
     String? routePayload,
+    String? dedupeKey,
   }) async {
+    if (!claim(dedupeKey)) return; // already alerted for this event
     if (!_initialized) await initialize();
     try {
       await _plugin.show(

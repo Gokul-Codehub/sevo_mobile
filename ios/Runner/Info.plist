@@ -47,6 +47,18 @@
 			</array>
 		</dict>
 	</dict>
+	<!-- iOS readiness (not built or tested yet): permission texts shown by the system prompts, and remote
+	     notifications (the Apple push key and the Push Notifications capability are added in Xcode later). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SEVO uses your location to fill in your address and find the nearest technician or delivery slot.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>SEVO needs the camera to take photos for your booking.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SEVO needs access to your photos so you can attach them to a booking.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

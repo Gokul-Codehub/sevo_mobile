@@ -1,3 +1,4 @@
+import '../../booking/domain/booking_status.dart' show bookingStatusLabel;
 import 'dart:math' as math;
 
 import 'package:equatable/equatable.dart';
@@ -117,6 +118,8 @@ class TrackingUpdate extends Equatable {
     this.paymentStatus,
     this.balanceDue,
     this.extraCharges = const [],
+    this.completionProofs = const [],
+    this.history = const [],
     this.deliveryException,
     this.deliveryOtp,
     this.feedbackToken,
@@ -171,6 +174,12 @@ class TrackingUpdate extends Equatable {
   /// Goods-transport money items (server-computed, display only).
   final String? balanceDue;
   final List<TrackingExtraCharge> extraCharges;
+
+  /// Photos / signature the technician or driver submitted when the work was done (server `completion_proofs`).
+  final List<TrackingProof> completionProofs;
+
+  /// Every status change of this booking with its time (server `status_history`), oldest first.
+  final List<TrackingHistoryEvent> history;
   final TrackingDeliveryException? deliveryException;
   final String? deliveryOtp;
 
@@ -206,6 +215,12 @@ class TrackingUpdate extends Equatable {
     final c = (serviceCategory ?? '').toLowerCase();
     return (logisticsLeg ?? '').isNotEmpty ||
         const ['goods', 'truck', 'two_wheeler', 'packers', 'transport'].any(c.contains);
+  }
+
+  /// A grocery / vegetable order (delivery-partner wording).
+  bool get isGrocery {
+    final c = (serviceCategory ?? '').toLowerCase();
+    return const ['grocery', 'groceries', 'vegetable', 'fruit', 'quick', 'daily'].any(c.contains);
   }
 
   /// A named technician / driver actually holds the job. The server's
@@ -324,6 +339,8 @@ class TrackingUpdate extends Equatable {
       paymentStatus: next.paymentStatus ?? paymentStatus,
       balanceDue: pick(next.balanceDue, balanceDue),
       extraCharges: partial && next.extraCharges.isEmpty ? extraCharges : next.extraCharges,
+      completionProofs: partial && next.completionProofs.isEmpty ? completionProofs : next.completionProofs,
+      history: partial && next.history.isEmpty ? history : next.history,
       deliveryException: pick(next.deliveryException, deliveryException),
       deliveryOtp: keep(next.deliveryOtp, deliveryOtp),
       feedbackToken: next.feedbackToken ?? feedbackToken,
@@ -346,8 +363,26 @@ class TrackingUpdate extends Equatable {
 
   /// Human-readable placeholder shown while there is no live position yet
   /// (mirrors the web app's `getFreshnessBadge()` text, simplified).
-  String get statusMessage {
+  String get statusMessage => messageFor();
+
+  /// The one-line status. [grocery] is for callers that know the booking is a grocery order even when the
+  /// server's category slug does not say so.
+  String messageFor({bool grocery = false}) {
     final s = status.toLowerCase();
+    if ((grocery || isGrocery) && !isLogistics) {
+      if (isTerminal) {
+        return s == 'cancelled' || s == 'rejected' ? 'This order has been cancelled.' : 'Your order has been delivered.';
+      }
+      if (s == 'in_progress') return 'Your delivery partner is handing over your order.';
+      if (s == 'arrived') return 'Your delivery partner has arrived with your order.';
+      if (!hasDriver) return 'Your order is confirmed - we are getting it ready.';
+      if (!isAccepted) return 'Delivery partner assigned - waiting for confirmation...';
+      if (!hasLiveData && locationLost) {
+        return "Your delivery partner's live location is temporarily unavailable - it will update when the signal returns.";
+      }
+      if (!hasLiveData) return 'Delivery partner assigned - waiting for live location...';
+      return 'Your order is on the way.';
+    }
     if (isTerminal) {
       return s == 'cancelled' || s == 'rejected'
           ? 'This booking has been cancelled.'
@@ -443,6 +478,13 @@ class TrackingUpdate extends Equatable {
               .map((e) => TrackingExtraCharge.fromJson(Map<String, dynamic>.from(e)))
               .toList()
           : const [],
+      history: TrackingHistoryEvent.parseList(json['status_history']),
+      completionProofs: json['completion_proofs'] is List
+          ? [
+              for (final e in json['completion_proofs'] as List)
+                ?TrackingProof.tryParse(e),
+            ]
+          : const [],
       deliveryException: json['delivery_exception'] is Map
           ? TrackingDeliveryException.fromJson(
               Map<String, dynamic>.from(json['delivery_exception'] as Map))
@@ -516,6 +558,8 @@ class TrackingUpdate extends Equatable {
         paymentStatus: paymentStatus,
         balanceDue: balanceDue,
         extraCharges: extraCharges,
+        completionProofs: completionProofs,
+        history: history,
         deliveryException: deliveryException,
         deliveryOtp: deliveryOtp,
         feedbackToken: feedbackToken,
@@ -560,6 +604,8 @@ class TrackingUpdate extends Equatable {
         paymentStatus,
         balanceDue,
         extraCharges,
+        completionProofs,
+        history,
         deliveryException,
         deliveryOtp,
         feedbackToken,
@@ -628,6 +674,73 @@ class TrackingExtraCharge extends Equatable {
 
   @override
   List<Object?> get props => [id, label, amount, receiptUrl];
+}
+
+/// One step in a booking's journey (assigned, on the way, arrived...) with when it happened.
+class TrackingHistoryEvent extends Equatable {
+  const TrackingHistoryEvent({required this.status, required this.label, required this.at});
+
+  final String status;
+  final String label;
+  final DateTime at;
+
+  /// Oldest first. Entries with no time or no new status are dropped, and the same status is never listed twice in a row.
+  static List<TrackingHistoryEvent> parseList(Object? raw) {
+    if (raw is! List) return const [];
+    final out = <TrackingHistoryEvent>[];
+    for (final e in raw) {
+      if (e is! Map) continue;
+      final to = (e['to_status'] ?? '').toString().trim();
+      final at = DateTime.tryParse((e['occurred_at'] ?? '').toString())?.toLocal();
+      if (to.isEmpty || at == null) continue;
+      if (out.isNotEmpty && out.last.status == to.toLowerCase()) continue;
+      out.add(TrackingHistoryEvent(status: to.toLowerCase(), label: bookingStatusLabel(to), at: at));
+    }
+    out.sort((a, b) => a.at.compareTo(b.at));
+    return out;
+  }
+
+  @override
+  List<Object?> get props => [status, label, at];
+}
+
+/// One photo (or signature) submitted as proof that the work / delivery was done.
+class TrackingProof extends Equatable {
+  const TrackingProof({required this.id, required this.type, required this.label, required this.imageUrl, this.notes, this.capturedAt});
+
+  final String id;
+  final String type; // PRESENCE | APPLIANCE | WORK_AREA | SIGNATURE | PICKUP | DELIVERY ...
+  final String label;
+  final String imageUrl;
+  final String? notes;
+  final DateTime? capturedAt;
+
+  bool get isSignature => type.toUpperCase() == 'SIGNATURE';
+
+  /// Only entries that really carry an image are shown (a proof row without a photo is skipped).
+  static TrackingProof? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final url = _asNonEmptyString(raw['image']);
+    if (url == null || !url.startsWith('http')) return null;
+    final type = (raw['proof_type'] ?? '').toString();
+    return TrackingProof(
+      id: (raw['id'] ?? url).toString(),
+      type: type,
+      label: _asNonEmptyString(raw['label']) ?? _humanise(type),
+      imageUrl: url,
+      notes: _asNonEmptyString(raw['notes']),
+      capturedAt: DateTime.tryParse((raw['captured_at'] ?? '').toString())?.toLocal(),
+    );
+  }
+
+  static String _humanise(String type) {
+    if (type.isEmpty) return 'Photo';
+    final words = type.toLowerCase().split('_').where((w) => w.isNotEmpty);
+    return words.map((w) => w[0].toUpperCase() + w.substring(1)).join(' ');
+  }
+
+  @override
+  List<Object?> get props => [id, type, label, imageUrl, notes, capturedAt];
 }
 
 /// An OPEN delivery exception reported by the driver (e.g. consignee absent).

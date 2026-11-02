@@ -1,3 +1,5 @@
+import '../../../tracking/data/call_service.dart';
+import '../../../../core/analytics/analytics_manager.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -30,6 +32,9 @@ import '../../data/booking_repository.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../widgets/active_quote_card.dart';
+import '../widgets/grocery_order_status_view.dart';
+import '../../domain/grocery_fee_split.dart';
+import '../../../pricing/domain/pricing_providers.dart';
 import '../../../../shared/utils/date_utils.dart';
 
 /// Comprehensive booking detail screen with timeline, actions, and technician info.
@@ -52,7 +57,7 @@ class BookingDetailScreen extends ConsumerWidget {
     final scaffold = Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Booking Details'),
+        title: Text((booking?.isGroceryBooking ?? false) ? 'Order Details' : 'Booking Details'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -95,6 +100,15 @@ class BookingDetailScreen extends ConsumerWidget {
     ThemeData theme,
     Booking booking,
   ) {
+    // Grocery / vegetable orders get their own status page: no map, only the order's progress.
+    if (booking.isGroceryBooking) {
+      return _GroceryStatusLoader(
+        booking: booking,
+        onHelp: () => context.push('/support/new?topic=booking&booking=${booking.id}&ref=${Uri.encodeQueryComponent(booking.requestId)}'),
+        onCancel: booking.canCancel ? () => _showCancelDialog(context, ref, booking) : null,
+        onInvoice: booking.isCancelled ? null : () => _downloadInvoice(context, ref, booking),
+      );
+    }
     final first = booking.items.isNotEmpty ? booking.items.first.service : null;
     final extra = booking.items.length - 1;
     final title = first == null
@@ -161,7 +175,7 @@ class BookingDetailScreen extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          BookingStatusChip(status: booking.status),
+                          BookingStatusChip(status: booking.status, grocery: booking.isGroceryBooking),
                         ],
                       ),
                     ),
@@ -239,14 +253,16 @@ class BookingDetailScreen extends ConsumerWidget {
                       multiline: true,
                     ),
                 ],
-                if (note.isNotEmpty)
+                // Grocery orders carry an internal "Quick Commerce ..." tag in the note; that is not something the
+                // customer wrote, so it is not shown back to them.
+                if (note.isNotEmpty && !(booking.isGroceryBooking && note.toLowerCase().contains('quick commerce')))
                   _BillRow(label: 'Special Instructions', amount: note, multiline: true),
                 if (cancelReason.isNotEmpty)
                   _BillRow(
                       label: 'Cancellation Reason', amount: cancelReason, multiline: true),
                 const _BdDivider(),
-                const Text(
-                  'SERVICES',
+                Text(
+                  booking.isGroceryBooking ? 'ITEMS' : 'SERVICES',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -330,7 +346,9 @@ class BookingDetailScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isLogisticsBooking(booking) ? 'Trip Status Tracker' : 'Service Status Tracker',
+                  _isLogisticsBooking(booking)
+                      ? 'Trip Status Tracker'
+                      : (booking.isGroceryBooking ? 'Order Status' : 'Service Status Tracker'),
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -449,12 +467,13 @@ class BookingDetailScreen extends ConsumerWidget {
                               if (booking.technician!.phone != null) ...[
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: () {
-                                      final uri = Uri.parse(
-                                        'tel:${booking.technician!.phone}',
-                                      );
-                                      launchUrl(uri);
-                                    },
+                                    // The server decides: a masked bridge call, or a direct dial when masking is off.
+                                    onPressed: () => callProfessional(
+                                      context,
+                                      ref,
+                                      bookingId: booking.id,
+                                      directNumber: booking.technician!.phone,
+                                    ),
                                     icon: const Icon(Icons.call, size: 16),
                                     label: Text(_isLogisticsBooking(booking)
                                         ? 'Call Driver'
@@ -511,17 +530,17 @@ class BookingDetailScreen extends ConsumerWidget {
                       icon: const Icon(Icons.location_on, size: 18),
                       label: Text(_isLogisticsBooking(booking)
                           ? 'Finding Driver - Track'
-                          : 'Track Service'),
+                          : (booking.isGroceryBooking ? 'Track Order' : 'Track Service')),
                     ),
                   ),
                   const SizedBox(height: 12),
                 ],
 
                 // ── 6. Action Buttons driven strictly by available_actions ──
-                if (booking.canReschedule || booking.canCancel) ...[
+                if ((booking.canReschedule && !booking.isGroceryBooking) || booking.canCancel) ...[
                   Row(
                     children: [
-                      if (booking.canReschedule) ...[
+                      if (booking.canReschedule && !booking.isGroceryBooking) ...[
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () => _showRescheduleModal(context, ref, booking),
@@ -590,6 +609,13 @@ class BookingDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                 ],
+
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/support/new?topic=booking&booking=${booking.id}&ref=${Uri.encodeQueryComponent(booking.requestId)}'),
+                  icon: const Icon(Icons.support_agent_rounded),
+                  label: Text(booking.isGroceryBooking ? 'Get help with this order' : 'Get help with this booking'),
+                ),
+                const SizedBox(height: 12),
 
                 if (booking.canRate) ...[
                   FilledButton.tonalIcon(
@@ -723,7 +749,18 @@ class BookingDetailScreen extends ConsumerWidget {
     'Need to reschedule instead',
   ];
 
+  static const _groceryCancelReasonOptions = <String>[
+    'Plans changed',
+    'Ordered by mistake',
+    'Added wrong items or quantity',
+    'Delivery address or slot is wrong',
+    'Found a better price elsewhere',
+    'Expected faster delivery — taking too long',
+    'Want to place a new order instead',
+  ];
+
   void _showCancelDialog(BuildContext context, WidgetRef ref, Booking booking) {
+    final grocery = booking.isGroceryBooking;
     final otherController = TextEditingController();
     String? selectedReason;
     // Real fee / refund for cancelling right now (null = couldn't load; the
@@ -737,15 +774,17 @@ class BookingDetailScreen extends ConsumerWidget {
         builder: (ctx, setState) {
           final isOther = selectedReason == 'Other';
           return AlertDialog(
-            title: const Text('Cancel Booking'),
+            title: Text(grocery ? 'Cancel Order' : 'Cancel Booking'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Are you sure you want to cancel this booking? If advance was paid, refund will be initiated.',
-                    style: TextStyle(fontSize: 12),
+                  Text(
+                    grocery
+                        ? 'Are you sure you want to cancel this order? If you already paid, the amount will be refunded.'
+                        : 'Are you sure you want to cancel this booking? If advance was paid, refund will be initiated.',
+                    style: const TextStyle(fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   FutureBuilder<CancellationPreview?>(
@@ -810,7 +849,7 @@ class BookingDetailScreen extends ConsumerWidget {
                     'Reason for cancellation',
                     style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
                   ),
-                  ..._cancelReasonOptions.map(
+                  ...(grocery ? _groceryCancelReasonOptions : _cancelReasonOptions).map(
                     (reason) => RadioListTile<String>(
                       value: reason,
                       groupValue: selectedReason,
@@ -847,7 +886,7 @@ class BookingDetailScreen extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Keep Booking'),
+                child: Text(grocery ? 'Keep Order' : 'Keep Booking'),
               ),
               FutureBuilder<CancellationPreview?>(
                 future: previewFuture,
@@ -860,6 +899,7 @@ class BookingDetailScreen extends ConsumerWidget {
                             ? otherController.text.trim()
                             : selectedReason!;
                         Navigator.pop(ctx);
+                        AnalyticsManager.instance.track(AnalyticsEvents.cancelTapped);
                         final error = await ref
                             .read(bookingActionControllerProvider.notifier)
                             .cancelBooking(booking.id, finalReason);
@@ -1029,6 +1069,44 @@ final _bookingLiveSnapshotProvider = FutureProvider.autoDispose
   }
 });
 
+/// Works out the freshest status for a grocery order (its own record, or the live snapshot if that is further along)
+/// and hands it to [GroceryOrderStatusView]. Same rule as [_LiveTimelineTracker], without the map.
+class _GroceryStatusLoader extends ConsumerWidget {
+  const _GroceryStatusLoader({required this.booking, required this.onHelp, this.onCancel, this.onInvoice});
+
+  final Booking booking;
+  final VoidCallback onHelp;
+  final VoidCallback? onCancel;
+  final VoidCallback? onInvoice;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final own = normalizeBookingStatus(booking.status);
+    var status = own;
+    if (!isBookingFinished(own) && !const {'draft', 'pending_payment', 'waiting_for_payment'}.contains(own)) {
+      final live = ref.watch(_bookingLiveSnapshotProvider((id: booking.id, token: booking.trackingIdentifier))).valueOrNull;
+      final liveStatus = normalizeBookingStatus(live?.status);
+      if (liveStatus.isNotEmpty &&
+          (isBookingFinished(liveStatus) || _TimelineTracker.indexFor(liveStatus) > _TimelineTracker.indexFor(own))) {
+        status = liveStatus;
+      }
+    }
+    final itemsTotal = booking.items.fold<Decimal>(Decimal.zero, (s, i) => s + i.totalPrice);
+    final other = booking.totalAmount - itemsTotal;
+    return GroceryOrderStatusView(
+      booking: booking,
+      feeLines: other > Decimal.zero
+          ? splitGroceryFees(itemsTotal: itemsTotal, other: other, pricing: ref.watch(pricingConfigProvider))
+          : null,
+      status: status,
+      itemThumb: (s) => _BookingItemThumb(service: s),
+      onHelp: onHelp,
+      onCancel: onCancel,
+      onInvoice: onInvoice,
+    );
+  }
+}
+
 class _LiveTimelineTracker extends ConsumerWidget {
   const _LiveTimelineTracker({required this.booking});
 
@@ -1040,7 +1118,7 @@ class _LiveTimelineTracker extends ConsumerWidget {
     // Nothing live to ask about before payment or once the booking is over.
     if (isBookingFinished(own) ||
         const {'draft', 'pending_payment', 'waiting_for_payment'}.contains(own)) {
-      return _TimelineTracker(currentStatus: own);
+      return _TimelineTracker(currentStatus: own, grocery: booking.isGroceryBooking);
     }
     final live = ref
         .watch(_bookingLiveSnapshotProvider((id: booking.id, token: booking.trackingIdentifier)))
@@ -1053,6 +1131,7 @@ class _LiveTimelineTracker extends ConsumerWidget {
             _TimelineTracker.indexFor(liveStatus) > _TimelineTracker.indexFor(own));
     final status = useLive ? liveStatus : own;
     return _TimelineTracker(
+      grocery: booking.isGroceryBooking,
       currentStatus: status,
       arrived: (live?.hasArrived ?? false) || isBookingArrivedStatus(status),
     );
@@ -1060,9 +1139,21 @@ class _LiveTimelineTracker extends ConsumerWidget {
 }
 
 class _TimelineTracker extends StatelessWidget {
-  const _TimelineTracker({required this.currentStatus, this.arrived = false});
+  const _TimelineTracker({required this.currentStatus, this.arrived = false, this.grocery = false});
 
   final String currentStatus;
+
+  /// Grocery / vegetable order: delivery wording instead of the service steps.
+  final bool grocery;
+
+  static const _grocerySteps = [
+    'Placed',
+    'Confirmed',
+    'Packing',
+    'On the Way',
+    'Arriving',
+    'Delivered',
+  ];
 
   /// Technician inside the 35 m arrival radius: "On the Way" reads "Arrived".
   final bool arrived;
@@ -1152,7 +1243,7 @@ class _TimelineTracker extends StatelessWidget {
         final stepIndex = index ~/ 2;
         final isCompleted = stepIndex < activeIndex;
         final isCurrent = stepIndex == activeIndex;
-        final label = (stepIndex == 3 && arrived) ? 'Arrived' : _steps[stepIndex];
+        final label = (stepIndex == 3 && arrived) ? 'Arrived' : (grocery ? _grocerySteps : _steps)[stepIndex];
 
         return Column(
           children: [

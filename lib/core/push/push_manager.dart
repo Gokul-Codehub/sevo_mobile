@@ -1,3 +1,7 @@
+import '../../features/booking/domain/booking_providers.dart' show myBookingsProvider;
+import '../../features/notifications/domain/notification_providers.dart' show notificationsControllerProvider;
+import '../navigation/web_link_mapper.dart';
+import '../../features/app_update/domain/store_info.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -17,6 +21,7 @@ import '../network/api_client.dart' show apiClientProvider;
 import '../network/session_interceptors.dart' show SessionNotice;
 import '../storage/secure_storage.dart' show secureStorageProvider;
 import '../services/notification_service.dart';
+import '../navigation/pending_link.dart';
 import '../utils/app_logger.dart';
 import 'device_facts.dart';
 import 'push_messaging.dart';
@@ -85,6 +90,7 @@ class PushManager {
     required this.onAppUpdate,
     required this.onNavigate,
     required this.showLocal,
+    this.onInboxChanged,
     this.onForceLogout,
     DeviceFactsReader? deviceFacts,
   })  : _messaging = messaging,
@@ -98,7 +104,10 @@ class PushManager {
   final DeviceFactsReader _facts;
   final void Function() onAppUpdate;
   final void Function(String route) onNavigate;
-  final Future<void> Function(String title, String body, String? route) showLocal;
+  final Future<void> Function(String title, String body, String? route, String? eventKey) showLocal;
+
+  /// A push arrived while the app is open: refresh the notification list / bookings so they are up to date.
+  final void Function()? onInboxChanged;
 
   /// The server signed this phone out (admin or another device): clear the session and go to login.
   final void Function()? onForceLogout;
@@ -132,13 +141,17 @@ class PushManager {
       final allowed = available ? await _messaging.notificationsAllowed() : false;
       final installed = await _reader.read();
       final facts = await _facts.read();
-      await _repo.register(
+      final ok = await _repo.register(
         token: token,
         notificationsEnabled: allowed,
         version: installed.versionName,
         build: installed.buildNumber,
         facts: facts,
       );
+      // Debug builds only (AppLogger.d prints nothing in release): lets a developer check push from Logcat
+      // and paste the token into Firebase Console > Messaging > "Send test message".
+      AppLogger.d('[PUSH]', 'registered=$ok permission=$allowed firebase=$available model=${facts.model}');
+      AppLogger.d('[PUSH]', 'fcm_token=${token ?? "none"}');
     } catch (_) {}
   }
 
@@ -159,7 +172,10 @@ class PushManager {
       return;
     }
     final title = m.title, body = m.body;
-    if (title != null && title.isNotEmpty) unawaited(showLocal(title, body ?? '', safeRoute(m.route)));
+    // On iOS the system already presented it (see FirebasePushMessaging); only Android needs a local notification.
+    if (StoreInfo.isIos) return;
+    onInboxChanged?.call();
+    if (title != null && title.isNotEmpty) unawaited(showLocal(title, body ?? '', safeRoute(m.route), m.data['event_key']));
   }
 
   void handleTap(PushMessage m) {
@@ -171,8 +187,26 @@ class PushManager {
       onAppUpdate();
       return;
     }
-    final route = safeRoute(m.route);
+    final route = appRouteFor(m.route);
     if (route != null) onNavigate(route);
+  }
+
+  /// App screens a push may open directly. Anything else is a WEBSITE path and goes through [resolveWebLink].
+  static const _nativePrefixes = [
+    '/bookings', '/track', '/support', '/notifications', '/my-payments', '/my-refunds', '/send-feedback', '/feedback',
+    '/cart', '/grocery-orders', '/profile', '/devices', '/notification-settings', '/offers', '/categories', '/search',
+  ];
+
+  /// The app route to open for a push `route`: an app screen as-is, a website path mapped to its app screen,
+  /// or null when there is no app screen for it.
+  static String? appRouteFor(String? route) {
+    final safe = safeRoute(route);
+    if (safe == null) return null;
+    final path = safe.split('?').first;
+    // The website's public tracking link is /tracking/<token>; the app's tracking screen is /track/<token>.
+    if (path.startsWith('/tracking/') && path.length > '/tracking/'.length) return '/track/${path.substring('/tracking/'.length)}';
+    if (_nativePrefixes.any((p) => path == p || path.startsWith('$p/'))) return safe;
+    return resolveWebLink(safe).route;
   }
 
   /// Only in-app paths: never a full URL or a protocol-relative link.
@@ -205,9 +239,23 @@ final pushManagerProvider = Provider<PushManager>((ref) {
     onAppUpdate: () => unawaited(ref.read(appUpdateControllerProvider.notifier).check(CheckReason.manual)),
     onNavigate: (route) {
       final context = rootNavigatorKey.currentContext;
-      if (context != null) GoRouter.of(context).push(route);
+      if (context == null) return;
+      // Account-specific screens while signed out: sign in first, then continue to the screen.
+      if (PendingLink.needsSignIn(route) && !ref.read(isUserAuthenticatedProvider)) {
+        PendingLink.set(route);
+        GoRouter.of(context).push('/login');
+        return;
+      }
+      GoRouter.of(context).push(route);
     },
-    showLocal: (title, body, route) => NotificationService.instance.show(title: title, body: body, routePayload: route),
+    showLocal: (title, body, route, eventKey) =>
+        NotificationService.instance.show(title: title, body: body, routePayload: route, dedupeKey: eventKey),
+    onInboxChanged: () {
+      try {
+        unawaited(ref.read(notificationsControllerProvider.notifier).refresh(silent: true));
+        ref.invalidate(myBookingsProvider(null));
+      } catch (_) {}
+    },
     onForceLogout: () async {
       try {
         await ref.read(secureStorageProvider).clearAll();
@@ -242,7 +290,17 @@ class _PushGateState extends ConsumerState<PushGate> {
   Widget build(BuildContext context) {
     ref.listen<bool>(isUserAuthenticatedProvider, (previous, next) {
       final manager = ref.read(pushManagerProvider);
-      if (next && previous != true) unawaited(manager.onSignedIn());
+      if (next && previous != true) {
+        unawaited(manager.onSignedIn());
+        final pending = PendingLink.take();
+        final context = rootNavigatorKey.currentContext;
+        if (pending != null && context != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final c = rootNavigatorKey.currentContext;
+            if (c != null) GoRouter.of(c).go(pending);
+          });
+        }
+      }
       if (!next && previous == true) unawaited(manager.onSignedOut());
     });
     return widget.child;

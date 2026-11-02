@@ -1,3 +1,7 @@
+import '../../../../shared/utils/app_toast.dart';
+import '../widgets/review_photo_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../../../core/analytics/analytics_manager.dart';
 import '../../../../core/foundation/foundation_controller.dart' show featureFlagProvider;
 import '../../../../core/rating/rating_prompt.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +39,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   final Set<String> _selectedTags = {'On Time ⏱️', 'Clean & Tidy 🧹'};
   bool _isLoading = false;
   bool _isSubmitted = false;
+  List<XFile> _photos = const [];
 
   static const _availableTags = [
     'On Time ⏱️',
@@ -83,6 +88,8 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     switch (result) {
       case Success():
         setState(() => _isSubmitted = true);
+        _uploadPhotos(); // best effort, after the rating itself is safely saved
+        AnalyticsManager.instance.track(AnalyticsEvents.ratingSubmitted, {'stars': _overallRating});
         // Store-rating prompt: only after a good rating, never the first time, at most every 90 days.
         RatingPromptManager.instance.afterRating(
           stars: _overallRating,
@@ -95,6 +102,20 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
             backgroundColor: AppColors.error,
           ),
         );
+    }
+  }
+
+  /// Sends the chosen photos one by one. The rating is already saved, so a failed photo only produces a notice.
+  Future<void> _uploadPhotos() async {
+    if (_photos.isEmpty) return;
+    final repo = ref.read(feedbackRepositoryProvider);
+    var failed = 0;
+    for (final photo in _photos) {
+      final result = await repo.uploadPhoto(widget.token, await photo.readAsBytes(), photo.name.isEmpty ? 'photo.jpg' : photo.name);
+      if (result is Failure) failed++;
+    }
+    if (failed > 0 && mounted) {
+      AppToast.show(context, 'Your rating was saved, but $failed photo(s) could not be uploaded.', type: AppToastType.error);
     }
   }
 
@@ -420,6 +441,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     ),
                   ),
                 ),
+
+                const SizedBox(height: 18),
+                ReviewPhotoPicker(photos: _photos, onChanged: (p) => setState(() => _photos = p)),
 
                 const SizedBox(height: 32),
 

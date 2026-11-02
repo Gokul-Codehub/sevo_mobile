@@ -1,3 +1,4 @@
+import '../../../core/l10n/locale_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,7 +47,7 @@ class DevicesScreen extends ConsumerWidget {
         content: const Text('That phone will be signed out and will need to log in again.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.signOut)),
         ],
       ),
     );
@@ -71,7 +72,7 @@ class DevicesScreen extends ConsumerWidget {
     final devices = ref.watch(deviceSessionsProvider);
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FA),
-      appBar: _bar(context, 'Your devices'),
+      appBar: _bar(context, context.l10n.devicesTitle),
       body: devices.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _error('We could not load your devices.', () => ref.invalidate(deviceSessionsProvider)),
@@ -83,7 +84,7 @@ class DevicesScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text('These phones are signed in to your SEVO account.', style: TextStyle(color: Colors.black54, fontSize: 13)),
+              Text(context.l10n.devicesIntro, style: const TextStyle(color: Colors.black54, fontSize: 13)),
               const SizedBox(height: 12),
               for (final d in list)
                 Card(
@@ -93,7 +94,7 @@ class DevicesScreen extends ConsumerWidget {
                   child: ListTile(
                     leading: const Icon(Icons.smartphone_rounded, color: AppColors.navy),
                     title: Text(d.model, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text([if (d.osVersion.isNotEmpty) d.osVersion, if (d.current) 'This device' else _ago(d.lastSeen)].join(' - ')),
+                    subtitle: Text([if (d.osVersion.isNotEmpty) d.osVersion, if (d.current) context.l10n.thisDevice else _ago(d.lastSeen)].join(' - ')),
                     trailing: d.current
                         ? null
                         : TextButton(onPressed: () => _signOut(context, ref, d), child: const Text('Sign out')),
@@ -104,7 +105,7 @@ class DevicesScreen extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 8),
                   child: OutlinedButton(
                     onPressed: () => _signOutOthers(context, ref),
-                    child: const Text('Sign out all other devices'),
+                    child: Text(context.l10n.signOutAllOthers),
                   ),
                 ),
             ],
@@ -140,15 +141,14 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
     final prefs = ref.watch(notificationPreferencesProvider);
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FA),
-      appBar: _bar(context, 'Notification settings'),
+      appBar: _bar(context, context.l10n.notifSettingsTitle),
       body: prefs.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _error('We could not load your settings.', () => ref.invalidate(notificationPreferencesProvider)),
         data: (map) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text('Choose what SEVO tells you about. Updates about an active booking are always saved in your notification list.',
-                style: TextStyle(color: Colors.black54, fontSize: 13)),
+            Text(context.l10n.notifSettingsIntro, style: const TextStyle(color: Colors.black54, fontSize: 13)),
             const SizedBox(height: 8),
             for (final e in kNotificationToggles.entries)
               SwitchListTile(

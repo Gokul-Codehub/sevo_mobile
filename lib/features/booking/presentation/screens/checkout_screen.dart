@@ -1,3 +1,4 @@
+import '../../../../core/analytics/analytics_manager.dart';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:decimal/decimal.dart';
@@ -335,6 +336,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (result.error != null) {
       AppToast.show(context, result.error!, type: AppToastType.error);
     } else if (result.booking != null) {
+      AnalyticsManager.instance.track(AnalyticsEvents.bookingSubmitted, {'payment_method': _paymentMethod});
       if (_paymentMethod == 'ONLINE') {
         // Pay Online: take the (test) payment now. The booking only shows
         // its success screen once the payment goes through.
@@ -342,6 +344,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         context.go('/checkout/payment?booking=${result.booking!.id}&type=full&from=checkout');
         return;
       }
+      AnalyticsManager.instance.track(AnalyticsEvents.bookingConfirmed, {'payment_method': _paymentMethod});
       AppToast.bookingSuccessful(context);
       context.go('/bookings/success/${result.booking!.id}',
           extra: result.booking);

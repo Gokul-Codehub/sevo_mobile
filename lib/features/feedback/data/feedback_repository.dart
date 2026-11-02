@@ -46,6 +46,21 @@ class FeedbackRepository {
     }
   }
 
+  // ── Review photos ─────────────────────────────────────────────────────────
+  /// `POST /feedback/<token>/photos/` (multipart). One photo per call; the server allows 3 of up to 5 MB.
+  Future<Result<bool>> uploadPhoto(String token, List<int> bytes, String filename) async {
+    try {
+      await api.post(
+        '/feedback/$token/photos/',
+        data: FormData.fromMap({'image': MultipartFile.fromBytes(bytes, filename: filename)}),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return const Success(true);
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
   ApiError _toError(Object e) {
     if (e is ApiError) return e;
     if (e is DioException && e.error is ApiError) {

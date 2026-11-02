@@ -1,0 +1,40 @@
+{
+  "@@locale": "en",
+  "language": "Language",
+  "languageSheetTitle": "Choose language",
+  "tryAgain": "Try again",
+  "goBack": "Go back",
+  "maintenanceTitleDefault": "We are upgrading SEVO",
+  "maintenanceMessageDefault": "We will be back shortly.",
+  "maintenanceBackIn": "Back in",
+  "maintenanceAnyMoment": "Any moment now",
+  "maintenanceChecking": "Checking...",
+  "maintenanceAutoCheck": "We check automatically every 30 seconds.",
+  "unavailableTitle": "{label} is temporarily unavailable",
+  "@unavailableTitle": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "unavailableBody": "We are working on it. Please try again in a little while.",
+  "serverUnreachable": "We could not reach SEVO. Retrying...",
+  "permContinue": "Continue",
+  "permNotNow": "Not now",
+  "permNeeded": "Permission needed",
+  "permOpenSettings": "Open settings",
+  "permCancel": "Cancel",
+  "devicesTitle": "Your devices",
+  "devicesIntro": "These phones are signed in to your SEVO account.",
+  "thisDevice": "This device",
+  "signOut": "Sign out",
+  "signOutAllOthers": "Sign out all other devices",
+  "notifSettingsTitle": "Notification settings",
+  "notifSettingsIntro": "Choose what SEVO tells you about. Updates about an active booking are always saved in your notification list.",
+  "feedbackTitle": "Send feedback",
+  "feedbackSend": "Send",
+  "feedbackSending": "Sending...",
+  "feedbackHint": "Write your message here",
+  "feedbackThanks": "Thank you - we have received your feedback."
+}

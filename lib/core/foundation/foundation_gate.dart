@@ -1,3 +1,4 @@
+import '../l10n/locale_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -85,8 +86,10 @@ class _FoundationGateState extends ConsumerState<FoundationGate> with WidgetsBin
     );
     final blocked = ref.watch(foundationControllerProvider.select((s) => s.maintenanceBlocksApp));
     final info = ref.watch(foundationControllerProvider.select((s) => s.config.maintenance));
-    final hasAnnouncement = ref.watch(visibleAnnouncementsProvider.select((l) => l.isNotEmpty));
-    final unreachable = ref.watch(networkStateProvider) == NetworkState.serverUnreachable;
+    // Only the top banner takes space at the top; modal and info announcements are drawn over the app.
+    final hasAnnouncement = ref.watch(announcementsOfKindProvider('banner').select((l) => l.isNotEmpty));
+    // Not at the first failed check: a slow server is covered by the screens' loaders; only a sustained outage warns.
+    final unreachable = ref.watch(serverBannerVisibleProvider) && !ref.watch(fullScreenLoaderActiveProvider);
     final hasBanner = hasAnnouncement || unreachable;
     return PopScope(
       canPop: !blocked,
@@ -102,6 +105,8 @@ class _FoundationGateState extends ConsumerState<FoundationGate> with WidgetsBin
               ),
             ],
           ),
+          const AnnouncementInfoCard(),
+          const AnnouncementModal(),
           if (blocked) Positioned.fill(child: MaintenanceScreen(info: info)),
         ],
       ),
@@ -135,11 +140,11 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
     super.dispose();
   }
 
-  String? _countdown() {
+  String? _countdown(BuildContext context) {
     final eta = widget.info.eta;
     if (eta == null) return null;
     final left = eta.difference(DateTime.now());
-    if (left.isNegative) return 'Any moment now';
+    if (left.isNegative) return context.l10n.maintenanceAnyMoment;
     final h = left.inHours, m = left.inMinutes.remainder(60), s = left.inSeconds.remainder(60);
     String two(int n) => n.toString().padLeft(2, '0');
     return h > 0 ? '${two(h)}:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
@@ -154,7 +159,8 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
   @override
   Widget build(BuildContext context) {
     final info = widget.info;
-    final countdown = _countdown();
+    final countdown = _countdown(context);
+    final l = context.l10n;
     return Material(
       color: Colors.white,
       child: SafeArea(
@@ -172,19 +178,19 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  info.title.isEmpty ? 'We are upgrading SEVO' : info.title,
+                  info.title.isEmpty ? l.maintenanceTitleDefault : info.title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.navy),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  info.message.isEmpty ? 'We will be back shortly.' : info.message,
+                  info.message.isEmpty ? l.maintenanceMessageDefault : info.message,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 15, height: 1.4, color: Colors.black54),
                 ),
                 if (countdown != null) ...[
                   const SizedBox(height: 18),
-                  const Text('Back in', style: TextStyle(fontSize: 12, color: Colors.black45)),
+                  Text(l.maintenanceBackIn, style: TextStyle(fontSize: 12, color: Colors.black45)),
                   Text(countdown, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.navy)),
                 ],
                 const SizedBox(height: 28),
@@ -193,11 +199,11 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
                   child: FilledButton(
                     onPressed: _retrying ? null : _retry,
                     style: FilledButton.styleFrom(backgroundColor: AppColors.navy, minimumSize: const Size.fromHeight(48)),
-                    child: Text(_retrying ? 'Checking...' : 'Try again'),
+                    child: Text(_retrying ? l.maintenanceChecking : l.tryAgain),
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text('We check automatically every 30 seconds.', style: TextStyle(fontSize: 12, color: Colors.black45)),
+                Text(l.maintenanceAutoCheck, style: TextStyle(fontSize: 12, color: Colors.black45)),
               ],
             ),
           ),
@@ -217,11 +223,11 @@ class ServerUnreachableBanner extends StatelessWidget {
     final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       child: Row(
-        children: const [
-          Icon(Icons.cloud_off_rounded, size: 16, color: Colors.white),
-          SizedBox(width: 8),
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 16, color: Colors.white),
+          const SizedBox(width: 8),
           Expanded(
-            child: Text('We could not reach SEVO. Retrying...', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+            child: Text(context.l10n.serverUnreachable, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

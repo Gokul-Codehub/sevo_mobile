@@ -1,3 +1,4 @@
+import 'store_info.dart';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -198,7 +199,9 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       AppLogger.d('[UPDATE]', 'Play unavailable: ${e.reason}');
       state = state.copyWith(
         playUnavailable: true,
-        message: 'The Google Play update service is not available on this device. Open the Play Store to update.',
+        message: StoreInfo.isIos
+            ? 'Open the App Store to update SEVO.'
+            : 'The Google Play update service is not available on this device. Open the Play Store to update.',
       );
       return;
     }
@@ -206,7 +209,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     if (!hasRequiredBuild) {
       state = state.copyWith(
         playUnavailable: true,
-        message: 'The required version is not available for your device on Google Play yet. '
+        message: 'The required version is not available for your device on ${StoreInfo.longName} yet. '
             'Please try again later or contact SEVO support.',
       );
       return;
@@ -214,7 +217,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     if (!info.immediateAllowed) {
       state = state.copyWith(
         playUnavailable: true,
-        message: 'Google Play cannot start the update inside the app right now. Open the Play Store to update.',
+        message: '${StoreInfo.longName == 'Google Play' ? 'Google Play' : 'The App Store'} cannot start the update inside the app right now. Open the ${StoreInfo.shortName} to update.',
       );
       return;
     }
@@ -228,7 +231,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       case PlayUpdateOutcome.failed:
         state = state.copyWith(
           playUnavailable: true,
-          message: 'The update could not be completed. Try again, or open the Play Store to update.',
+          message: 'The update could not be completed. Try again, or open the ${StoreInfo.shortName} to update.',
         );
     }
   }
@@ -312,13 +315,13 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     final configured = policy?.storeUrl.trim() ?? '';
     final Uri? uri = configured.isNotEmpty
         ? Uri.tryParse(configured)
-        : (installed != null ? Uri.parse('https://play.google.com/store/apps/details?id=${installed.packageName}') : null);
+        : (installed != null ? StoreInfo.fallbackUrl(installed.packageName) : null);
     if (uri == null) {
       state = state.copyWith(message: 'The store link is not available. Please contact SEVO support.');
       return false;
     }
     final ok = await _openUrl(uri);
-    if (!ok) state = state.copyWith(message: 'Could not open the Play Store. Please open it manually and update SEVO.');
+    if (!ok) state = state.copyWith(message: 'Could not open the ${StoreInfo.shortName}. Please open it manually and update SEVO.');
     return ok;
   }
 }

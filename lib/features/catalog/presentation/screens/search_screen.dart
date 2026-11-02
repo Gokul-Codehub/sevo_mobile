@@ -1,3 +1,4 @@
+import '../../../../core/analytics/analytics_manager.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -236,6 +237,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final q = raw.trim();
     if (q.isEmpty) return;
     ref.read(recentSearchesProvider(_mode).notifier).add(q);
+    AnalyticsManager.instance.track(AnalyticsEvents.searchPerformed, {'mode': _mode.wire});
     context.push('/search/${_mode.wire}?q=${Uri.encodeQueryComponent(q)}');
   }
 

@@ -10,6 +10,8 @@ import '../../catalog/domain/catalog_models.dart';
 import '../../pricing/domain/pricing_providers.dart';
 import '../../pricing/domain/service_fare.dart';
 import 'booking_models.dart';
+import 'combo_key.dart';
+import 'marketplace_cart.dart';
 
 /// State notifier for customer shopping cart with persistent local storage.
 class CartNotifier extends Notifier<List<CartItem>> {
@@ -26,13 +28,16 @@ class CartNotifier extends Notifier<List<CartItem>> {
       if (raw != null && raw.isNotEmpty) {
         final decoded = jsonDecode(raw);
         if (decoded is List) {
-          final items = decoded
+          final all = decoded
               .whereType<Map>()
               .map((m) => CartItem.fromStorageJson(Map<String, dynamic>.from(m)))
               .toList();
+          // A cart saved by an older version may hold old-catalog groceries, which are not sold any more.
+          final items = [for (final i in all) if (!isLegacyGroceryItem(i.service)) i];
           if (items.isNotEmpty && state.isEmpty) {
             state = items;
           }
+          if (items.length != all.length) _persist();
         }
       }
     } catch (_) {
@@ -55,6 +60,10 @@ class CartNotifier extends Notifier<List<CartItem>> {
   }
 
   void addService(ServiceItem service, {int quantity = 1, String? notes}) {
+    if (isLegacyGroceryItem(service)) {
+      AppLogger.d('[P0-CART]', 'CART_ADD refused: ${service.title} is an old-catalog grocery item (not sold any more)');
+      return;
+    }
     // A product bought on its own never merges into a combo's line (and vice versa).
     final existingIndex = state.indexWhere((i) => i.service.id == service.id && !i.isComboLine);
     if (existingIndex >= 0) {
@@ -86,6 +95,7 @@ class CartNotifier extends Notifier<List<CartItem>> {
     required String comboKey,
     required String comboTitle,
   }) {
+    if (isLegacyGroceryItem(service)) return;
     final i = state.indexWhere((e) => e.service.id == service.id && e.comboKey == comboKey);
     if (i >= 0) {
       final list = [...state];
@@ -140,10 +150,25 @@ class CartNotifier extends Notifier<List<CartItem>> {
     _persist();
   }
 
+  /// Swaps a single-product line for a fresher copy of the same product (new price / stock) and quantity.
+  void replaceLine(int serviceId, ServiceItem service, int quantity) {
+    state = [
+      for (final i in state)
+        if (i.service.id == serviceId && !i.isComboLine) i.copyWith(service: service, quantity: quantity) else i,
+    ];
+    _persist();
+  }
+
   void removeService(int serviceId) {
     state = state.where((item) => item.service.id != serviceId || item.isComboLine).toList();
     AppLogger.d('[P0-CART]',
         'CART_REMOVE: serviceId=$serviceId, cartLength=${state.length}, items=${state.map((i) => "${i.service.title}:${i.service.id}").toList()}');
+    _persist();
+  }
+
+  /// After a grocery order is placed: remove the grocery lines and keep anything else in the cart.
+  void removeMarketplaceLines() {
+    state = [for (final i in state) if (marketplaceProductIdOf(i) == null) i];
     _persist();
   }
 
@@ -274,9 +299,18 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
   Decimal subtotal = Decimal.zero;
   Decimal originalTotal = Decimal.zero;
 
+  final seenCombos = <String>{};
   for (final item in items) {
     count += item.quantity;
-    subtotal += item.totalPrice;
+    final comboKey = item.comboKey;
+    if (comboKey != null && ComboKey.parse(comboKey)?.bundlePrice != null) {
+      // A combo is ONE all-in price (what the server charges), counted once for the whole group of its products.
+      if (seenCombos.add(comboKey)) {
+        subtotal += comboGroupTotal([for (final i in items) if (i.comboKey == comboKey) i]);
+      }
+    } else {
+      subtotal += item.totalPrice;
+    }
     final itemMrp = item.service.mrp;
     originalTotal += itemMrp * Decimal.fromInt(item.quantity);
   }
@@ -323,19 +357,25 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
 
   if (isGrocery) {
     // ── Quick Commerce Grocery Fee Rules (admin-configurable, Settings > Pricing) ──
+    // A cart made only of Seller Hub products is ordered through the marketplace checkout (same as the web store),
+    // and the server charges exactly the items for it: no delivery, handling, small-order fee or tip. Showing fees
+    // here would quote a total the customer is then not charged.
+    final marketplace = isMarketplaceCart(items) || marketplaceLines(items).isNotEmpty;
+
     // Delivery fee: FREE if subtotal >= pricing.freeDeliveryThreshold
-    final deliveryFee = subtotal >= pricing.freeDeliveryThreshold
+    final deliveryFee = marketplace || subtotal >= pricing.freeDeliveryThreshold
         ? Decimal.zero
         : pricing.deliveryFee;
 
     // Handling and packaging fee
-    final handlingFee = pricing.handlingFee;
+    final handlingFee = marketplace ? Decimal.zero : pricing.handlingFee;
 
     // Small cart fee, charged below pricing.smallCartThreshold
     final smallCartFee =
-        subtotal < pricing.smallCartThreshold ? pricing.smallCartFee : Decimal.zero;
+        !marketplace && subtotal < pricing.smallCartThreshold ? pricing.smallCartFee : Decimal.zero;
 
-    final total = subtotal + deliveryFee + handlingFee + smallCartFee + tipAmount;
+    final tip = marketplace ? Decimal.zero : tipAmount;
+    final total = subtotal + deliveryFee + handlingFee + smallCartFee + tip;
 
     // Full 100% settlement for groceries (no technician advance split)
     return CartSummary(
@@ -347,7 +387,7 @@ final cartSummaryProvider = Provider<CartSummary>((ref) {
       deliveryFee: deliveryFee,
       handlingFee: handlingFee,
       smallCartFee: smallCartFee,
-      tipAmount: tipAmount,
+      tipAmount: tip,
       taxes: Decimal.zero,
       total: total,
       advancePayable: total,

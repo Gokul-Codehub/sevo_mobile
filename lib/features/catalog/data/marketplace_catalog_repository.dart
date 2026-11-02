@@ -7,6 +7,8 @@ import '../../../config/env.dart';
 import '../../../core/errors/api_error.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
+import '../../addresses/domain/address_notifier.dart' show selectedAddressProvider;
+import '../../logistics/domain/logistics_providers.dart' show customerLocationProvider;
 import '../domain/catalog_models.dart';
 import 'basket_models.dart';
 import 'recipe_models.dart';
@@ -200,6 +202,8 @@ class MarketplaceProduct {
     this.categoryName,
     this.categorySlug,
     this.sellerName,
+    this.ratingAverage,
+    this.ratingCount = 0,
     this.inStock = true,
     this.availableStock = 0,
     this.description,
@@ -212,7 +216,11 @@ class MarketplaceProduct {
     this.variants = const [],
     this.showRecipes = false,
     this.recipes = const [],
+    this.warehouseId,
   });
+
+  /// Fulfilment warehouse (`warehouse_id` in the vendor payload).
+  final int? warehouseId;
 
   final int id;
   final String title;
@@ -321,9 +329,17 @@ class MarketplaceProduct {
     return combined.isEmpty ? null : combined;
   }
 
+  /// Real customer rating of this product (average of submitted reviews); null until someone has reviewed it.
+  final double? ratingAverage;
+  final int ratingCount;
+
   ServiceItem toServiceItem() {
     final hasMrp = hasStrikeThroughMrp;
     return ServiceItem(
+      // Only a rating customers actually gave. 0 means "none yet" and hides the star chip; it used to fall back to a
+      // made-up 4.8 on every product.
+      rating: ratingAverage ?? 0,
+      reviewCount: ratingCount,
       id: _cartIdOffset + id,
       title: title,
       slug: 'seller-hub-$id',
@@ -343,6 +359,7 @@ class MarketplaceProduct {
       // to CatalogFlowType.grocery regardless of this tree's own category
       // names (e.g. "Oils & Ghee", which wouldn't otherwise match).
       categorySlug: 'seller_hub_groceries',
+      warehouseId: warehouseId,
       imageUrl: primaryImage,
       galleryImages: galleryImages,
       variantOptions: hasSelectableVariants
@@ -391,6 +408,10 @@ class MarketplaceProduct {
       categoryName: (category['name'] ?? '').toString().trim().isEmpty ? null : category['name'].toString(),
       categorySlug: (category['slug'] ?? '').toString().trim().isEmpty ? null : category['slug'].toString(),
       sellerName: (seller['name'] ?? '').toString().trim().isEmpty ? null : seller['name'].toString(),
+      ratingAverage: json['rating'] is Map ? double.tryParse((json['rating'] as Map)['average']?.toString() ?? '') : null,
+      ratingCount: json['rating'] is Map ? int.tryParse((json['rating'] as Map)['count']?.toString() ?? '') ?? 0 : 0,
+      warehouseId: int.tryParse(json['warehouse_id']?.toString() ?? '') ??
+          (json['warehouse'] is Map ? int.tryParse((json['warehouse'] as Map)['id']?.toString() ?? '') : null),
       inStock: json['in_stock'] != false,
       availableStock: num.tryParse(json['available_stock']?.toString() ?? '') ?? 0,
       description: (json['description'] ?? '').toString().trim().isEmpty
@@ -456,9 +477,39 @@ class MarketplaceProductPage {
 }
 
 class MarketplaceCatalogRepository {
-  MarketplaceCatalogRepository({required this.api});
+  MarketplaceCatalogRepository({required this.api, this.warehouseResolver});
 
   final ApiClient api;
+
+  /// Which warehouse serves the customer's delivery point. Product lists are filtered to it (the web store does
+  /// the same since the service-area update); [DeliveryZone.unknown] means "could not tell" and fails open, while
+  /// [DeliveryZone.unserviceable] means nothing is sold there, so no products are returned.
+  final Future<DeliveryZone> Function()? warehouseResolver;
+
+  /// `GET /api/marketplace/warehouses/resolve-location/` - the warehouse whose service area covers a point (or a
+  /// saved address). Any failure is `unknown`, never "unserviceable": a flaky network must not lock people out.
+  Future<DeliveryZone> resolveWarehouse({double? lat, double? lng, int? addressId}) async {
+    if ((lat == null || lng == null) && addressId == null) return const DeliveryZone.unknown();
+    try {
+      final response = await api.get('/marketplace/warehouses/resolve-location/', queryParameters: {
+        if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
+        if (addressId != null) 'address_id': addressId,
+      });
+      final body = response.data;
+      final m = body is Map ? Map<String, dynamic>.from(body) : const <String, dynamic>{};
+      if (m['is_serviceable'] == true && m['warehouse'] is Map) {
+        final w = Map<String, dynamic>.from(m['warehouse'] as Map);
+        final id = int.tryParse(w['id']?.toString() ?? '');
+        if (id != null) return DeliveryZone.serviceable(id, (w['name'] ?? '').toString());
+      }
+      if (m['is_serviceable'] == false) {
+        return DeliveryZone.unserviceable((m['message'] ?? 'We do not deliver to this location yet.').toString());
+      }
+      return const DeliveryZone.unknown();
+    } catch (_) {
+      return const DeliveryZone.unknown();
+    }
+  }
 
   /// `GET /api/marketplace/categories/` — defaults to the full nested tree
   /// of active departments, pruned of any department (and its subtree)
@@ -492,7 +543,12 @@ class MarketplaceCatalogRepository {
     int pageSize = 60,
   }) async {
     try {
+      final zone = await warehouseResolver?.call() ?? const DeliveryZone.unknown();
+      if (zone.status == DeliveryZoneStatus.unserviceable) {
+        return Success(MarketplaceProductPage(products: const [], count: 0, page: page, totalPages: 1));
+      }
       final response = await api.get('/marketplace/products/', queryParameters: {
+        if (zone.warehouseId != null) 'warehouse_id': zone.warehouseId,
         if (categoryId != null) 'category_id': categoryId,
         if (categorySlug != null && categorySlug.isNotEmpty) 'category_slug': categorySlug,
         if (search != null && search.isNotEmpty) 'search': search,
@@ -771,8 +827,63 @@ class DeliverySlotDay {
 }
 
 final marketplaceCatalogRepositoryProvider = Provider<MarketplaceCatalogRepository>((ref) {
-  return MarketplaceCatalogRepository(api: ref.watch(apiClientProvider));
+  // Rebuilt whenever the delivery point changes, so every provider built on this repository refetches its products.
+  final point = ref.watch(deliveryPointProvider);
+  final repo = MarketplaceCatalogRepository(
+    api: ref.watch(apiClientProvider),
+    warehouseResolver: () => ref.read(deliveryZoneProvider.future),
+  );
+  assert(point.key.isNotEmpty);
+  return repo;
 });
+
+/// The point the customer wants things delivered to: the address they picked, else the detected / typed location.
+class DeliveryPoint {
+  const DeliveryPoint({this.lat, this.lng, this.addressId});
+  final double? lat;
+  final double? lng;
+  final int? addressId;
+
+  String get key => '${lat?.toStringAsFixed(4)},${lng?.toStringAsFixed(4)},$addressId';
+}
+
+final deliveryPointProvider = Provider<DeliveryPoint>((ref) {
+  final address = ref.watch(selectedAddressProvider);
+  if (address != null) {
+    return DeliveryPoint(lat: address.latitude, lng: address.longitude, addressId: address.id);
+  }
+  final loc = ref.watch(customerLocationProvider);
+  return DeliveryPoint(lat: loc.latitude, lng: loc.longitude);
+});
+
+/// Which warehouse (if any) serves [deliveryPointProvider]. Cached per delivery point; fails open to `unknown`.
+final deliveryZoneProvider = FutureProvider<DeliveryZone>((ref) async {
+  final point = ref.watch(deliveryPointProvider);
+  final api = ref.watch(apiClientProvider);
+  return MarketplaceCatalogRepository(api: api).resolveWarehouse(lat: point.lat, lng: point.lng, addressId: point.addressId);
+});
+
+enum DeliveryZoneStatus { serviceable, unserviceable, unknown }
+
+class DeliveryZone {
+  const DeliveryZone.serviceable(int this.warehouseId, this.name)
+      : status = DeliveryZoneStatus.serviceable,
+        message = null;
+  const DeliveryZone.unserviceable(this.message)
+      : status = DeliveryZoneStatus.unserviceable,
+        warehouseId = null,
+        name = null;
+  const DeliveryZone.unknown()
+      : status = DeliveryZoneStatus.unknown,
+        warehouseId = null,
+        name = null,
+        message = null;
+
+  final DeliveryZoneStatus status;
+  final int? warehouseId;
+  final String? name;
+  final String? message;
+}
 
 /// The full department tree, fetched once and kept alive for the browse
 /// screen's lifetime — never throws to its watcher; an unreachable vendor
@@ -1040,10 +1151,13 @@ final marketplaceWarehousesProvider = FutureProvider.autoDispose<List<DeliveryWa
 /// from the seller hub-delivery slot"). A failed/unreachable fetch
 /// resolves to an empty slot list rather than throwing, so the picker can
 /// show "No slots available for this date" instead of crashing.
+/// Which delivery slots to load: a date and the warehouse the cart's products ship from (null = server default).
+typedef SlotQuery = ({String date, int? warehouseId});
+
 final marketplaceDeliverySlotsForDateProvider =
-    FutureProvider.autoDispose.family<DeliverySlotDay, String>((ref, date) async {
+    FutureProvider.autoDispose.family<DeliverySlotDay, SlotQuery>((ref, query) async {
   final repo = ref.watch(marketplaceCatalogRepositoryProvider);
-  final result = await repo.getDeliverySlots(date: date);
+  final result = await repo.getDeliverySlots(warehouseId: query.warehouseId, date: query.date);
   switch (result) {
     case Success(:final data):
       return data;
@@ -1106,6 +1220,7 @@ extension _ServiceItemFallback on ServiceItem {
       inStock: inStock,
       maxQuantity: maxQuantity,
       description: description,
+      warehouseId: warehouseId,
     );
   }
 }

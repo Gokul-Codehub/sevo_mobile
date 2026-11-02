@@ -1,3 +1,5 @@
+import '../features/support/presentation/screens/support_requests_screens.dart';
+import '../features/my_payments/presentation/my_payments_screens.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,12 +39,12 @@ import '../features/catalog/presentation/screens/seller_hub_vegetables_screen.da
 import '../features/catalog/presentation/screens/service_detail_screen.dart';
 import '../features/feedback/presentation/screens/feedback_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
-import '../shared/theme/grocery_theme.dart';
 import '../features/logistics/presentation/screens/drop_location_picker_screen.dart';
 import '../features/ac_inspection/presentation/screens/ac_inspection_screen.dart';
 import '../core/analytics/analytics_manager.dart';
 import '../core/foundation/feature_guard.dart';
 import '../features/account_settings/presentation/account_settings_screens.dart';
+import '../features/account_settings/presentation/delete_account_screen.dart';
 import '../features/account_settings/presentation/feedback_screen.dart';
 import '../features/logistics/presentation/screens/goods_transport_booking_screen.dart';
 import '../features/logistics/domain/logistics_models.dart'
@@ -54,6 +56,9 @@ import '../features/profile/presentation/screens/profile_screen.dart';
 import '../features/notifications/presentation/screens/notifications_screen.dart';
 import '../features/support/presentation/screens/support_screen.dart';
 import '../features/tracking/presentation/screens/live_tracking_screen.dart';
+import '../features/orders/presentation/grocery_orders_screens.dart';
+import '../features/booking/domain/marketplace_cart.dart' show isLegacyGroceryItem;
+import '../features/orders/presentation/order_returns.dart' show ReturnRequestScreen;
 import '../features/work_extension/presentation/screens/work_extension_screen.dart';
 import '../shared/widgets/app_shell.dart';
 import '../shared/widgets/status_page.dart';
@@ -112,6 +117,15 @@ abstract final class AppRoutes {
   static const String support = '/support';
   static const String notifications = '/notifications';
   static const String devices = '/devices';
+  static const String supportRequests = '/support/requests';
+  static const String supportNew = '/support/new';
+  static const String supportTicket = '/support/tickets/:id';
+  static const String myPayments = '/my-payments';
+  static const String groceryOrders = '/grocery-orders';
+  static const String groceryOrderDetail = '/grocery-orders/:orderNumber';
+  static const String groceryOrderReturn = '/grocery-orders/:orderNumber/return';
+  static const String myRefunds = '/my-refunds';
+  static const String deleteAccount = '/delete-account';
   static const String appFeedback = '/send-feedback';
   static const String notificationSettings = '/notification-settings';
   static const String profile = '/profile';
@@ -135,6 +149,14 @@ abstract final class AppRoutes {
 // to a booking's detail screen). Not used for anything else; every normal
 // in-app navigation keeps using its own local `context`.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Where an old in-house grocery / vegetable category link should go instead (null for every other category).
+String? legacyGroceryCategoryRoute(String slug) {
+  final s = slug.toLowerCase().replaceAll('-', '_');
+  if (s.contains('vegetable') || s.contains('fruit')) return AppRoutes.sellerHubVegetables;
+  if (s.contains('grocer') || s == 'farm_fresh') return AppRoutes.sellerHubGroceries;
+  return null;
+}
 
 /// Navigator inside the bottom-nav shell: sheets shown on it (e.g. Ask Apta)
 /// open above the page but leave the bottom navigator visible.
@@ -212,6 +234,55 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => AppFeedbackScreen(bookingRef: state.uri.queryParameters['booking']),
           ),
           GoRoute(
+            path: AppRoutes.deleteAccount,
+            name: 'delete-account',
+            builder: (context, state) => const DeleteAccountScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.groceryOrders,
+            name: 'grocery-orders',
+            builder: (context, state) => const GroceryOrdersScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.groceryOrderReturn,
+            name: 'grocery-order-return',
+            builder: (context, state) => ReturnRequestScreen(orderNumber: state.pathParameters['orderNumber'] ?? ''),
+          ),
+          GoRoute(
+            path: AppRoutes.groceryOrderDetail,
+            name: 'grocery-order-detail',
+            builder: (context, state) => GroceryOrderDetailScreen(orderNumber: state.pathParameters['orderNumber'] ?? ''),
+          ),
+          GoRoute(
+            path: AppRoutes.myPayments,
+            name: 'my-payments',
+            builder: (context, state) => const PaymentHistoryScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.myRefunds,
+            name: 'my-refunds',
+            builder: (context, state) => const RefundsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.supportRequests,
+            name: 'support-requests',
+            builder: (context, state) => const SupportRequestsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.supportNew,
+            name: 'support-new',
+            builder: (context, state) => NewSupportRequestScreen(
+              topic: state.uri.queryParameters['topic'],
+              bookingId: state.uri.queryParameters['booking'],
+              bookingRef: state.uri.queryParameters['ref'],
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.supportTicket,
+            name: 'support-ticket',
+            builder: (context, state) => SupportTicketScreen(id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
+          ),
+          GoRoute(
             path: AppRoutes.devices,
             name: 'devices',
             builder: (context, state) => const DevicesScreen(),
@@ -274,6 +345,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.categoryDetail,
             name: 'category-detail',
+            // The old in-house grocery / vegetable categories are not sold any more: send those links (old
+            // notifications, bookmarks) to the Seller Hub store, which is what the web store shows.
+            redirect: (context, state) => legacyGroceryCategoryRoute(state.pathParameters['slug'] ?? ''),
             builder: (context, state) {
               final slug = state.pathParameters['slug'] ?? '';
               final extra = state.extra;
@@ -312,6 +386,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.serviceDetail,
             name: 'service-detail',
+            redirect: (context, state) {
+              final extra = state.extra;
+              return extra is ServiceItem && isLegacyGroceryItem(extra) ? AppRoutes.sellerHubGroceries : null;
+            },
             builder: (context, state) {
               final slug = state.pathParameters['slug'] ?? '';
               final extra = state.extra;
@@ -537,6 +615,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.liveTracking,
         name: 'live-tracking',
+        // Grocery / vegetable orders have no map: their tracking is the order status page.
+        redirect: (context, state) {
+          final extra = state.extra;
+          return extra is Booking && extra.isGroceryBooking ? '/bookings/${extra.id}' : null;
+        },
         builder: (context, state) => LiveTrackingScreen(
           identifier: state.pathParameters['identifier'] ?? '',
           // Present when navigated from booking detail / my bookings — lets

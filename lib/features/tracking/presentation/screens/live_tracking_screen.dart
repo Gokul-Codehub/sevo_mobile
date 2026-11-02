@@ -1,4 +1,9 @@
+import '../../data/call_service.dart';
+import '../widgets/tracking_history_card.dart';
+import '../widgets/work_photos_card.dart';
+import '../../../../core/analytics/analytics_manager.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,6 +97,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsManager.instance.track(AnalyticsEvents.trackingOpened);
     _loadMarkerIcons();
   }
 
@@ -183,6 +189,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     final tracking = ref.watch(trackingProvider(_trackingArgs));
+    final grocery = !tracking.isLogistics && (tracking.isGrocery || (widget.booking?.isGroceryBooking ?? false));
     final hasLiveData = tracking.hasLiveData;
     final techPos = hasLiveData
         ? LatLng(tracking.technicianLat!, tracking.technicianLng!)
@@ -299,6 +306,16 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
           onPressed: () => context.goBack(),
         ),
         actions: [
+          // Share a link so family can follow the booking too.
+          if (!tracking.isTerminal)
+            IconButton(
+              tooltip: 'Share tracking',
+              icon: const Icon(Icons.share_rounded, color: AppColors.navy, size: 20),
+              onPressed: () {
+                final id = (widget.booking?.trackingIdentifier ?? '').isNotEmpty ? widget.booking!.trackingIdentifier! : widget.identifier;
+                Share.share(trackingShareText(id), subject: 'Track my SEVO booking');
+              },
+            ),
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -373,7 +390,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 32),
                             child: Text(
-                              tracking.statusMessage,
+                              tracking.messageFor(grocery: grocery),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontSize: 12,
@@ -419,7 +436,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         flat: true,
                         infoWindow: InfoWindow(
                           title: technicianName ??
-                              (tracking.isLogistics ? 'Driver' : 'Technician'),
+                              (tracking.isLogistics ? 'Driver' : (grocery ? 'Delivery partner' : 'Technician')),
                           snippet: (_roadRouteEtaMinutes ?? tracking.etaMinutes) != null
                               ? '${_roadRouteEtaMinutes ?? tracking.etaMinutes} mins away'
                               : 'On the way',
@@ -520,7 +537,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              tracking.statusMessage,
+                              tracking.messageFor(grocery: grocery),
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -651,10 +668,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                             const {'in_progress', 'started', 'service_started', 'proof_submitted'}
                                 .contains(tracking.status.toLowerCase()))) ...[
                       _OtpCard(
-                        label: tracking.isLogistics ? 'PICKUP OTP' : 'WORK START OTP',
+                        label: tracking.isLogistics ? 'PICKUP OTP' : (grocery ? 'DELIVERY OTP' : 'WORK START OTP'),
                         hint: tracking.isLogistics
                             ? 'Share this code with the driver at pickup to start the trip'
-                            : 'Share this code with the technician to begin service',
+                            : (grocery
+                                ? 'Share this code with the delivery partner when you receive your order'
+                                : 'Share this code with the technician to begin service'),
                         otp: tracking.startOtp!,
                         color: const Color(0xFF92400E),
                         background: AppColors.warningLight,
@@ -682,6 +701,11 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       ),
                       const SizedBox(height: 12),
                     ],
+
+                    // Photos the technician / driver submitted when the work was done.
+                    WorkPhotosCard(proofs: tracking.completionProofs),
+                    // Every status change with its time.
+                    TrackingHistoryCard(events: tracking.history),
 
                     // Goods Transport / Packers & Movers items (server-driven;
                     // each card hides itself when the payload has nothing).
@@ -838,7 +862,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                   technicianName ??
                                       (tracking.isLogistics
                                           ? 'Driver not yet assigned'
-                                          : 'Technician not yet assigned'),
+                                          : (grocery ? 'Delivery partner not yet assigned' : 'Technician not yet assigned')),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
                                     fontSize: 13.5,
@@ -874,9 +898,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           // number, never a fallback support line.
                           if (technicianPhone != null && technicianPhone.isNotEmpty)
                             IconButton(
-                              onPressed: () {
-                                launchUrl(Uri.parse('tel:$technicianPhone'));
-                              },
+                              onPressed: () => callProfessional(
+                                context,
+                                ref,
+                                bookingId: tracking.bookingId ?? widget.booking?.id,
+                                directNumber: technicianPhone,
+                              ),
                               icon: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: const BoxDecoration(
@@ -913,7 +940,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                     Text(
-                      tracking.isLogistics ? 'Trip Status' : 'Service Status',
+                      tracking.isLogistics ? 'Trip Status' : (grocery ? 'Order Status' : 'Service Status'),
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
@@ -923,20 +950,20 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     const SizedBox(height: 14),
 
                     _TimelineStep(
-                      title: 'Booking Confirmed',
-                      subtitle: 'Your request has been placed',
+                      title: grocery ? 'Order Confirmed' : 'Booking Confirmed',
+                      subtitle: grocery ? 'Your order has been placed' : 'Your request has been placed',
                       isCompleted: currentStep > 0,
                       isActive: currentStep == 0,
                     ),
                     _TimelineStep(
-                      title: tracking.isLogistics ? 'Driver Assigned' : 'Technician Assigned',
+                      title: tracking.isLogistics ? 'Driver Assigned' : (grocery ? 'Packed & Partner Assigned' : 'Technician Assigned'),
                       subtitle: (currentStep == 1 && !tracking.hasDriver)
                           ? (tracking.isLogistics
                               ? 'Finding the nearest available driver'
-                              : 'Finding the nearest available professional')
+                              : (grocery ? 'Packing your items and finding a delivery partner' : 'Finding the nearest available professional'))
                           : (tracking.isLogistics
                               ? 'A driver and vehicle are allocated'
-                              : 'Expert professional allocated'),
+                              : (grocery ? 'A delivery partner is allocated' : 'Expert professional allocated')),
                       isCompleted: currentStep > 1,
                       isActive: currentStep == 1,
                     ),
@@ -945,26 +972,26 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       subtitle: arrived
                           ? (tracking.isLogistics
                               ? 'Driver has reached the pickup point'
-                              : 'Technician has reached your address')
+                              : (grocery ? 'Delivery partner has reached your address' : 'Technician has reached your address'))
                           : (tracking.isLogistics
                               ? 'Driver is on the way to the pickup'
-                              : 'Technician is en route to your address'),
+                              : (grocery ? 'Delivery partner is bringing your order' : 'Technician is en route to your address')),
                       isCompleted: currentStep > 2,
                       isActive: currentStep == 2,
                     ),
                     _TimelineStep(
-                      title: tracking.isLogistics ? 'Goods in Transit' : 'Service in Progress',
+                      title: tracking.isLogistics ? 'Goods in Transit' : (grocery ? 'Handing Over' : 'Service in Progress'),
                       subtitle: tracking.isLogistics
                           ? 'Pickup OTP verified, goods on the way'
-                          : 'OTP verification & work begins',
+                          : (grocery ? 'Share the delivery code to receive your order' : 'OTP verification & work begins'),
                       isCompleted: currentStep > 3,
                       isActive: currentStep == 3,
                     ),
                     _TimelineStep(
-                      title: tracking.isLogistics ? 'Delivered' : 'Completed',
+                      title: tracking.isLogistics || grocery ? 'Delivered' : 'Completed',
                       subtitle: tracking.isLogistics
                           ? 'Goods delivered & payment settled'
-                          : 'Service finished & final invoice',
+                          : (grocery ? 'Order delivered' : 'Service finished & final invoice'),
                       isCompleted: currentStep >= 4,
                       isActive: currentStep == 4,
                       isLast: true,

@@ -1,3 +1,4 @@
+import '../../../../core/analytics/analytics_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -64,6 +65,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsManager.instance.track(AnalyticsEvents.serviceViewed);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.invalidate(serviceDetailProvider);

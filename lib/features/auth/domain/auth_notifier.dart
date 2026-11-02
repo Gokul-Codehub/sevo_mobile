@@ -159,15 +159,14 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   // ── Delete Account ────────────────────────────────────────────────────────
-  /// Requests backend account deletion and resets auth state to unauthenticated.
-  /// Returns error string if deletion request fails, or null on success.
-  Future<String?> deleteAccount() async {
-    final result = await _repo.deleteAccount();
-    state = const AuthUnauthenticated();
-    return switch (result) {
-      Success() => null,
-      Failure(:final error) => error.message,
-    };
+  /// Sends the account-deletion confirmation code (see [AuthRepository.requestAccountDeletion]).
+  Future<Result<DeletionCodeInfo>> requestAccountDeletion() => _repo.requestAccountDeletion();
+
+  /// Confirms the deletion with the code. Only on success is the customer signed out locally.
+  Future<Result<bool>> confirmAccountDeletion(String otp) async {
+    final result = await _repo.confirmAccountDeletion(otp);
+    if (result is Success<bool>) state = const AuthUnauthenticated();
+    return result;
   }
 }
 

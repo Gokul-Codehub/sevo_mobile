@@ -1,3 +1,5 @@
+import '../../../../core/foundation/foundation_controller.dart' show featureFlagProvider;
+import '../../../../shared/utils/app_toast.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -31,7 +33,14 @@ const Color _kAiInk = Color(0xFF0D253A);
 /// highlight the Ask AI tab instead of the page underneath.
 final ValueNotifier<bool> aiChatOpen = ValueNotifier<bool>(false);
 
-Future<void> showAiChatSheet(BuildContext context) {
+Future<void> showAiChatSheet(BuildContext context) async {
+  // Server-controlled kill switch (flag "ai_mitra"): explain instead of opening a chat that would be refused.
+  try {
+    if (!ProviderScope.containerOf(context, listen: false).read(featureFlagProvider('ai_mitra'))) {
+      if (context.mounted) AppToast.show(context, 'The assistant is temporarily unavailable. Please try again later.', type: AppToastType.info);
+      return;
+    }
+  } catch (_) {}
   aiChatOpen.value = true;
   // Open on the shell's navigator (when available) so the bottom navigator
   // stays visible under the chat instead of being covered by the sheet.

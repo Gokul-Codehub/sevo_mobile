@@ -374,9 +374,12 @@ class ErrorStateWidget extends StatelessWidget {
 
 /// Status chip for booking status display.
 class BookingStatusChip extends StatelessWidget {
-  const BookingStatusChip({super.key, required this.status});
+  const BookingStatusChip({super.key, required this.status, this.grocery = false});
 
   final String status;
+
+  /// Grocery / vegetable order: the pill shows the order-timeline step instead of the service wording.
+  final bool grocery;
 
   // Rewritten 2026-10-28 (status audit): colour comes from the booking's
   // stage and the label from the shared status table (booking_status.dart),
@@ -401,7 +404,7 @@ class BookingStatusChip extends StatelessWidget {
     final (bgColor, textColor) = normalized == 'refund_requested'
         ? (AppColors.warningLight, AppColors.statusRefundRequested)
         : _colorsFor(bookingStageOf(normalized));
-    final label = bookingStatusLabel(normalized);
+    final label = grocery ? groceryStatusLabel(normalized) : bookingStatusLabel(normalized);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

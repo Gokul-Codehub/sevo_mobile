@@ -1,3 +1,4 @@
+import '../l10n/locale_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -37,17 +38,17 @@ class FeatureGuard extends ConsumerWidget {
             children: [
               const Icon(Icons.construction_rounded, size: 56, color: AppColors.navy),
               const SizedBox(height: 18),
-              Text('$label is temporarily unavailable',
+              Text(context.l10n.unavailableTitle(label),
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.navy)),
               const SizedBox(height: 8),
-              const Text('We are working on it. Please try again in a little while.',
-                  textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, height: 1.4)),
+              Text(context.l10n.unavailableBody,
+                  textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54, height: 1.4)),
               const SizedBox(height: 22),
               FilledButton(
                 onPressed: context.goBack,
                 style: FilledButton.styleFrom(backgroundColor: AppColors.navy),
-                child: const Text('Go back'),
+                child: Text(context.l10n.goBack),
               ),
             ],
           ),

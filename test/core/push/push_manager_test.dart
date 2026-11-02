@@ -63,6 +63,8 @@ void main() {
   late int updateChecks;
   late List<String> navigated;
   late List<List<String?>> shown;
+  late List<String?> shownKeys;
+  late int inboxRefreshes;
   late int forcedLogouts;
   late PushManager manager;
 
@@ -72,7 +74,11 @@ void main() {
         installedReader: FakeInstalledReader(installedApp(10)),
         onAppUpdate: () => updateChecks++,
         onNavigate: navigated.add,
-        showLocal: (t, b, r) async => shown.add([t, b, r]),
+        showLocal: (t, b, r, k) async {
+          shown.add([t, b, r]);
+          shownKeys.add(k);
+        },
+        onInboxChanged: () => inboxRefreshes++,
         deviceFacts: _Facts(),
         onForceLogout: () => forcedLogouts++,
       );
@@ -83,6 +89,8 @@ void main() {
     updateChecks = 0;
     navigated = [];
     shown = [];
+    shownKeys = [];
+    inboxRefreshes = 0;
     forcedLogouts = 0;
     manager = make();
   });
@@ -162,7 +170,7 @@ void main() {
   test('a push that launched the app from a closed state is handled at start', () async {
     messaging.initial = const PushMessage(data: {'route': '/tracking/7'});
     await manager.start();
-    expect(navigated, ['/tracking/7']);
+    expect(navigated, ['/track/7']);
   });
 
   test('routes must be in-app paths (no URLs, no protocol-relative links)', () {
@@ -187,6 +195,27 @@ void main() {
     expect(forcedLogouts, 2);
     expect(shown, isEmpty);
     expect(navigated, isEmpty);
+  });
+
+
+  test('a foreground push refreshes the inbox and passes its event key for de-duplication', () async {
+    await manager.start();
+    messaging.foreground.add(const PushMessage(title: 'On the way', body: 'Ravi', data: {'route': '/bookings/42', 'event_key': 'technician_on_the_way'}));
+    await pump();
+    expect(inboxRefreshes, 1);
+    expect(shownKeys, ['technician_on_the_way']);
+  });
+
+  test('app screens open as they are; website paths are mapped; unknown ones open nothing', () {
+    expect(PushManager.appRouteFor('/bookings/42'), '/bookings/42');
+    expect(PushManager.appRouteFor('/support/tickets/7'), '/support/tickets/7');
+    expect(PushManager.appRouteFor('/my-refunds'), '/my-refunds');
+    expect(PushManager.appRouteFor('/tracking/abc-123'), '/track/abc-123');
+    expect(PushManager.appRouteFor('/track/abc-123'), '/track/abc-123');
+    expect(PushManager.appRouteFor('/booking/services?category=electrician'), startsWith('/categories'));
+    expect(PushManager.appRouteFor('https://evil.com'), isNull);
+    expect(PushManager.appRouteFor(null), isNull);
+    expect(PushManager.appRouteFor('/totally-unknown-page'), isNull);
   });
 
   test('start is idempotent', () async {

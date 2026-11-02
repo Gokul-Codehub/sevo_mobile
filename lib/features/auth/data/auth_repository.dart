@@ -18,6 +18,13 @@ import '../domain/auth_models.dart';
 ///   POST /auth/customer/profile/complete/
 ///   POST /auth/refresh/            ← BCR-001 (cookie-only currently)
 ///   POST /auth/logout/
+/// Where the deletion code was sent (masked, e.g. `******3210`) and when it can be re-sent.
+class DeletionCodeInfo {
+  const DeletionCodeInfo({required this.sentTo, this.resendAfterSeconds = 60});
+  final String sentTo;
+  final int resendAfterSeconds;
+}
+
 class AuthRepository {
   AuthRepository({
     required this.api,
@@ -263,24 +270,39 @@ class AuthRepository {
     }
   }
 
-  // ── Delete Account ───────────────────────────────────────────────────────
-  /// Deletes the authenticated customer's account and purges all local storage.
-  /// First attempts DELETE /auth/customer/account/delete/, with fallback to POST.
-  Future<Result<bool>> deleteAccount() async {
+  // ── Delete Account (OTP-confirmed) ───────────────────────────────────────
+  /// Step 1: `POST /auth/customer/account/delete/request/` - the server checks the account may be deleted
+  /// (no active booking or order) and sends a one-time code to the customer's own phone / e-mail.
+  /// A refusal comes back as a [ValidationError] with code `ACTIVE_ACTIVITY` (counts in `extra['details']`).
+  Future<Result<DeletionCodeInfo>> requestAccountDeletion() async {
     try {
-      final response = await api.delete('/auth/customer/account/delete/');
-      return ResponseNormalizer.extract(response, (_) => true);
+      final response = await api.post('/auth/customer/account/delete/request/', data: <String, dynamic>{});
+      return ResponseNormalizer.extract(response, (json) {
+        final m = json is Map ? Map<String, dynamic>.from(json) : const <String, dynamic>{};
+        return DeletionCodeInfo(
+          sentTo: m['sent_to']?.toString() ?? '',
+          resendAfterSeconds: int.tryParse(m['resend_after_seconds']?.toString() ?? '') ?? 60,
+        );
+      });
     } on Exception catch (e) {
-      try {
-        final altResponse = await api.post('/auth/customer/account/delete/');
-        return ResponseNormalizer.extract(altResponse, (_) => true);
-      } catch (_) {
-        return Failure(_toError(e));
+      return Failure(_toError(e));
+    }
+  }
+
+  /// Step 2: `POST /auth/customer/account/delete/confirm/ {otp}`. The phone is wiped ONLY when the server
+  /// confirms the deletion - a failure never signs the customer out of an account that still exists.
+  Future<Result<bool>> confirmAccountDeletion(String otp) async {
+    try {
+      final response = await api.post('/auth/customer/account/delete/confirm/', data: {'otp': otp.trim()});
+      final result = ResponseNormalizer.extract(response, (_) => true);
+      if (result is Success<bool>) {
+        await storage.clearAll();
+        await storage.clearCartStorage();
+        await storage.clearSelectedAddress();
       }
-    } finally {
-      await storage.clearAll();
-      await storage.clearCartStorage();
-      await storage.clearSelectedAddress();
+      return result;
+    } on Exception catch (e) {
+      return Failure(_toError(e));
     }
   }
 

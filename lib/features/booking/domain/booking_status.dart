@@ -205,6 +205,22 @@ const Map<String, String> _labels = {
 };
 
 /// Customer-facing label for any status, never raw snake_case.
+/// The status a grocery / vegetable order shows in its pill: the same steps as its order timeline, so the list and the
+/// detail page always agree (a service booking's "Finding Technician" means nothing for an order). Waiting for payment
+/// and the ended states keep their own wording.
+String groceryStatusLabel(Object? raw) {
+  final s = normalizeBookingStatus(raw);
+  if (const {'draft', 'pending_payment', 'waiting_for_payment'}.contains(s)) return bookingStatusLabel(s);
+  return switch (bookingStageOf(s)) {
+    BookingStage.requested => 'Order Placed',
+    BookingStage.confirmed => 'Order Confirmed',
+    BookingStage.assigned => 'Packed',
+    BookingStage.onTheWay || BookingStage.inProgress => 'Out for Delivery',
+    BookingStage.completed => 'Delivered',
+    BookingStage.ended || BookingStage.cancelled => bookingStatusLabel(s),
+  };
+}
+
 String bookingStatusLabel(Object? raw) {
   final s = normalizeBookingStatus(raw);
   final known = _labels[s];

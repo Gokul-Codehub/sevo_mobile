@@ -1,3 +1,4 @@
+import '../../../../core/l10n/locale_controller.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -171,6 +172,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         onTap: () => context.push('/bookings'),
                       ),
                       _MenuRow(
+                        icon: Icons.receipt_long_outlined,
+                        label: 'My Payments',
+                        onTap: () => context.push('/my-payments'),
+                      ),
+                      _MenuRow(
+                        icon: Icons.undo_rounded,
+                        label: 'My Refunds',
+                        onTap: () => context.push('/my-refunds'),
+                      ),
+                      _MenuRow(
                         icon: Icons.location_on_outlined,
                         label: 'Saved Addresses',
                         onTap: () => context.push('/addresses'),
@@ -196,11 +207,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     _MenuCard(children: [
                       _MenuRow(
                         icon: Icons.language_rounded,
-                        label: 'Language',
-                        value: 'English',
-                        onTap: () => AppToast.show(
-                            context, 'English is the only language available right now.',
-                            type: AppToastType.info),
+                        label: context.l10n.language,
+                        value: kLanguages[ref.watch(localeProvider).languageCode] ?? 'English',
+                        onTap: () => showLanguageSheet(context, ref),
                       ),
                       _MenuRow(
                         icon: Icons.palette_outlined,
@@ -243,7 +252,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         _MenuRow(
                           icon: Icons.delete_outline_rounded,
                           label: 'Delete Account',
-                          onTap: () => _showDeleteAccountDialog(context, ref),
+                          onTap: () => context.push('/delete-account'),
                         ),
                     ]),
 
@@ -687,115 +696,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteAccountDialog(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: AppColors.error),
-            SizedBox(width: 8),
-            Text(
-              'Delete Account',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: AppColors.navy,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Are you sure you want to delete your SEVO account?\n\n'
-                '• This action is permanent and cannot be undone.\n'
-                '• Your profile, saved addresses, active bookings, and order history will be permanently deleted from our servers.\n'
-                '• Any active loyalty points or coupon discounts will be forfeited.\n',
-                style: TextStyle(fontSize: 12, height: 1.4),
-              ),
-              InkWell(
-                onTap: () => launchUrl(
-                  Uri.parse(Env.accountDeletionUrl),
-                  mode: LaunchMode.externalApplication,
-                ),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.open_in_new_rounded,
-                          size: 14, color: AppColors.navy),
-                      SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          'Web Deletion Request Portal',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.navy,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Keep Account'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final error =
-                  await ref.read(authProvider.notifier).deleteAccount();
-              if (!context.mounted) return;
-
-              if (error != null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Account deletion notice: $error'),
-                    backgroundColor: AppColors.warning,
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Your account and data have been permanently deleted.',
-                    ),
-                    backgroundColor: AppColors.navy,
-                  ),
-                );
-              }
-              context.go('/');
-            },
-            child: const Text('Delete Permanently'),
           ),
         ],
       ),

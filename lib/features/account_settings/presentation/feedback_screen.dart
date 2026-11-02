@@ -1,3 +1,4 @@
+import '../../../core/l10n/locale_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,7 +47,7 @@ class _AppFeedbackScreenState extends ConsumerState<AppFeedbackScreen> {
     if (!mounted) return;
     setState(() => _sending = false);
     if (ok) {
-      AppToast.show(context, 'Thank you - we have received your feedback.');
+      AppToast.show(context, context.l10n.feedbackThanks);
       context.goBack();
     } else {
       AppToast.show(context, 'Could not send. Check your connection and try again.', type: AppToastType.error);
@@ -58,7 +59,7 @@ class _AppFeedbackScreenState extends ConsumerState<AppFeedbackScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FA),
       appBar: AppBar(
-        title: const Text('Send feedback', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy, fontSize: 18)),
+        title: Text(context.l10n.feedbackTitle, style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy, fontSize: 18)),
         leading: BackButton(onPressed: context.goBack),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.navy,
@@ -95,7 +96,7 @@ class _AppFeedbackScreenState extends ConsumerState<AppFeedbackScreen> {
             maxLength: 1000,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              hintText: 'Write your message here',
+              hintText: context.l10n.feedbackHint,
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -105,7 +106,7 @@ class _AppFeedbackScreenState extends ConsumerState<AppFeedbackScreen> {
           FilledButton(
             onPressed: _valid && !_sending ? _send : null,
             style: FilledButton.styleFrom(backgroundColor: AppColors.navy, minimumSize: const Size.fromHeight(50)),
-            child: Text(_sending ? 'Sending...' : 'Send'),
+            child: Text(_sending ? context.l10n.feedbackSending : context.l10n.feedbackSend),
           ),
         ],
       ),

@@ -69,9 +69,35 @@ Tests: backend `python manage.py test app_foundation` (39) ; Flutter `flutter te
 * Fixed along the way: route/class name clash with the existing post-service `FeedbackScreen`; analytics filter dropping `screen_name`.
 * Verified: backend 148 tests (foundation + update + push + GT switch), Flutter 175 tests in the owned folders, debug APK builds. Not verified on a device.
 
+## Also built (round 7)
+
+* **Funnel analytics wired**: booking_submitted / booking_confirmed (checkout), payment_started / failed / succeeded, tracking_opened, cancel_tapped, rating_submitted, service_viewed, search_performed.
+* **Shared UI**: `ErrorManager.present` (one place that turns any error into a plain-language message; server text shown only if it reads like text for people) + `ErrorState`, `EmptyState`, `LoadingState` (skeleton after 300 ms) in `lib/shared/widgets/state_widgets.dart`. Existing screens still use their own states - adopt as they are touched.
+* **Payment recovery card** on the payment screen after a failure: reason + Try again / Choose another method / Contact support.
+* **AI assistant kill switch**: server refuses chat with 409 `FEATURE_DISABLED` when flag `ai_mitra` is off; the Ask AI tab explains instead of opening.
+* **Continue after login**: a notification tap on an account-specific screen while signed out sends the customer to login, then on to that screen (`PendingLink`).
+* **Operations alerts**: Celery task e-mails `MOBILE_ALERT_EMAILS` when push failures exceed 30% (>=10 attempts/hour) or app errors reach 50/hour; once per 6 h per alert.
+* **Localization**: ARB + gen-l10n for English / Hindi / Tamil, Profile -> Language (remembered; English until chosen). Applied to the screens added in this work (maintenance, unavailable page, server-unreachable bar, permission sheets, Your devices, Notification settings, Send feedback). **Hindi and Tamil text was written by Claude and needs review by a native speaker.** The older screens are still English-only and need converting as they are touched.
+* Verified: backend 170 tests (foundation, update, push, kill switches, notifications), Flutter 231 tests in owned folders (3 old IMG tests fail, unrelated), debug APK builds.
+
+## iOS readiness (decision: Android first; iOS wires left open)
+
+Nothing iOS-specific is built or tested. What is already prepared so iOS is configuration, not redesign:
+
+* **Backend**: every endpoint accepts `platform=ios`; update policy supports channel `app_store`; push messages carry an `apns` block (alert/sound, background for force-logout); the app id is per platform (`settings.APP_FOUNDATION_APP_IDS`, env `CUSTOMER_ANDROID_APP_ID` / `CUSTOMER_IOS_BUNDLE_ID`). iOS stays off until `CUSTOMER_IOS_BUNDLE_ID` is set. (`test_ios_ready.py`)
+* **App**: `StoreInfo` switches store wording (Play Store / App Store) and never invents a Play URL on iOS; iOS push shows the system banner in the foreground; device model/OS facts already read `iosInfo`; `Info.plist` has the location/camera/photo usage texts and `remote-notification` background mode.
+
+**To connect iOS later (needs a Mac + Apple Developer account):**
+1. Add the iOS app in Firebase, download `GoogleService-Info.plist` into `ios/Runner/`.
+2. Create an APNs auth key (.p8) in Apple Developer and upload it in Firebase > Project settings > Cloud Messaging.
+3. In Xcode: enable the *Push Notifications* and *Background Modes > Remote notifications* capabilities (creates `Runner.entitlements` with `aps-environment`); set the bundle id.
+4. Set `CUSTOMER_IOS_BUNDLE_ID` on the server; in Version Management create an iOS configuration (channel App Store, `store_url` = the apps.apple.com link).
+5. `cd ios && pod install` (permission_handler needs its Podfile permission macros enabled for location/camera/photos), run on a device and repeat the Android checks (device in Devices, test push, crash).
+6. Still to build for iOS: App Attest (integrity), Universal Links (`apple-app-site-association`), Crashlytics dSYM upload, App Store review notes.
+
 ## Not done yet (honest list)
 
-* **Needs outside input**: Play Integrity / App Attest (needs Google Cloud + Apple setup), iOS (Apple account, APNs key), deep-link verification files (`assetlinks.json` needs the release signing SHA-256), real push/crash/analytics delivery (needs the live backend + a build + the service-account key).
-* **Deliberately skipped**: a second deep-link handler (go_router + the manifest filters already open https/sevo links; no pending-link-after-login yet), background tasks (workmanager - battery cost, little need), a global 503 maintenance middleware (can lock out the API).
-* **Still open**: funnel analytics call sites, flags for the remaining modules (wallet, packers...) and their server-side checks, shared ErrorState/EmptyState/loading widgets and the SevoException family, a LocationManager wrapper (existing geolocator flows left as tuned), localization (ARB + Tamil/Hindi), proactive token refresh, payment-recovery UI beyond the clearer message (retry/other method/cash), operations alert rules (email/chat), release rollout percentage per AppRelease.
-* Not committed. Deploy: `migrate` (settings_hub 0021, app_foundation 0001-0004), env `FCM_SERVICE_ACCOUNT_FILE`, Celery beat reload, web build, new app build.
+* **Needs outside input**: Play Integrity / App Attest + root checks (Google Cloud / Apple setup), iOS (Apple account, APNs key), verified app-link files (`assetlinks.json` needs the release signing SHA-256), real push/crash/analytics delivery (needs the live backend, a build and the service-account key).
+* **Skipped on purpose**: background tasks (workmanager), a global 503 maintenance middleware (can lock out the API), a central LocationManager wrapper (existing geolocator flows are tuned).
+* **Still open**: flags + server checks for modules not yet covered (only Goods & Transport, Groceries (app side), AI assistant), converting older screens to the shared state widgets and to localized strings, native-speaker review of Hindi/Tamil, cash-on-service switch in payment recovery (needs a per-service rule), release rollout percentage per AppRelease.
+* Not committed. Deploy: `migrate` (settings_hub 0021, app_foundation 0001-0004), env `FCM_SERVICE_ACCOUNT_FILE` and `MOBILE_ALERT_EMAILS`, Celery beat reload, web build, new app build.

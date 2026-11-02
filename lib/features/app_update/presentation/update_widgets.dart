@@ -1,3 +1,4 @@
+import '../domain/store_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -208,7 +209,7 @@ class MandatoryUpdateScreen extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('Open Play Store', style: TextStyle(fontWeight: FontWeight.w700)),
+                        child: Text('Open ${StoreInfo.shortName}', style: const TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ),
                     TextButton(

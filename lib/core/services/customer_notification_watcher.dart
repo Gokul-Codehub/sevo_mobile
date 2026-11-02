@@ -111,6 +111,7 @@ class _CustomerNotificationWatcherState extends ConsumerState<CustomerNotificati
       _showInAppToast(n.title, n.target);
       NotificationService.instance.show(
         title: n.title,
+        dedupeKey: n.eventKey, // the same key the server puts on the push for this event
         body: n.body.isEmpty ? 'Tap to open' : n.body,
         routePayload: n.target == null
             ? '/notifications'

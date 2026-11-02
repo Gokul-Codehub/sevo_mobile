@@ -1,3 +1,4 @@
+import 'payment_failure.dart';
 import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 
@@ -170,9 +171,12 @@ final class PaymentSuccess extends PaymentState {
 }
 
 final class PaymentFailed extends PaymentState {
-  const PaymentFailed({required this.errorMessage, this.code});
+  const PaymentFailed({required this.errorMessage, this.code, this.info});
   final String errorMessage;
   final int? code;
+
+  /// Why it failed, in plain language, with the next step (null for older failure paths).
+  final PaymentFailureInfo? info;
   @override
-  List<Object?> get props => [errorMessage, code];
+  List<Object?> get props => [errorMessage, code, info?.kind];
 }

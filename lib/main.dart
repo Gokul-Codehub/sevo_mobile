@@ -1,3 +1,5 @@
+import 'l10n/app_localizations.dart';
+import 'core/l10n/locale_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -16,6 +18,7 @@ import 'core/foundation/error_reporter.dart';
 import 'core/foundation/foundation_gate.dart';
 import 'core/push/push_manager.dart';
 import 'features/app_update/presentation/app_update_gate.dart';
+import 'features/booking/presentation/widgets/cart_zone_guard.dart';
 import 'routing/app_router.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/connectivity_gate.dart';
@@ -124,6 +127,9 @@ class CalServicesApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'SEVO',
+      locale: ref.watch(localeProvider),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       scrollBehavior: const AppScrollBehavior(),
@@ -146,7 +152,7 @@ class CalServicesApp extends ConsumerWidget {
             child: PushGate(
               child: BookingNotificationWatcher(
                 child: CustomerNotificationWatcher(
-                  child: child ?? const SizedBox.shrink(),
+                  child: CartZoneGuard(child: child ?? const SizedBox.shrink()),
                 ),
               ),
             ),

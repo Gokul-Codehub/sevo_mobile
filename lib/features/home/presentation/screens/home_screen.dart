@@ -1,3 +1,4 @@
+import '../widgets/home_load_gate.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -253,8 +254,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
+  /// Nothing loaded yet: the branded loader fills the screen. Part loaded: the page, with a skeleton per section.
   @override
-  Widget build(BuildContext context) {
+  // _buildHome runs INSIDE this build (not in a Builder): ref.watch / ref.listen are only allowed in the screen's own build.
+  Widget build(BuildContext context) => HomeLoadGate(child: _buildHome(context));
+
+  Widget _buildHome(BuildContext context) {
     ref.listen<int>(homeTabTapProvider, (_, __) => _onHomeTabTap());
     final groceryHubCategories = ref.watch(groceryHubCategoriesProvider);
     final popularServicesAsync = ref.watch(popularServicesProvider);
@@ -4143,6 +4148,8 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
     // banner content — this is the exact window that used to flash the
     // hardcoded static templates.
     if (homepageConfigAsync.isLoading && homepageConfig == null) {
+      // Part of the page is already showing: this section just waits behind a skeleton (the full-screen loader is for
+      // when nothing at all has loaded - see HomeLoadGate).
       return AspectRatio(
         aspectRatio: widget.aspectRatio,
         child: const ShimmerCard(borderRadius: 0),

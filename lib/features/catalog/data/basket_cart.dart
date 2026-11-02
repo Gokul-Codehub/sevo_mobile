@@ -1,4 +1,5 @@
 import '../../booking/domain/cart_notifier.dart';
+import '../../booking/domain/combo_key.dart';
 import '../domain/catalog_models.dart';
 import 'basket_models.dart';
 
@@ -18,12 +19,20 @@ int addComboToCart(
 ) {
   final entries = <({ServiceItem item, int qty})>[];
   final slotDefaultTitles = <String>{};
+  // What the customer picked for each slot: the server needs it to know what to pack.
+  final selections = <({int slotId, int productId})>[];
 
   for (final slot in basket.slots) {
     final defaultTitle = slot.defaultOption?.title;
     if (defaultTitle != null) slotDefaultTitles.add(defaultTitle);
-    final item = pick(slot)?.toServiceItem();
-    if (item != null) entries.add((item: item, qty: slot.quantity));
+    final option = pick(slot);
+    final item = option?.toServiceItem();
+    if (item != null) {
+      entries.add((item: item, qty: slot.quantity));
+      final slotId = slot.id;
+      final productId = option!.productId ?? option.id ?? option.optionId;
+      if (slotId != null && productId != null) selections.add((slotId: slotId, productId: productId));
+    }
   }
   for (final fixed in basket.items) {
     if (slotDefaultTitles.contains(fixed.productTitle)) continue;
@@ -33,7 +42,8 @@ int addComboToCart(
   if (entries.isEmpty) return 0;
 
   final ids = entries.map((e) => e.item.id).toList()..sort();
-  final key = '${basket.id}:${ids.join(',')}';
+  // Remembers the bundle price (what the combo really costs) and the customer's picks, not only which products.
+  final key = ComboKey.build(basketId: basket.id, productIds: ids, bundlePrice: basket.bundlePrice, selections: selections);
   for (final e in entries) {
     cart.addComboItem(e.item, quantity: e.qty, comboKey: key, comboTitle: basket.title);
   }
