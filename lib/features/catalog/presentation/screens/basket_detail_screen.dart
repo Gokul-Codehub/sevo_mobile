@@ -150,6 +150,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
           Align(
             alignment: Alignment.topLeft,
             child: IconButton(
+        tooltip: 'Back',
               icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
               onPressed: () => context.goBack(),
             ),

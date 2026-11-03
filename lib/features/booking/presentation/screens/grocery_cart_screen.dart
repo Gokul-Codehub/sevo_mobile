@@ -1,3 +1,5 @@
+import '../../../orders/presentation/buy_it_again_strip.dart';
+import '../../../auth/domain/auth_return.dart';
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -382,6 +384,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () {
             if (Navigator.of(context).canPop()) {
@@ -991,6 +994,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               ),
             ),
             const SizedBox(height: 14),
+
+            // ── Buy it again: things already bought before, at today's price ─────
+            const BuyItAgainStrip(),
 
             // ── Delivery slot card (inline, always visible) ──────────────────
             KeyedSubtree(key: _slotCardKey, child: _buildDeliverySlotCard(context)),
@@ -1880,7 +1886,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               returnPath: AppRoutes.cart,
             ),
           );
-      context.push(AppRoutes.login);
+      requireLogin(context, ref);
       return;
     }
 

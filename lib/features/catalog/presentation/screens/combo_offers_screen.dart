@@ -28,6 +28,7 @@ class ComboOffersScreen extends ConsumerWidget {
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () => context.goBack(),
         ),

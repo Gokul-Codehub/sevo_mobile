@@ -1,3 +1,4 @@
+import '../../core/navigation/safe_back.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -432,7 +433,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           ref.read(homeTabTapProvider.notifier).state++;
           return;
         }
-        context.go(tab.route);
+        // Keeps the history: from a deep page the tab opens on top of it, from a tab's own page it replaces it.
+        context.openTab(tab.route);
       },
       child: Center(
         child: FittedBox(

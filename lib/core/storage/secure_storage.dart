@@ -78,6 +78,18 @@ class SecureStorage {
   Future<void> clearSelectedAddress() =>
       _storage.delete(key: 'calservices_selected_address');
 
+  // ── Recently viewed (services and grocery items the person opened) ──────────
+  Future<String?> getRecentlyViewedJson() => _readSafe('calservices_recently_viewed');
+
+  Future<void> setRecentlyViewedJson(String json) =>
+      _storage.write(key: 'calservices_recently_viewed', value: json);
+
+  // ── Browsing location (last place chosen / detected) ───────────────────────
+  Future<String?> getBrowseLocationJson() => _readSafe('calservices_browse_location');
+
+  Future<void> setBrowseLocationJson(String json) =>
+      _storage.write(key: 'calservices_browse_location', value: json);
+
   // ── Onboarding seen flag ───────────────────────────────────────────────────
   // Added 2026-09-19 — root cause of "onboarding pages don't do anything":
   // SplashScreen unconditionally routed straight to Home on every cold
@@ -118,6 +130,10 @@ class SecureStorage {
     await _storage.delete(key: Env.keyAccessToken);
     await _storage.delete(key: Env.keyRefreshToken);
     await _storage.delete(key: Env.keyUserJson);
+    // The cart and the address in use belong to the signed-in person: they never carry over to the next one.
+    await _storage.delete(key: 'calservices_persistent_cart');
+    await _storage.delete(key: 'calservices_selected_address');
+    await _storage.delete(key: 'calservices_recently_viewed');
   }
 
   // ── Has active session ────────────────────────────────────────────────────

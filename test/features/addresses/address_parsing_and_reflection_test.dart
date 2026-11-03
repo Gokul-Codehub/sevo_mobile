@@ -1,3 +1,4 @@
+import 'package:calservices_customer/core/storage/secure_storage.dart';
 import 'package:calservices_customer/features/addresses/domain/address_models.dart';
 import 'package:calservices_customer/features/addresses/domain/address_notifier.dart';
 import 'package:calservices_customer/features/auth/domain/auth_models.dart';
@@ -11,12 +12,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:calservices_customer/features/logistics/domain/logistics_providers.dart';
 
 class _TestCustomerLocationNotifier extends CustomerLocationNotifier {
-  _TestCustomerLocationNotifier() : super() {
-    state = const CustomerLocationState(address: '', pincode: '', isDetected: false);
+  _TestCustomerLocationNotifier() : super(SecureStorage()) {
+    state = const CustomerLocationState();
   }
 
   @override
-  Future<void> detectAndSetCurrentLocation() async {}
+  Future<bool> detectAndSetCurrentLocation({bool openSettingsIfBlocked = false}) async => false;
+
+  @override
+  Future<void> autoDetectIfNeeded() async {}
 }
 
 void main() {

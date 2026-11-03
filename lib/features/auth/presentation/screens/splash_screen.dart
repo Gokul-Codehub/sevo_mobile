@@ -1,3 +1,4 @@
+import '../../../../core/utils/restart_widget.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -62,6 +63,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _animController.forward();
+    // A restart after logout / session expiry reopens straight on Home: no launch splash again.
+    if (RestartWidget.skipSplashOnce) {
+      RestartWidget.skipSplashOnce = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(AppRoutes.home);
+      });
+      return;
+    }
     // Added 2026-10-07 ("while loading the splash screen load the entire
     // application fastly atleast home page"): before this, Home's own
     // `ref.watch(homepageConfigProvider)`/`ref.watch(categoriesProvider)`
@@ -157,8 +166,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // launch now goes straight to the location prompt (and is marked as
       // seen so it only happens once per install).
       if (!hasSeenOnboarding) {
-        await ref.read(secureStorageProvider).setOnboardingSeen();
-        if (!mounted) return;
+        // Marked as seen by the location screen once the customer gets through it (or leaves it), so closing the app
+        // in the middle of this step shows it again next time.
         context.go(AppRoutes.locationAccess);
         return;
       }

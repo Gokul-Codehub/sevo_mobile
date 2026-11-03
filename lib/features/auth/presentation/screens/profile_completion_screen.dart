@@ -1,3 +1,4 @@
+import '../../domain/auth_return.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -94,6 +95,7 @@ class _ProfileCompletionScreenState
 
       final pendingAction = ref.read(pendingActionProvider);
       if (pendingAction != null) {
+        ref.read(returnAfterLoginProvider.notifier).state = false;
         ref.read(pendingActionProvider.notifier).clear();
         ref.read(cartProvider.notifier).addService(
               pendingAction.service,
@@ -107,7 +109,7 @@ class _ProfileCompletionScreenState
           context.go(returnTarget);
         }
       } else {
-        context.go(AppRoutes.home);
+        finishSignIn(context, ref);
       }
     }
   }
@@ -245,7 +247,7 @@ class _ProfileCompletionScreenState
                 if (!_needsMobile)
                   Center(
                     child: TextButton(
-                      onPressed: () => context.go(AppRoutes.home),
+                      onPressed: () => finishSignIn(context, ref),
                       child: const Text('Skip for now'),
                     ),
                   ),

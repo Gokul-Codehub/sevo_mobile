@@ -40,6 +40,7 @@ class RecipeDetailScreen extends ConsumerWidget {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
           onPressed: () => context.canPop() ? context.pop() : context.go('/'),
         ),

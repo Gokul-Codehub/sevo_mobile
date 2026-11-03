@@ -1,3 +1,4 @@
+import 'book_again_section.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -216,6 +217,11 @@ class StudioSectionView extends ConsumerWidget {
         return _spaced(TabbedShowcase(section: section, pageKey: pageKey));
       case 'bestseller_tiles':
         return _spaced(_BestsellerTiles(section: section, pageKey: pageKey));
+      // Personal sections draw nothing (not even a gap) until the customer has something to show.
+      case 'book_again':
+        return StudioBookAgain(section: section, pageKey: pageKey);
+      case 'recently_viewed':
+        return StudioRecentlyViewed(section: section, pageKey: pageKey);
       case 'service_category_grid':
         return _spaced(_ServiceCategoryGrid(section: section, pageKey: pageKey));
       case 'service_collection':

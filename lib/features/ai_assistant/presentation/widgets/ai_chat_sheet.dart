@@ -523,7 +523,7 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
               runSpacing: 8,
               children: [
                 for (final p in const [
-                  ('My Bookings', 'Show my bookings', Icons.event_note_outlined),
+                  ('Bookings & Orders', 'Show my bookings', Icons.event_note_outlined),
                   ('Popular Services', 'What are your popular services?', Icons.bolt_rounded),
                   ('Doorstep Process', 'How does the doorstep service process work?', Icons.home_repair_service_outlined),
                   ('Cancellation & refund policy', 'What is your cancellation and refund policy?', Icons.policy_outlined),

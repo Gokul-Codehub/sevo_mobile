@@ -125,6 +125,7 @@ class _PaytmCheckoutScreenState extends State<PaytmCheckoutScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
+        tooltip: 'Close',
             icon: const Icon(Icons.close_rounded, color: AppColors.navy),
             onPressed: _confirmClose,
           ),

@@ -1,3 +1,4 @@
+import '../../domain/recently_viewed.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -99,7 +100,8 @@ class GroceryProductDetailScreen extends ConsumerWidget {
         ),
       );
     }
-    return _GroceryProductDetailBody(product: product);
+    // Counts as "viewed" for Home's Recently Viewed section.
+    return RecordRecentView(item: product, child: _GroceryProductDetailBody(product: product));
   }
 }
 
@@ -1284,7 +1286,7 @@ class _BottomActions extends ConsumerWidget {
         const SizedBox(width: 12),
         Expanded(
           child: FilledButton.icon(
-            onPressed: () => context.go('/cart'),
+            onPressed: () => context.openTab('/cart'),
             icon: const Icon(Icons.shopping_bag_outlined, size: 20),
             label: const Text('Go to Cart', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
             style: FilledButton.styleFrom(

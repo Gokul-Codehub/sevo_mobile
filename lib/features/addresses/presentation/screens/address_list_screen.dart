@@ -1,9 +1,9 @@
+import '../../../auth/domain/auth_return.dart';
 import '../../../../shared/widgets/login_required_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../auth/domain/auth_notifier.dart';
@@ -39,7 +39,7 @@ class AddressListScreen extends ConsumerWidget {
           title: 'Login Required',
           subtitle: 'Please log in to manage your saved addresses.',
           buttonLabel: 'Log In',
-          onPressed: () => context.push(AppRoutes.login),
+          onPressed: () => requireLogin(context, ref),
         ),
       );
     }

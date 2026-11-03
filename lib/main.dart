@@ -11,6 +11,8 @@ import 'core/services/booking_notification_watcher.dart';
 import 'core/services/customer_notification_watcher.dart';
 import 'core/utils/app_logger.dart';
 import 'core/utils/restart_widget.dart';
+import 'features/auth/domain/auth_models.dart' show AuthState, AuthUnauthenticated;
+import 'features/auth/domain/auth_notifier.dart' show authProvider;
 import 'core/analytics/analytics_manager.dart';
 import 'core/analytics/performance_monitor.dart';
 import 'core/foundation/crash_reporting.dart';
@@ -124,6 +126,13 @@ class CalServicesApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+
+    // The server ended a signed-in session: say so, and start from a clean slate as a guest.
+    ref.listen<AuthState>(authProvider, (prev, next) {
+      if (next is AuthUnauthenticated && next.sessionExpired) {
+        RestartWidget.restartApp(context, skipSplash: true, notice: 'Your session has expired. Please sign in again.');
+      }
+    });
 
     return MaterialApp.router(
       title: 'SEVO',

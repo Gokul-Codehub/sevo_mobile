@@ -1,3 +1,4 @@
+import '../../../auth/domain/auth_return.dart';
 import 'dart:math' as math;
 
 import 'package:decimal/decimal.dart';
@@ -26,6 +27,11 @@ import '../../../../core/errors/api_error.dart';
 import '../../data/logistics_repository.dart';
 import '../../domain/gt_models.dart';
 import '../../domain/gt_providers.dart';
+import '../../domain/gt_assist.dart';
+import '../../domain/gt_declaration.dart';
+import '../widgets/gt_declaration_section.dart';
+import '../widgets/gt_insurance_section.dart';
+import '../widgets/gt_assist_section.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
 import '../widgets/gt_extras_section.dart';
@@ -336,9 +342,13 @@ class _GoodsTransportBookingScreenState
         // the screen).
         ref.read(cargoDeclarationProvider.notifier).state = const CargoDeclaration();
         ref.read(loadingHelpProvider.notifier).state = true;
+        ref.read(gtAssistProvider.notifier).state = const GtAssist();
+        ref.read(declaredGoodsProvider.notifier).state = const [];
         ref.read(selectedGtLaneProvider.notifier).state = null;
         ref.read(acceptEstimatedDistanceProvider.notifier).state = false;
         ref.read(insuranceOptInProvider.notifier).state = false;
+        ref.read(insuranceConsentProvider.notifier).state = false;
+        ref.read(gtGoodsDeclProvider.notifier).state = const GtGoodsDecl();
         ref.read(customerGstinProvider.notifier).state = '';
         ref.read(ewayBillNumberProvider.notifier).state = '';
         ref.read(ptlModeProvider.notifier).state = false;
@@ -402,6 +412,8 @@ class _GoodsTransportBookingScreenState
       cargo: cargo.isEmpty ? null : cargo,
       customerGstin: _effectiveGstin,
       waypoints: _waypoints(),
+      // Only what this vehicle really offers; nothing at all is sent when nothing was asked for.
+      assist: ref.read(gtAssistProvider).forTier(tier),
     );
   }
 
@@ -496,13 +508,24 @@ class _GoodsTransportBookingScreenState
       extra['eway_bill_number'] = eway;
     }
 
-    // Transit insurance is no longer offered at booking (owner decision
-    // 2026-10-28, same as the web) — never opted in from the app.
-    const insurance = false;
     // Cash / Pay online / SEVO wallet (wallet bookings are created ONLINE
-    // and settled from the wallet right after). Insurance always needs a
-    // paid booking.
+    // and settled from the wallet right after).
     final pick = ref.read(gtPaymentMethodProvider);
+    // Transit insurance (sold again, same as the web): only when the server says it is offered for this service, it is
+    // paid online / from the wallet, and the customer ticked the insurer's consent wording. Otherwise the goods are
+    // simply not insured, exactly as the screen told them.
+    final insMode = ref.read(ptlModeProvider) ? 'ptl' : null;
+    final insOffered = ref
+            .read(insuranceAvailabilityProvider((service: category.serviceCategoryValue, mode: insMode)))
+            .valueOrNull
+            ?.offered ==
+        true;
+    final insurance = insOffered &&
+        pick != 'cod' &&
+        ref.read(insuranceOptInProvider) &&
+        ref.read(insuranceConsentProvider) &&
+        (_declaredValue ?? Decimal.zero) > Decimal.zero;
+    if (insurance) extra['insurance_consent'] = true;
     final paymentMethod = (insurance || pick != 'cod') ? 'ONLINE' : 'COD';
 
     Map<String, dynamic> line(double price, Map<String, dynamic> more) => {
@@ -619,13 +642,21 @@ class _GoodsTransportBookingScreenState
       if (cargoLines.isNotEmpty) ...{'cargo_items': cargoLines, 'goods_items': cargoLines},
     };
 
+    final assist = ref.read(gtAssistProvider).forTier(tier);
+    // Optional floor / lift / door access: only briefs the driver, never changes the price.
+    final access = ref.read(gtAssistProvider).accessJson();
+    if (access != null) extra['cargo_access'] = access;
     return (
       error: null,
       cart: [
         line(q.total, {
           ...q.toCartEcho(),
           ...cargoCart,
+          if (_listedGoods.isNotEmpty) 'declared_goods': _listedGoods.map((l) => l.toJson()).toList(),
+          ...ref.read(gtGoodsDeclProvider).cartFields(hasTypedGoods: cargo.hasCustom || _listedGoods.isNotEmpty),
           if (stopsPayload.isNotEmpty) 'stops': stopsPayload,
+          // The same helpers / carry the fare was quoted for (the server prices it again from this).
+          if (!assist.isEmpty) 'assist': assist.toJson(),
         }),
       ],
       extra: extra,
@@ -690,7 +721,30 @@ class _GoodsTransportBookingScreenState
     return parts.join(' · ');
   }
 
+  /// Typed goods carry their own value; the booking total is their sum (never counted twice, never typed twice).
+  double get _customGoodsValue => ref.read(cargoDeclarationProvider).customValueTotal;
+
+  /// Goods listed for a Part Truck Load or a move.
+  List<CargoLine> get _listedGoods {
+    final category = ref.read(selectedVehicleCategoryProvider);
+    final partLoad = ref.read(ptlModeProvider) && category == LogisticsVehicleCategory.truck;
+    if (!partLoad && category != LogisticsVehicleCategory.packersMovers) return const [];
+    return ref.read(declaredGoodsProvider);
+  }
+
+  double get _listedGoodsValue => _listedGoods.fold<double>(0, (t, l) => t + (l.declaredValue ?? 0));
+  double get _listedGoodsWeight => _listedGoods.fold<double>(0, (t, l) => t + (l.weightKg ?? 0) * l.quantity);
+
+  bool get _isPartLoad =>
+      ref.read(ptlModeProvider) && ref.read(selectedVehicleCategoryProvider) == LogisticsVehicleCategory.truck;
+
+  /// The declared value comes from the goods when they carry their own: typed goods (truck / bike) or the part-load
+  /// list. A move's list only sets a minimum, so its value stays typed.
+  double get _valueFromGoods => _customGoodsValue > 0 ? _customGoodsValue : (_isPartLoad ? _listedGoodsValue : 0);
+
   Decimal? get _declaredValue {
+    final fromGoods = _valueFromGoods;
+    if (fromGoods > 0) return Decimal.parse(fromGoods.toStringAsFixed(2));
     final raw = _declaredValueController.text.trim();
     if (raw.isEmpty) return null;
     try {
@@ -702,6 +756,36 @@ class _GoodsTransportBookingScreenState
 
   bool get _isHighValue =>
       (_declaredValue?.toDouble() ?? 0) >= _highValueThresholdHint;
+
+  /// The server rejects every goods booking without a declared value above zero, so the form asks for it up front.
+  bool get _declaredValueMissing => (_declaredValue ?? Decimal.zero) <= Decimal.zero;
+  static const String _declaredValueMessage = 'Please enter the declared value of your goods (in ₹).';
+
+  /// Typed goods must be confirmed as accurately described (the server refuses the booking otherwise).
+  bool get _goodsNotConfirmed =>
+      (ref.read(cargoDeclarationProvider).hasCustom || _listedGoods.isNotEmpty) && !ref.read(gtGoodsDeclProvider).accepted;
+
+  /// The server's rules for a goods list, checked here first: a move's declared value cannot be less than what is
+  /// listed, and a part load's cargo weight has to match the listed weight (within 5%, at least 1 kg).
+  String? get _listedGoodsProblem {
+    if (_listedGoods.isEmpty) return null;
+    final category = ref.read(selectedVehicleCategoryProvider);
+    if (category == LogisticsVehicleCategory.packersMovers) {
+      final declared = _declaredValue?.toDouble() ?? 0;
+      if (declared + 1 < _listedGoodsValue) {
+        return 'Declared value (₹${declared.toStringAsFixed(0)}) is less than the goods you listed (₹${_listedGoodsValue.toStringAsFixed(0)}).';
+      }
+    } else if (_isPartLoad) {
+      final w = ref.read(ptlWeightKgProvider);
+      final listed = _listedGoodsWeight;
+      if (w != null && (w - listed).abs() > math.max(1, listed * 0.05)) {
+        return 'Cargo weight (${w.toStringAsFixed(0)} kg) does not match the goods you listed (${listed.toStringAsFixed(0)} kg).';
+      }
+    }
+    return null;
+  }
+  static const String _goodsConfirmMessage =
+      'Please confirm that the goods are described accurately and none are hazardous, illegal or restricted.';
 
   Future<void> _handlePickDropLocation() async {
     final current = ref.read(dropLocationProvider);
@@ -735,7 +819,7 @@ class _GoodsTransportBookingScreenState
 
     final isAuthenticated = ref.read(isUserAuthenticatedProvider);
     if (!isAuthenticated) {
-      context.push('/login');
+      requireLogin(context, ref);
       return;
     }
 
@@ -787,10 +871,22 @@ class _GoodsTransportBookingScreenState
     }
     _cargoDescription = builtDescription;
 
+    if (_declaredValueMissing) {
+      _warn(_declaredValueMessage);
+      return;
+    }
     if (_isHighValue && _consigneeRelationshipController.text.trim().isEmpty) {
       _warn(
         'For high-value consignments, please describe your relationship to the consignee.',
       );
+      return;
+    }
+    if (_listedGoodsProblem != null) {
+      _warn(_listedGoodsProblem!);
+      return;
+    }
+    if (_goodsNotConfirmed) {
+      _warn(_goodsConfirmMessage);
       return;
     }
 
@@ -908,7 +1004,7 @@ class _GoodsTransportBookingScreenState
       // (403 PHONE_VERIFICATION_REQUIRED). Send the customer to sign in;
       // the form keeps everything they entered.
       if (result.error!.toLowerCase().contains('verify your phone')) {
-        context.push('/login');
+        requireLogin(context, ref);
       }
     } else if (result.booking != null) {
       await _afterBooked(result.booking!, online: prep.paymentMethod == 'ONLINE');
@@ -1005,7 +1101,7 @@ class _GoodsTransportBookingScreenState
   Future<void> _requestSurvey({PackersMoversQuote? quote}) async {
     if (_surveyBusy) return;
     if (!ref.read(isUserAuthenticatedProvider)) {
-      context.push('/login');
+      requireLogin(context, ref);
       return;
     }
     final address = ref.read(selectedAddressProvider);
@@ -1187,7 +1283,18 @@ class _GoodsTransportBookingScreenState
     final grandTotal = double.parse((quote.total! + addOnEstimate).toStringAsFixed(2));
     final stopsPayload = _stopsPayload();
     final payPick = ref.read(gtPaymentMethodProvider);
-    final pmMethod = payPick == 'cod' ? 'COD' : 'ONLINE';
+    // Transit insurance for a move, same rules as the other goods bookings: only when the server offers it for this
+    // service, it is paid online / from the wallet, and the insurer's consent wording was ticked.
+    final pmInsured = ref
+                .read(insuranceAvailabilityProvider((service: LogisticsVehicleCategory.packersMovers.serviceCategoryValue, mode: null)))
+                .valueOrNull
+                ?.offered ==
+            true &&
+        payPick != 'cod' &&
+        ref.read(insuranceOptInProvider) &&
+        ref.read(insuranceConsentProvider) &&
+        (_declaredValue ?? Decimal.zero) > Decimal.zero;
+    final pmMethod = (pmInsured || payPick != 'cod') ? 'ONLINE' : 'COD';
 
     // This cart_data[0] map is read verbatim by the backend's
     // `verify_packers_movers_quote` (via `resolve_logistics_fare_v2`) — it
@@ -1208,6 +1315,8 @@ class _GoodsTransportBookingScreenState
         'drop_has_lift': param.dropHasLift,
         'relocation_type': param.relocationType,
         'helpers_requested': helpers,
+        if (_listedGoods.isNotEmpty) 'declared_goods': _listedGoods.map((l) => l.toJson()).toList(),
+        ...ref.read(gtGoodsDeclProvider).cartFields(hasTypedGoods: _listedGoods.isNotEmpty),
         if (addOnLines.isNotEmpty) 'pm_addons': addOnLines,
         'date': dateFormatted,
         'slot': selectedSlot.label,
@@ -1224,7 +1333,9 @@ class _GoodsTransportBookingScreenState
           // submitted total that doesn't equal the verified quote's total.
           totalAmount: Decimal.parse(grandTotal.toStringAsFixed(2)),
           paymentMethod: pmMethod,
+          insuranceOptedIn: pmInsured ? true : null,
           extraPayload: {
+            if (pmInsured) 'insurance_consent': true,
             if (stopsPayload.isNotEmpty) 'stops': stopsPayload,
             if (quote.isEstimate) 'accept_estimated_distance': true,
           },
@@ -1266,7 +1377,7 @@ class _GoodsTransportBookingScreenState
       // (403 PHONE_VERIFICATION_REQUIRED). Send the customer to sign in;
       // the form keeps everything they entered.
       if (result.error!.toLowerCase().contains('verify your phone')) {
-        context.push('/login');
+        requireLogin(context, ref);
       }
     } else if (result.booking != null) {
       await _afterBooked(result.booking!, online: pmMethod == 'ONLINE', pm: true);
@@ -1289,6 +1400,10 @@ class _GoodsTransportBookingScreenState
     if (s.contains('consignee')) {
       target = 'Declared value';
       focus = _consigneeFocus;
+    } else if (s.contains('declared value')) {
+      target = 'Declared value';
+    } else if (s.contains('described accurately')) {
+      target = 'Goods declaration';
     } else if (s.contains('vehicle')) {
       target = 'Vehicle type';
     } else if (s.contains('stop ')) {
@@ -1349,6 +1464,7 @@ class _GoodsTransportBookingScreenState
     // read inside _spotParam so build and submit share one quote key).
     ref.watch(loadingHelpProvider);
     ref.watch(cargoDeclarationProvider);
+    ref.watch(declaredGoodsProvider);
     ref.watch(customerGstinProvider);
     final extraStops = ref.watch(gtStopsProvider);
     final ptlMode = ref.watch(ptlModeProvider) &&
@@ -1450,6 +1566,7 @@ class _GoodsTransportBookingScreenState
         backgroundColor: const Color(0xFFF8F4EF),
         elevation: 0,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () {
             if (_step > 0) {
@@ -2037,6 +2154,10 @@ class _GoodsTransportBookingScreenState
                 const SizedBox(height: 18),
               ],
             ],
+            if (ptlMode || isPackersMovers) ...[
+              KeyedSubtree(key: _anchor('Goods list'), child: GtDeclaredGoodsSection(partLoad: ptlMode)),
+              const SizedBox(height: 18),
+            ],
             // ── Declared value / consignee relationship ──
             _SectionCard(
               anchorKey: _anchor('Declared value'),
@@ -2046,7 +2167,7 @@ class _GoodsTransportBookingScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Declared Value of Goods (Optional)',
+                    'Declared Value of Goods (₹) *',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
@@ -2055,21 +2176,36 @@ class _GoodsTransportBookingScreenState
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Helps us handle high-value consignments with extra care.',
+                    'Required. The value of what you are sending; it helps us handle valuable consignments with extra care.',
                     style: TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: _declaredValueController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                  if (ref.watch(cargoDeclarationProvider).customValueTotal > 0 || (ref.watch(ptlModeProvider) && ref.watch(declaredGoodsProvider).any((l) => (l.declaredValue ?? 0) > 0)))
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.border, width: 0.8),
+                      ),
+                      child: Text(
+                        '₹${_valueFromGoods.toStringAsFixed(_valueFromGoods % 1 == 0 ? 0 : 2)}  ·  total of the goods you listed',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy),
+                      ),
+                    )
+                  else
+                    TextField(
+                      controller: _declaredValueController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      decoration: _fieldDecoration('e.g. 15000'),
                     ),
-                    onChanged: (_) => setState(() {}),
-                    decoration: _fieldDecoration('e.g. 15000'),
-                  ),
                   if (_isHighValue) ...[
                     const SizedBox(height: 12),
                     TextField(
@@ -2085,8 +2221,28 @@ class _GoodsTransportBookingScreenState
             ),
             const SizedBox(height: 18),
             // ── Loading help, insurance, GST / e-way bill ──
+            // Floor / lift / door access for the driver; plus Mini Truck extra helpers and stairs carrying when this
+            // vehicle offers them (Admin-set rates).
+            if (!isPackersMovers) ...[
+              GtAssistSection(
+                tier: (selectedTier != null && selectedTier.offersAssistance && !ref.watch(ptlModeProvider)) ? selectedTier : null,
+              ),
+              const SizedBox(height: 18),
+            ],
+            if (isPackersMovers) ...[
+              KeyedSubtree(
+                key: _anchor('Goods declaration'),
+                child: GtDeclarationSection(required: ref.watch(declaredGoodsProvider).isNotEmpty),
+              ),
+              const SizedBox(height: 18),
+            ],
             if (!isPackersMovers) ...[
               GtOptionsSection(declaredValue: _declaredValue?.toDouble()),
+              const SizedBox(height: 18),
+              KeyedSubtree(
+                key: _anchor('Goods declaration'),
+                child: GtDeclarationSection(required: ref.watch(cargoDeclarationProvider).hasCustom || (ptlMode && ref.watch(declaredGoodsProvider).isNotEmpty)),
+              ),
               const SizedBox(height: 18),
             ],
             ],
@@ -2618,6 +2774,8 @@ class _GoodsTransportBookingScreenState
                 },
               ),
             ),
+            // The move's transit insurance (the other goods bookings show theirs with the options above).
+            if (isPackersMovers) GtInsuranceSection(declaredValue: _declaredValue?.toDouble()),
             const SizedBox(height: 18),
             GtPoliciesSection(
               serviceCategory: vehicleCategory.serviceCategoryValue,
@@ -2632,7 +2790,7 @@ class _GoodsTransportBookingScreenState
           ),
         ],
       ),
-      bottomNavigationBar: Container(
+      bottomNavigationBar: SafeArea(top: false, child: Container(
         margin: const EdgeInsets.fromLTRB(12, 6, 12, 12),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
@@ -2676,7 +2834,7 @@ class _GoodsTransportBookingScreenState
                   ),
           ),
         ),
-      ),
+      )),
     ));
   }
 
@@ -2700,10 +2858,22 @@ class _GoodsTransportBookingScreenState
         );
         return;
       }
+      if (_declaredValueMissing) {
+        _warn(_declaredValueMessage);
+        return;
+      }
       if (_isHighValue && _consigneeRelationshipController.text.trim().isEmpty) {
         _warn(
           'For high-value consignments, please describe your relationship to the consignee.',
         );
+        return;
+      }
+      if (_listedGoodsProblem != null) {
+        _warn(_listedGoodsProblem!);
+        return;
+      }
+      if (_goodsNotConfirmed) {
+        _warn(_goodsConfirmMessage);
         return;
       }
     } else if (_step == 1) {
@@ -2901,6 +3071,8 @@ class _FareQuoteView extends StatelessWidget {
     final loadingUnloading = _num(breakdown?['loading_unloading']) ?? 0;
     final additionalStopCharge =
         _num(breakdown?['additional_stop_charge']) ?? 0;
+    final helperCharge = _num(breakdown?['helper_charge']) ?? 0;
+    final carryCharge = _num(breakdown?['carry_charge']) ?? 0;
     final additionalStops = breakdown?['additional_stops'];
     final surgeMultiplier = _num(breakdown?['surge_multiplier']) ?? 1;
     final minimumFareApplied = breakdown?['minimum_fare_applied'] == true;
@@ -2953,6 +3125,10 @@ class _FareQuoteView extends StatelessWidget {
             ),
           if (loadingUnloading > 0)
             _FareRow('Loading / unloading', loadingUnloading),
+          if (helperCharge > 0)
+            _FareRow('Extra helpers (${_num(breakdown['extra_helpers'])?.round() ?? ''})', helperCharge),
+          if (carryCharge > 0)
+            _FareRow('Stairs carrying (${_num(breakdown['carry_floors'])?.round() ?? ''} floors)', carryCharge),
           if (additionalStopCharge > 0)
             _FareRow(
               additionalStops != null

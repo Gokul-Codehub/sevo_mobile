@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error.dart';
 import '../data/logistics_repository.dart';
+import 'gt_assist.dart';
+import 'gt_declaration.dart';
 import 'gt_models.dart';
 import 'logistics_models.dart';
 
@@ -47,7 +49,10 @@ final gtPoliciesProvider =
     FutureProvider.family<GtPolicyTerms, String>((ref, serviceCategory) async {
   ref.keepAlive();
   return _unwrap(
-    await ref.watch(logisticsRepositoryProvider).getGtPolicies(serviceCategory),
+    await ref.watch(logisticsRepositoryProvider).getGtPolicies(
+          serviceCategory.split('#').first,
+          bookingMode: serviceCategory.contains('#') ? serviceCategory.split('#').last : null,
+        ),
   );
 });
 
@@ -79,10 +84,20 @@ final cargoFitmentProvider = FutureProvider.autoDispose
   );
 });
 
-/// Premium + liability cap for a declared goods value.
-final insuranceTermsProvider =
-    FutureProvider.autoDispose.family<InsuranceTerms, double>((ref, value) async {
-  return _unwrap(await ref.watch(logisticsRepositoryProvider).getInsuranceTerms(value));
+/// Whether transit insurance is sold for a service (and why not), checked with a nominal value like the web does.
+final insuranceAvailabilityProvider = FutureProvider.autoDispose
+    .family<InsuranceTerms, ({String service, String? mode})>((ref, k) async {
+  return _unwrap(await ref
+      .watch(logisticsRepositoryProvider)
+      .getInsuranceTerms(1000, serviceCategory: k.service, bookingMode: k.mode));
+});
+
+/// Premium, cover, exclusions and consent wording for a declared goods value.
+final insuranceTermsProvider = FutureProvider.autoDispose
+    .family<InsuranceTerms, ({double value, String service, String? mode})>((ref, k) async {
+  return _unwrap(await ref
+      .watch(logisticsRepositoryProvider)
+      .getInsuranceTerms(k.value, serviceCategory: k.service, bookingMode: k.mode));
 });
 
 class PtlQuoteParam {
@@ -150,6 +165,9 @@ final cargoDeclarationProvider =
 /// "Loading help" — driver-assisted loading (default on, matching the backend).
 final loadingHelpProvider = StateProvider<bool>((ref) => true);
 
+/// Mini Truck extra helpers / stairs carrying the customer asked for (nothing by default).
+final gtAssistProvider = StateProvider<GtAssist>((ref) => const GtAssist());
+
 /// Optional fixed-fare lane picked by the customer (`logistics_lane`).
 final selectedGtLaneProvider = StateProvider<LogisticsLane?>((ref) => null);
 
@@ -160,6 +178,16 @@ final acceptEstimatedDistanceProvider = StateProvider<bool>((ref) => false);
 
 /// Transit insurance opt-in (`insurance_opted_in`) — prepaid payment only.
 final insuranceOptInProvider = StateProvider<bool>((ref) => false);
+
+/// The goods the customer lists for a Part Truck Load or a Packers & Movers booking (sent as `declared_goods`,
+/// like the web's goods list). Truck / Two-Wheeler bookings keep their goods in [cargoDeclarationProvider].
+final declaredGoodsProvider = StateProvider<List<CargoLine>>((ref) => const []);
+
+/// The customer's tick on the insurer's consent wording (`insurance_consent`); without it the booking is not insured.
+final insuranceConsentProvider = StateProvider<bool>((ref) => false);
+
+/// Handling notes for the driver + the accuracy confirmation (required for typed goods).
+final gtGoodsDeclProvider = StateProvider<GtGoodsDecl>((ref) => const GtGoodsDecl());
 
 final customerGstinProvider = StateProvider<String>((ref) => '');
 final ewayBillNumberProvider = StateProvider<String>((ref) => '');

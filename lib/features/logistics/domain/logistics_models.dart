@@ -13,9 +13,14 @@ class ServiceabilityResult extends Equatable {
     this.openAccess = false,
     this.availableServices = const [],
     this.serviceAllowed,
+    this.isUnknown = false,
   });
 
   final bool isServiceable;
+
+  /// The check could not be made (no usable location, or the server could not be reached). Never blocks the
+  /// customer, but must not be shown as "service is available" either.
+  final bool isUnknown;
   final String message;
   final String? hubName;
   final int? estimatedArrivalMinutes;
@@ -55,6 +60,12 @@ class ServiceabilityResult extends Equatable {
     );
   }
 
+  factory ServiceabilityResult.couldNotCheck() => const ServiceabilityResult(
+        isServiceable: true,
+        isUnknown: true,
+        message: "We couldn't check your area right now. You can carry on; we'll confirm when you book.",
+      );
+
   factory ServiceabilityResult.available([String? hub]) => ServiceabilityResult(
         isServiceable: true,
         inZone: true,
@@ -72,6 +83,7 @@ class ServiceabilityResult extends Equatable {
   @override
   List<Object?> get props => [
         isServiceable,
+        isUnknown,
         message,
         hubName,
         estimatedArrivalMinutes,
@@ -176,7 +188,17 @@ class LogisticsTier extends Equatable {
     this.bodyLengthCm,
     this.bodyWidthCm,
     this.bodyHeightCm,
+    this.extraHelperCharge = 0,
+    this.maxExtraHelpers = 0,
+    this.carryChargePerFloor = 0,
   });
+
+  /// Mini Truck carrying assistance, priced by the server from rates the Admin sets on this vehicle:
+  /// ₹ per extra helper (up to [maxExtraHelpers]) and ₹ per floor carried by stairs. 0 = not offered.
+  final double extraHelperCharge;
+  final int maxExtraHelpers;
+  final double carryChargePerFloor;
+  bool get offersAssistance => (extraHelperCharge > 0 && maxExtraHelpers > 0) || carryChargePerFloor > 0;
 
   /// Cargo-body size in cm (admin-entered; null = unknown).
   final double? bodyLengthCm;
@@ -256,6 +278,9 @@ class LogisticsTier extends Equatable {
       bodyLengthCm: parseDoubleOrNull(json['body_length_cm']),
       bodyWidthCm: parseDoubleOrNull(json['body_width_cm']),
       bodyHeightCm: parseDoubleOrNull(json['body_height_cm']),
+      extraHelperCharge: parseDoubleOrNull(json['extra_helper_charge']) ?? 0,
+      maxExtraHelpers: parseInt(json['max_extra_helpers']),
+      carryChargePerFloor: parseDoubleOrNull(json['carry_charge_per_floor']) ?? 0,
     );
   }
 
@@ -283,6 +308,9 @@ class LogisticsTier extends Equatable {
         bodyLengthCm,
         bodyWidthCm,
         bodyHeightCm,
+        extraHelperCharge,
+        maxExtraHelpers,
+        carryChargePerFloor,
       ];
 }
 

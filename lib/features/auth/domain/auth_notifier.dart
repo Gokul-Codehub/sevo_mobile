@@ -149,7 +149,8 @@ class AuthNotifier extends Notifier<AuthState> {
 
   // ── Force unauthenticated (called by auth interceptor on refresh failure) ──
   void forceUnauthenticated() {
-    state = const AuthUnauthenticated();
+    // Only a signed-in customer has a session to lose; a guest's rejected request is not an "expiry".
+    state = AuthUnauthenticated(sessionExpired: state is AuthAuthenticated);
   }
 
   // ── Logout ────────────────────────────────────────────────────────────────

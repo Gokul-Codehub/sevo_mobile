@@ -69,10 +69,10 @@ ServiceItem _createService(int id, String name, String slug, int price, {String 
 
 void main() {
   group('P0 Root Cause Investigation Regression Suite — CART01 to CART09', () {
-    final amla = _createService(244, 'Amlaa (Nellikaai)', 'veg-amla', 64);
-    final beetroot = _createService(228, 'Beetroot', 'veg-beetroot', 37);
-    final bitterGourd = _createService(224, 'Bitter Gourd (Pavakkai)', 'veg-bitter-gourd', 17);
-    final zucchini = _createService(231, 'Green Zucchini', 'veg-zucchini', 45);
+    final amla = _createService(800000244, 'Amlaa (Nellikaai)', 'veg-amla', 64);
+    final beetroot = _createService(800000228, 'Beetroot', 'veg-beetroot', 37);
+    final bitterGourd = _createService(800000224, 'Bitter Gourd (Pavakkai)', 'veg-bitter-gourd', 17);
+    final zucchini = _createService(800000231, 'Green Zucchini', 'veg-zucchini', 45);
 
     test('CART01: Same item quantity reliably increments beyond 1', () {
       final container = ProviderContainer();
@@ -104,7 +104,7 @@ void main() {
 
       final cart = container.read(cartProvider);
       expect(cart.length, equals(4));
-      expect(cart.map((i) => i.service.id).toList(), containsAll([228, 244, 224, 231]));
+      expect(cart.map((i) => i.service.id).toList(), containsAll([800000228, 800000244, 800000224, 800000231]));
 
       final summary = container.read(cartSummaryProvider);
       expect(summary.itemCount, equals(10)); // 3 + 2 + 1 + 4
@@ -144,11 +144,11 @@ void main() {
       final json1 = item1.toStorageJson();
       final json2 = item2.toStorageJson();
 
-      expect(json1['service']['id'], equals(228));
+      expect(json1['service']['id'], equals(800000228));
       expect(json1['quantity'], equals(3));
       expect(json1['service']['unit'], equals('500 g'));
 
-      expect(json2['service']['id'], equals(244));
+      expect(json2['service']['id'], equals(800000244));
       expect(json2['quantity'], equals(2));
     });
 
@@ -165,11 +165,11 @@ void main() {
           .toList();
 
       expect(decoded.length, equals(3));
-      expect(decoded[0].service.id, equals(228));
+      expect(decoded[0].service.id, equals(800000228));
       expect(decoded[0].quantity, equals(3));
-      expect(decoded[1].service.id, equals(244));
+      expect(decoded[1].service.id, equals(800000244));
       expect(decoded[1].quantity, equals(2));
-      expect(decoded[2].service.id, equals(224));
+      expect(decoded[2].service.id, equals(800000224));
       expect(decoded[2].quantity, equals(1));
     });
 
@@ -307,7 +307,7 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final beetroot = _createService(228, 'Beetroot', 'veg-beetroot', 37);
+      final beetroot = _createService(800000228, 'Beetroot', 'veg-beetroot', 37);
       container.read(cartProvider.notifier).addService(beetroot, quantity: 2);
 
       expect(container.read(cartProvider).length, equals(1));
@@ -359,7 +359,7 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      final beetroot = _createService(228, 'Beetroot', 'veg-beetroot', 37);
+      final beetroot = _createService(800000228, 'Beetroot', 'veg-beetroot', 37);
       final action = PendingCartAction(
         service: beetroot,
         actionType: PendingCartActionType.buy,
@@ -370,7 +370,7 @@ void main() {
       container.read(pendingActionProvider.notifier).setAction(action);
 
       final saved = container.read(pendingActionProvider);
-      expect(saved?.service.id, equals(228));
+      expect(saved?.service.id, equals(800000228));
       expect(saved?.quantity, equals(3));
       expect(saved?.actionType, equals(PendingCartActionType.buy));
       expect(saved?.returnPath, equals('/checkout'));

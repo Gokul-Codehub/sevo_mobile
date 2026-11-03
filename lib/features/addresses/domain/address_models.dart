@@ -10,7 +10,7 @@ class Address extends Equatable {
     this.addressLine2,
     this.landmark,
     required this.city,
-    this.state = 'Karnataka',
+    this.state = '',
     required this.postalCode,
     this.addressType = 'home',
     this.latitude,
@@ -92,8 +92,8 @@ class Address extends Equatable {
           ?.toString()
           .trim(),
       landmark: json['landmark']?.toString().trim(),
-      city: (json['city'] ?? 'Bengaluru').toString().trim(),
-      state: (json['state'] ?? 'Karnataka').toString().trim(),
+      city: (json['city'] ?? '').toString().trim(),
+      state: (json['state'] ?? '').toString().trim(),
       postalCode: (json['postal_code'] ??
               json['pincode'] ??
               json['zip_code'] ??

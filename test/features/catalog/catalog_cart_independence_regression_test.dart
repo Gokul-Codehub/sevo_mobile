@@ -54,10 +54,10 @@ void main() {
   });
 
   group('P0 Mandatory Regression Suite: Catalog and Cart Independence (Tests A through F)', () {
-    final amla = _makeProduct(244, 'Amlaa (Nellikaai)', 'veg-amla', 64);
-    final beetroot = _makeProduct(228, 'Beetroot', 'veg-beetroot', 37);
-    final bitterGourd = _makeProduct(224, 'Bitter Gourd (Pavakkai)', 'veg-bitter-gourd', 17);
-    final bottleGourd = _makeProduct(225, 'Bottle Gourd (Suraikkai)', 'veg-bottle-gourd', 25);
+    final amla = _makeProduct(800000244, 'Amlaa (Nellikaai)', 'veg-amla', 64);
+    final beetroot = _makeProduct(800000228, 'Beetroot', 'veg-beetroot', 37);
+    final bitterGourd = _makeProduct(800000224, 'Bitter Gourd (Pavakkai)', 'veg-bitter-gourd', 17);
+    final bottleGourd = _makeProduct(800000225, 'Bottle Gourd (Suraikkai)', 'veg-bottle-gourd', 25);
 
     final catalogProducts = [amla, beetroot, bitterGourd, bottleGourd];
 
@@ -90,28 +90,28 @@ void main() {
       notifier.addService(amla);
       var cart = container.read(cartProvider);
       expect(cart.length, equals(1));
-      expect(cart[0].service.id, equals(244));
+      expect(cart[0].service.id, equals(800000244));
       expect(cart[0].quantity, equals(1));
 
       // Step 2: Add second item (Beetroot) -> MUST APPEND, not replace
       notifier.addService(beetroot);
       cart = container.read(cartProvider);
       expect(cart.length, equals(2));
-      expect(cart.map((i) => i.service.id).toList(), equals([244, 228]));
-      expect(cart.firstWhere((i) => i.service.id == 244).quantity, equals(1));
-      expect(cart.firstWhere((i) => i.service.id == 228).quantity, equals(1));
+      expect(cart.map((i) => i.service.id).toList(), equals([800000244, 800000228]));
+      expect(cart.firstWhere((i) => i.service.id == 800000244).quantity, equals(1));
+      expect(cart.firstWhere((i) => i.service.id == 800000228).quantity, equals(1));
 
       // Step 3: Add third item (Bitter Gourd)
       notifier.addService(bitterGourd);
       cart = container.read(cartProvider);
       expect(cart.length, equals(3));
-      expect(cart.map((i) => i.service.id).toList(), equals([244, 228, 224]));
+      expect(cart.map((i) => i.service.id).toList(), equals([800000244, 800000228, 800000224]));
 
       // Step 4: Add fourth item (Bottle Gourd)
       notifier.addService(bottleGourd);
       cart = container.read(cartProvider);
       expect(cart.length, equals(4));
-      expect(cart.map((i) => i.service.id).toList(), equals([244, 228, 224, 225]));
+      expect(cart.map((i) => i.service.id).toList(), equals([800000244, 800000228, 800000224, 800000225]));
 
       // TEST B: Increase quantities: Amlaa -> x3, Beetroot -> x2
       notifier.updateQuantity(amla.id, 3);
@@ -155,7 +155,7 @@ void main() {
       // Load category services
       final servicesInitial = await container.read(categoryServicesProvider(param).future);
       expect(servicesInitial.length, equals(4));
-      expect(servicesInitial.map((i) => i.id).toList(), equals([244, 228, 224, 225]));
+      expect(servicesInitial.map((i) => i.id).toList(), equals([800000244, 800000228, 800000224, 800000225]));
 
       // Add items to cart
       container.read(cartProvider.notifier).addService(amla, quantity: 2);
@@ -164,7 +164,7 @@ void main() {
       // Verify category provider still returns full 4 items
       final servicesAfterAdd = await container.read(categoryServicesProvider(param).future);
       expect(servicesAfterAdd.length, equals(4));
-      expect(servicesAfterAdd.map((i) => i.id).toList(), equals([244, 228, 224, 225]));
+      expect(servicesAfterAdd.map((i) => i.id).toList(), equals([800000244, 800000228, 800000224, 800000225]));
       expect(servicesAfterAdd.length, isNot(equals(container.read(cartProvider).length)));
     });
 
@@ -208,7 +208,7 @@ void main() {
       // Empty cart MUST NOT mean empty catalog
       catalog = await container.read(categoryServicesProvider(param).future);
       expect(catalog.length, equals(4));
-      expect(catalog.map((i) => i.id).toList(), containsAll([244, 228, 224, 225]));
+      expect(catalog.map((i) => i.id).toList(), containsAll([800000244, 800000228, 800000224, 800000225]));
     });
 
     test('CATEGORY ID STABILITY: Category ID 18 remains constant across all transitions', () {

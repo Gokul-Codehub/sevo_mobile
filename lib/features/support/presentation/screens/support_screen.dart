@@ -45,6 +45,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.canPop() ? context.pop() : context.go('/'),
         ),
@@ -143,6 +144,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                 prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
+        tooltip: 'Close',
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () => setState(() => _searchQuery = ''),
                       )

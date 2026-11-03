@@ -255,9 +255,11 @@ class _ItemPicker extends StatelessWidget {
         ),
         if (selected)
           Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.remove_circle_outline), onPressed: () => onChanged(qty - 1)),
+            IconButton(
+        tooltip: 'Delete',visualDensity: VisualDensity.compact, icon: const Icon(Icons.remove_circle_outline), onPressed: () => onChanged(qty - 1)),
             Text('$qty', style: const TextStyle(fontWeight: FontWeight.w800)),
-            IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.add_circle_outline), onPressed: qty < line.quantity ? () => onChanged(qty + 1) : null),
+            IconButton(
+        tooltip: 'Add',visualDensity: VisualDensity.compact, icon: const Icon(Icons.add_circle_outline), onPressed: qty < line.quantity ? () => onChanged(qty + 1) : null),
           ]),
       ]),
     );

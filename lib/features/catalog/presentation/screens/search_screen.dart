@@ -1,3 +1,4 @@
+import '../../../home/presentation/widgets/book_again_section.dart';
 import '../../../../core/analytics/analytics_manager.dart';
 import 'dart:async';
 
@@ -303,6 +304,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       onPressed: _startVoice,
                     )
                   : IconButton(
+        tooltip: 'Close',
                       icon: const Icon(Icons.close_rounded, size: 19),
                       onPressed: () {
                         _debounce?.cancel();
@@ -406,6 +408,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
       children: [
+        // What they were just looking at, ready to open again.
+        RecentlyViewedStrip(grocery: _isGroceries),
         if (recent.isNotEmpty) ...[
           _SectionHeader(
             title: 'Recent searches',
@@ -419,6 +423,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               leading: const Icon(Icons.history_rounded, size: 20, color: AppColors.textSecondary),
               title: Text(r, style: const TextStyle(fontSize: 13.5, color: AppColors.navy)),
               trailing: IconButton(
+                tooltip: 'Remove from recent searches',
                 icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textHint),
                 onPressed: () => ref.read(recentSearchesProvider(_mode).notifier).remove(r),
               ),

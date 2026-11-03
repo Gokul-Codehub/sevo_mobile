@@ -1,3 +1,4 @@
+import '../../../../core/navigation/safe_back.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -101,10 +102,9 @@ class ServiceCard extends ConsumerWidget {
       ref.read(cartProvider.notifier).addService(service);
       AppToast.addedToCart(context, service.title);
     }
-    // Use context.go — /cart is inside the ShellRoute.
-    // context.push from outside the shell crosses navigator boundaries
-    // and throws a GoException in go_router 14.x (red screen crash).
-    context.go(AppRoutes.cart);
+    // /cart is inside the ShellRoute: openTab pushes it over this page (back returns here) and falls back to a
+    // plain jump when a push from outside the shell would throw (go_router 14.x).
+    context.openTab(AppRoutes.cart);
   }
 
   // Fixed 2026-10-07 — same root cause and fix as ProductCard._lockTextScale

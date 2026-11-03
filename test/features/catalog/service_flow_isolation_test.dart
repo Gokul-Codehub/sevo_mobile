@@ -26,7 +26,7 @@ void main() {
   );
 
   final beetroot = ServiceItem(
-    id: 228,
+    id: 800000228,
     categoryId: 18,
     title: 'Beetroot',
     slug: 'veg-beetroot',
@@ -50,9 +50,9 @@ void main() {
       final summary = container.read(cartSummaryProvider);
       expect(summary.subtotal, equals(Decimal.parse('899.00')));
       expect(summary.serviceFee, equals(Decimal.parse('29.00')));
-      expect(summary.taxes, equals(Decimal.parse('161.82'))); // 18% of 899
-      expect(summary.total, equals(Decimal.parse('1089.82'))); // 899 + 29 + 161.82
-      expect(summary.advancePayable, equals(Decimal.parse('217.964'))); // 20% of 1089.82
+      expect(summary.taxes, equals(Decimal.parse('162'))); // 18% of 899 = 161.82, rounded to whole rupees like the backend
+      expect(summary.total, equals(Decimal.parse('1090'))); // 899 + 29 + 162
+      expect(summary.advancePayable, equals(Decimal.parse('218'))); // 20% of 1090
     });
 
     test('Booking model requires scheduled date and slot for normal service', () {

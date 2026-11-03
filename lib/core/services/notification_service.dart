@@ -115,12 +115,23 @@ class NotificationService {
           AndroidNotificationChannel(c.$1, c.$2, description: c.$3, importance: c.$4),
         );
       }
-      // Android 13+ (API 33) requires this explicit runtime request before
-      // any notification can be shown; a no-op on older Android. iOS
-      // permission is requested via DarwinInitializationSettings above.
-      await androidImpl?.requestNotificationsPermission();
+      // The Android 13+ permission prompt is NOT shown here any more: at launch it stacked on top of the location
+      // prompt, and for a guest it asks for something that does nothing yet. See [requestPermission], called once
+      // the customer signs in (the way the big delivery apps do it).
     } catch (e) {
       debugPrint('[NotificationService] Failed to initialize notifications plugin: $e');
+    }
+  }
+
+  /// Asks for the Android 13+ (API 33) notification permission, which is required before any notification can be
+  /// shown; a no-op on older Android and when already granted. Call it at a moment the customer can see the point of
+  /// it, for example right after signing in. iOS asks through DarwinInitializationSettings.
+  Future<void> requestPermission() async {
+    try {
+      final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await androidImpl?.requestNotificationsPermission();
+    } catch (e) {
+      debugPrint('[NotificationService] Notification permission request failed: $e');
     }
   }
 

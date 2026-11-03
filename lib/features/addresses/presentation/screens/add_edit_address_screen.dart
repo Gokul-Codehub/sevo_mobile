@@ -1062,21 +1062,27 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   data: (result) => Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: result.isServiceable
-                          ? const Color(0xFFE6ECF4)
-                          : AppColors.errorLight,
+                      color: result.isUnknown
+                          ? const Color(0xFFF1F5F9)
+                          : result.isServiceable
+                              ? const Color(0xFFE6ECF4)
+                              : AppColors.errorLight,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          result.isServiceable
-                              ? Icons.verified_rounded
-                              : Icons.error_outline_rounded,
+                          result.isUnknown
+                              ? Icons.info_outline_rounded
+                              : result.isServiceable
+                                  ? Icons.verified_rounded
+                                  : Icons.error_outline_rounded,
                           size: 18,
-                          color: result.isServiceable
-                              ? AppColors.navy
-                              : AppColors.error,
+                          color: result.isUnknown
+                              ? AppColors.textSecondary
+                              : result.isServiceable
+                                  ? AppColors.navy
+                                  : AppColors.error,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -1084,9 +1090,11 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                             result.message,
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: result.isServiceable
-                                  ? AppColors.navyDark
-                                  : AppColors.error,
+                              color: result.isUnknown
+                                  ? AppColors.textSecondary
+                                  : result.isServiceable
+                                      ? AppColors.navyDark
+                                      : AppColors.error,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

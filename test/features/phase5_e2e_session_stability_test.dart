@@ -42,7 +42,7 @@ void main() {
   );
 
   final sampleBeetroot = ServiceItem(
-    id: 228,
+    id: 800000228,
     categoryId: 18,
     title: 'Beetroot',
     slug: 'veg-beetroot',
@@ -53,7 +53,7 @@ void main() {
   );
 
   final sampleTomato = ServiceItem(
-    id: 230,
+    id: 800000230,
     categoryId: 18,
     title: 'Country Tomato',
     slug: 'veg-country-tomato',
@@ -113,7 +113,7 @@ void main() {
 
       final pending = container.read(pendingActionProvider);
       expect(pending, isNotNull);
-      expect(pending!.service.id, equals(228));
+      expect(pending!.service.id, equals(800000228));
       expect(pending.actionType, equals(PendingCartActionType.addToCart));
       expect(pending.returnPath, equals('/categories/vegetables_groceries'));
     });
@@ -178,7 +178,7 @@ void main() {
       addTearDown(container.dispose);
 
       container.read(cartProvider.notifier).addService(sampleBeetroot, quantity: 1);
-      container.read(cartProvider.notifier).updateQuantity(228, 3);
+      container.read(cartProvider.notifier).updateQuantity(800000228, 3);
       expect(container.read(cartProvider).first.quantity, equals(3));
       final summary = container.read(cartSummaryProvider);
       expect(summary.subtotal, equals(Decimal.fromInt(111))); // 37 * 3
@@ -191,7 +191,7 @@ void main() {
 
       container.read(cartProvider.notifier).addService(sampleBeetroot, quantity: 1);
       expect(container.read(cartProvider).length, equals(1));
-      container.read(cartProvider.notifier).updateQuantity(228, 0);
+      container.read(cartProvider.notifier).updateQuantity(800000228, 0);
       expect(container.read(cartProvider).length, equals(0));
     });
 
@@ -237,7 +237,7 @@ void main() {
       expect(
         (payload['items'] as List)[0],
         equals({
-          'service_id': 228,
+          'service_id': 800000228,
           'service_slug': 'veg-beetroot',
           'service_title': 'Beetroot',
           'quantity': 2,
@@ -519,7 +519,7 @@ void main() {
       final item = CartItem(service: sampleBeetroot, quantity: 2);
       final jsonMap = item.toStorageJson();
       expect(jsonMap['service'], isA<Map<String, dynamic>>());
-      expect((jsonMap['service'] as Map)['id'], equals(228));
+      expect((jsonMap['service'] as Map)['id'], equals(800000228));
       expect(jsonMap['quantity'], equals(2));
     });
 
@@ -527,7 +527,7 @@ void main() {
     test('STATE02: Cart serialization outputs standard JSON string', () {
       final item = CartItem(service: sampleBeetroot, quantity: 1);
       final encoded = jsonEncode(item.toStorageJson());
-      expect(encoded, contains('"id":228'));
+      expect(encoded, contains('"id":800000228'));
       expect(encoded, contains('"quantity":1'));
     });
 
@@ -535,7 +535,7 @@ void main() {
     test('STATE03: Cart restoration deserializes storage JSON into CartItem model', () {
       final raw = {
         'service': {
-          'id': 228,
+          'id': 800000228,
           'title': 'Beetroot',
           'slug': 'veg-beetroot',
           'price': '37',
@@ -549,7 +549,7 @@ void main() {
       };
 
       final item = CartItem.fromStorageJson(raw);
-      expect(item.service.id, equals(228));
+      expect(item.service.id, equals(800000228));
       expect(item.quantity, equals(3));
       expect(item.customNotes, equals('Fresh only please'));
       expect(item.totalPrice, equals(Decimal.fromInt(111)));
@@ -615,7 +615,7 @@ void main() {
       addTearDown(container.dispose);
 
       container.read(cartProvider.notifier).addService(sampleBeetroot);
-      final item = container.read(cartProvider).firstWhere((i) => i.service.id == 228);
+      final item = container.read(cartProvider).firstWhere((i) => i.service.id == 800000228);
       expect(item.quantity, equals(1));
     });
 

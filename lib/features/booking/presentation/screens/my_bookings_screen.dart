@@ -1,3 +1,5 @@
+import '../widgets/book_again_actions.dart';
+import '../../../auth/domain/auth_return.dart';
 import '../../../../shared/widgets/login_required_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -172,14 +174,14 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
         backgroundColor: const Color(0xFFF7F9FC),
         appBar: AppBar(
           backgroundColor: const Color(0xFFF7F9FC),
-          title: const Text('My Bookings'),
+          title: const Text('Bookings & Orders'),
         ),
         body: LoginRequiredView(
           title: 'Sign in to view bookings',
           subtitle: 'Please log in to track your service requests and bookings.',
           buttonLabel: 'Login / Sign Up',
           icon: Icons.event_note_rounded,
-          onPressed: () => context.push('/login'),
+          onPressed: () => requireLogin(context, ref),
         ),
       );
     }
@@ -192,7 +194,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
         scrolledUnderElevation: 0,
         centerTitle: false,
         title: const Text(
-          'My Bookings',
+          'Bookings & Orders',
           style: TextStyle(
             color: AppColors.navy,
             fontWeight: FontWeight.w900,
@@ -339,6 +341,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
               suffixIcon: _query.isEmpty
                   ? null
                   : IconButton(
+        tooltip: 'Close',
                       icon: const Icon(Icons.close_rounded, size: 18),
                       onPressed: () {
                         _searchController.clear();
@@ -815,6 +818,11 @@ class _BookingCard extends ConsumerWidget {
                               ),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                        ],
+                        // A finished booking can be booked again in one tap (current price and slots are fetched fresh).
+                        if ((booking.isCompleted || booking.isCancelled) && !booking.isGroceryBooking && booking.items.isNotEmpty) ...[
+                          AgainButton(label: 'Book again', onPressed: () => openServiceAgain(context, booking.items.first.service)),
                           const SizedBox(width: 8),
                         ],
                         FilledButton(

@@ -535,6 +535,8 @@ class Booking extends Equatable {
     }
     add('Additional stops (${_fbNum(f['additional_stops']).round()})', f['additional_stop_charge']);
     add('Loading / unloading', f['loading_unloading']);
+    add('Extra helpers (${_fbNum(f['extra_helpers']).round()})', f['helper_charge']);
+    add('Stairs carrying (${_fbNum(f['carry_floors']).round()} floors)', f['carry_charge']);
     add('Special handling', f['special_handling_charge'] ?? f['special_handling']);
 
     final p = _fbPricing;

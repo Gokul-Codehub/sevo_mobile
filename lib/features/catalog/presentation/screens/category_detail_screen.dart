@@ -431,6 +431,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   /// specific sub-service already.
   void _maybeShowCategoryPopup(Category? category) {
     if (_popupShown || category == null) return;
+    // Goods & Transport has no popup: its booking page has the transport category selector itself
+    // (see _maybeRedirectToLogistics), and the category's admin popup tiles must not open on top of it.
+    if (category.flowType == CatalogFlowType.logistics) return;
     if (category.popupTiles.isEmpty || widget.initialSubcategorySlug != null) return;
     _popupShown = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {

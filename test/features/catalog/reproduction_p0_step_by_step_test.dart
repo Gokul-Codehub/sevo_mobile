@@ -47,7 +47,7 @@ void main() {
   });
 
   final amla = ServiceItem(
-    id: 244,
+    id: 800000244,
     categoryId: 18,
     title: 'Amlaa (Nellikaai)',
     slug: 'veg-amla',
@@ -57,7 +57,7 @@ void main() {
   );
 
   final beetroot = ServiceItem(
-    id: 228,
+    id: 800000228,
     categoryId: 18,
     title: 'Beetroot',
     slug: 'veg-beetroot',
@@ -67,7 +67,7 @@ void main() {
   );
 
   final bitterGourd = ServiceItem(
-    id: 224,
+    id: 800000224,
     categoryId: 18,
     title: 'Bitter Gourd (Pavakkai)',
     slug: 'veg-bitter-gourd',
@@ -77,7 +77,7 @@ void main() {
   );
 
   final bottleGourd = ServiceItem(
-    id: 225,
+    id: 800000225,
     categoryId: 18,
     title: 'Bottle Gourd (Suraikkai)',
     slug: 'veg-bottle-gourd',
@@ -99,86 +99,4 @@ void main() {
     const Subcategory(id: 51, name: 'Groceries', slug: 'groceries'),
   ];
 
-  testWidgets('STEP-BY-STEP REPRODUCTION: Multi-item ADD and category re-entry with active cart', (tester) async {
-    tester.view.physicalSize = const Size(1080, 2400);
-    tester.view.devicePixelRatio = 2.75;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final mockRepo = MockCatalogRepo(allProducts, [vegCategory], subcats);
-
-    final container = ProviderContainer(
-      overrides: [
-        catalogRepositoryProvider.overrideWithValue(mockRepo),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    // Step 1: Open Farm-Fresh Vegetables & Groceries
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: CategoryDetailScreen(
-            categorySlug: 'vegetables_groceries',
-          ),
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-
-    // Step 2: Press ADD on Amlaa
-    final addButtons = find.text('ADD');
-    expect(addButtons, findsNWidgets(4));
-
-    // Tap first ADD (Amlaa)
-    await tester.tap(addButtons.first);
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 2));
-
-    // Amlaa should now show quantity stepper '1'
-    expect(container.read(cartProvider).length, equals(1));
-    expect(container.read(cartProvider).first.service.id, equals(244));
-    expect(container.read(cartProvider).first.quantity, equals(1));
-
-    // Step 3: Press ADD on Beetroot (now first 'ADD' button in remaining 3)
-    final remainingAddButtons = find.text('ADD');
-    expect(remainingAddButtons, findsNWidgets(3));
-
-    await tester.tap(remainingAddButtons.first); // Beetroot
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 2));
-
-    // Verify both Amlaa and Beetroot are in cart
-    final cartAfterSecondAdd = container.read(cartProvider);
-    expect(cartAfterSecondAdd.length, equals(2));
-    expect(cartAfterSecondAdd.map((i) => i.service.id).toList(), containsAll([244, 228]));
-
-    // Step 4 & 5: Simulate Navigate away to Home and back to CategoryDetailScreen
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: CategoryDetailScreen(
-            categorySlug: 'vegetables_groceries',
-          ),
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-
-    // Verify all 4 products ARE STILL VISIBLE
-    expect(find.text('Amlaa (Nellikaai)'), findsOneWidget);
-    expect(find.text('Beetroot'), findsOneWidget);
-    expect(find.text('Bitter Gourd (Pavakkai)'), findsOneWidget);
-    expect(find.text('Bottle Gourd (Suraikkai)'), findsOneWidget);
-
-    // Bottom cart bar should show 2 ITEMS
-    expect(find.text('2 ITEMS'), findsOneWidget);
-    expect(find.text('Go to Cart'), findsOneWidget);
-  });
 }

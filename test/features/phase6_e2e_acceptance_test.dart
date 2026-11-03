@@ -141,7 +141,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────────────
   group('2. Guest Action + Login Return Flow', () {
     final beetroot = ServiceItem(
-      id: 228,
+      id: 800000228,
       title: 'Beetroot',
       slug: 'veg-beetroot',
       price: Decimal.fromInt(37),
@@ -161,7 +161,7 @@ void main() {
       );
 
       expect(container.read(pendingActionProvider), isNotNull);
-      expect(container.read(pendingActionProvider)!.service.id, equals(228));
+      expect(container.read(pendingActionProvider)!.service.id, equals(800000228));
       expect(container.read(pendingActionProvider)!.actionType, equals(PendingCartActionType.addToCart));
 
       // After user logs in, execute pending action
@@ -172,7 +172,7 @@ void main() {
       }
 
       expect(container.read(cartProvider).length, equals(1));
-      expect(container.read(cartProvider).first.service.id, equals(228));
+      expect(container.read(cartProvider).first.service.id, equals(800000228));
       expect(container.read(pendingActionProvider), isNull);
     });
 
@@ -192,7 +192,7 @@ void main() {
       cartNotifier.addService(pending.service);
       pendingNotifier.clear();
 
-      expect(container.read(cartProvider).first.service.id, equals(228));
+      expect(container.read(cartProvider).first.service.id, equals(800000228));
     });
   });
 
@@ -202,7 +202,7 @@ void main() {
   group('3. Farm-Fresh Grocery Flow & Isolation', () {
     test('Beetroot item parsed from live API JSON maintains flowType == grocery and durationMinutes == 8', () {
       final liveJson = {
-        'id': 228,
+        'id': 800000228,
         'category': 18,
         'category_slug': 'vegetables_groceries',
         'name': 'Beetroot',
@@ -217,11 +217,11 @@ void main() {
       };
 
       final item = ServiceItem.fromJson(liveJson);
-      expect(item.id, equals(228));
+      expect(item.id, equals(800000228));
       expect(item.flowType, equals(CatalogFlowType.grocery));
       expect(item.durationMinutes, equals(8));
       expect(item.price, equals(Decimal.fromInt(37)));
-      expect(item.imageUrl, equals('https://customer.caldimservices.online/mockups/vegetables_realistic.png'));
+      expect(item.imageUrl, equals('https://sevo.co.in/mockups/vegetables_realistic.png'));
     });
 
     test('Cart calculations for multiple grocery produce items', () {
@@ -229,7 +229,7 @@ void main() {
       final cartNotifier = container.read(cartProvider.notifier);
 
       final beetroot = ServiceItem(
-        id: 228,
+        id: 800000228,
         title: 'Beetroot',
         slug: 'veg-beetroot',
         price: Decimal.fromInt(37),
@@ -237,7 +237,7 @@ void main() {
       );
 
       final tomato = ServiceItem(
-        id: 229,
+        id: 800000229,
         title: 'Country Tomato',
         slug: 'veg-tomato',
         price: Decimal.fromInt(24),
@@ -253,7 +253,7 @@ void main() {
       expect(summary.subtotal, equals(Decimal.fromInt(98))); // 74 + 24 = 98
 
       // Update quantity of beetroot to 1
-      cartNotifier.updateQuantity(228, 1);
+      cartNotifier.updateQuantity(800000228, 1);
       final updatedSummary = container.read(cartSummaryProvider);
       expect(updatedSummary.itemCount, equals(2));
       expect(updatedSummary.subtotal, equals(Decimal.fromInt(61))); // 37 + 24 = 61

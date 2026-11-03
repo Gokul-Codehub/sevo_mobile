@@ -52,11 +52,15 @@ double? _d(Object? v) => v == null ? null : double.tryParse(v.toString());
 DateTime? _t(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
 
 class OrderLine {
-  const OrderLine({required this.title, required this.quantity, required this.unitPrice, required this.amount, this.image, this.pack = '', this.id, this.sellerId});
+  const OrderLine({required this.title, required this.quantity, required this.unitPrice, required this.amount, this.image, this.pack = '', this.id, this.sellerId, this.productId, this.basketId});
 
   /// The order item's id (needed to return it) and the seller it came from.
   final int? id;
   final int? sellerId;
+
+  /// The Seller Hub product this line was (to order it again), or the combo offer it belonged to.
+  final int? productId;
+  final int? basketId;
   final String title;
   final int quantity;
   final double unitPrice;
@@ -74,6 +78,8 @@ class OrderLine {
     return OrderLine(
       id: int.tryParse(raw['id']?.toString() ?? ''),
       sellerId: int.tryParse(raw['seller_id']?.toString() ?? ''),
+      productId: int.tryParse(raw['seller_product_id']?.toString() ?? ''),
+      basketId: int.tryParse(raw['basket_id']?.toString() ?? ''),
       title: title,
       quantity: qty,
       unitPrice: unit,

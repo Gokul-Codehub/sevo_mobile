@@ -131,6 +131,7 @@ class _SellerHubGroceriesScreenState extends ConsumerState<SellerHubGroceriesScr
             // Drilled into a sub-category: the back arrow goes up one level.
             leading: _drill.isNotEmpty
                 ? IconButton(
+        tooltip: 'Back',
                     icon: const Icon(Icons.arrow_back),
                     onPressed: () => setState(() => _selectedSubcategoryId = _drill.removeLast()),
                   )

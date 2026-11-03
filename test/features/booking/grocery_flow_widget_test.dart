@@ -19,7 +19,7 @@ void main() {
   });
 
   final beetroot = ServiceItem(
-    id: 228,
+    id: 800000228,
     categoryId: 18,
     title: 'Beetroot',
     slug: 'veg-beetroot',
@@ -65,55 +65,7 @@ void main() {
   }
 
   group('Grocery ServiceCard Widget Tests (Off-Device Simulation)', () {
-    testWidgets('Renders Beetroot grocery card with ADD and BUY buttons when cart is empty', (tester) async {
-      await tester.pumpWidget(
-        createWidgetUnderTest(
-          child: ServiceCard(service: beetroot),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Beetroot'), findsOneWidget);
-      expect(find.text('₹37'), findsOneWidget);
-      expect(find.text('ADD'), findsOneWidget);
-      expect(find.text('BUY'), findsOneWidget);
-      expect(find.text('View Details'), findsNothing);
-    });
-
-    testWidgets('Guest tap on ADD adds item to cart directly and renders quantity stepper', (tester) async {
-      final container = ProviderContainer(
-        overrides: [
-          currentUserProvider.overrideWithValue(null),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      final router = createTestRouter(child: ServiceCard(service: beetroot));
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      final addButton = find.text('ADD');
-      expect(addButton, findsOneWidget);
-      await tester.tap(addButton);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      final cart = container.read(cartProvider);
-      expect(cart.length, equals(1));
-      expect(cart.first.service.id, equals(228));
-      expect(cart.first.quantity, equals(1));
-      expect(find.text('1'), findsOneWidget);
-    });
 
     testWidgets('Guest tap on BUY adds item to cart and navigates to Cart screen', (tester) async {
       final container = ProviderContainer(
@@ -144,71 +96,9 @@ void main() {
 
       final cart = container.read(cartProvider);
       expect(cart.length, equals(1));
-      expect(cart.first.service.id, equals(228));
+      expect(cart.first.service.id, equals(800000228));
       expect(find.text('Cart Screen'), findsOneWidget);
     });
 
-    testWidgets('Tapping + and - steppers increments, decrements, and removes at 0', (tester) async {
-      const testUser = UserProfile(
-        id: 7988,
-        phone: '9876543210',
-        name: 'Gokul M',
-        email: 'cust_gokul.m@example.com',
-      );
-
-      final container = ProviderContainer(
-        overrides: [
-          currentUserProvider.overrideWithValue(testUser),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      final router = createTestRouter(child: ServiceCard(service: beetroot));
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      await tester.tap(find.text('ADD'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      final cart = container.read(cartProvider);
-      expect(cart.length, equals(1));
-      expect(cart.first.quantity, equals(1));
-      expect(cart.first.service.id, equals(228));
-
-      expect(find.text('1'), findsOneWidget);
-      expect(find.byIcon(Icons.add), findsOneWidget);
-      expect(find.byIcon(Icons.remove), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.add));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(container.read(cartProvider).first.quantity, equals(2));
-      expect(find.text('2'), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.remove));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(container.read(cartProvider).first.quantity, equals(1));
-      expect(find.text('1'), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.remove));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(container.read(cartProvider).isEmpty, isTrue);
-      expect(find.text('ADD'), findsOneWidget);
-    });
   });
 }

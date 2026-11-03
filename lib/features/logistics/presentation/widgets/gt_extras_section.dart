@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -10,6 +12,7 @@ import '../../domain/gt_models.dart';
 import '../../domain/gt_providers.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
+import 'gt_insurance_section.dart';
 
 // Goods & Transport sections wired to the updated backend:
 //   GtCargoSection     goods catalogue + /evaluate-cargo/ vehicle fitment
@@ -439,6 +442,8 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                   if (_otherOpen) ...[
                     const SizedBox(height: 12),
                     _CustomCargoForm(
+                      twoWheeler: vehicleCategory == LogisticsVehicleCategory.twoWheeler,
+                      categoryNames: categories.valueOrNull?.map((c) => c.name).toList() ?? const [],
                       onAdd: (line) => _setCargo(
                         cargo.copyWith(items: [...cargo.items, line]),
                       ),
@@ -566,22 +571,55 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
       );
 }
 
-const _kSizePresets = <String, ({String label, double w, double c, double l, double wd, double h})>{
-  'small': (label: 'Small (~10 kg)', w: 10, c: 1.5, l: 40, wd: 30, h: 25),
-  'medium': (label: 'Medium (~30 kg)', w: 30, c: 6, l: 60, wd: 50, h: 45),
-  'large': (label: 'Large (~75 kg)', w: 75, c: 18, l: 90, wd: 75, h: 70),
-  'extra_large': (label: 'XL / Oversized (~150kg)', w: 150, c: 35, l: 120, wd: 90, h: 85),
+typedef _SizePreset = ({String label, double w, double c, double l, double wd, double h});
+
+const _kSizePresets = <String, _SizePreset>{
+  'small': (label: 'Small (~10 kg): bag, small carton', w: 10, c: 1.5, l: 40, wd: 30, h: 25),
+  'medium': (label: 'Medium (~30 kg): carton, chair', w: 30, c: 6, l: 60, wd: 50, h: 45),
+  'large': (label: 'Large (~75 kg): sofa, fridge', w: 75, c: 18, l: 90, wd: 75, h: 70),
+  'extra_large': (label: 'XL (~150 kg): bed, machine', w: 150, c: 35, l: 120, wd: 90, h: 85),
 };
+
+/// Parcel sizes for a Two-Wheeler (payload up to 20 kg), as on the web.
+const _kBikePresets = <String, _SizePreset>{
+  'doc': (label: 'Doc / Envelope (< 1 kg)', w: 0.5, c: 0.1, l: 30, wd: 22, h: 2),
+  'small': (label: 'Small (~3 kg): shoe box, bag', w: 3, c: 0.4, l: 25, wd: 20, h: 15),
+  'medium': (label: 'Medium (~8 kg): laptop bag', w: 8, c: 0.8, l: 35, wd: 25, h: 20),
+  'large': (label: 'Large (~15 kg): big box', w: 15, c: 1.2, l: 40, wd: 35, h: 30),
+};
+
+const _kPacking = <String, String>{
+  'original_box': 'Original / manufacturer box',
+  'cartons': 'Cartons or crates',
+  'wrapped': 'Wrapped or bubble-wrapped',
+  'pallet': 'On a pallet',
+  'loose': 'Loose / unpacked',
+};
+
+/// Quick picks for "what are you sending?", the same lists the web offers.
+const _kCommonGoodsTruck = <String>[
+  'Sofa / chairs / furniture', 'Bed / mattress / wardrobe', 'Fridge / washing machine / appliances', 'Cartons / boxes',
+  'Machine / equipment parts', 'Building material', 'Shop stock / goods for sale', 'Bike / vehicle', 'Documents / small parcel',
+];
+const _kCommonGoodsBike = <String>[
+  'Documents / envelope', 'Food / tiffin', 'Medicines', 'Clothes / garments', 'Electronics / gadgets', 'Books / stationery',
+  'Small parcel / box', 'Keys / small items',
+];
+
+const double _kBikeMaxKg = 20;
+const int _kMaxPhotoBytes = 2000000; // the server refuses photos over ~2 MB
 
 String _n(double v) => v % 1 == 0 ? v.toStringAsFixed(0) : v.toString();
 
-/// "Unlisted / Custom Cargo" entry — mirrors the web GoodsCargoSelectorModal
-/// "Other / Not listed" form (description, quick size, qty, weight, photo,
-/// dimensions, fragile).
+/// "Other / Not listed" goods entry: mirrors the web GoodsCargoSelectorModal form. The customer describes ANY goods:
+/// what, how big, how heavy, what they are worth (required, it becomes the booking's declared value), handling flags
+/// and how they are packed; photo, exact size, goods type and a handling note are optional.
 class _CustomCargoForm extends StatefulWidget {
-  const _CustomCargoForm({required this.onAdd});
+  const _CustomCargoForm({required this.onAdd, required this.twoWheeler, required this.categoryNames});
 
   final ValueChanged<CargoLine> onAdd;
+  final bool twoWheeler;
+  final List<String> categoryNames;
 
   @override
   State<_CustomCargoForm> createState() => _CustomCargoFormState();
@@ -591,21 +629,31 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
   final _name = TextEditingController();
   final _qty = TextEditingController(text: '1');
   final _weight = TextEditingController();
+  final _value = TextEditingController();
   final _l = TextEditingController();
   final _w = TextEditingController();
   final _h = TextEditingController();
+  final _handling = TextEditingController();
   String? _size;
   bool _fragile = false;
+  bool _liquid = false;
+  bool _perishable = false;
+  bool _hazardous = false;
+  String? _packing;
+  String? _category;
   String? _photo;
+  String? _photoData;
   String? _err;
 
   /// Fields the customer typed themselves; a size preset never overwrites them
   /// (web QA Pass 7: switching Small -> Medium used to keep Small's numbers).
   final Set<TextEditingController> _edited = {};
 
+  Map<String, _SizePreset> get _presets => widget.twoWheeler ? _kBikePresets : _kSizePresets;
+
   @override
   void dispose() {
-    for (final c in [_name, _qty, _weight, _l, _w, _h]) {
+    for (final c in [_name, _qty, _weight, _value, _l, _w, _h, _handling]) {
       c.dispose();
     }
     super.dispose();
@@ -615,13 +663,11 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
 
   double get _cftFromDims {
     final l = _num(_l), w = _num(_w), h = _num(_h);
-    return l > 0 && w > 0 && h > 0
-        ? (l * w * h / 28316.85 * 100).round() / 100
-        : 0;
+    return l > 0 && w > 0 && h > 0 ? (l * w * h / 28316.85 * 100).round() / 100 : 0;
   }
 
   void _pickSize(String key) {
-    final p = _kSizePresets[key]!;
+    final p = _presets[key]!;
     setState(() {
       _size = key;
       void put(TextEditingController c, double v) {
@@ -655,15 +701,18 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
     );
     if (src == null) return;
     try {
-      final f = await ImagePicker()
-          .pickImage(source: src, maxWidth: 1600, imageQuality: 80);
+      final f = await ImagePicker().pickImage(source: src, maxWidth: 1280, imageQuality: 70);
       if (f == null || !mounted) return;
-      if (await f.length() > 5 * 1024 * 1024) {
-        setState(() => _err = 'Image size cannot exceed 5MB.');
+      final bytes = await f.readAsBytes();
+      if (bytes.length > _kMaxPhotoBytes) {
+        setState(() => _err = 'The photo must be under 2 MB. Please choose a smaller one.');
         return;
       }
+      final lower = f.path.toLowerCase();
+      final mime = lower.endsWith('.png') ? 'image/png' : (lower.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
       setState(() {
         _photo = f.path;
+        _photoData = 'data:$mime;base64,${base64Encode(bytes)}';
         _err = null;
       });
     } catch (_) {
@@ -671,70 +720,118 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
     }
   }
 
+  void _fail(String m) => setState(() => _err = m);
+
   void _add() {
     final name = _name.text.trim();
     final qty = int.tryParse(_qty.text.trim()) ?? 0;
     var weight = _num(_weight);
-    var cft = _cftFromDims;
-    if (name.isEmpty) {
-      return setState(() => _err = 'Describe the goods (e.g. clay pots, steel almirah).');
+    final preset = _size == null ? null : _presets[_size];
+    if (name.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').length < 2) {
+      return _fail('Describe the goods (e.g. clay pots, steel almirah).');
     }
-    if (name.length > 120) {
-      return setState(() => _err = 'Description can be at most 120 characters.');
+    if (name.length > 120) return _fail('Description can be at most 120 characters.');
+    if (qty < 1 || qty > 500) return _fail('Quantity must be between 1 and 500.');
+    if (_hazardous) return _fail('We cannot carry hazardous, flammable, explosive or illegal goods.');
+    if ((_fragile || _liquid || _perishable) && _packing == null) {
+      return _fail('Tell us how these goods are packed; the driver needs it to handle them safely.');
     }
-    if (qty < 1 || qty > 500) {
-      return setState(() => _err = 'Quantity must be between 1 and 500.');
+    if (weight <= 0 && preset != null) weight = preset.w;
+    if (!(weight > 0 && weight <= 100000)) return _fail('Enter the weight of one unit in kg.');
+    final value = _num(_value);
+    if (!(value > 0 && value <= 99999999)) return _fail('Enter the declared value of these goods in rupees.');
+
+    var l = _num(_l), w = _num(_w), h = _num(_h);
+    final typedDims = [l, w, h].where((d) => d > 0).length;
+    if (typedDims != 3) {
+      if (preset != null) {
+        if (l <= 0) l = preset.l;
+        if (w <= 0) w = preset.wd;
+        if (h <= 0) h = preset.h;
+      } else if (typedDims > 0) {
+        return _fail('Enter all three of length, width and height, or leave them blank and pick a size.');
+      } else if (!widget.twoWheeler) {
+        return _fail('Pick how big one item is (Small, Medium, Large or XL) so the right vehicle can be planned.');
+      }
     }
-    final preset = _size == null ? null : _kSizePresets[_size];
-    if (preset != null) {
-      if (weight <= 0) weight = preset.w;
-      if (cft <= 0) cft = preset.c;
+    if ([l, w, h].any((d) => d > 2000)) return _fail('Each dimension must be 2000 cm or less.');
+    if (widget.twoWheeler && weight > _kBikeMaxKg) {
+      return _fail('This item exceeds the Two-Wheeler weight limit ($_kBikeMaxKg kg). For heavier items, please choose Mini Truck.');
     }
-    if (!(weight > 0 && weight <= 100000)) {
-      return setState(() => _err = 'Select a simple size or enter approximate weight in kg.');
-    }
-    if (!(cft > 0 && cft <= 10000)) {
-      return setState(() => _err =
-          'Select a simple size, or enter length, width and height in cm.');
-    }
+
+    final dimsTyped = _edited.contains(_l) || _edited.contains(_w) || _edited.contains(_h);
+    final cft = dimsTyped || preset == null
+        ? (l > 0 && w > 0 && h > 0 ? (l * w * h / 28316.85 * 100).round() / 100 : _cftFromDims)
+        : preset.c;
+    final category = (_category ?? '').trim();
+    final note = _handling.text.trim();
+
     widget.onAdd(CargoLine(
       quantity: qty,
       customName: name,
       weightKg: weight,
-      cft: cft,
+      cft: cft > 0 ? cft : null,
       isFragile: _fragile,
+      isLiquid: _liquid,
+      isPerishable: _perishable,
+      packing: (_fragile || _liquid || _perishable) ? _packing : null,
+      declaredValue: value,
+      goodsCategoryName: category.isEmpty ? null : (category.length > 60 ? category.substring(0, 60) : category),
+      specialHandling: note.isEmpty ? null : (note.length > 200 ? note.substring(0, 200) : note),
       sizeKey: _size,
       photoPath: _photo,
-      lengthCm: _l.text.isEmpty ? null : _num(_l),
-      widthCm: _w.text.isEmpty ? null : _num(_w),
-      heightCm: _h.text.isEmpty ? null : _num(_h),
+      photoDataUrl: _photoData,
+      lengthCm: l > 0 ? l : null,
+      widthCm: w > 0 ? w : null,
+      heightCm: h > 0 ? h : null,
     ));
     setState(() {
       _name.clear();
       _qty.text = '1';
       _weight.clear();
+      _value.clear();
       _l.clear();
       _w.clear();
       _h.clear();
+      _handling.clear();
       _size = null;
       _fragile = false;
+      _liquid = false;
+      _perishable = false;
+      _hazardous = false;
+      _packing = null;
+      _category = null;
       _photo = null;
+      _photoData = null;
       _err = null;
       _edited.clear();
     });
   }
 
-  Widget _numField(TextEditingController c, String hint) => TextField(
+  Widget _numField(TextEditingController c, String hint, {bool track = true}) => TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        onChanged: (_) => setState(() => _edited.add(c)),
+        onChanged: (_) => setState(() {
+          if (track) _edited.add(c);
+        }),
         decoration: _decoration(hint),
+      );
+
+  Widget _flag(String label, bool value, ValueChanged<bool> onChanged) => CheckboxListTile(
+        value: value,
+        onChanged: (v) => setState(() => onChanged(v ?? false)),
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        title: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
       );
 
   @override
   Widget build(BuildContext context) {
     final qty = int.tryParse(_qty.text.trim()) ?? 1;
     final totalW = _num(_weight) * (qty < 1 ? 1 : qty);
+    final needsPacking = _fragile || _liquid || _perishable;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -749,34 +846,45 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
           child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Unlisted / Custom Cargo',
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF064E3B))),
+              Text('Add what you are sending',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF064E3B))),
               SizedBox(height: 2),
               Text(
-                'Describe your items and choose approximate size. Declared '
-                'values are checked by driver at pickup.',
+                'Tell us what it is and roughly how big it is. You do not need exact measurements; an estimate '
+                'is fine and the driver checks at pickup.',
                 style: TextStyle(fontSize: 11, color: Color(0xFF065F46), height: 1.35),
               ),
             ],
           ),
         ),
         const SizedBox(height: 10),
+        _fieldLabel('What are you sending? *'),
         TextField(
           controller: _name,
           maxLength: 120,
-          decoration: _decoration('Describe the goods (e.g. clay pots, wooden bench)')
+          decoration: _decoration(widget.twoWheeler ? 'e.g. laptop bag, tiffin box' : 'e.g. clay pots, steel almirah')
               .copyWith(counterText: ''),
         ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final g in widget.twoWheeler ? _kCommonGoodsBike : _kCommonGoodsTruck)
+              ActionChip(
+                label: Text(g, style: const TextStyle(fontSize: 11)),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => _name.text = g),
+              ),
+          ],
+        ),
         const SizedBox(height: 10),
-        _fieldLabel('Quick Size Selection (per unit)'),
+        _fieldLabel(widget.twoWheeler ? 'How big is ONE parcel? * (max 20 kg)' : 'How big is ONE item? * (pick the closest)'),
         Wrap(
           spacing: 6,
           runSpacing: 6,
           children: [
-            for (final e in _kSizePresets.entries)
+            for (final e in _presets.entries)
               ChoiceChip(
                 label: Text(e.value.label, style: const TextStyle(fontSize: 11)),
                 selected: _size == e.key,
@@ -796,91 +904,160 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
             ),
           ),
           const SizedBox(width: 8),
-          Expanded(child: _numField(_weight, 'Approx weight (kg)')),
+          Expanded(child: _numField(_weight, 'Weight of ONE (kg) *')),
         ]),
         if (_num(_weight) > 0)
           Padding(
             padding: const EdgeInsets.only(top: 6),
+            child: Text('Unit: ${_n(_num(_weight))} kg · Total: ${_n((totalW * 10).round() / 10)} kg', style: _hintStyle),
+          ),
+        if (_num(_weight) >= 50)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
             child: Text(
-              'Unit: ${_n(_num(_weight))} kg · Total: ${_n((totalW * 10).round() / 10)} kg',
-              style: _hintStyle,
+              'One unit is 50 kg or more: it may need extra helpers. Use the loading-help option on this booking if it is offered.',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF92400E), height: 1.35),
             ),
           ),
         const SizedBox(height: 10),
-        _fieldLabel('Cargo Photo (Evidence for driver verification)'),
-        if (_photo != null)
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF6EE7B7)),
-              borderRadius: BorderRadius.circular(10),
+        _fieldLabel('Roughly what are these goods worth (all units together)? *'),
+        TextField(
+          controller: _value,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+          onChanged: (_) => setState(() {}),
+          decoration: _decoration('Total value in rupees, e.g. 12000').copyWith(prefixText: '₹ '),
+        ),
+        const SizedBox(height: 8),
+        _fieldLabel('Are these goods...'),
+        _flag('Fragile / breakable', _fragile, (v) => _fragile = v),
+        _flag('A liquid', _liquid, (v) => _liquid = v),
+        _flag('Perishable (food, plants, medicines)', _perishable, (v) => _perishable = v),
+        _flag('Hazardous, flammable, explosive or illegal', _hazardous, (v) => _hazardous = v),
+        if (_hazardous)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text(
+              'We cannot carry hazardous, flammable, explosive or illegal goods.',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.error),
             ),
-            child: Row(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(File(_photo!), width: 44, height: 44, fit: BoxFit.cover),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text('Photo ready',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF047857))),
-              ),
-              IconButton(
-                onPressed: () => setState(() => _photo = null),
-                icon: const Icon(Icons.delete_outline, color: Color(0xFFE11D48), size: 20),
-              ),
-            ]),
-          )
-        else
-          InkWell(
-            onTap: _pickPhoto,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border, width: 1.2),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.photo_camera_outlined, size: 18, color: Color(0xFF059669)),
-                  SizedBox(width: 8),
-                  Text('Upload or snap photo of item',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+        if (needsPacking) ...[
+          const SizedBox(height: 4),
+          _fieldLabel('How are they packed? *'),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final e in _kPacking.entries)
+                ChoiceChip(
+                  label: Text(e.value, style: const TextStyle(fontSize: 11)),
+                  selected: _packing == e.key,
+                  onSelected: (_) => setState(() => _packing = e.key),
+                  selectedColor: AppColors.navy.withValues(alpha: 0.15),
+                ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text('Needed so the driver can load it safely.', style: _hintStyle),
+          ),
+        ],
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: const Text('More details (optional): photo, exact size, notes',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            children: [
+              _fieldLabel('Cargo photo (for driver verification)'),
+              if (_photo != null)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFF6EE7B7)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(File(_photo!), width: 44, height: 44, fit: BoxFit.cover),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text('Photo ready',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF047857))),
+                    ),
+                    IconButton(
+        tooltip: 'Delete',
+                      onPressed: () => setState(() {
+                        _photo = null;
+                        _photoData = null;
+                      }),
+                      icon: const Icon(Icons.delete_outline, color: Color(0xFFE11D48), size: 20),
+                    ),
+                  ]),
+                )
+              else
+                InkWell(
+                  onTap: _pickPhoto,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border, width: 1.2),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.photo_camera_outlined, size: 18, color: Color(0xFF059669)),
+                        SizedBox(width: 8),
+                        Text('Upload or snap photo of item', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 10),
+              _fieldLabel('I know the exact size (cm). Leave blank to use the size chosen above'),
+              Row(children: [
+                Expanded(child: _numField(_l, 'Length')),
+                const SizedBox(width: 6),
+                Expanded(child: _numField(_w, 'Width')),
+                const SizedBox(width: 6),
+                Expanded(child: _numField(_h, 'Height')),
+              ]),
+              const SizedBox(height: 10),
+              _fieldLabel('Goods type (optional)'),
+              DropdownButtonFormField<String>(
+                key: ValueKey(_category),
+                initialValue: _category,
+                isExpanded: true,
+                decoration: _decoration('Other / Not listed'),
+                items: [
+                  const DropdownMenuItem<String>(value: null, child: Text('Other / Not listed')),
+                  for (final n in widget.categoryNames) DropdownMenuItem<String>(value: n, child: Text(n)),
                 ],
+                onChanged: (v) => setState(() => _category = v),
               ),
-            ),
+              const SizedBox(height: 10),
+              _fieldLabel('Special handling (optional)'),
+              TextField(
+                controller: _handling,
+                maxLength: 200,
+                decoration: _decoration('e.g. keep upright, glass top').copyWith(counterText: ''),
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _numField(_l, 'Length (cm)')),
-          const SizedBox(width: 6),
-          Expanded(child: _numField(_w, 'Width (cm)')),
-          const SizedBox(width: 6),
-          Expanded(child: _numField(_h, 'Height (cm)')),
-        ]),
-        const SizedBox(height: 4),
-        CheckboxListTile(
-          value: _fragile,
-          onChanged: (v) => setState(() => _fragile = v ?? false),
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: const Text('Fragile item (needs gentle handling)',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ),
         if (_err != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(_err!,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.error)),
+            child: Text(_err!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.error)),
           ),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -888,8 +1065,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           onPressed: _add,
-          child: const Text('Add Unlisted Goods',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          child: const Text('Add Unlisted Goods', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
         ),
       ],
     );
@@ -903,43 +1079,95 @@ class _CustomLineTile extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFECFDF5).withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF6EE7B7)),
-        ),
-        child: Row(children: [
-          if (line.photoPath != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.file(File(line.photoPath!), width: 32, height: 32, fit: BoxFit.cover),
-              ),
+  Widget build(BuildContext context) {
+    final flags = [
+      if (line.isFragile) 'Fragile',
+      if (line.isLiquid) 'Liquid',
+      if (line.isPerishable) 'Perishable',
+    ];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5).withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF6EE7B7)),
+      ),
+      child: Row(children: [
+        if (line.photoPath != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.file(File(line.photoPath!), width: 32, height: 32, fit: BoxFit.cover),
             ),
-          Expanded(
-            child: Text.rich(TextSpan(children: [
-              TextSpan(
-                text: '${line.quantity}× ${line.customName}',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-              ),
-              TextSpan(
-                text: ' · ${line.weightKg} kg each'
-                    '${line.isFragile ? ' · Fragile' : ''}',
-                style: _hintStyle,
-              ),
-            ])),
           ),
-          IconButton(
-            onPressed: onRemove,
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFE11D48)),
-          ),
-        ]),
-      );
+        Expanded(
+          child: Text.rich(TextSpan(children: [
+            TextSpan(
+              text: '${line.quantity}× ${line.customName}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+            TextSpan(
+              text: ' · ${line.weightKg == null ? '' : _n(line.weightKg!)} kg each'
+                  '${line.declaredValue == null ? '' : ' · ₹${_n(line.declaredValue!)}'}'
+                  '${flags.isEmpty ? '' : ' · ${flags.join(', ')}'}',
+              style: _hintStyle,
+            ),
+          ])),
+        ),
+        IconButton(
+        tooltip: 'Delete',
+          onPressed: onRemove,
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFE11D48)),
+        ),
+      ]),
+    );
+  }
+}
+
+/// "List your goods" for a Part Truck Load or a Packers & Movers booking: the same typed-goods entry the truck and
+/// bike bookings have, kept apart from the catalogue cargo and sent as `declared_goods`. Optional for a move (the
+/// declared value alone is enough); the values listed here count toward the declared value.
+class GtDeclaredGoodsSection extends ConsumerWidget {
+  const GtDeclaredGoodsSection({super.key, required this.partLoad});
+
+  /// Part Truck Load: the listed values ARE the declared value and the listed weight has to match the cargo weight.
+  final bool partLoad;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lines = ref.watch(declaredGoodsProvider);
+    final categories = ref.watch(goodsCategoriesProvider).valueOrNull?.map((c) => c.name).toList() ?? const <String>[];
+    return _card(Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(partLoad ? 'List your goods' : 'List your goods (optional)', style: _titleStyle),
+        const SizedBox(height: 2),
+        Text(
+          partLoad
+              ? 'What you are sending, how many, how heavy and what each is worth. The total value becomes the declared value.'
+              : 'Add valuables or special items so the crew knows about them. Their value counts toward the declared value.',
+          style: _hintStyle,
+        ),
+        const SizedBox(height: 10),
+        _CustomCargoForm(
+          twoWheeler: false,
+          categoryNames: categories,
+          onAdd: (line) => ref.read(declaredGoodsProvider.notifier).state = [...lines, line],
+        ),
+        if (lines.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          for (final l in lines)
+            _CustomLineTile(
+              line: l,
+              onRemove: () => ref.read(declaredGoodsProvider.notifier).state = lines.where((x) => !identical(x, l)).toList(),
+            ),
+        ],
+      ],
+    ));
+  }
 }
 
 /// Extra helpers + add-on services for a Packers & Movers booking (web
@@ -1607,9 +1835,9 @@ class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
               value: loadingHelp,
               onChanged: (v) => ref.read(loadingHelpProvider.notifier).state = v,
             ),
-          // Transit insurance is no longer offered at booking (owner
-          // decision 2026-10-28; the web booking pages dropped the option and
-          // the policy text no longer mentions it), so there is no opt-in here.
+          // Transit insurance is sold again (owner decision, Nov 2026, same as the web): the server says whether it is
+          // offered for this service and on what terms.
+          GtInsuranceSection(declaredValue: widget.declaredValue),
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
@@ -1941,7 +2169,7 @@ class GtPoliciesSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final policies = ref.watch(gtPoliciesProvider(serviceCategory));
+    final policies = ref.watch(gtPoliciesProvider(ref.watch(ptlModeProvider) ? '$serviceCategory#ptl' : serviceCategory));
     final faqs = ref.watch(gtFaqsProvider((category: faqCategory, city: city?.toLowerCase())));
 
     final terms = policies.valueOrNull?.terms ?? const <String>[];

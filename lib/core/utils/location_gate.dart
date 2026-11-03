@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:location/location.dart' as loc;
 
+import '../../features/logistics/domain/logistics_providers.dart' show customerLocationProvider;
 import '../../shared/theme/app_colors.dart';
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 
@@ -99,4 +101,39 @@ Future<void> ensureLocationEnabled(BuildContext context) async {
       ],
     ),
   );
+}
+
+/// "Use my current location" with the explanation the big apps give: if the permission was blocked for good, say why
+/// the location is needed and offer to open the app's settings, instead of silently throwing the customer into Settings.
+/// Returns true when the browsing location was set from the device.
+Future<bool> useCurrentLocationWithHelp(BuildContext context, WidgetRef ref) async {
+  final ok = await ref.read(customerLocationProvider.notifier).detectAndSetCurrentLocation();
+  if (ok || !context.mounted) return ok;
+  if (await Geolocator.checkPermission() != LocationPermission.deniedForever) return false;
+  if (!context.mounted) return false;
+  final open = await showDialog<bool>(
+    context: context,
+    builder: (d) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      icon: const Icon(Icons.location_disabled_rounded, color: AppColors.primary, size: 32),
+      title: const Text('Location permission is off', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+      content: const Text(
+        'We use your location only to show what is available near you and to find the nearest delivery or technician. '
+        'Allow it in the app settings, or search for your place instead.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 13.5, color: AppColors.textSecondary, height: 1.35),
+      ),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        TextButton(onPressed: () => Navigator.of(d).pop(false), child: const Text('Not now')),
+        ElevatedButton(
+          onPressed: () => Navigator.of(d).pop(true),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+          child: const Text('Open settings'),
+        ),
+      ],
+    ),
+  );
+  if (open == true) await Geolocator.openAppSettings();
+  return false;
 }

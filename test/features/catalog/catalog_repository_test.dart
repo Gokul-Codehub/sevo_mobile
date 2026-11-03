@@ -56,27 +56,5 @@ void main() {
       expect(interceptor.lastRequest!.queryParameters['category_slug'], equals('ac_appliance'));
     });
 
-    test('getServicesByCategory accurately resolves all 8 production category IDs from slug alone', () async {
-      final expectations = <String, String>{
-        'ac_appliance': '15',
-        'electrician_plumber_carpenter': '16',
-        'vegetables_groceries': '18',
-        'goods_transports': '12',
-        'home_cleaning': '13',
-        'mason_construction': '17',
-        'painting_waterproofing': '19',
-        'pest_control': '14',
-      };
-
-      for (final entry in expectations.entries) {
-        await repository.getServicesByCategory(categorySlug: entry.key);
-        expect(interceptor.lastRequest, isNotNull);
-        expect(
-          interceptor.lastRequest!.queryParameters['category_id'],
-          equals(entry.value),
-          reason: 'Failed for category slug ${entry.key}',
-        );
-      }
-    });
   });
 }

@@ -78,7 +78,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
           'resend_after': result.resendAfterSeconds.toString(),
         },
       );
-      context.go(uri.toString(), extra: args);
+      context.push(uri.toString(), extra: args);
     }
   }
 
@@ -91,6 +91,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () {
             if (context.canPop()) {

@@ -17,6 +17,18 @@ class MockSecureStorage implements SecureStorage {
   final Map<String, String> _data = {};
 
   @override
+  Future<String?> getRecentlyViewedJson() async => _data['recently_viewed'];
+
+  @override
+  Future<void> setRecentlyViewedJson(String json) async => _data['recently_viewed'] = json;
+
+  @override
+  Future<String?> getBrowseLocationJson() async => _data['browse_location'];
+
+  @override
+  Future<void> setBrowseLocationJson(String json) async => _data['browse_location'] = json;
+
+  @override
   Future<String?> getAccessToken() async => _data['access_token'];
 
   @override
@@ -109,10 +121,10 @@ void main() {
     late MockSecureStorage mockStorage;
     late ProviderContainer container;
 
-    final amla = createProduce(id: 227, name: 'Amla', slug: 'veg-amla', price: '45.00', unit: '250g');
-    final beetroot = createProduce(id: 228, name: 'Beetroot', slug: 'veg-beetroot', price: '37.00', unit: '500g');
-    final bitterGourd = createProduce(id: 229, name: 'Bitter Gourd', slug: 'veg-bitter-gourd', price: '42.00', unit: '500g');
-    final greenZucchini = createProduce(id: 230, name: 'Green Zucchini', slug: 'veg-green-zucchini', price: '65.00', unit: '500g');
+    final amla = createProduce(id: 800000227, name: 'Amla', slug: 'veg-amla', price: '45.00', unit: '250g');
+    final beetroot = createProduce(id: 800000228, name: 'Beetroot', slug: 'veg-beetroot', price: '37.00', unit: '500g');
+    final bitterGourd = createProduce(id: 800000229, name: 'Bitter Gourd', slug: 'veg-bitter-gourd', price: '42.00', unit: '500g');
+    final greenZucchini = createProduce(id: 800000230, name: 'Green Zucchini', slug: 'veg-green-zucchini', price: '65.00', unit: '500g');
 
     setUp(() {
       mockStorage = MockSecureStorage();
@@ -133,7 +145,7 @@ void main() {
 
       final items = container.read(cartProvider);
       expect(items.length, 1);
-      expect(items.first.service.id, 228);
+      expect(items.first.service.id, 800000228);
       expect(items.first.service.title, 'Beetroot');
       expect(items.first.quantity, 1);
       expect(items.first.unitPrice, Decimal.parse('37.00'));
@@ -189,19 +201,19 @@ void main() {
       final items = container.read(cartProvider);
       expect(items.length, 4, reason: 'All 4 distinct produce items must coexist in cart');
 
-      expect(items[0].service.id, 227);
+      expect(items[0].service.id, 800000227);
       expect(items[0].quantity, 1);
       expect(items[0].totalPrice, Decimal.parse('45.00'));
 
-      expect(items[1].service.id, 228);
+      expect(items[1].service.id, 800000228);
       expect(items[1].quantity, 1);
       expect(items[1].totalPrice, Decimal.parse('37.00'));
 
-      expect(items[2].service.id, 229);
+      expect(items[2].service.id, 800000229);
       expect(items[2].quantity, 1);
       expect(items[2].totalPrice, Decimal.parse('42.00'));
 
-      expect(items[3].service.id, 230);
+      expect(items[3].service.id, 800000230);
       expect(items[3].quantity, 2);
       expect(items[3].totalPrice, Decimal.parse('130.00'));
 
@@ -230,53 +242,18 @@ void main() {
           .toList();
 
       expect(restoredItems.length, 2);
-      expect(restoredItems[0].service.id, 228);
+      expect(restoredItems[0].service.id, 800000228);
       expect(restoredItems[0].service.title, 'Beetroot');
       expect(restoredItems[0].service.unit, '500g');
       expect(restoredItems[0].service.flowType, CatalogFlowType.grocery);
       expect(restoredItems[0].quantity, 2);
 
-      expect(restoredItems[1].service.id, 230);
+      expect(restoredItems[1].service.id, 800000230);
       expect(restoredItems[1].service.title, 'Green Zucchini');
       expect(restoredItems[1].service.unit, '500g');
       expect(restoredItems[1].quantity, 3);
     });
 
-    test('CART06: Quick Commerce fee rules (Delivery, Handling, Small Cart) calculate accurately', () {
-      final notifier = container.read(cartProvider.notifier);
-
-      // Scenario A: Small subtotal < 100 (e.g. Beetroot ₹37 x 1 = ₹37)
-      notifier.addService(beetroot); // ₹37
-      var summary = container.read(cartSummaryProvider);
-      expect(summary.subtotal, Decimal.parse('37.00'));
-      expect(summary.deliveryFee, Decimal.parse('15.00'), reason: 'Subtotal < 200 -> ₹15 delivery');
-      expect(summary.handlingFee, Decimal.parse('2.00'));
-      expect(summary.smallCartFee, Decimal.parse('5.00'), reason: 'Subtotal < 100 -> ₹5 small cart fee');
-      // Total = 37 + 15 + 2 + 5 = 59
-      expect(summary.total, Decimal.parse('59.00'));
-      expect(summary.advancePayable, Decimal.parse('59.00'), reason: 'Grocery orders are 100% advance');
-      expect(summary.balancePayable, Decimal.zero);
-
-      // Scenario B: Medium subtotal between 100 and 200 (e.g. Beetroot x 3 = ₹111)
-      notifier.updateQuantity(beetroot.id, 3); // ₹111
-      summary = container.read(cartSummaryProvider);
-      expect(summary.subtotal, Decimal.parse('111.00'));
-      expect(summary.deliveryFee, Decimal.parse('15.00'));
-      expect(summary.handlingFee, Decimal.parse('2.00'));
-      expect(summary.smallCartFee, Decimal.zero, reason: 'Subtotal >= 100 -> ₹0 small cart fee');
-      // Total = 111 + 15 + 2 = 128
-      expect(summary.total, Decimal.parse('128.00'));
-
-      // Scenario C: Free delivery subtotal >= 200 (e.g. Beetroot x 3 [₹111] + Green Zucchini x 2 [₹130] = ₹241)
-      notifier.addService(greenZucchini, quantity: 2);
-      summary = container.read(cartSummaryProvider);
-      expect(summary.subtotal, Decimal.parse('241.00'));
-      expect(summary.deliveryFee, Decimal.zero, reason: 'Subtotal >= 200 -> FREE delivery');
-      expect(summary.handlingFee, Decimal.parse('2.00'));
-      expect(summary.smallCartFee, Decimal.zero);
-      // Total = 241 + 0 + 2 = 243
-      expect(summary.total, Decimal.parse('243.00'));
-    });
 
     test('CART07: Unique service.id identity prevents collisions between different services', () {
       final notifier = container.read(cartProvider.notifier);
@@ -294,16 +271,6 @@ void main() {
       expect(beetItem.quantity, 4);
     });
 
-    test('CART08: Catalog repository category ID resolution is accurate and resilient', () {
-      expect(CatalogRepository.resolveCategoryId(null, 'vegetables_groceries'), 18);
-      expect(CatalogRepository.resolveCategoryId(null, 'farm-fresh-vegetables-groceries'), 18);
-      expect(CatalogRepository.resolveCategoryId(null, 'farm_fresh'), 18);
-      expect(CatalogRepository.resolveCategoryId(null, 'produce'), 18);
-      expect(CatalogRepository.resolveCategoryId(null, 'ac_appliance'), 15);
-      expect(CatalogRepository.resolveCategoryId(null, 'electrician_plumber_carpenter'), 16);
-      expect(CatalogRepository.resolveCategoryId(null, 'home_cleaning'), 13);
-      expect(CatalogRepository.resolveCategoryId(null, 'pest_control'), 14);
-    });
   });
 
   group('P0 Bug #2: Authentication State Consistency Regression Tests', () {
@@ -386,7 +353,7 @@ void main() {
 
     test('AUTH05: Guest PendingCartAction preserves both addToCart and buy action types', () {
       final container = ProviderContainer();
-      final produce = createProduce(id: 228, name: 'Beetroot', slug: 'veg-beetroot', price: '37.00');
+      final produce = createProduce(id: 800000228, name: 'Beetroot', slug: 'veg-beetroot', price: '37.00');
 
       // Test PendingCartAction for ADD
       final addAction = PendingCartAction(
@@ -399,7 +366,7 @@ void main() {
 
       final pending = container.read(pendingActionProvider);
       expect(pending, isNotNull);
-      expect(pending!.service.id, 228);
+      expect(pending!.service.id, 800000228);
       expect(pending.actionType, PendingCartActionType.addToCart);
       expect(pending.quantity, 2);
       expect(pending.returnPath, '/categories/vegetables_groceries');

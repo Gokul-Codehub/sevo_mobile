@@ -179,6 +179,7 @@ class _CouponBottomSheetState extends ConsumerState<CouponBottomSheet> {
                     ),
                   ),
                   IconButton(
+        tooltip: 'Close',
                     icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary),
                     onPressed: () => Navigator.of(context).pop(),

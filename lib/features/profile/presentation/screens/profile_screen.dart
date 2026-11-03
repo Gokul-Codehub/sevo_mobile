@@ -1,3 +1,5 @@
+import '../../../../core/utils/restart_widget.dart';
+import '../../../auth/domain/auth_return.dart';
 import '../../../../core/l10n/locale_controller.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -130,6 +132,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   SizedBox(
                     width: 48,
                     child: IconButton(
+        tooltip: 'Back',
                       icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
                       onPressed: () =>
                           context.canPop() ? context.pop() : context.go('/'),
@@ -168,7 +171,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       _MenuRow(
                         icon: Icons.calendar_month_outlined,
-                        label: 'My Bookings',
+                        label: 'Bookings & Orders',
                         onTap: () => context.push('/bookings'),
                       ),
                       _MenuRow(
@@ -423,7 +426,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             width: double.infinity,
             height: 46,
             child: ElevatedButton(
-              onPressed: () => context.push('/login'),
+              onPressed: () => requireLogin(context, ref),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.navy,
                 shape: RoundedRectangleBorder(
@@ -566,9 +569,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               await ref.read(authProvider.notifier).logout();
-              if (context.mounted) {
-                context.go('/');
-              }
+              // A clean slate for the next person on this phone: cart, selected address and every cached screen.
+              if (context.mounted) RestartWidget.restartApp(context, skipSplash: true);
             },
             child: const Text('Log Out'),
           ),

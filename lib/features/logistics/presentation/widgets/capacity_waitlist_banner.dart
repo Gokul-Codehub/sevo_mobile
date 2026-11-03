@@ -1,10 +1,9 @@
+import '../../../auth/domain/auth_return.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/errors/api_error.dart';
-import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../booking/domain/cart_notifier.dart';
@@ -28,7 +27,7 @@ class _CapacityWaitlistBannerState extends ConsumerState<CapacityWaitlistBanner>
 
   Future<void> _join(String service, String date) async {
     if (!ref.read(isUserAuthenticatedProvider)) {
-      context.push(AppRoutes.login);
+      requireLogin(context, ref);
       return;
     }
     final address = ref.read(selectedAddressProvider)?.formattedAddress ?? '';

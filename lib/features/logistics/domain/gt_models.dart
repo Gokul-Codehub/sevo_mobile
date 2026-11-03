@@ -127,9 +127,9 @@ class GoodsItem extends Equatable {
 
 /// One cargo line sent to quote / evaluate-cargo / booking.
 ///
-/// Either a catalogue item ([itemId]) or an "Other / Not listed" custom line
-/// ([customName] set, with per-unit [weightKg] / [cft]) — same shape the web
-/// GoodsCargoSelectorModal sends.
+/// Either a catalogue item ([itemId]) or an "Other / Not listed" custom line ([customName] set), exactly the shape the
+/// web GoodsCargoSelectorModal sends. A custom line is the customer's own declaration: the server requires its
+/// [declaredValue], its size, and (for fragile / liquid / perishable goods) how it is [packing].
 class CargoLine extends Equatable {
   const CargoLine({
     this.itemId,
@@ -138,8 +138,15 @@ class CargoLine extends Equatable {
     this.weightKg,
     this.cft,
     this.isFragile = false,
+    this.isLiquid = false,
+    this.isPerishable = false,
+    this.packing,
+    this.declaredValue,
+    this.goodsCategoryName,
+    this.specialHandling,
     this.sizeKey,
     this.photoPath,
+    this.photoDataUrl,
     this.lengthCm,
     this.widthCm,
     this.heightCm,
@@ -152,22 +159,48 @@ class CargoLine extends Equatable {
   final double? weightKg;
   final double? cft;
   final bool isFragile;
+  final bool isLiquid;
+  final bool isPerishable;
+
+  /// original_box | cartons | wrapped | pallet | loose
+  final String? packing;
+
+  /// Total value of this line (all units together), in rupees.
+  final double? declaredValue;
+  final String? goodsCategoryName;
+  final String? specialHandling;
   final String? sizeKey;
+
+  /// Local file, for the preview only.
   final String? photoPath;
+
+  /// The same photo as a `data:image/...;base64,` URL, which is what the server stores (under ~2 MB).
+  final String? photoDataUrl;
   final double? lengthCm;
   final double? widthCm;
   final double? heightCm;
 
   bool get isCustom => customName != null;
 
-  Map<String, dynamic> toJson() => isCustom
+  Map<String, dynamic> toJson({bool includePhoto = true}) => isCustom
       ? {
           'quantity': quantity,
           'is_custom': true,
           'name': customName,
           'weight_kg': weightKg,
-          'cft': cft,
+          if (cft != null) 'cft': cft,
           'is_fragile': isFragile,
+          'is_liquid': isLiquid,
+          'is_perishable': isPerishable,
+          if (packing != null) 'packing': packing,
+          if (declaredValue != null) 'declared_value': declaredValue,
+          if (goodsCategoryName != null) 'goods_category': goodsCategoryName,
+          if (specialHandling != null) 'special_handling': specialHandling,
+          if (sizeKey != null) 'size': sizeKey,
+          if (lengthCm != null) 'length_cm': lengthCm,
+          if (widthCm != null) 'width_cm': widthCm,
+          if (heightCm != null) 'height_cm': heightCm,
+          if (includePhoto && photoDataUrl != null) 'photo_url': photoDataUrl,
         }
       : {'item_id': itemId, 'quantity': quantity};
 
@@ -178,8 +211,15 @@ class CargoLine extends Equatable {
         weightKg: weightKg,
         cft: cft,
         isFragile: isFragile,
+        isLiquid: isLiquid,
+        isPerishable: isPerishable,
+        packing: packing,
+        declaredValue: declaredValue,
+        goodsCategoryName: goodsCategoryName,
+        specialHandling: specialHandling,
         sizeKey: sizeKey,
         photoPath: photoPath,
+        photoDataUrl: photoDataUrl,
         lengthCm: lengthCm,
         widthCm: widthCm,
         heightCm: heightCm,
@@ -187,8 +227,8 @@ class CargoLine extends Equatable {
 
   @override
   List<Object?> get props => [
-        itemId, quantity, customName, weightKg, cft, isFragile, sizeKey,
-        photoPath, lengthCm, widthCm, heightCm,
+        itemId, quantity, customName, weightKg, cft, isFragile, isLiquid, isPerishable, packing, declaredValue,
+        goodsCategoryName, specialHandling, sizeKey, photoPath, photoDataUrl, lengthCm, widthCm, heightCm,
       ];
 }
 
@@ -224,6 +264,11 @@ class CargoDeclaration extends Equatable {
         declaredCft: declaredCft ?? this.declaredCft,
       );
 
+  /// Typed ("Other / Not listed") goods: their values add up to the booking's declared value, as on the web.
+  bool get hasCustom => items.any((l) => l.isCustom);
+  double get customValueTotal =>
+      items.where((l) => l.isCustom).fold<double>(0, (t, l) => t + (l.declaredValue ?? 0));
+
   bool get isEmpty =>
       items.isEmpty &&
       goodsCategoryId == null &&
@@ -233,7 +278,8 @@ class CargoDeclaration extends Equatable {
   /// Top-level fields shared by `/logistics/quote/`, `/evaluate-cargo/` and
   /// the booking-create payload (same keys on all three).
   Map<String, dynamic> toPayload() => {
-        if (items.isNotEmpty) 'cargo_items': items.map((e) => e.toJson()).toList(),
+        // No photos here: this also goes to every quote / fitment call; the booking's cart_data carries them.
+        if (items.isNotEmpty) 'cargo_items': items.map((e) => e.toJson(includePhoto: false)).toList(),
         if (goodsCategoryId != null) 'goods_category_id': goodsCategoryId,
         if (declaredWeightKg != null) 'declared_weight_kg': declaredWeightKg,
         if (declaredCft != null) 'declared_cft': declaredCft,
@@ -481,9 +527,10 @@ class GtPolicyTerms extends Equatable {
   List<Object?> get props => [serviceCategory, terms];
 }
 
-/// `GET /logistics/insurance-terms/?declared_value=` — the exact premium that
-/// will be billed. Insurance needs prepaid (online/wallet) payment and is not
-/// offered for instant Packers & Movers.
+/// `GET /logistics/insurance-terms/?service_category=&booking_mode=&declared_value=`: whether transit insurance is sold
+/// for this service and, if so, the exact premium that will be billed with the insurer's exclusions and consent wording.
+/// Prepaid (online / wallet) only. When it cannot be sold, [reason] says why (not_offered | terms_incomplete | expired |
+/// not_yet_valid) and the customer is told their goods will not be insured.
 class InsuranceTerms extends Equatable {
   const InsuranceTerms({
     required this.offered,
@@ -492,6 +539,11 @@ class InsuranceTerms extends Equatable {
     this.ratePercent,
     this.maxLiability,
     this.requiresPrepaid = true,
+    this.reason,
+    this.message,
+    this.exclusions,
+    this.consentText,
+    this.policyReference,
   });
 
   final bool offered;
@@ -500,6 +552,11 @@ class InsuranceTerms extends Equatable {
   final double? ratePercent;
   final double? maxLiability;
   final bool requiresPrepaid;
+  final String? reason;
+  final String? message;
+  final String? exclusions;
+  final String? consentText;
+  final String? policyReference;
 
   factory InsuranceTerms.fromJson(Map<String, dynamic> json) => InsuranceTerms(
         offered: parseBoolOrDefault(json['offered'], false),
@@ -508,10 +565,15 @@ class InsuranceTerms extends Equatable {
         ratePercent: parseDoubleOrNull(json['rate_percent']),
         maxLiability: parseDoubleOrNull(json['max_liability']),
         requiresPrepaid: parseBoolOrDefault(json['requires_prepaid'], true),
+        reason: json['reason']?.toString(),
+        message: json['message']?.toString(),
+        exclusions: json['exclusions']?.toString(),
+        consentText: json['consent_text']?.toString(),
+        policyReference: json['policy_reference']?.toString(),
       );
 
   @override
-  List<Object?> get props => [offered, premium, liabilityCap, ratePercent, maxLiability];
+  List<Object?> get props => [offered, premium, liabilityCap, ratePercent, maxLiability, reason, exclusions, consentText, policyReference];
 }
 
 // ── Light PTL (Part Truck Load, priced per kg) ──────────────────────────────

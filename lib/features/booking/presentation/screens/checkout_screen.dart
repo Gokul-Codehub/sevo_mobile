@@ -1,3 +1,4 @@
+import '../../../auth/domain/auth_return.dart';
 import '../../../../core/analytics/analytics_manager.dart';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
@@ -156,7 +157,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             '[CheckoutScreen] Item is a grocery item: ID ${target.id} ("${target.title}"). Redirecting to /cart...');
         ref.read(cartProvider.notifier).addService(target);
         if (mounted) {
-          context.go('/cart');
+          // Replaces this redirect page, so back goes to wherever the customer came from, not Home.
+          context.openTab('/cart', replace: true);
         }
         return;
       }
@@ -250,7 +252,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               returnPath: AppRoutes.bookingCheckout,
             ),
           );
-      context.push(AppRoutes.login);
+      requireLogin(context, ref);
       return;
     }
 
@@ -1042,6 +1044,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       child: Row(
                         children: [
                           IconButton(
+        tooltip: 'Remove',
                             icon: const Icon(Icons.remove, size: 18),
                             padding: EdgeInsets.zero,
                             constraints:
@@ -1059,6 +1062,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                   fontSize: 14,
                                   color: AppColors.navy)),
                           IconButton(
+        tooltip: 'Add',
                             icon: const Icon(Icons.add, size: 18),
                             padding: EdgeInsets.zero,
                             constraints:
@@ -1415,6 +1419,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           scrolledUnderElevation: 0,
           titleSpacing: 0,
           leading: IconButton(
+        tooltip: 'Back',
             icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
             onPressed: () {
               if (_step > 0) {
@@ -1471,7 +1476,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         // ── Floating bottom bar ──
         bottomNavigationBar: !hasItems
             ? null
-            : Padding(
+            : SafeArea(top: false, child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
@@ -1589,7 +1594,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                   ),
                 ),
-              ),
+              )),
       ),
     );
   }

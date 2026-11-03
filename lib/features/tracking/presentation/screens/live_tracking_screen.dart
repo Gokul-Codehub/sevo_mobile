@@ -302,6 +302,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () => context.goBack(),
         ),
@@ -898,6 +899,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           // number, never a fallback support line.
                           if (technicianPhone != null && technicianPhone.isNotEmpty)
                             IconButton(
+        tooltip: 'Call',
                               onPressed: () => callProfessional(
                                 context,
                                 ref,

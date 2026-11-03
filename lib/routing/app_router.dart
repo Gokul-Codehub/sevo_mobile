@@ -11,7 +11,6 @@ import '../features/addresses/presentation/screens/address_list_screen.dart';
 import '../features/auth/domain/auth_models.dart';
 import '../features/auth/presentation/screens/auth_prompt_screen.dart';
 import '../features/auth/presentation/screens/location_access_screen.dart';
-import '../features/auth/presentation/screens/onboarding_screen.dart';
 import '../features/auth/presentation/screens/otp_verify_screen.dart';
 import '../features/auth/presentation/screens/phone_auth_screen.dart';
 import '../features/auth/presentation/screens/profile_completion_screen.dart';
@@ -66,7 +65,6 @@ import '../shared/widgets/status_page.dart';
 // ── Route path constants ────────────────────────────────────────────────────
 abstract final class AppRoutes {
   static const String splash = '/splash';
-  static const String onboarding = '/onboarding';
   static const String locationAccess = '/location-access';
   static const String authPrompt = '/auth-prompt';
   static const String home = '/';
@@ -178,11 +176,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.splash,
         name: 'splash',
         builder: (context, state) => const SplashScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.onboarding,
-        name: 'onboarding',
-        builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
         path: AppRoutes.locationAccess,
@@ -444,79 +437,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
 
-          // ── Address routes ────────────────────────────────────────────────
-          GoRoute(
-            path: AppRoutes.addresses,
-            name: 'addresses',
-            builder: (context, state) {
-              final selectMode = state.uri.queryParameters['select'] == 'true';
-              return AddressListScreen(isSelectionMode: selectMode);
-            },
-          ),
-          GoRoute(
-            path: AppRoutes.addAddress,
-            name: 'add-address',
-            builder: (context, state) => const AddEditAddressScreen(),
-          ),
-          GoRoute(
-            path: AppRoutes.editAddress,
-            name: 'edit-address',
-            builder: (context, state) {
-              final extra = state.extra;
-              return AddEditAddressScreen(
-                initialAddress: extra is Address ? extra : null,
-              );
-            },
-          ),
-
-          // ── Checkout ──────────────────────────────────────────────────────
-          GoRoute(
-            path: AppRoutes.bookingCheckout,
-            name: 'checkout',
-            builder: (context, state) {
-              final serviceSlug = state.uri.queryParameters['service'];
-              final extra = state.extra;
-              return CheckoutScreen(
-                initialServiceSlug: serviceSlug,
-                initialService: extra is ServiceItem ? extra : null,
-              );
-            },
-          ),
-          GoRoute(
-            path: AppRoutes.acInspection,
-            name: 'ac-inspection',
-            builder: (context, state) => const AcInspectionScreen(),
-          ),
-          GoRoute(
-            path: AppRoutes.goodsTransportBooking,
-            name: 'goods-transport-booking',
-            builder: (context, state) {
-              // Updated 2026-09-20: this screen no longer books a single
-              // tapped ServiceItem/package — it's the consolidated Goods &
-              // Transport flow (pickup, drop-on-map, date/slot, vehicle
-              // category + tier, live fare) — so no extra is required at
-              // all. An optional Category is still accepted (from
-              // CategoryDetailScreen's redirect) purely for page branding.
-              final extra = state.extra;
-              final catParam = state.uri.queryParameters['category'];
-              final initialVehicleCat = switch (catParam) {
-                'truck' => LogisticsVehicleCategory.truck,
-                'two_wheeler' || 'two-wheeler' => LogisticsVehicleCategory.twoWheeler,
-                'packers_movers' || 'packers-movers' => LogisticsVehicleCategory.packersMovers,
-                _ => null,
-              };
-              // Server-controlled kill switch / module maintenance (flag "goods_transport").
-              return FeatureGuard(
-                flag: 'goods_transport',
-                label: 'Goods & Transport',
-                child: GoodsTransportBookingScreen(
-                  category: extra is Category ? extra : null,
-                  initialVehicleCategory: initialVehicleCat,
-                ),
-              );
-            },
-          ),
-
           GoRoute(
             path: AppRoutes.bookingSuccess,
             name: 'booking-success',
@@ -543,21 +463,96 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               );
             },
           ),
-          GoRoute(
-            path: AppRoutes.payment,
-            name: 'payment',
-            builder: (context, state) {
-              final bookingIdString = state.uri.queryParameters['booking'] ?? '0';
-              final bookingId = int.tryParse(bookingIdString) ?? 0;
-              final type = state.uri.queryParameters['type'] ?? 'advance';
-              return PaymentScreen(
-                bookingId: bookingId,
-                paymentType: type,
-                fromCheckout: state.uri.queryParameters['from'] == 'checkout',
-              );
-            },
-          ),
         ],
+      ),
+
+      // ── Task flows: OUTSIDE the shell, so no bottom bar ───────────────────────
+      // Picking / adding an address, checkout, payment and the Goods & Transport and AC inspection
+      // booking forms are tasks to finish, not places to browse. They open above the shell (go_router only
+      // allows that for top-level routes), so a tab tap cannot abandon a half-done task and the first-launch
+      // location step stays a closed flow. Browsing screens stay inside the shell and keep the bar.
+      GoRoute(
+        path: AppRoutes.addresses,
+        name: 'addresses',
+        builder: (context, state) {
+          final selectMode = state.uri.queryParameters['select'] == 'true';
+          return AddressListScreen(isSelectionMode: selectMode);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.addAddress,
+        name: 'add-address',
+        builder: (context, state) => const AddEditAddressScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.editAddress,
+        name: 'edit-address',
+        builder: (context, state) {
+          final extra = state.extra;
+          return AddEditAddressScreen(
+            initialAddress: extra is Address ? extra : null,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.bookingCheckout,
+        name: 'checkout',
+        builder: (context, state) {
+          final serviceSlug = state.uri.queryParameters['service'];
+          final extra = state.extra;
+          return CheckoutScreen(
+            initialServiceSlug: serviceSlug,
+            initialService: extra is ServiceItem ? extra : null,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.acInspection,
+        name: 'ac-inspection',
+        builder: (context, state) => const AcInspectionScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.goodsTransportBooking,
+        name: 'goods-transport-booking',
+        builder: (context, state) {
+          // Updated 2026-09-20: this screen no longer books a single
+          // tapped ServiceItem/package — it's the consolidated Goods &
+          // Transport flow (pickup, drop-on-map, date/slot, vehicle
+          // category + tier, live fare) — so no extra is required at
+          // all. An optional Category is still accepted (from
+          // CategoryDetailScreen's redirect) purely for page branding.
+          final extra = state.extra;
+          final catParam = state.uri.queryParameters['category'];
+          final initialVehicleCat = switch (catParam) {
+            'truck' => LogisticsVehicleCategory.truck,
+            'two_wheeler' || 'two-wheeler' => LogisticsVehicleCategory.twoWheeler,
+            'packers_movers' || 'packers-movers' => LogisticsVehicleCategory.packersMovers,
+            _ => null,
+          };
+          // Server-controlled kill switch / module maintenance (flag "goods_transport").
+          return FeatureGuard(
+            flag: 'goods_transport',
+            label: 'Goods & Transport',
+            child: GoodsTransportBookingScreen(
+              category: extra is Category ? extra : null,
+              initialVehicleCategory: initialVehicleCat,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.payment,
+        name: 'payment',
+        builder: (context, state) {
+          final bookingIdString = state.uri.queryParameters['booking'] ?? '0';
+          final bookingId = int.tryParse(bookingIdString) ?? 0;
+          final type = state.uri.queryParameters['type'] ?? 'advance';
+          return PaymentScreen(
+            bookingId: bookingId,
+            paymentType: type,
+            fromCheckout: state.uri.queryParameters['from'] == 'checkout',
+          );
+        },
       ),
 
       // ── Auth flow (no bottom nav — pre-authentication) ────────────────────

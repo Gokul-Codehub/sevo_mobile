@@ -339,11 +339,13 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
                     child: Text('How many ACs?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.navy)),
                   ),
                   IconButton(
+        tooltip: 'Delete',
                     onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
                     icon: const Icon(Icons.remove_circle_outline_rounded),
                   ),
                   Text('$_qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                   IconButton(
+        tooltip: 'Add',
                     onPressed: _qty < 50 ? () => setState(() => _qty++) : null,
                     icon: const Icon(Icons.add_circle_outline_rounded),
                   ),
@@ -384,7 +386,8 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
                     ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(_photo!, width: 64, height: 64, fit: BoxFit.cover)),
                     const SizedBox(width: 12),
                     const Expanded(child: Text('Photo attached', style: TextStyle(fontWeight: FontWeight.w700))),
-                    IconButton(onPressed: () => setState(() { _photo = null; _photoName = null; }), icon: const Icon(Icons.close_rounded)),
+                    IconButton(
+        tooltip: 'Close',onPressed: () => setState(() { _photo = null; _photoName = null; }), icon: const Icon(Icons.close_rounded)),
                   ],
                 ),
             ],

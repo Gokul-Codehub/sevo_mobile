@@ -36,7 +36,7 @@ void main() {
   });
 
   final sampleProduce = ServiceItem(
-    id: 228,
+    id: 800000228,
     categoryId: 18,
     title: 'Beetroot',
     slug: 'veg-beetroot',
@@ -181,7 +181,7 @@ void main() {
 
       final pending = container.read(pendingActionProvider);
       expect(pending, isNotNull);
-      expect(pending!.service.id, equals(228));
+      expect(pending!.service.id, equals(800000228));
       expect(pending.actionType, equals(PendingCartActionType.addToCart));
       expect(pending.quantity, equals(2));
       expect(pending.returnPath, equals('/categories/vegetables_groceries'));

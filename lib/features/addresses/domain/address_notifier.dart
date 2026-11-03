@@ -1,9 +1,49 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error.dart';
+import '../../../core/storage/secure_storage.dart';
 import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../data/address_repository.dart';
 import 'address_models.dart';
+
+/// What the customer last chose to deliver to, as remembered on the phone: a saved address ([id]), or a place they
+/// searched / detected ([placeChosen] with no id). Nothing remembered means "use the default address".
+class LastDeliveryChoice {
+  const LastDeliveryChoice({this.id, this.placeChosen = false});
+  final int? id;
+  final bool placeChosen;
+}
+
+LastDeliveryChoice parseLastDeliveryChoice(String? raw) {
+  if (raw == null || raw.isEmpty) return const LastDeliveryChoice();
+  try {
+    final m = jsonDecode(raw);
+    if (m is! Map || !m.containsKey('id')) return const LastDeliveryChoice();
+    final id = m['id'];
+    return id is int ? LastDeliveryChoice(id: id) : const LastDeliveryChoice(placeChosen: true);
+  } catch (_) {
+    return const LastDeliveryChoice();
+  }
+}
+
+/// Picks the address to start with: the one used last if it still exists, else the default, else the first; and
+/// nothing at all when the customer last chose a searched / detected place instead of a saved address.
+Address? startingAddress(List<Address> all, LastDeliveryChoice last) {
+  if (all.isEmpty || last.placeChosen) return null;
+  final byLast = last.id == null ? null : all.where((a) => a.id == last.id).firstOrNull;
+  return byLast ?? all.firstWhere((a) => a.isDefault, orElse: () => all.first);
+}
+
+/// The single way to change what we deliver to from the UI: sets the address (null = a searched / detected place is
+/// in use instead) and remembers the choice for the next launch.
+Future<void> chooseDeliveryAddress(WidgetRef ref, Address? address) async {
+  ref.read(selectedAddressProvider.notifier).state = address;
+  try {
+    await ref.read(secureStorageProvider).setSelectedAddressJson(jsonEncode({'id': address?.id}));
+  } catch (_) {}
+}
 
 /// State notifier for customer addresses list.
 class AddressListNotifier extends AsyncNotifier<List<Address>> {
@@ -39,6 +79,10 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     // customer had just signed in.
     final isAuthenticated = ref.watch(isUserAuthenticatedProvider);
     if (!isAuthenticated) return const [];
+    // Remember every change of the selected address (address pickers elsewhere set the provider directly).
+    ref.listen<Address?>(selectedAddressProvider, (prev, next) {
+      ref.read(secureStorageProvider).setSelectedAddressJson(jsonEncode({'id': next?.id})).catchError((_) {});
+    });
     return _fetchAddresses();
   }
 
@@ -49,12 +93,17 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     return switch (result) {
       Success(:final data) => () {
           if (data.isNotEmpty) {
-            Future.microtask(() {
+            Future.microtask(() async {
               final currentSelected = ref.read(selectedAddressProvider);
-              if (currentSelected == null || !data.any((a) => a.id == currentSelected.id)) {
-                final defaultAddr = data.firstWhere((a) => a.isDefault, orElse: () => data.first);
-                ref.read(selectedAddressProvider.notifier).state = defaultAddr;
-              }
+              if (currentSelected != null && data.any((a) => a.id == currentSelected.id)) return;
+              // Like Swiggy / Zomato: start from what the customer used last, not always the default.
+              String? raw;
+              try {
+                raw = await ref.read(secureStorageProvider).getSelectedAddressJson();
+              } catch (_) {}
+              if (ref.read(selectedAddressProvider) != null) return; // chosen while we were reading
+              final start = startingAddress(data, parseLastDeliveryChoice(raw));
+              if (start != null) ref.read(selectedAddressProvider.notifier).state = start;
             });
           }
           return data;

@@ -1,3 +1,4 @@
+import '../../core/navigation/safe_back.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,7 +47,7 @@ class GoToCartPill extends StatelessWidget {
     );
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => push ? context.push('/cart') : context.go('/cart'),
+      onTap: () => context.openTab('/cart'),
       child: expand ? SizedBox(width: double.infinity, child: pill) : pill,
     );
   }

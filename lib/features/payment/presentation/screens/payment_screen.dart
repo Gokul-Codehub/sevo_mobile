@@ -224,6 +224,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: AppColors.navy, size: 20),
           onPressed: _leave,

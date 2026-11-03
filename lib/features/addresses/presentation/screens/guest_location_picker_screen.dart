@@ -1,3 +1,4 @@
+import '../../../../core/utils/location_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,7 +55,7 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
     setState(() => _busy = true);
     var detected = false;
     try {
-      detected = await ref.read(customerLocationProvider.notifier).detectAndSetCurrentLocation(openSettingsIfBlocked: true);
+      detected = await useCurrentLocationWithHelp(context, ref);
     } catch (_) {}
     if (!mounted) return;
     setState(() => _busy = false);
@@ -82,22 +83,29 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
     double? lat;
     double? lng;
     try {
-      // Best effort: turn what was typed into coordinates so the app can
-      // check serviceability for that exact place.
+      // The typed place has to become real coordinates: serviceability and delivery are checked against them.
       final hits = await locationFromAddress('$label, India');
       if (hits.isNotEmpty) {
         lat = hits.first.latitude;
         lng = hits.first.longitude;
       }
     } catch (_) {}
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (lat == null || lng == null) {
+      AppToast.show(
+        context,
+        "We couldn't find that place. Check the address and pincode, or use your current location.",
+        type: AppToastType.error,
+      );
+      return;
+    }
     ref.read(customerLocationProvider.notifier).setManualLocation(
           label,
           pin,
           latitude: lat,
           longitude: lng,
         );
-    if (!mounted) return;
-    setState(() => _busy = false);
     context.pop(true);
   }
 

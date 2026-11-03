@@ -8,6 +8,7 @@ import '../../../core/errors/api_error.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
 import '../../addresses/domain/address_notifier.dart' show selectedAddressProvider;
+import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../../logistics/domain/logistics_providers.dart' show customerLocationProvider;
 import '../domain/catalog_models.dart';
 import 'basket_models.dart';
@@ -839,21 +840,40 @@ final marketplaceCatalogRepositoryProvider = Provider<MarketplaceCatalogReposito
 
 /// The point the customer wants things delivered to: the address they picked, else the detected / typed location.
 class DeliveryPoint {
-  const DeliveryPoint({this.lat, this.lng, this.addressId});
+  const DeliveryPoint({this.lat, this.lng, this.addressId, this.label = '', this.pincode = ''});
   final double? lat;
   final double? lng;
   final int? addressId;
 
+  /// What the location pill shows; empty when no location is known yet ("Select location").
+  final String label;
+  final String pincode;
+
   String get key => '${lat?.toStringAsFixed(4)},${lng?.toStringAsFixed(4)},$addressId';
 }
 
+/// The ONE answer to "where are we delivering?": what the pill shows, what the delivery zone is checked against and
+/// what the catalogue is filtered by. A saved address (signed in) wins, else the place chosen / detected on the phone.
 final deliveryPointProvider = Provider<DeliveryPoint>((ref) {
-  final address = ref.watch(selectedAddressProvider);
+  final signedIn = ref.watch(isUserAuthenticatedProvider);
+  final address = signedIn ? ref.watch(selectedAddressProvider) : null;
   if (address != null) {
-    return DeliveryPoint(lat: address.latitude, lng: address.longitude, addressId: address.id);
+    final line = address.addressLine1.isNotEmpty ? address.addressLine1 : address.city;
+    return DeliveryPoint(
+      lat: address.latitude,
+      lng: address.longitude,
+      addressId: address.id,
+      label: '${address.addressType.toUpperCase()}: $line',
+      pincode: address.postalCode,
+    );
   }
   final loc = ref.watch(customerLocationProvider);
-  return DeliveryPoint(lat: loc.latitude, lng: loc.longitude);
+  return DeliveryPoint(
+    lat: loc.latitude,
+    lng: loc.longitude,
+    label: loc.hasLocation ? loc.address : '',
+    pincode: loc.pincode,
+  );
 });
 
 /// Which warehouse (if any) serves [deliveryPointProvider]. Cached per delivery point; fails open to `unknown`.

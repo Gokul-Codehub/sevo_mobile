@@ -25,9 +25,18 @@ class RestartWidget extends StatefulWidget {
 
   /// Call from anywhere under this widget (e.g. a `RefreshIndicator`'s
   /// `onRefresh`) to trigger the full reload.
-  static void restartApp(BuildContext context) {
+  ///
+  /// [skipSplash] reopens straight on Home (a logout / session reset should not replay the launch splash) and
+  /// [notice] is shown once on the screen that opens (for example "Your session has expired").
+  static void restartApp(BuildContext context, {bool skipSplash = false, String? notice}) {
+    skipSplashOnce = skipSplash;
+    noticeAfterRestart = notice;
     context.findAncestorStateOfType<_RestartWidgetState>()?._restart();
   }
+
+  /// Read-and-clear by the splash screen / Home after a restart.
+  static bool skipSplashOnce = false;
+  static String? noticeAfterRestart;
 
   @override
   State<RestartWidget> createState() => _RestartWidgetState();

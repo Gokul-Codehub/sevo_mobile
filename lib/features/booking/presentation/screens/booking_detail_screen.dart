@@ -60,6 +60,7 @@ class BookingDetailScreen extends ConsumerWidget {
         title: Text((booking?.isGroceryBooking ?? false) ? 'Order Details' : 'Booking Details'),
         actions: [
           IconButton(
+        tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.refresh(bookingDetailProvider(bookingId)),
           ),

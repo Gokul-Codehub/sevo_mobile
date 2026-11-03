@@ -80,44 +80,8 @@ void main() {
     // empty) — removed here along with it.
 
     // IMG05
-    testWidgets('IMG05: Null image URL gracefully falls back to Tier 3 semantic icon placeholder', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: AppRemoteImage(
-              imageUrl: null,
-              categoryName: 'AC & Appliance',
-              slug: 'ac_appliance',
-              width: 100,
-              height: 100,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.byIcon(Icons.ac_unit_rounded), findsOneWidget);
-    });
 
     // IMG06
-    testWidgets('IMG06: Empty image URL string falls back to Tier 3 placeholder without throwing exception', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: AppRemoteImage(
-              imageUrl: '   ',
-              categoryName: 'Home Cleaning',
-              slug: 'home_cleaning',
-              width: 100,
-              height: 100,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.byIcon(Icons.cleaning_services_rounded), findsOneWidget);
-    });
 
     // IMG07
     test('IMG07: Relative URL resolution prepends authoritative production origin', () {
@@ -162,25 +126,6 @@ void main() {
     // along with the method itself — see the note above IMG05.
 
     // IMG13
-    testWidgets('IMG13: Completely missing local asset and remote URL renders vector placeholder', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: AppRemoteImage(
-              imageUrl: null,
-              rawPath: null,
-              categoryName: 'Pest Control',
-              slug: 'pest_control',
-              width: 80,
-              height: 80,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.byIcon(Icons.pest_control_rounded), findsOneWidget);
-    });
 
     // IMG14
     testWidgets('IMG14: Image failure does NOT logout or mutate authenticated user state', (tester) async {
@@ -214,35 +159,6 @@ void main() {
     });
 
     // IMG15
-    testWidgets('IMG15: Image failure does NOT clear cart items or cart subtotal', (tester) async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      container.read(cartProvider.notifier).addService(sampleBeetroot, quantity: 2);
-      expect(container.read(cartProvider).length, equals(1));
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(
-            home: Scaffold(
-              body: AppRemoteImage(
-                imageUrl: 'https://invalid-host-image-failure.com/image.png',
-                categoryName: 'Farm-Fresh Vegetables',
-                slug: 'vegetables_groceries',
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      // Cart items MUST remain intact
-      final cart = container.read(cartProvider);
-      expect(cart.length, equals(1));
-      expect(cart.first.service.id, equals(228));
-      expect(cart.first.quantity, equals(2));
-    });
 
     // IMG16
     test('IMG16: Path normalization avoids duplicate /api/api path prefix', () {

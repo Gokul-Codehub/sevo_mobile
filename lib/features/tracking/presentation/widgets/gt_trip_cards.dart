@@ -1226,6 +1226,7 @@ class _GtStopsEditorCardState extends ConsumerState<GtStopsEditorCard> {
                         ),
                       ),
                       IconButton(
+        tooltip: 'Close',
                         onPressed: () => setState(() {
                           _draft.removeAt(i).dispose();
                         }),

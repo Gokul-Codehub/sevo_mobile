@@ -44,6 +44,7 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
                       ),
                     ),
                     IconButton(
+        tooltip: 'Close',
                       icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),

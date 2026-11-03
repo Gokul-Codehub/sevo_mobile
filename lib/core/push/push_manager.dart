@@ -292,6 +292,9 @@ class _PushGateState extends ConsumerState<PushGate> {
       final manager = ref.read(pushManagerProvider);
       if (next && previous != true) {
         unawaited(manager.onSignedIn());
+        // Now that the customer has an account (so bookings and orders to be told about), ask to allow notifications.
+        // A moment later, so it does not land on top of the sign-in screen's own transition.
+        unawaited(Future<void>.delayed(const Duration(milliseconds: 1500), () => NotificationService.instance.requestPermission()));
         final pending = PendingLink.take();
         final context = rootNavigatorKey.currentContext;
         if (pending != null && context != null) {

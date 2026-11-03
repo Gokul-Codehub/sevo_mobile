@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/storage/secure_storage.dart';
+import '../../../../core/utils/location_gate.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
-import '../../../logistics/domain/logistics_providers.dart';
 import '../../../../shared/utils/app_toast.dart';
 
 /// Screen 3: Location Access
@@ -32,6 +33,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
   /// into the very first run.
   void _proceedFromLocation() {
     if (!mounted) return;
+    ref.read(secureStorageProvider).setOnboardingSeen();
     final isAuthenticated = ref.read(isUserAuthenticatedProvider);
     context.go(isAuthenticated ? AppRoutes.home : AppRoutes.authPrompt);
   }
@@ -40,8 +42,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
     setState(() => _isLoadingGps = true);
     var detected = false;
     try {
-      final notifier = ref.read(customerLocationProvider.notifier);
-      detected = await notifier.detectAndSetCurrentLocation(openSettingsIfBlocked: true);
+      detected = await useCurrentLocationWithHelp(context, ref);
     } catch (_) {
       // Fallback is handled safely inside notifier
     }
@@ -120,6 +121,7 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                             child: InkWell(
                               customBorder: const CircleBorder(),
                               onTap: () {
+                                ref.read(secureStorageProvider).setOnboardingSeen();
                                 if (context.canPop()) {
                                   context.pop();
                                 } else {

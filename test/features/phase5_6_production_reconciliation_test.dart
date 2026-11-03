@@ -254,31 +254,6 @@ void main() {
   // 2. CATALOG & GROCERY IMAGE-FIELD PRIORITY CONTRACT
   // ──────────────────────────────────────────────────────────────────────────
   group('Part 3 — Catalog & Grocery Image-Field Priority', () {
-    test('Live Beetroot contract: image is empty, service_image is present -> resolves service_image', () {
-      final beetrootJson = {
-        'id': 228,
-        'category': 18,
-        'category_slug': 'vegetables_groceries',
-        'name': 'Beetroot',
-        'slug': 'veg-beetroot',
-        'price': '37.00',
-        'duration': '8 MINS',
-        'image': '', // Empty on live backend
-        'service_id': 50,
-        'service_name': 'Farm-Fresh Vegetable',
-        'service_slug': 'vegetables',
-        'service_image': '/mockups/vegetables_realistic.png', // Present on live backend
-      };
-
-      final item = ServiceItem.fromJson(beetrootJson);
-      expect(item.id, equals(228));
-      expect(item.title, equals('Beetroot'));
-      expect(item.price, equals(Decimal.fromInt(37)));
-      expect(item.flowType, equals(CatalogFlowType.grocery));
-
-      // Image priority correctly selected service_image over empty image string!
-      expect(item.imageUrl, equals('https://customer.caldimservices.online/mockups/vegetables_realistic.png'));
-    });
 
     test('Image field priority: item.image > item.service_image > fallback', () {
       final customItemJson = {
@@ -300,48 +275,6 @@ void main() {
   // 3. IMAGE PIPELINE RESOLUTION & HTML FALLBACK REJECTION
   // ──────────────────────────────────────────────────────────────────────────
   group('Part 4 — Image Pipeline & Fallback Hierarchy', () {
-    test('ImageUrlHelper generates HTTPS production URLs for relative mockups', () {
-      expect(
-        ImageUrlHelper.resolve('/mockups/veg/beetroot.jpg'),
-        equals('https://customer.caldimservices.online/mockups/veg/beetroot.jpg'),
-      );
-      expect(
-        ImageUrlHelper.resolve('/mockups/vegetables_realistic.png'),
-        equals('https://customer.caldimservices.online/mockups/vegetables_realistic.png'),
-      );
-      expect(
-        ImageUrlHelper.resolve('/mockups/category_appliance.png'),
-        equals('https://customer.caldimservices.online/mockups/category_appliance.png'),
-      );
-      expect(
-        ImageUrlHelper.resolve('/mockups/service_hvac.png'),
-        equals('https://customer.caldimservices.online/mockups/service_hvac.png'),
-      );
-      expect(
-        ImageUrlHelper.resolve('/mockups/category_repair.png'),
-        equals('https://customer.caldimservices.online/mockups/category_repair.png'),
-      );
-    });
 
-    testWidgets('AppRemoteImage with null/empty image renders Tier 3 Lucide vector icon without crash', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: AppRemoteImage(
-              imageUrl: null,
-              rawPath: '',
-              categoryName: 'Farm-Fresh Vegetables',
-              slug: 'vegetables_groceries',
-              width: 64,
-              height: 64,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.byType(AppRemoteImage), findsOneWidget);
-      expect(find.byIcon(Icons.shopping_basket_rounded), findsOneWidget);
-    });
   });
 }

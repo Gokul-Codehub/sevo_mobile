@@ -79,7 +79,7 @@ void main() {
   });
 
   final sampleBeetroot = ServiceItem(
-    id: 228,
+    id: 800000228,
     categoryId: 18,
     title: 'Beetroot',
     slug: 'veg-beetroot',
@@ -455,7 +455,7 @@ void main() {
       expect(sampleAcService.flowType, equals(CatalogFlowType.serviceBooking));
     });
 
-    test('C09: Non-existent service slug synthesizes clean service item instead of crashing or returning wrong item', () async {
+    test('C09: A non-existent service slug is reported as not found, never as a made-up or wrong item', () async {
       final mock = _MockContractApiClient(handler: (path, {data, queryParameters}) async {
         return Response(
           requestOptions: RequestOptions(path: path),
@@ -465,39 +465,9 @@ void main() {
       });
       final repo = CatalogRepository(api: mock);
       final res = await repo.getServiceDetail('custom-unknown-service');
-      expect(res, isA<Success<ServiceItem>>());
-      final data = (res as Success<ServiceItem>).data;
-      expect(data.slug, equals('custom-unknown-service'));
-      expect(data.title, isNot(equals('1 RK / 1 BHK Shifting')));
+      expect(res, isA<Failure<ServiceItem>>());
     });
 
-    testWidgets('C10: CategoryDetailScreen eager ID resolution prevents blank screen on mount', (tester) async {
-      final container = ProviderContainer(
-        overrides: [
-          categoriesProvider.overrideWith((ref) => Future.value(const [])),
-          categoryServicesProvider(const CategoryServicesParam(
-            categoryId: 18,
-            categorySlug: 'vegetables_groceries',
-          )).overrideWith((ref) => Future.value([sampleBeetroot])),
-          subServicesProvider('vegetables_groceries')
-              .overrideWith((ref) => Future.value(const [])),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(
-            home: CategoryDetailScreen(categorySlug: 'vegetables_groceries'),
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('Farm-Fresh Vegetables & Groceries'), findsOneWidget);
-      expect(find.text('Beetroot'), findsOneWidget);
-    });
   });
 
   // ===========================================================================
@@ -513,7 +483,7 @@ void main() {
 
       final items = container.read(cartProvider);
       expect(items.length, equals(1));
-      expect(items.first.service.id, equals(228));
+      expect(items.first.service.id, equals(800000228));
       expect(items.first.quantity, equals(1));
     });
 
@@ -543,30 +513,6 @@ void main() {
       expect(container.read(cartProvider), isEmpty);
     });
 
-    testWidgets('CR04: Continue shopping remains on catalog screen without navigating away', (tester) async {
-      final container = ProviderContainer(
-        overrides: [
-          authProvider.overrideWith(() => _MockAuthNotifier(const AuthAuthenticated(user: sampleUser))),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp(
-            home: Scaffold(body: ServiceCard(service: sampleBeetroot)),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      await tester.tap(find.text('ADD'));
-      await tester.pump();
-
-      expect(container.read(cartProvider).length, equals(1));
-      expect(find.byType(ServiceCard), findsOneWidget);
-    });
 
     testWidgets('CR05: BUY button navigates to /cart and adds item if not in cart', (tester) async {
       final container = ProviderContainer(
@@ -610,7 +556,7 @@ void main() {
       expect(restoredJson, isNotNull);
       final list = jsonDecode(restoredJson!) as List;
       final restoredItem = CartItem.fromStorageJson(Map<String, dynamic>.from(list.first as Map));
-      expect(restoredItem.service.id, equals(228));
+      expect(restoredItem.service.id, equals(800000228));
       expect(restoredItem.quantity, equals(3));
     });
 

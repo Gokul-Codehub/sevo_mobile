@@ -1,3 +1,5 @@
+import 'package:geocoding/geocoding.dart';
+import '../domain/gt_assist.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,49 +23,39 @@ class LogisticsRepository {
     double? longitude,
     String? serviceSlug,
   }) async {
-    try {
-      // Resolve coordinates (default to Hosur Central Hub if only postal code provided)
-      double lat = latitude ?? 12.754598;
-      double lng = longitude ?? 77.834477;
-      if (latitude == null && longitude == null) {
-        if (postalCode.startsWith('560')) {
-          lat = 12.9716;
-          lng = 77.5946;
-        } else {
-          lat = 12.754598;
-          lng = 77.834477;
-        }
+    // Real coordinates only. A pincode on its own is turned into a point by geocoding; if even that is not possible
+    // the honest answer is "could not check". It used to substitute the Hosur hub (or Bengaluru for 560xxx), which
+    // judged one place by another's coordinates, and to answer "available" whenever the server could not be reached.
+    var lat = latitude;
+    var lng = longitude;
+    if (lat == null || lng == null) {
+      final pin = postalCode.trim();
+      if (pin.length == 6) {
+        try {
+          final hits = await locationFromAddress('$pin, India');
+          if (hits.isNotEmpty) {
+            lat = hits.first.latitude;
+            lng = hits.first.longitude;
+          }
+        } catch (_) {}
       }
+    }
+    if (lat == null || lng == null) return Success(ServiceabilityResult.couldNotCheck());
 
+    try {
       final payload = <String, dynamic>{
         'lat': lat,
         'lng': lng,
-        if (serviceSlug != null && serviceSlug.trim().isNotEmpty)
-          'service_slug': _normalizeServiceSlug(serviceSlug),
+        if (serviceSlug != null && serviceSlug.trim().isNotEmpty) 'service_slug': _normalizeServiceSlug(serviceSlug),
       };
-
-      final response = await api.post(
-        '/settings/service-zones/check/',
-        data: payload,
-      );
+      final response = await api.post('/settings/service-zones/check/', data: payload);
       return ResponseNormalizer.extract(
         response,
-        (data) => ServiceabilityResult.fromJson(
-          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
-        ),
+        (data) => ServiceabilityResult.fromJson(data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{}),
       );
     } on Exception {
-      // Fail-open gracefully if service zone endpoint is temporarily unreachable
-      // matching web reference implementation in LandingPage.jsx:1072-1075
-      return const Success(
-        ServiceabilityResult(
-          isServiceable: true,
-          inZone: true,
-          openAccess: true,
-          message: 'Service is available in your area',
-          hubName: 'Hosur Hub',
-        ),
-      );
+      // Unreachable or refused (the server answers 503 when it cannot verify): not a "yes", and not a block either.
+      return Success(ServiceabilityResult.couldNotCheck());
     }
   }
 
@@ -323,6 +315,8 @@ class LogisticsRepository {
     String? customerGstin,
     // Intermediate stops as {lat, lng}; the booking must send the same list.
     List<Map<String, double>>? waypoints,
+    // Mini Truck extra helpers / stairs carrying; the booking must echo the same.
+    GtAssist? assist,
   }) async {
     try {
       final response = await api.post(
@@ -341,6 +335,7 @@ class LogisticsRepository {
           if (customerGstin != null && customerGstin.trim().isNotEmpty)
             'customer_gstin': customerGstin.trim(),
           if (waypoints != null && waypoints.isNotEmpty) 'waypoints': waypoints,
+          if (assist != null && !assist.isEmpty) 'assist': assist.toJson(),
         },
       );
       return ResponseNormalizer.extract(
@@ -728,11 +723,12 @@ class LogisticsRepository {
 
   /// GET /api/logistics/policies/?service_category= — cancellation, waiting,
   /// extra-charge, claims and e-way-bill terms to show before booking.
-  Future<Result<GtPolicyTerms>> getGtPolicies(String serviceCategory) async {
+  Future<Result<GtPolicyTerms>> getGtPolicies(String serviceCategory, {String? bookingMode}) async {
     try {
       final response = await api.get(
         '/logistics/policies/',
-        queryParameters: {'service_category': serviceCategory},
+        // Part Truck Load has its own cancellation / insurance terms: say which mode these are for.
+        queryParameters: {'service_category': serviceCategory, if ((bookingMode ?? '').isNotEmpty) 'booking_mode': bookingMode},
       );
       return ResponseNormalizer.extract(
         response,
@@ -745,12 +741,20 @@ class LogisticsRepository {
     }
   }
 
-  /// GET /api/logistics/insurance-terms/?declared_value=
-  Future<Result<InsuranceTerms>> getInsuranceTerms(double declaredValue) async {
+  /// GET /api/logistics/insurance-terms/?service_category=&booking_mode=&declared_value=
+  Future<Result<InsuranceTerms>> getInsuranceTerms(
+    double declaredValue, {
+    required String serviceCategory,
+    String? bookingMode,
+  }) async {
     try {
       final response = await api.get(
         '/logistics/insurance-terms/',
-        queryParameters: {'declared_value': declaredValue.toStringAsFixed(2)},
+        queryParameters: {
+          'service_category': serviceCategory,
+          if ((bookingMode ?? '').isNotEmpty) 'booking_mode': bookingMode,
+          'declared_value': declaredValue.toStringAsFixed(2),
+        },
       );
       return ResponseNormalizer.extract(
         response,

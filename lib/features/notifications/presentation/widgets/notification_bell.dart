@@ -1,3 +1,4 @@
+import '../../../auth/domain/auth_return.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,7 +23,13 @@ class NotificationBell extends ConsumerWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => context.push(signedIn ? AppRoutes.notifications : AppRoutes.login),
+      onTap: () {
+        if (signedIn) {
+          context.push(AppRoutes.notifications);
+        } else {
+          requireLogin(context, ref);
+        }
+      },
       child: SizedBox(
         width: 42,
         height: 42,

@@ -1,3 +1,4 @@
+import '../../domain/auth_return.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_notifier.dart';
+import '../../domain/otp_autofill.dart';
 
 /// Screen 5: OTP Verification
 /// 6 individual rounded digit boxes with countdown timer and navy Verify CTA matching reference screen 5.
@@ -51,10 +53,18 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
   // and would redundantly re-run the focus-advance logic out of order.
   bool _isDistributingPaste = false;
 
+  StreamSubscription<String>? _autofillSub;
+
   @override
   void initState() {
     super.initState();
     _startCountdown();
+    // Fills the boxes by itself when an SMS code reader is connected (see otp_autofill.dart). Until then the
+    // stream is empty and the code is typed, pasted, or taken from the keyboard's suggestion.
+    _autofillSub = ref.read(otpAutofillProvider).listen().listen((code) {
+      if (!mounted || _isLoading || code.length != 6) return;
+      _distributePastedDigits(code, 0);
+    });
   }
 
   /// Lets backspace continue walking backward through already-filled boxes
@@ -173,6 +183,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _autofillSub?.cancel();
     for (final c in _digitControllers) {
       c.dispose();
     }
@@ -218,10 +229,11 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       // the web app's sign-in flow), so they go through profile completion too.
       if (result.isNewUser ||
           (user != null && (!user.isProfileComplete || !user.hasMobileNumber))) {
-        context.go(AppRoutes.profileComplete);
+        context.pushReplacement(AppRoutes.profileComplete);
       } else {
         final pendingAction = ref.read(pendingActionProvider);
         if (pendingAction != null) {
+          ref.read(returnAfterLoginProvider.notifier).state = false;
           ref.read(pendingActionProvider.notifier).clear();
           ref.read(cartProvider.notifier).addService(
                 pendingAction.service,
@@ -263,7 +275,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
               backgroundColor: AppColors.success,
             ),
           );
-          context.go(AppRoutes.home);
+          finishSignIn(context, ref);
         }
       }
     }
@@ -324,8 +336,9 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
-          onPressed: () => context.go(AppRoutes.login),
+          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.login),
         ),
       ),
       body: SafeArea(
@@ -422,6 +435,8 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                               const BorderSide(color: AppColors.primary, width: 2.5),
                         ),
                       ),
+                      // Lets the keyboard offer the code from the SMS (Gboard / iOS), no permission needed.
+                      autofillHints: const [AutofillHints.oneTimeCode],
                       onChanged: (val) => _onDigitChanged(val, index),
                     ),
                   );

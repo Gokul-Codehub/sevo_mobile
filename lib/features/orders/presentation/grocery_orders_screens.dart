@@ -1,3 +1,5 @@
+import '../domain/reorder.dart';
+import '../../booking/presentation/widgets/book_again_actions.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -127,12 +129,31 @@ class _OrderList extends StatelessWidget {
   }
 }
 
-class OrderCard extends StatelessWidget {
+class OrderCard extends ConsumerStatefulWidget {
   const OrderCard({super.key, required this.order});
   final GroceryOrder order;
 
   @override
+  ConsumerState<OrderCard> createState() => _OrderCardState();
+}
+
+class _OrderCardState extends ConsumerState<OrderCard> {
+  bool _reordering = false;
+
+  /// Adds what can still be bought to the cart at today's price and stock, then opens the cart.
+  Future<void> _orderAgain() async {
+    setState(() => _reordering = true);
+    final plan = await reorderGroceryOrder(ref, widget.order);
+    if (!mounted) return;
+    setState(() => _reordering = false);
+    final text = plan == null ? "We couldn't check today's prices. Please try again." : reorderMessage(plan);
+    AppToast.show(context, text, type: (plan == null || plan.isEmpty) ? AppToastType.error : AppToastType.success);
+    if (plan != null && !plan.isEmpty) context.openTab('/cart');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final order = widget.order;
     final o = order;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -207,6 +228,10 @@ class OrderCard extends StatelessWidget {
           if (o.createdAt != null) ...[
             const SizedBox(height: 8),
             Text('Placed ${formatDmyTime(o.createdAt!)}', style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+          ],
+          if ((o.stage == OrderStage.delivered || o.stage == OrderStage.cancelled) && o.items.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Align(alignment: Alignment.centerRight, child: AgainButton(label: 'Order again', busy: _reordering, onPressed: _orderAgain)),
           ],
         ]),
       ),

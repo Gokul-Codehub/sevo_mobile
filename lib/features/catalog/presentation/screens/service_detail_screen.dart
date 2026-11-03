@@ -1,3 +1,4 @@
+import '../../domain/recently_viewed.dart';
 import '../../../../core/analytics/analytics_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -105,7 +106,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
       );
     }
     if (effectiveService != null) {
-      return _buildScaffold(context, effectiveService);
+      // Counts as "viewed" for Home's Recently Viewed section.
+      return RecordRecentView(item: effectiveService, child: _buildScaffold(context, effectiveService));
     }
 
     return serviceAsync.when(
@@ -180,6 +182,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
             backgroundColor: Colors.white,
             elevation: 0,
             leading: IconButton(
+        tooltip: 'Back',
               icon: Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
@@ -196,6 +199,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
             ),
             actions: [
               IconButton(
+        tooltip: 'Share',
                 icon: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(

@@ -207,6 +207,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () => context.goBack(),
         ),

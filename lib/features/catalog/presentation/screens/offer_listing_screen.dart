@@ -167,6 +167,7 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
+        tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navy),
           onPressed: () => context.canPop() ? context.pop() : context.go('/'),
         ),

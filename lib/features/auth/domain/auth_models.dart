@@ -134,9 +134,13 @@ final class AuthLoading extends AuthState {
 
 /// No authenticated user — show login flow.
 final class AuthUnauthenticated extends AuthState {
-  const AuthUnauthenticated();
+  const AuthUnauthenticated({this.sessionExpired = false});
+
+  /// True when a signed-in session was ended by the server (refresh token rejected), not by the customer.
+  final bool sessionExpired;
+
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [sessionExpired];
 }
 
 /// OTP has been sent — waiting for the code.

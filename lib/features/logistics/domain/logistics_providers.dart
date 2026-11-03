@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'gt_assist.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -5,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:location/location.dart' as loc;
 
 import '../../../core/errors/api_error.dart';
+import '../../../core/storage/secure_storage.dart';
 import '../data/logistics_repository.dart';
 import '../../addresses/domain/address_notifier.dart' show selectedAddressProvider;
 import '../../notifications/domain/capacity_claim.dart';
@@ -223,6 +227,7 @@ class LogisticsQuoteParam {
     this.cargo,
     this.customerGstin,
     this.waypoints,
+    this.assist,
   });
 
   final int tierId;
@@ -242,6 +247,9 @@ class LogisticsQuoteParam {
   /// Intermediate stops as {lat, lng}, in order. Part of the key.
   final List<Map<String, double>>? waypoints;
 
+  /// Extra helpers / stairs carrying (Mini Truck). Part of the key, so changing it re-quotes the fare.
+  final GtAssist? assist;
+
   String get _waypointsKey =>
       (waypoints ?? const []).map((w) => '${w['lat']},${w['lng']}').join('|');
 
@@ -260,12 +268,13 @@ class LogisticsQuoteParam {
           loadingHelp == other.loadingHelp &&
           cargo == other.cargo &&
           customerGstin == other.customerGstin &&
+          assist == other.assist &&
           _waypointsKey == other._waypointsKey;
 
   @override
   int get hashCode => Object.hash(tierId, serviceCategory, pickupLatitude,
       pickupLongitude, dropLatitude, dropLongitude, laneId, loadingHelp, cargo,
-      customerGstin, _waypointsKey);
+      customerGstin, _waypointsKey, assist);
 }
 
 /// The live, authoritative fare for the currently selected tier + pickup +
@@ -287,6 +296,7 @@ final logisticsQuoteProvider = FutureProvider.autoDispose
     cargo: param.cargo,
     customerGstin: param.customerGstin,
     waypoints: param.waypoints,
+    assist: param.assist,
   );
 
   return switch (result) {
@@ -553,79 +563,154 @@ final pmQuoteProvider = FutureProvider.autoDispose.family<PackersMoversQuote, Pm
   };
 });
 
-/// Customer location state model.
+/// Where the customer's browsing location came from. One rule, like the big delivery apps: an explicit choice
+/// (a typed place) always beats GPS, GPS only fills the gap when nothing was chosen, and nothing is ever invented.
+enum LocationSource { none, gps, manual }
+
+/// Customer browsing location (used when no saved address is selected). Persisted across restarts.
 class CustomerLocationState {
   const CustomerLocationState({
-    this.address = 'Hosur, Tamil Nadu',
-    this.pincode = '635109',
-    this.latitude = 12.7409,
-    this.longitude = 77.8253,
-    this.isDetected = true,
+    this.address = '',
+    this.pincode = '',
+    this.latitude,
+    this.longitude,
+    this.source = LocationSource.none,
   });
 
   final String address;
   final String pincode;
-  final double latitude;
-  final double longitude;
-  final bool isDetected;
+  final double? latitude;
+  final double? longitude;
+  final LocationSource source;
 
-  CustomerLocationState copyWith({
-    String? address,
-    String? pincode,
-    double? latitude,
-    double? longitude,
-    bool? isDetected,
-  }) {
+  /// A real, usable point (never a made-up default).
+  bool get hasLocation => source != LocationSource.none && latitude != null && longitude != null;
+  bool get isDetected => source == LocationSource.gps;
+
+  Map<String, dynamic> toJson() => {
+        'address': address,
+        'pincode': pincode,
+        'lat': latitude,
+        'lng': longitude,
+        'source': source.name,
+      };
+
+  static CustomerLocationState? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final lat = (raw['lat'] as num?)?.toDouble();
+    final lng = (raw['lng'] as num?)?.toDouble();
+    final source = LocationSource.values.where((s) => s.name == raw['source']).firstOrNull ?? LocationSource.none;
+    if (lat == null || lng == null || source == LocationSource.none) return null;
     return CustomerLocationState(
-      address: address ?? this.address,
-      pincode: pincode ?? this.pincode,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      isDetected: isDetected ?? this.isDetected,
+      address: (raw['address'] ?? '').toString(),
+      pincode: (raw['pincode'] ?? '').toString(),
+      latitude: lat,
+      longitude: lng,
+      source: source,
     );
   }
 }
 
-/// Customer location notifier provider.
+/// Customer location notifier.
+///
+/// Rules (the same ones Swiggy / Zomato / Amazon follow):
+///  1. The last place the customer chose is remembered and restored on the next launch.
+///  2. A typed place is an explicit choice: GPS never overwrites it. Only "Use current location" switches back.
+///  3. With no choice yet, GPS fills in silently, but only if the permission is already granted and the phone's
+///     location is on: no dialogs and no Settings screens on ordinary launches. Those belong to the explicit button.
+///  4. A typed place must resolve to real coordinates, so serviceability is never checked against another place.
+///  5. With nothing known the location stays empty ("Select location"); no fake default.
 class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
-  CustomerLocationNotifier() : super(const CustomerLocationState());
+  CustomerLocationNotifier(this._storage) : super(const CustomerLocationState()) {
+    _ready = _restore();
+  }
 
-  // Fixed 2026-08-27: this previously never touched the device's actual GPS
-  // at all — it just always set the same hardcoded "Current Location,
-  // Hosur" / 635109, regardless of where the customer actually was. Now it
-  // reads the real device position (respecting permission state) and
-  // reverse-geocodes it, falling back to the previous state (never to fake
-  // coordinates) if location is unavailable/denied.
+  final SecureStorage _storage;
+  late final Future<void> _ready;
+
+  /// Set once something was chosen / detected, so a slow restore can never overwrite it.
+  bool _touched = false;
+
+  Future<void> _restore() async {
+    try {
+      final raw = await _storage.getBrowseLocationJson();
+      if (raw == null || _touched || !mounted) return;
+      final saved = CustomerLocationState.fromJson(jsonDecode(raw));
+      if (saved != null) state = saved;
+    } catch (_) {
+      // A damaged copy just means "nothing remembered".
+    }
+  }
+
+  void _set(CustomerLocationState next) {
+    _touched = true;
+    state = next;
+    _persist(next);
+  }
+
+  Future<void> _persist(CustomerLocationState s) async {
+    try {
+      await _storage.setBrowseLocationJson(jsonEncode(s.toJson()));
+    } catch (_) {}
+  }
+
+  /// Reads the device position and names it (reverse geocoding is best effort; the coordinates are always real).
+  Future<CustomerLocationState> _readPosition() async {
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
+    );
+    var address = 'Current location';
+    var pincode = '';
+    try {
+      final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+        final locality = (p.locality ?? '').trim();
+        final adminArea = (p.administrativeArea ?? '').trim();
+        final name = [locality, adminArea].where((s) => s.isNotEmpty).join(', ');
+        if (name.isNotEmpty) address = name;
+        pincode = (p.postalCode ?? '').trim();
+      }
+    } catch (_) {}
+    return CustomerLocationState(
+      address: address,
+      pincode: pincode,
+      latitude: position.latitude,
+      longitude: position.longitude,
+      source: LocationSource.gps,
+    );
+  }
+
+  /// Quiet detection for ordinary launches: fills the location from GPS only when the customer has not chosen a
+  /// place, the permission is already granted and the phone's location is on. Never shows a dialog or opens Settings.
+  Future<void> autoDetectIfNeeded() async {
+    await _ready;
+    if (state.source == LocationSource.manual) return; // an explicit choice stays
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.unableToDetermine) {
+        return;
+      }
+      final fix = await _readPosition();
+      // The customer may have typed a place while the fix was being read.
+      if (mounted && state.source != LocationSource.manual) _set(fix);
+    } catch (_) {
+      // Keep whatever is remembered; never substitute fake coordinates.
+    }
+  }
+
+  /// "Use current location": the explicit action. Turns the phone's location on (in-app prompt), asks for the
+  /// permission, and switches the browsing location to the device position.
   ///
-  /// Returns true only when a real position was read and stored. A customer who
-  /// answers "No thanks" to the in-app "turn on location" prompt, or denies the
-  /// permission, gets false - and is NOT sent to the system Settings app (the
-  /// caller keeps them on the page to try again or enter a place by hand).
-  /// Settings is only opened when the in-app prompt could not be shown at all
-  /// (iOS, or Play Services unavailable), or - when [openSettingsIfBlocked] -
-  /// for a permanently denied permission, which has no other way back.
+  /// Returns true only when a real position was read and stored. A customer who answers "No thanks" to the in-app
+  /// prompt, or denies the permission, gets false and stays where they are. Settings is only opened when the in-app
+  /// prompt could not be shown at all (iOS, or Play Services unavailable) or, when [openSettingsIfBlocked], for a
+  /// permanently denied permission, which has no other way back.
   Future<bool> detectAndSetCurrentLocation({bool openSettingsIfBlocked = false}) async {
     try {
-      // Fixed 2026-09-29 per explicit report ("if user clicks the user my
-      // current location the android does not open the accessibility to
-      // turn on"): this used to just `return` here, doing nothing at all
-      // when the phone's location service (GPS) itself is switched off at
-      // the OS level — a common state, especially on first launch.
-      //
-      // Fixed again 2026-10-01 per explicit report ("whenever i open the
-      // app it open the mobile settings to turn on th location... if user
-      // click in back [it] should turn on the location without redirect to
-      // the settings"): this used to unconditionally call
-      // Geolocator.openLocationSettings(), kicking the customer straight
-      // out to Android's system Settings app on every app open where GPS
-      // was off — this is the exact screen (LocationAccessScreen, shown
-      // right on first/every app launch) the report was about. `location`'s
-      // requestService() shows Google Play Services' own native in-app
-      // "Turn on location" resolution dialog instead (same pattern already
-      // applied in core/utils/location_gate.dart for the checkout flow), so
-      // the customer can enable GPS without ever leaving CalServices.
-      // Falls back to the old Settings deep-link only if the in-app prompt
-      // fails or isn't available (iOS, or Play Services missing/outdated).
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         var enabledNow = false;
@@ -635,13 +720,11 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
         } catch (_) {
           promptUnavailable = true;
         }
-        // iOS never lets an app flip the switch, so requestService() is always
-        // "false" there - that is not a refusal.
+        // iOS never lets an app flip the switch, so requestService() is always "false" there - not a refusal.
         if (defaultTargetPlatform == TargetPlatform.iOS) promptUnavailable = true;
         if (!enabledNow) {
           final stillDisabled = !(await Geolocator.isLocationServiceEnabled());
           if (stillDisabled) {
-            // "No thanks" (or still off): stay where we are.
             if (promptUnavailable && openSettingsIfBlocked) {
               await Geolocator.openLocationSettings();
             }
@@ -655,76 +738,31 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.deniedForever) {
-        // Permanently denied ("Don't ask again") — Android will never show
-        // the in-app permission dialog again from here on, so the only way
-        // forward is the app's own permission settings page. openAppSettings()
-        // jumps straight there, same fix pattern as the GPS-off case above.
         if (openSettingsIfBlocked) await Geolocator.openAppSettings();
         return false;
       }
-      if (permission == LocationPermission.denied) {
-        return false;
-      }
+      if (permission == LocationPermission.denied) return false;
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
-
-      String address = state.address;
-      String pincode = state.pincode;
-      try {
-        final placemarks = await placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-        if (placemarks.isNotEmpty) {
-          final p = placemarks.first;
-          final locality = (p.locality ?? '').trim();
-          final adminArea = (p.administrativeArea ?? '').trim();
-          if (locality.isNotEmpty || adminArea.isNotEmpty) {
-            address = [locality, adminArea].where((s) => s.isNotEmpty).join(', ');
-          }
-          if ((p.postalCode ?? '').trim().isNotEmpty) {
-            pincode = p.postalCode!.trim();
-          }
-        }
-      } catch (_) {
-        // Reverse geocoding is best-effort — coordinates below are still real.
-      }
-
-      state = state.copyWith(
-        address: address,
-        pincode: pincode,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        isDetected: true,
-      );
+      _set(await _readPosition());
       return true;
     } catch (_) {
-      // Leave state unchanged on any GPS failure rather than substituting
-      // fake coordinates.
       return false;
     }
   }
 
-  /// Sets the browsing location by hand (no account needed). [latitude] /
-  /// [longitude] are optional - pass them when the typed place was geocoded
-  /// so serviceability checks use the real point, not the previous one.
-  void setManualLocation(String address, String pincode, {double? latitude, double? longitude}) {
-    state = state.copyWith(
+  /// A place the customer typed (no account needed). Coordinates are required: a place that could not be located is
+  /// refused by the caller instead of being saved with another place's coordinates.
+  void setManualLocation(String address, String pincode, {required double latitude, required double longitude}) {
+    _set(CustomerLocationState(
       address: address,
       pincode: pincode,
       latitude: latitude,
       longitude: longitude,
-      isDetected: false,
-    );
+      source: LocationSource.manual,
+    ));
   }
 }
 
 final customerLocationProvider =
     StateNotifierProvider<CustomerLocationNotifier, CustomerLocationState>(
-        (ref) => CustomerLocationNotifier());
-
+        (ref) => CustomerLocationNotifier(ref.read(secureStorageProvider)));
