@@ -46,3 +46,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Java / Android heap dumps (hundreds of MB; GitHub rejects files over 100 MB)
+*.hprof
+java_pid*
+*.hprof.*
