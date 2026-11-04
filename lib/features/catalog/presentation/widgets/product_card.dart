@@ -79,6 +79,9 @@ class ProductCard extends ConsumerWidget {
   static const double _notchW = 60.0;
   static const double _notchH = 32.0;
 
+  /// Whether the pack selector fits on the Add-notch row (needs ~84px of pill).
+  static bool _packInline(double cardWidth) => cardWidth - 16 - (_notchW - 4) >= 84;
+
   /// Pack text for the selector row; a bare unit ("kg") reads as "1 kg".
   static String _packLabel(ServiceItem s) {
     final u = s.displayUnit.trim();
@@ -118,7 +121,7 @@ class ProductCard extends ConsumerWidget {
     h += _titleBlockHeight + 3; // reserved title block + gap
     if (showPrice) h += 19 + 3; // price row + gap
     if (!showImage && showAddButton) h += 28; // ADD has no photo to sit on
-    h += 28.0; // pack/quantity selector band (sits beside the Add notch)
+    h += 28.0; // selector band beside the Add notch
     h += 8.0; // safety margin for platform font-metric variance
     return h;
   }
@@ -650,17 +653,15 @@ class ProductCard extends ConsumerWidget {
                           ],
                         ),
                       const SizedBox(height: 3),
-                      // Pack / quantity selector. Replaces the old hard-coded
-                      // "22 mins" ETA: sits beside the Add notch, one row.
-                      // A product sold in several packs gets a tappable
-                      // selector (opens the pack-size sheet); a single pack
-                      // shows its size as plain text in the same slot.
-                      Padding(
-                        padding: EdgeInsets.only(right: nW > 0 ? nW - 4 : 0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: GestureDetector(
+                      // Pack / quantity selector, always on the Add-notch row. On
+                      // narrow cards (3-column) it shrinks to a compact pill: tight
+                      // label, small chevron.
+                      LayoutBuilder(
+                        builder: (context, box) {
+                          final compact = !ProductCard._packInline(box.maxWidth + 16);
+                          final lowStock =
+                              service.maxQuantity <= 5 && service.inStock;
+                          final pill = GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: service.hasVariantOptions
                                     ? () => showProductVariantSheet(
@@ -671,12 +672,14 @@ class ProductCard extends ConsumerWidget {
                                 child: Container(
                                   width: double.infinity,
                                   height: 28,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: compact ? 2 : 8,
                                   ),
                                   decoration: BoxDecoration(
                                     color: service.hasVariantOptions
-                                        ? AppColors.groceryGreenLight
+                                        ? (compact
+                                            ? Colors.transparent
+                                            : AppColors.groceryGreenLight)
                                         : AppColors.surfaceVariant,
                                     borderRadius: BorderRadius.circular(10),
                                     border: service.hasVariantOptions
@@ -690,14 +693,17 @@ class ProductCard extends ConsumerWidget {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          _packLabel(service) +
-                                              (service.maxQuantity <= 5 && service.inStock
+                                          (compact
+                                              ? _packLabel(service).replaceAll(' ', '')
+                                              : _packLabel(service)) +
+                                              (!compact && lowStock
                                                   ? ' · ${service.maxQuantity} left'
                                                   : ''),
                                           maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                          overflow: TextOverflow.clip,
+                                          softWrap: false,
                                           style: TextStyle(
-                                            fontSize: 10.5,
+                                            fontSize: compact ? 9.5 : 10.5,
                                             fontWeight: FontWeight.w700,
                                             color: service.hasVariantOptions
                                                 ? AppColors.groceryGreenDark
@@ -706,18 +712,20 @@ class ProductCard extends ConsumerWidget {
                                         ),
                                       ),
                                       if (service.hasVariantOptions)
-                                        const Icon(
+                                        Icon(
                                           Icons.keyboard_arrow_down_rounded,
-                                          size: 16,
+                                          size: compact ? 11 : 16,
                                           color: AppColors.groceryGreenDark,
                                         ),
                                     ],
                                   ),
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
+                              );
+                          return Padding(
+                            padding: EdgeInsets.only(right: nW > 0 ? nW - 4 : 0),
+                            child: pill,
+                          );
+                        },
                       ),
                       // Recipe badge removed 2026-09-30 per explicit request: the
                       // Recipe feature isn't implemented yet (planned for phase 2,
