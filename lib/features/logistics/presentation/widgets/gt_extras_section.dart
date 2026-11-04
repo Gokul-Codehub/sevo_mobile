@@ -285,6 +285,7 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _TotalWeightBar(cargo: cargo),
                   // Side by side so the type and its items are visible in one
                   // frame; each pane scrolls on its own.
                   Row(
@@ -1432,6 +1433,51 @@ class GtPaymentMethodPicker extends ConsumerWidget {
   }
 }
 
+/// "12" for 12.0, "12.5" otherwise.
+String _kg(double v) {
+  final r = (v * 10).round() / 10;
+  return r == r.roundToDouble() ? r.toStringAsFixed(0) : r.toStringAsFixed(1);
+}
+
+/// Total weight of everything picked so far (listed items x quantity + custom lines), shown above the item table.
+class _TotalWeightBar extends ConsumerWidget {
+  const _TotalWeightBar({required this.cargo});
+
+  final CargoDeclaration cargo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catId = cargo.goodsCategoryId;
+    final listed = catId == null ? const <GoodsItem>[] : (ref.watch(goodsItemsProvider(catId)).valueOrNull ?? const <GoodsItem>[]);
+    final byId = {for (final i in listed) i.id: i};
+    var total = 0.0;
+    for (final l in cargo.items) {
+      final w = l.itemId != null ? (byId[l.itemId]?.defaultWeightKg ?? l.weightKg ?? 0) : (l.weightKg ?? 0);
+      total += w * l.quantity;
+    }
+    if (total <= 0) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.scale_outlined, size: 16, color: Color(0xFF047857)),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('Total weight', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF065F46))),
+          ),
+          Text('${_kg(total)} kg', style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: Color(0xFF065F46))),
+        ],
+      ),
+    );
+  }
+}
+
 class _ItemList extends ConsumerWidget {
   const _ItemList({
     required this.categoryId,
@@ -1561,6 +1607,19 @@ class _ItemRow extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ],
+          if ((item.defaultWeightKg ?? 0) > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              qty > 1 && !locked
+                  ? '${_kg(item.defaultWeightKg!)} kg each · ${_kg(item.defaultWeightKg! * qty)} kg total'
+                  : '${_kg(item.defaultWeightKg!)} kg',
+              style: _hintStyle.copyWith(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF047857),
+              ),
             ),
           ],
           if (tags.isNotEmpty) ...[
@@ -1792,6 +1851,9 @@ class _FitmentBanner extends ConsumerWidget {
 
 // ── Options: loading help, insurance, GSTIN / e-way bill ────────────────────
 
+/// Goods worth this much or more need an e-way bill (same threshold as the web booking page).
+const double kEwayBillThreshold = 50000;
+
 class GtOptionsSection extends ConsumerStatefulWidget {
   const GtOptionsSection({super.key, required this.declaredValue});
 
@@ -1817,6 +1879,8 @@ class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
   Widget build(BuildContext context) {
     final loadingHelp = ref.watch(loadingHelpProvider);
     final ptl = ref.watch(ptlModeProvider);
+    final ewayRequired = (widget.declaredValue ?? 0) >= kEwayBillThreshold;
+    final ewayNumber = ref.watch(ewayBillNumberProvider);
 
     return _card(
       Column(
@@ -1841,9 +1905,11 @@ class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
+              key: ValueKey('gst-eway-$ewayRequired'), // reopens when the value crosses the threshold
+              initiallyExpanded: ewayRequired,
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,
-              title: const Text('GST & e-way bill (optional)', style: _titleStyle),
+              title: Text(ewayRequired ? 'GST & e-way bill (e-way bill required)' : 'GST & e-way bill (optional)', style: _titleStyle),
               children: [
                 TextField(
                   controller: _gstinController,
@@ -1856,17 +1922,23 @@ class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
                 TextField(
                   controller: _ewayController,
                   keyboardType: TextInputType.number,
-                  decoration: _decoration('E-way bill number (12 digits)'),
+                  decoration: _decoration(ewayRequired ? 'E-way bill number (12 digits) *' : 'E-way bill number (12 digits)').copyWith(
+                    errorText: ewayRequired && ewayNumber.isNotEmpty && !RegExp(r'^\d{12}$').hasMatch(ewayNumber)
+                        ? 'Enter all 12 digits'
+                        : null,
+                  ),
                   onChanged: (v) =>
                       ref.read(ewayBillNumberProvider.notifier).state = v.trim(),
                 ),
                 const SizedBox(height: 4),
-                const Align(
+                Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Goods of higher value may need an e-way bill. You are '
-                    'responsible for providing it to the driver at pickup.',
-                    style: _hintStyle,
+                    ewayRequired
+                        ? 'An e-way bill is required for goods worth ₹50,000 or more. Enter its number to continue.'
+                        : 'Goods of higher value may need an e-way bill. You are '
+                            'responsible for providing it to the driver at pickup.',
+                    style: ewayRequired ? _hintStyle.copyWith(color: const Color(0xFFB45309), fontWeight: FontWeight.w700) : _hintStyle,
                   ),
                 ),
                 const SizedBox(height: 8),

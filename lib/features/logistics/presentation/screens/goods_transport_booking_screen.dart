@@ -351,6 +351,7 @@ class _GoodsTransportBookingScreenState
         ref.read(gtGoodsDeclProvider.notifier).state = const GtGoodsDecl();
         ref.read(customerGstinProvider.notifier).state = '';
         ref.read(ewayBillNumberProvider.notifier).state = '';
+        ref.read(gtScheduledProvider.notifier).state = false;
         ref.read(ptlModeProvider.notifier).state = false;
         ref.read(ptlWeightKgProvider.notifier).state = null;
         ref.read(ptlLoadAssistProvider.notifier).state = false;
@@ -506,6 +507,8 @@ class _GoodsTransportBookingScreenState
         return fail('The e-way bill number must be exactly 12 digits.');
       }
       extra['eway_bill_number'] = eway;
+    } else if ((_declaredValue?.toDouble() ?? 0) >= kEwayBillThreshold) {
+      return fail('An e-way bill number is required for goods worth ₹50,000 or more.');
     }
 
     // Cash / Pay online / SEVO wallet (wallet bookings are created ONLINE
@@ -805,8 +808,10 @@ class _GoodsTransportBookingScreenState
     final dropLocation = ref.read(dropLocationProvider);
     final isPtlTrip = ref.read(ptlModeProvider) &&
         vehicleCategory == LogisticsVehicleCategory.truck;
+    final scheduled = ref.read(gtScheduledProvider);
     final isSpotTrip = !isPtlTrip &&
-        vehicleCategory != LogisticsVehicleCategory.packersMovers;
+        vehicleCategory != LogisticsVehicleCategory.packersMovers &&
+        !scheduled; // an Urgent trip leaves today; a Scheduled one carries the chosen date
     // Goods & Transport has no booking time slots since the 2026-10-29
     // backend change: a truck / 2-wheeler trip is dispatched immediately
     // (today), Part Truck Load is date-only, Packers & Movers picks a date.
@@ -814,7 +819,7 @@ class _GoodsTransportBookingScreenState
         ? DateTime.now()
         : ref.read(selectedBookingDateProvider);
     final selectedSlot = ref.read(selectedTimeSlotProvider) ??
-        (isPtlTrip ? _kFlexibleSlot : _kImmediateSlot);
+        (isPtlTrip || scheduled ? _kFlexibleSlot : _kImmediateSlot);
     final currentUser = ref.read(currentUserProvider);
 
     final isAuthenticated = ref.read(isUserAuthenticatedProvider);
@@ -1799,18 +1804,6 @@ class _GoodsTransportBookingScreenState
                                       ),
                                     ),
                                   ],
-                                  if (tier.dimensionsText.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Size: ${tier.dimensionsText}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
                                   if (tier.startingPrice != null) ...[
                                     const SizedBox(height: 4),
                                     Text(
@@ -2623,7 +2616,10 @@ class _GoodsTransportBookingScreenState
                       city: selectedTier?.city,
                       showSlots: false,
                     )
-                  : const _ImmediateDispatchCard(),
+                  : _UrgentOrScheduled(
+                      category: vehicleCategory.serviceCategoryValue,
+                      city: selectedTier?.city,
+                    ),
             ),
             const SizedBox(height: 18),
             ],
@@ -3042,143 +3038,122 @@ class _FareQuoteView extends StatelessWidget {
 
   final LogisticsQuote quote;
 
-  /// Row logic rewritten 2026-09-20 to mirror the real customer web app's
-  /// own Fare Breakdown panel exactly (`MiniTruckBookingHosurPage.jsx`,
-  /// confirmed against the actual reference source, not guessed) — row by
-  /// row, rather than a generic "print every present key" list:
-  ///  - Base fare always shows when present.
-  ///  - Distance charge shows the "(X km × ₹Y/km)" annotation inline, same
-  ///    as the web page, instead of a separate "distance charged" row.
-  ///  - Loading/unloading and additional-stop charges only show when > 0
-  ///    (the web page hides a present-but-zero line rather than printing
-  ///    "₹0.00", which reads as more, not less, trustworthy).
-  ///  - Surge only shows when the multiplier isn't 1×.
-  ///  - "Minimum fare applied" is surfaced as its own note, matching the
-  ///    web page's dedicated line for it, instead of being silently absent.
+  /// Mirrors the web booking page's "Fare Breakdown" panel line for line
+  /// (`MiniTruckBookingHosurPage.jsx`): Route Distance, Base Fare (incl. first
+  /// X km), Distance Charge (X km beyond base x rate), Loading & Unloading,
+  /// Extra helpers, Stairs carrying, Additional Stops, Surge, the minimum-fare
+  /// note, then Amount Payable. Zero lines are hidden, as on the web.
   static double? _num(dynamic v) {
     if (v == null) return null;
     if (v is num) return v.toDouble();
     return double.tryParse(v.toString());
   }
 
+  static bool _positive(double? v) => v != null && v > 0;
+
   @override
   Widget build(BuildContext context) {
-    final breakdown = quote.breakdown;
-    final baseFare = _num(breakdown?['base_fare']);
-    final distanceCharge = _num(breakdown?['distance_charge']);
-    final chargeableKm = _num(breakdown?['chargeable_km']);
-    final ratePerKm = _num(breakdown?['rate_per_km']);
-    final loadingUnloading = _num(breakdown?['loading_unloading']) ?? 0;
-    final additionalStopCharge =
-        _num(breakdown?['additional_stop_charge']) ?? 0;
-    final helperCharge = _num(breakdown?['helper_charge']) ?? 0;
-    final carryCharge = _num(breakdown?['carry_charge']) ?? 0;
-    final additionalStops = breakdown?['additional_stops'];
-    final surgeMultiplier = _num(breakdown?['surge_multiplier']) ?? 1;
-    final minimumFareApplied = breakdown?['minimum_fare_applied'] == true;
-    final isDistanceMode = quote.pricingMode == 'distance' && breakdown != null;
+    final b = quote.breakdown;
+    final distanceKm = _num(b?['distance_km']) ?? _num(b?['route_distance_km']) ?? 0;
+    final freeKm = _num(b?['free_km']);
+    final chargeableKm = _num(b?['chargeable_km']);
+    final ratePerKm = _num(b?['rate_per_km']);
+    final distanceCharge = _num(b?['distance_charge']);
+    final surge = _num(b?['surge_multiplier']) ?? 1;
+    final stops = b?['additional_stops'];
+    final floors = _num(b?['carry_floors'])?.round() ?? 0;
+    final hasBreakdown = b != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Estimated Fare',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppColors.navy,
-              ),
-            ),
-            Text(
-              '₹${quote.total.toStringAsFixed(0)}',
-              style: const TextStyle(
-                fontSize: 17.5,
-                fontWeight: FontWeight.w900,
-                color: AppColors.navy,
-              ),
-            ),
-          ],
+        const Text(
+          'Fare Breakdown',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy),
         ),
         if (quote.isEstimate && (quote.estimateNotice ?? '').isNotEmpty) ...[
           const SizedBox(height: 6),
           Text(
             quote.estimateNotice!,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.warning,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-        const Divider(height: 20, color: AppColors.border),
-        if (isDistanceMode) ...[
-          if (baseFare != null) _FareRow('Base fare', baseFare),
-          if (distanceCharge != null)
-            _FareRow(
-              chargeableKm != null && ratePerKm != null
-                  ? 'Distance (${chargeableKm.toStringAsFixed(1)} km × ₹${ratePerKm.toStringAsFixed(0)}/km)'
-                  : 'Distance charge',
-              distanceCharge,
-            ),
-          if (loadingUnloading > 0)
-            _FareRow('Loading / unloading', loadingUnloading),
-          if (helperCharge > 0)
-            _FareRow('Extra helpers (${_num(breakdown['extra_helpers'])?.round() ?? ''})', helperCharge),
-          if (carryCharge > 0)
-            _FareRow('Stairs carrying (${_num(breakdown['carry_floors'])?.round() ?? ''} floors)', carryCharge),
-          if (additionalStopCharge > 0)
-            _FareRow(
-              additionalStops != null
-                  ? 'Additional stops ($additionalStops)'
-                  : 'Additional stops',
-              additionalStopCharge,
-            ),
-          if (surgeMultiplier != 1)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Surge',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  Text(
-                    '${surgeMultiplier.toStringAsFixed(2)}×',
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.navy,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ] else
-          _FareRow('Trip fare', quote.total),
-        if (minimumFareApplied) ...[
-          const SizedBox(height: 6),
-          const Text(
-            'Minimum fare applied for this trip.',
-            style: TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w600),
           ),
         ],
         const SizedBox(height: 8),
-        const Text(
-          'This is the same authoritative number the server records — it will not change unexpectedly when you confirm.',
-          style: TextStyle(fontSize: 11, color: AppColors.textHint),
+        if (hasBreakdown) ...[
+          _FareTextRow('Route Distance', '${distanceKm.toStringAsFixed(2)} km', bold: true),
+          _FareRow(
+            _positive(freeKm) ? 'Base Fare (incl. first ${freeKm!.toStringAsFixed(1)} km)' : 'Base Fare',
+            _num(b['base_fare']) ?? 0,
+          ),
+          if (distanceCharge != null)
+            _FareRow(
+              chargeableKm != null && ratePerKm != null
+                  ? (chargeableKm > 0
+                      ? 'Distance Charge (${chargeableKm.toStringAsFixed(2)} km beyond base \u00d7 \u20b9${ratePerKm.toStringAsFixed(0)}/km)'
+                      : 'Distance Charge (0.00 km chargeable)')
+                  : 'Distance Charge',
+              distanceCharge,
+            ),
+          if (_positive(_num(b['loading_unloading'])))
+            _FareRow('Loading & Unloading', _num(b['loading_unloading'])!),
+          if (_positive(_num(b['helper_charge'])))
+            _FareRow('Extra helpers (${_num(b['extra_helpers'])?.round() ?? 0})', _num(b['helper_charge'])!),
+          if (_positive(_num(b['carry_charge'])))
+            _FareRow('Stairs carrying ($floors floor${floors == 1 ? '' : 's'})', _num(b['carry_charge'])!),
+          if (_positive(_num(b['additional_stop_charge'])))
+            _FareRow('Additional Stops (${stops ?? ''})', _num(b['additional_stop_charge'])!),
+          if (surge != 1)
+            _FareTextRow('Surge (${surge.toStringAsFixed(2)}\u00d7)', 'applied', color: AppColors.warning),
+          if (b['minimum_fare_applied'] == true)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Minimum fare applied for this trip.',
+                style: TextStyle(fontSize: 10.5, color: AppColors.warning),
+              ),
+            ),
+        ] else
+          _FareRow('Trip Fare', quote.total),
+        const Divider(height: 18, color: AppColors.border),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Amount Payable',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.navy),
+            ),
+            Text(
+              '\u20b9${quote.total.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.navy),
+            ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+class _FareTextRow extends StatelessWidget {
+  const _FareTextRow(this.label, this.value, {this.bold = false, this.color});
+
+  final String label;
+  final String value;
+  final bool bold;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(label, style: TextStyle(fontSize: 11.5, color: color ?? AppColors.textSecondary, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
+          ),
+          Text(value, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color ?? AppColors.navy)),
+        ],
+      ),
     );
   }
 }
@@ -3691,45 +3666,80 @@ const TimeSlot _kFlexibleSlot = TimeSlot(
   label: 'Flexible (Anytime)',
 );
 
-/// Replaces the old slot picker for truck / 2-wheeler trips.
-class _ImmediateDispatchCard extends StatelessWidget {
-  const _ImmediateDispatchCard();
+/// Truck / 2-Wheeler: "Urgent" (nearest driver right away) or "Schedule" (pick a later date on the calendar), like the web.
+/// Urgent is switched off when the server says same-day booking has closed (past the cut-off).
+class _UrgentOrScheduled extends ConsumerWidget {
+  const _UrgentOrScheduled({required this.category, required this.city});
+
+  final String category;
+  final String? city;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8EDF7),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.bolt_rounded, size: 20, color: AppColors.navy),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Dispatch: Immediate / On-Demand',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navy,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final res = ref.watch(gtSlotsProvider((date: today, category: category, city: city))).valueOrNull;
+    final sameDayClosed = res?.isSameDayClosed ?? false;
+    final scheduled = ref.watch(gtScheduledProvider) || sameDayClosed;
+
+    if (sameDayClosed && !ref.read(gtScheduledProvider)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(gtScheduledProvider.notifier).state = true);
+    }
+
+    Widget option(String title, String sub, IconData icon, bool selected, VoidCallback? onTap) => Expanded(
+          child: Opacity(
+            opacity: onTap == null ? 0.45 : 1,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onTap,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.navy.withValues(alpha: 0.08) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: selected ? AppColors.navy : AppColors.border, width: selected ? 1.6 : 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(icon, size: 20, color: AppColors.navy),
+                    const SizedBox(height: 6),
+                    Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                    const SizedBox(height: 2),
+                    Text(sub, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                  ],
                 ),
               ),
-              SizedBox(height: 3),
-              Text(
-                'The nearest available driver is assigned right away. No time slot is needed.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-            ],
+            ),
           ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            option(
+              'Urgent',
+              sameDayClosed ? 'Closed for today' : 'Nearest driver, right away',
+              Icons.bolt_rounded,
+              !scheduled,
+              sameDayClosed ? null : () => ref.read(gtScheduledProvider.notifier).state = false,
+            ),
+            const SizedBox(width: 10),
+            option(
+              'Schedule',
+              'Pick a later date',
+              Icons.event_outlined,
+              scheduled,
+              () => ref.read(gtScheduledProvider.notifier).state = true,
+            ),
+          ],
         ),
+        if (scheduled) ...[
+          const SizedBox(height: 14),
+          GtSlotPicker(category: category, city: city, showSlots: false),
+        ],
       ],
     );
   }

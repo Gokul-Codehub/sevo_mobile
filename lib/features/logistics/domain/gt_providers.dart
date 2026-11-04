@@ -63,6 +63,9 @@ final ptlConfigProvider =
 
 // ── Per-attempt data ────────────────────────────────────────────────────────
 
+/// Truck / 2-Wheeler dispatch choice, as on the web: false = Urgent (nearest driver now), true = Schedule for a later date.
+final gtScheduledProvider = StateProvider<bool>((ref) => false);
+
 /// Server-authoritative slots for a date + service category (+ city).
 final gtSlotsProvider = FutureProvider.autoDispose
     .family<GtSlotsResult, ({String date, String category, String? city})>(
