@@ -1,5 +1,9 @@
+import '../../../coverage/data/coverage_repository.dart';
+import '../../../addresses/presentation/widgets/place_suggestions_panel.dart';
+import '../../../addresses/domain/place_search.dart';
 import '../../../../core/permissions/permission_manager.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
@@ -24,16 +28,16 @@ import '../../../../shared/maps/sevo_map_style.dart';
 ///
 /// Returns a [PickedDropLocation] via `context.pop(result)`, or `null` if the
 /// customer backs out without confirming.
-class DropLocationPickerScreen extends StatefulWidget {
+class DropLocationPickerScreen extends ConsumerStatefulWidget {
   const DropLocationPickerScreen({super.key, this.initial});
 
   final PickedDropLocation? initial;
 
   @override
-  State<DropLocationPickerScreen> createState() => _DropLocationPickerScreenState();
+  ConsumerState<DropLocationPickerScreen> createState() => _DropLocationPickerScreenState();
 }
 
-class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
+class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScreen> {
   double _lat = 12.754598;
   double _lng = 77.834477;
 
@@ -51,6 +55,15 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
   int _geocodeSeq = 0;
   GoogleMapController? _mapController;
   final _searchController = TextEditingController();
+
+  // Suggestions while typing (customer backend proxy, never Google directly): from 3 characters, 300 ms pause, one
+  // session token per search. If the proxy fails, Enter still searches the plain way and the pin can be moved by hand.
+  late final PlaceSearch _places = _newPlaceSearch();
+
+  PlaceSearch _newPlaceSearch() => PlaceSearch(
+        autocomplete: (q, session, lat, lng) => ref.read(coverageRepositoryProvider).autocomplete(q, session: session, lat: lat, lng: lng),
+        details: (s, session) => ref.read(coverageRepositoryProvider).details(s, session: session),
+      );
 
   /// True when the pin moved because of a typed address, so the map settling
   /// doesn't overwrite what the customer typed.
@@ -75,6 +88,7 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
 
   @override
   void dispose() {
+    _places.dispose();
     _searchController.dispose();
     _mapController?.dispose();
     super.dispose();
@@ -151,6 +165,30 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
     }
   }
 
+  /// A suggestion was tapped in the search bar: take its address and coordinates, move the pin there.
+  Future<void> _pickSuggestion(PlaceSuggestion s) async {
+    FocusScope.of(context).unfocus();
+    setState(() => _searching = true);
+    final d = await _places.select(s); // same session token as the typing that found it
+    if (!mounted) return;
+    setState(() => _searching = false);
+    if (d == null) {
+      _showError("We couldn't open that place. Move the pin on the map, or type the address with Edit.");
+      return;
+    }
+    final text = withoutCountry(d.address.isNotEmpty ? d.address : d.label);
+    _searchController.clear();
+    _keepTypedAddress = true; // the map settling must not replace the address that came with the place
+    _geocodeSeq++;
+    setState(() {
+      _address = text;
+      _placeTitle = d.name.isNotEmpty ? d.name : (d.locality.isNotEmpty ? d.locality : 'Selected location');
+      _placeLine = text;
+      _isResolvingAddress = false;
+    });
+    await _moveTo(d.lat, d.lng, zoom: 17);
+  }
+
   Future<List<Location>> _geocodeQuery(String q) async {
     var results = await locationFromAddress(q);
     if (results.isEmpty && !q.toLowerCase().contains('india')) {
@@ -190,6 +228,9 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
   /// "Edit": type the address; the pin follows it.
   Future<void> _openEditSheet() async {
     final ctrl = TextEditingController(text: _address.isNotEmpty ? _address : _placeLine);
+    final sheetSearch = _newPlaceSearch();
+    PlaceDetails? picked; // the suggestion whose text is in the box (cleared as soon as the text is edited)
+    String pickedText = '';
     var busy = false;
     String? error;
     await showModalBottomSheet<void>(
@@ -211,12 +252,20 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
             });
             var moved = false;
             try {
-              final results = await _geocodeQuery(text);
-              if (results.isNotEmpty) {
+              if (picked != null && text == pickedText) {
+                // The text is exactly a suggestion: its coordinates are already known, no guessing needed.
                 _keepTypedAddress = true;
-                _geocodeSeq++; // drop any reverse lookup still in flight
-                await _moveTo(results.first.latitude, results.first.longitude);
+                _geocodeSeq++;
+                await _moveTo(picked!.lat, picked!.lng);
                 moved = true;
+              } else {
+                final results = await _geocodeQuery(text);
+                if (results.isNotEmpty) {
+                  _keepTypedAddress = true;
+                  _geocodeSeq++; // drop any reverse lookup still in flight
+                  await _moveTo(results.first.latitude, results.first.longitude);
+                  moved = true;
+                }
               }
             } catch (_) {}
             if (!mounted) return;
@@ -259,12 +308,32 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
                   maxLines: 4,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => busy ? null : apply(),
+                  onChanged: (v) {
+                    if (v.trim() != pickedText) picked = null;
+                    sheetSearch.onChanged(v, lat: _lat, lng: _lng);
+                  },
                   decoration: InputDecoration(
                     labelText: 'Drop-off address',
                     errorText: error,
                     prefixIcon: const Icon(Icons.location_on_rounded, color: AppColors.navy),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   ),
+                ),
+                PlaceSuggestionsPanel(
+                  search: sheetSearch,
+                  manualHint: 'Type the full address and tap Save.',
+                  onPick: (sug) async {
+                    final d = await sheetSearch.select(sug);
+                    if (d == null) {
+                      setSheet(() => error = "We couldn't open that place. Type the full address and tap Save.");
+                      return;
+                    }
+                    picked = d;
+                    pickedText = withoutCountry(d.address.isNotEmpty ? d.address : d.label);
+                    ctrl.text = pickedText;
+                    ctrl.selection = TextSelection.collapsed(offset: pickedText.length);
+                    setSheet(() => error = null);
+                  },
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
@@ -289,7 +358,10 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
     );
     // Not disposed straight away: the sheet is still animating closed and its
     // TextField would rebuild with a disposed controller (red error screen).
-    Future<void>.delayed(const Duration(milliseconds: 500), ctrl.dispose);
+    Future<void>.delayed(const Duration(milliseconds: 500), () {
+      ctrl.dispose();
+      sheetSearch.dispose();
+    });
   }
 
   void _showError(String message) {
@@ -415,6 +487,7 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
                       controller: _searchController,
                       textInputAction: TextInputAction.search,
                       onSubmitted: _searchPlace,
+                      onChanged: (v) => _places.onChanged(v, lat: _lat, lng: _lng),
                       style: const TextStyle(fontSize: 13.5),
                       decoration: InputDecoration(
                         hintText: 'Search for area, landmark...',
@@ -437,6 +510,14 @@ class _DropLocationPickerScreenState extends State<DropLocationPickerScreen> {
                 ),
               ],
             ),
+          ),
+
+          // Suggestions under the search box
+          Positioned(
+            top: topPad + 8 + 48 + 6,
+            left: 12 + 46 + 10,
+            right: 12,
+            child: PlaceSuggestionsPanel(search: _places, onPick: _pickSuggestion),
           ),
 
           // Locate-me / map-type buttons

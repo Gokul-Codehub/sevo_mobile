@@ -8,6 +8,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../logistics/domain/logistics_providers.dart';
 import '../../../../shared/utils/app_toast.dart';
+import '../../../coverage/data/coverage_repository.dart';
+import '../../domain/place_search.dart';
+import '../widgets/place_suggestions_panel.dart';
 
 /// "Enter location manually" for people who are not logged in.
 ///
@@ -32,6 +35,16 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
   String? _state;
   bool _busy = false;
 
+  // Suggestions while typing a place (customer backend proxy, never Google directly). A tapped suggestion fills the
+  // form below and brings its own coordinates; the form stays fully editable, and works without any suggestion.
+  final _searchCtl = TextEditingController();
+  late final PlaceSearch _places = PlaceSearch(
+    autocomplete: (q, session, lat, lng) => ref.read(coverageRepositoryProvider).autocomplete(q, session: session, lat: lat, lng: lng),
+    details: (s, session) => ref.read(coverageRepositoryProvider).details(s, session: session),
+  );
+  PlaceDetails? _picked;
+  String _pickedLabel = '';
+
   static const _states = <String>[
     'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa',
     'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala',
@@ -44,6 +57,8 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
 
   @override
   void dispose() {
+    _places.dispose();
+    _searchCtl.dispose();
     _addressLine.dispose();
     _area.dispose();
     _city.dispose();
@@ -71,6 +86,35 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
     }
   }
 
+  String _labelNow() => [_addressLine.text.trim(), _area.text.trim(), _city.text.trim(), (_state ?? '').trim(), _pincode.text.trim()]
+      .where((p) => p.isNotEmpty)
+      .join(', ');
+
+  Future<void> _pickSuggestion(PlaceSuggestion s) async {
+    FocusScope.of(context).unfocus();
+    setState(() => _busy = true);
+    final d = await _places.select(s); // same session token as the typing that found it
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (d == null) {
+      AppToast.show(context, "We couldn't open that place. Fill the address below instead.", type: AppToastType.error);
+      return;
+    }
+    final stateName = _states.where((x) => x.toLowerCase() == d.state.toLowerCase()).firstOrNull;
+    final name = d.name.trim();
+    setState(() {
+      _area.text = d.street;
+      if (d.cityName.isNotEmpty) _city.text = d.cityName;
+      if (stateName != null) _state = stateName;
+      if (d.pincode.isNotEmpty) _pincode.text = d.pincode;
+      // The house / building line is theirs to give; a real place name is the best starting point when it is empty.
+      if (_addressLine.text.trim().isEmpty && name.isNotEmpty && name.toLowerCase() != d.cityName.toLowerCase()) _addressLine.text = name;
+      _picked = d;
+      _pickedLabel = _labelNow();
+      _searchCtl.clear();
+    });
+  }
+
   Future<void> _confirm() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _busy = true);
@@ -82,14 +126,19 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
     final label = [line, area, city, state, pin].where((p) => p.isNotEmpty).join(', ');
     double? lat;
     double? lng;
-    try {
-      // The typed place has to become real coordinates: serviceability and delivery are checked against them.
-      final hits = await locationFromAddress('$label, India');
-      if (hits.isNotEmpty) {
-        lat = hits.first.latitude;
-        lng = hits.first.longitude;
-      }
-    } catch (_) {}
+    if (_picked != null && label == _pickedLabel) {
+      lat = _picked!.lat; // exactly what the suggestion filled in: its coordinates are already known
+      lng = _picked!.lng;
+    } else {
+      try {
+        // The typed place has to become real coordinates: serviceability and delivery are checked against them.
+        final hits = await locationFromAddress('$label, India');
+        if (hits.isNotEmpty) {
+          lat = hits.first.latitude;
+          lng = hits.first.longitude;
+        }
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() => _busy = false);
     if (lat == null || lng == null) {
@@ -130,6 +179,14 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
               style: TextStyle(fontSize: 14, height: 1.4, color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 18),
+            TextField(
+              controller: _searchCtl,
+              textInputAction: TextInputAction.search,
+              onChanged: (v) => _places.onChanged(v, lat: ref.read(customerLocationProvider).latitude, lng: ref.read(customerLocationProvider).longitude),
+              decoration: _dec('Search your area, street or pincode', Icons.search_rounded),
+            ),
+            PlaceSuggestionsPanel(search: _places, manualHint: 'Fill in the address below instead.', onPick: _pickSuggestion),
+            const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _busy ? null : _useGps,
               icon: const Icon(Icons.my_location_rounded, size: 20),

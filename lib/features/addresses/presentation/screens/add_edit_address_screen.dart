@@ -1,3 +1,4 @@
+import '../widgets/place_suggestions_panel.dart';
 import '../../../../core/permissions/permission_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 import '../../../logistics/domain/logistics_providers.dart';
+import '../../../coverage/data/coverage_repository.dart';
 import '../../domain/address_models.dart';
+import '../../domain/place_search.dart';
 import '../../domain/address_notifier.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../shared/utils/focus_first_error.dart';
@@ -50,6 +53,19 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
 
+  // Place suggestions while typing: from 3 characters, after a 300 ms pause, one session token per search. They come
+  // through the customer backend's proxy (the app never holds a Google key); if it fails, the map pin and the
+  // address form below keep working exactly as before.
+  late final PlaceSearch _places = PlaceSearch(
+    autocomplete: (q, session, lat, lng) =>
+        ref.read(coverageRepositoryProvider).autocomplete(q, session: session, lat: lat, lng: lng),
+    details: (s, session) => ref.read(coverageRepositoryProvider).details(s, session: session),
+  );
+
+  /// Set while the map flies to a chosen suggestion, so the camera settling does not overwrite the address that came
+  /// with the place with the phone's own reverse geocode.
+  bool _skipNextReverse = false;
+
   /// True while the pinned location is outside the service area (updated from
   /// the live serviceability check; keeps its last value while re-checking so
   /// the sheet doesn't flicker as the map moves).
@@ -87,6 +103,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
   @override
   void dispose() {
     _mapController?.dispose();
+    _places.dispose();
     _searchController.dispose();
     _searchFocus.dispose();
     _line1Controller.dispose();
@@ -309,6 +326,43 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
     }
   }
 
+  Future<void> _selectSuggestion(PlaceSuggestion s) async {
+    FocusScope.of(context).unfocus();
+    setState(() => _searching = true);
+    final details = await _places.select(s); // same session token as the typing that found it
+    if (!mounted) return;
+    setState(() => _searching = false);
+    if (details == null) {
+      _showLocationError("We couldn't open that place. Move the pin on the map, or type the address in the next step.");
+      return;
+    }
+    _applyPlace(details);
+  }
+
+  /// Fills the address form from the chosen place and moves the pin to it. The house / flat line and the landmark are
+  /// the customer's own and are never touched; the street line is only replaced if it is empty or was filled automatically.
+  void _applyPlace(PlaceDetails d) {
+    _skipNextReverse = true;
+    Future<void>.delayed(const Duration(seconds: 2), () => _skipNextReverse = false); // if the camera never moves
+    _currentLat = d.lat;
+    _currentLng = d.lng;
+    final city = d.cityName;
+    if (city.isNotEmpty) _cityController.text = city;
+    if (d.state.isNotEmpty) _stateController.text = d.state;
+    if (d.pincode.isNotEmpty) _pincodeController.text = d.pincode;
+    final street = d.street;
+    if (street.isNotEmpty && (_line2Controller.text.trim().isEmpty || _line2Controller.text.trim() == _lastAutoLine2)) {
+      _line2Controller.text = street;
+      _lastAutoLine2 = street;
+    }
+    _searchController.clear();
+    setState(() {
+      _placeTitle = d.name.isNotEmpty ? d.name : (d.locality.isNotEmpty ? d.locality : city);
+      _placeLine = withoutCountry(d.address);
+    });
+    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(LatLng(d.lat, d.lng), 16));
+  }
+
   Widget _circleButton(IconData icon, VoidCallback onTap, {bool loading = false}) {
     return Material(
       color: Colors.white,
@@ -372,6 +426,10 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               onCameraIdle: () {
                 if (!mounted) return;
                 setState(() {});
+                if (_skipNextReverse) {
+                  _skipNextReverse = false;
+                  return;
+                }
                 _reverseGeocodeAndFillFields(_currentLat, _currentLng);
               },
               myLocationButtonEnabled: false,
@@ -447,6 +505,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                       focusNode: _searchFocus,
                       textInputAction: TextInputAction.search,
                       onSubmitted: _searchPlace,
+                      onChanged: (v) => _places.onChanged(v, lat: _currentLat, lng: _currentLng),
                       style: const TextStyle(fontSize: 13.5),
                       decoration: InputDecoration(
                         hintText: 'Search for area, landmark...',
@@ -475,6 +534,14 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                 ),
               ],
             ),
+          ),
+
+          // Suggestions under the search box
+          Positioned(
+            top: topPad + 8 + 48 + 6,
+            left: 12 + 46 + 10,
+            right: 12,
+            child: PlaceSuggestionsPanel(search: _places, onPick: _selectSuggestion),
           ),
 
           // Locate-me / map-type buttons

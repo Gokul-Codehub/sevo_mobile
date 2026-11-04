@@ -49,7 +49,10 @@ class LocationSheet extends ConsumerStatefulWidget {
 class _LocationSheetState extends ConsumerState<LocationSheet> {
   final _query = TextEditingController();
   // One Google "session" per sheet opening: the typing and the final pick are billed together.
-  final String _session = List.generate(24, (_) => 'abcdefghijklmnopqrstuvwxyz0123456789'[Random().nextInt(36)]).join();
+  String _session = _newSession();
+
+  static String _newSession() =>
+      List.generate(24, (_) => 'abcdefghijklmnopqrstuvwxyz0123456789'[Random.secure().nextInt(36)]).join();
   Timer? _debounce;
   List<PlaceSuggestion> _suggestions = const [];
   List<_Place> _results = const [];
@@ -70,13 +73,14 @@ class _LocationSheetState extends ConsumerState<LocationSheet> {
     _debounce?.cancel();
     final q = text.trim();
     if (q.length < 3) {
+      _session = _newSession(); // the search ended: the next one is a new billing session
       setState(() {
         _suggestions = const [];
         _message = null;
       });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 350), () async {
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
       final here = ref.read(customerLocationProvider);
       final r = await ref.read(coverageRepositoryProvider).autocomplete(q, session: _session, lat: here.latitude, lng: here.longitude);
       if (!mounted || _query.text.trim() != q) return; // the customer kept typing
