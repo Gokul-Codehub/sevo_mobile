@@ -117,9 +117,8 @@ class ProductCard extends ConsumerWidget {
     h += 6 + 6; // Padding.fromLTRB(8, 6, 8, 6) -- top + bottom
     h += _titleBlockHeight + 3; // reserved title block + gap
     if (showPrice) h += 19 + 3; // price row + gap
-    h += 28 + 4; // pack selector (+ cart shortcut) row + gap
     if (!showImage && showAddButton) h += 28; // ADD has no photo to sit on
-    h += 28.0; // delivery-time row band (sits beside the Add notch)
+    h += 28.0; // pack/quantity selector band (sits beside the Add notch)
     h += 8.0; // safety margin for platform font-metric variance
     return h;
   }
@@ -651,12 +650,13 @@ class ProductCard extends ConsumerWidget {
                           ],
                         ),
                       const SizedBox(height: 3),
-                      // Pack size: a product sold in several packs gets a tappable
-                      // selector with a chevron (opens the pack-size sheet); a single
-                      // pack shows its size as plain text in the same slot so every
-                      // card keeps the same height.
+                      // Pack / quantity selector. Replaces the old hard-coded
+                      // "22 mins" ETA: sits beside the Add notch, one row.
+                      // A product sold in several packs gets a tappable
+                      // selector (opens the pack-size sheet); a single pack
+                      // shows its size as plain text in the same slot.
                       Padding(
-                        padding: EdgeInsets.zero,
+                        padding: EdgeInsets.only(right: nW > 0 ? nW - 4 : 0),
                         child: Row(
                           children: [
                             Expanded(
@@ -690,7 +690,10 @@ class ProductCard extends ConsumerWidget {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          _packLabel(service),
+                                          _packLabel(service) +
+                                              (service.maxQuantity <= 5 && service.inStock
+                                                  ? ' · ${service.maxQuantity} left'
+                                                  : ''),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -714,58 +717,6 @@ class ProductCard extends ConsumerWidget {
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Delivery ETA & Stock
-                      Padding(
-                        padding: EdgeInsets.only(right: nW > 0 ? nW - 4 : 0),
-                        child: SizedBox(
-                          height: 28,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.timer_outlined,
-                                    size: 11,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  const Text(
-                                    '22 mins',
-                                    style: TextStyle(
-                                      fontSize: 9.5,
-                                      color: AppColors.textSecondary,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  if (service.maxQuantity <= 5 &&
-                                      service.inStock) ...[
-                                    const SizedBox(width: 6),
-                                    const Icon(
-                                      Icons.inventory_2_outlined,
-                                      size: 10,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      '${service.maxQuantity} left',
-                                      style: const TextStyle(
-                                        fontSize: 9,
-                                        color: AppColors.textSecondary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
                         ),
                       ),
                       // Recipe badge removed 2026-09-30 per explicit request: the

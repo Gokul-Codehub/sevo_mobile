@@ -127,6 +127,7 @@ dependencies:
   permission_handler: 12.0.1
   firebase_analytics: ^13.0.1
   firebase_performance: ^0.12.1
+  # firebase_in_app_messaging: ^0.10.1  # disabled: Android build can't resolve firebase-inappmessaging (no version). Re-enable after fixing Firebase versions.
   in_app_review: ^2.0.12
 
 dev_dependencies:

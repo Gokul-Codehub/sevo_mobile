@@ -1,4 +1,5 @@
 import '../../../tracking/data/call_service.dart';
+import '../../../../core/refresh/refresh_runner.dart';
 import '../../../../core/analytics/analytics_manager.dart';
 import 'dart:async';
 import 'dart:io';
@@ -120,7 +121,10 @@ class BookingDetailScreen extends ConsumerWidget {
     final note = (booking.specialInstructions ?? '').trim();
     final cancelReason = (booking.cancellationReason ?? '').trim();
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: () => RefreshRunner.run(context, [() => ref.refresh(bookingDetailProvider(booking.id).future)]),
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 14, 16, 20 + MediaQuery.paddingOf(context).bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,7 +663,7 @@ class BookingDetailScreen extends ConsumerWidget {
           const SizedBox(height: 40),
         ],
       ),
-    );
+    ));
   }
 
   // Fetches the real backend-generated invoice PDF and hands it to the

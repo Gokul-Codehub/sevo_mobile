@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/refresh/refresh_runner.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -76,7 +77,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => controller.refresh(silent: true),
+        onRefresh: () => RefreshRunner.run(context, [() => controller.refresh(silent: true)]),
         child: Builder(builder: (context) {
           if (!state.loadedOnce && state.isLoading) {
             return ListView(

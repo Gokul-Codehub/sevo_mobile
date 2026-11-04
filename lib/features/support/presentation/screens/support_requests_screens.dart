@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/errors/api_error.dart';
 import '../../../../core/errors/error_manager.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../core/refresh/refresh_runner.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/utils/date_utils.dart';
@@ -57,6 +58,7 @@ class SupportRequestsScreen extends ConsumerWidget {
         label: const Text('New request'),
       ),
       body: requests.when(
+        skipLoadingOnReload: true,
         loading: () => const LoadingState(),
         error: (e, _) => ErrorState.from(e, onRetry: () => ref.invalidate(supportRequestsProvider)),
         data: (list) {
@@ -70,7 +72,10 @@ class SupportRequestsScreen extends ConsumerWidget {
             );
           }
           return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(supportRequestsProvider),
+            onRefresh: () {
+              ref.invalidate(supportRequestsProvider);
+              return RefreshRunner.run(context, [() => ref.read(supportRequestsProvider.future)]);
+            },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
               children: [for (final r in list) _RequestCard(request: r)],
@@ -283,12 +288,16 @@ class _SupportTicketScreenState extends ConsumerState<SupportTicketScreen> {
       backgroundColor: const Color(0xFFF6F8FA),
       appBar: _bar(context, 'Support request'),
       body: async.when(
+        skipLoadingOnReload: true,
         loading: () => const LoadingState(),
         error: (e, _) => ErrorState.from(e, onRetry: () => ref.invalidate(supportRequestProvider(widget.id))),
         data: (r) => Column(children: [
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () async => ref.invalidate(supportRequestProvider(widget.id)),
+              onRefresh: () {
+                ref.invalidate(supportRequestProvider(widget.id));
+                return RefreshRunner.run(context, [() => ref.read(supportRequestProvider(widget.id).future)]);
+              },
               child: ListView(padding: const EdgeInsets.all(16), children: [
                 _Header(request: r),
                 const SizedBox(height: 12),

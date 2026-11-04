@@ -48,6 +48,7 @@ class HomeStudioBlock extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(homeStudioPageProvider(pageKey));
     return async.when(
+      skipLoadingOnReload: true,
       loading: () => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

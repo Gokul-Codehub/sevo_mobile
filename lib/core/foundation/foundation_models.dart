@@ -95,6 +95,7 @@ const Map<String, Object> kSettingDefaults = {
   'booking_poll_seconds': 15,
   'crash_reporting_enabled': true,
   'analytics_enabled': true,
+  'in_app_messaging_enabled': true,
   'soft_update_interval_hours': 24,
   'config_refresh_minutes': 15,
 };

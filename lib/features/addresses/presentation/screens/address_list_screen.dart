@@ -11,6 +11,7 @@ import '../../domain/address_models.dart';
 import '../../domain/address_notifier.dart';
 import 'guest_location_picker_screen.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../core/refresh/refresh_runner.dart';
 
 /// Screen listing customer addresses with options to add, select, edit, or delete.
 class AddressListScreen extends ConsumerWidget {
@@ -80,6 +81,7 @@ class AddressListScreen extends ConsumerWidget {
         ),
       ),
       body: addressesAsync.when(
+        skipLoadingOnReload: true,
         loading: () => ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: 3,
@@ -91,7 +93,10 @@ class AddressListScreen extends ConsumerWidget {
           onRetry: () => ref.read(addressListProvider.notifier).refresh(),
         ),
         data: (addresses) {
-          return ListView(
+          return RefreshIndicator(
+            onRefresh: () => RefreshRunner.run(context, [() => ref.read(addressListProvider.notifier).refreshQuietly()]),
+            child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
             children: [
               // Add New Address
@@ -175,7 +180,7 @@ class AddressListScreen extends ConsumerWidget {
                   ),
                 ),
             ],
-          );
+          ));
         },
       ),
     );

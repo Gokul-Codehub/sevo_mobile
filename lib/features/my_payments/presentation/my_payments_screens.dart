@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/safe_back.dart';
+import '../../../core/refresh/refresh_runner.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/date_utils.dart';
 import '../../../shared/widgets/state_widgets.dart';
@@ -45,12 +46,16 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
       backgroundColor: const Color(0xFFF6F8FA),
       appBar: _bar(context, 'My payments'),
       body: history.when(
+        skipLoadingOnReload: true,
         loading: () => const LoadingState(),
         error: (e, _) => ErrorState.from(e, onRetry: () => ref.invalidate(paymentHistoryProvider)),
         data: (h) {
           final rows = h.records.where((r) => _filter == null || r.outcome == _filter).toList();
           return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(paymentHistoryProvider),
+            onRefresh: () {
+              ref.invalidate(paymentHistoryProvider);
+              return RefreshRunner.run(context, [() => ref.read(paymentHistoryProvider.future)]);
+            },
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -164,6 +169,7 @@ class RefundsScreen extends ConsumerWidget {
       backgroundColor: const Color(0xFFF6F8FA),
       appBar: _bar(context, 'My refunds'),
       body: refunds.when(
+        skipLoadingOnReload: true,
         loading: () => const LoadingState(),
         error: (e, _) => ErrorState.from(e, onRetry: () => ref.invalidate(myRefundsProvider)),
         data: (list) {
@@ -175,7 +181,10 @@ class RefundsScreen extends ConsumerWidget {
             );
           }
           return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(myRefundsProvider),
+            onRefresh: () {
+              ref.invalidate(myRefundsProvider);
+              return RefreshRunner.run(context, [() => ref.read(myRefundsProvider.future)]);
+            },
             child: ListView(padding: const EdgeInsets.all(16), children: [
               for (final r in list) RefundCard(refund: r),
               Center(child: TextButton(onPressed: () => context.push('/support/new?topic=refund'), child: const Text('Refund not received? Ask support'))),

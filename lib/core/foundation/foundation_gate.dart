@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/theme/app_colors.dart';
-import '../../routing/app_router.dart' show rootNavigatorKey;
+import '../../routing/app_router.dart' show appRouterProvider, rootNavigatorKey;
 import '../../shared/utils/app_toast.dart';
 import '../network/network_state.dart';
 import '../network/session_interceptors.dart';
@@ -14,6 +14,7 @@ import '../analytics/analytics_manager.dart';
 import 'announcement_host.dart';
 import 'crash_reporting.dart';
 import 'foundation_controller.dart';
+import 'in_app_messaging.dart';
 import 'foundation_models.dart' show FoundationConfig, MaintenanceInfo;
 import 'foundation_models.dart';
 
@@ -29,18 +30,43 @@ class FoundationGate extends ConsumerStatefulWidget {
 }
 
 class _FoundationGateState extends ConsumerState<FoundationGate> with WidgetsBindingObserver {
+  Listenable? _routerDelegate;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     SessionNotice.message.addListener(_showSessionNotice);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(ref.read(foundationControllerProvider.notifier).start());
+      if (!mounted) return;
+      unawaited(ref.read(foundationControllerProvider.notifier).start());
+      _watchRouteForInAppMessages();
     });
+  }
+
+  /// Firebase In-App Messaging is held back on payment, checkout, sign-in and tracking screens.
+  void _watchRouteForInAppMessages() {
+    try {
+      final delegate = ref.read(appRouterProvider).routerDelegate;
+      _routerDelegate = delegate;
+      delegate.addListener(_onRouteChanged);
+      _onRouteChanged();
+    } catch (_) {}
+  }
+
+  void _onRouteChanged() {
+    try {
+      final dynamic config = ref.read(appRouterProvider).routerDelegate.currentConfiguration;
+      final dynamic last = config.last;
+      // A screen opened with push() keeps its own location inside an "imperative" match.
+      final dynamic list = last.runtimeType.toString().contains('Imperative') ? last.matches : config;
+      InAppMessagingManager.instance.setLocation((list.uri as Uri).path);
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _routerDelegate?.removeListener(_onRouteChanged);
     SessionNotice.message.removeListener(_showSessionNotice);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -83,6 +109,11 @@ class _FoundationGateState extends ConsumerState<FoundationGate> with WidgetsBin
     ref.listen<bool>(
       foundationControllerProvider.select((s) => s.config.boolSetting('analytics_enabled')),
       (previous, next) => AnalyticsManager.instance.setRemoteEnabled(next),
+    );
+    // Remote switch for Firebase In-App Messaging (pop-ups made in Firebase Console).
+    ref.listen<bool>(
+      foundationControllerProvider.select((s) => s.config.boolSetting('in_app_messaging_enabled', fallback: true)),
+      (previous, next) => InAppMessagingManager.instance.setRemoteEnabled(next),
     );
     final blocked = ref.watch(foundationControllerProvider.select((s) => s.maintenanceBlocksApp));
     final info = ref.watch(foundationControllerProvider.select((s) => s.config.maintenance));

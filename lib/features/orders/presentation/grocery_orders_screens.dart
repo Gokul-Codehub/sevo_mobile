@@ -1,4 +1,5 @@
 import '../domain/reorder.dart';
+import '../../../core/refresh/refresh_runner.dart';
 import '../../booking/presentation/widgets/book_again_actions.dart';
 import 'dart:async';
 
@@ -60,6 +61,12 @@ class _StatusChip extends StatelessWidget {
 
 // ───────────────────────────────── Orders list ─────────────────────────────────
 
+/// Pull-to-refresh for the orders list: waits for the new list (never longer than the shared limit).
+Future<void> _reloadOrders(BuildContext context, WidgetRef ref) {
+  ref.invalidate(groceryOrdersProvider);
+  return RefreshRunner.run(context, [() => ref.read(groceryOrdersProvider.future)]);
+}
+
 /// Profile -> My grocery orders. Active / Delivered / Cancelled, each order with a live progress bar.
 class GroceryOrdersScreen extends ConsumerWidget {
   const GroceryOrdersScreen({super.key});
@@ -86,12 +93,13 @@ class GroceryOrdersScreen extends ConsumerWidget {
             ),
           ),
           body: orders.when(
+            skipLoadingOnReload: true,
             loading: () => const LoadingState(),
             error: (e, _) => ErrorState.from(e, onRetry: () => ref.invalidate(groceryOrdersProvider)),
             data: (all) => TabBarView(children: [
-              _OrderList(orders: all.where((o) => o.isActive).toList(), empty: 'No active orders', onRefresh: () async => ref.invalidate(groceryOrdersProvider)),
-              _OrderList(orders: all.where((o) => o.stage == OrderStage.delivered).toList(), empty: 'No delivered orders yet', onRefresh: () async => ref.invalidate(groceryOrdersProvider)),
-              _OrderList(orders: all.where((o) => o.stage == OrderStage.cancelled).toList(), empty: 'No cancelled orders', onRefresh: () async => ref.invalidate(groceryOrdersProvider)),
+              _OrderList(orders: all.where((o) => o.isActive).toList(), empty: 'No active orders', onRefresh: () => _reloadOrders(context, ref)),
+              _OrderList(orders: all.where((o) => o.stage == OrderStage.delivered).toList(), empty: 'No delivered orders yet', onRefresh: () => _reloadOrders(context, ref)),
+              _OrderList(orders: all.where((o) => o.stage == OrderStage.cancelled).toList(), empty: 'No cancelled orders', onRefresh: () => _reloadOrders(context, ref)),
             ]),
           ),
         ),
@@ -349,12 +357,16 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
         backgroundColor: _page,
         appBar: _bar(context, 'Order #${widget.orderNumber}'),
         body: async.when(
+          skipLoadingOnReload: true,
           loading: () => const LoadingState(),
           error: (e, _) => ErrorState.from(e, onRetry: () => ref.invalidate(groceryOrderProvider(widget.orderNumber))),
           data: (o) => Column(children: [
             Expanded(
               child: RefreshIndicator(
-                onRefresh: () async => ref.invalidate(groceryOrderProvider(widget.orderNumber)),
+                onRefresh: () {
+                  ref.invalidate(groceryOrderProvider(widget.orderNumber));
+                  return RefreshRunner.run(context, [() => ref.read(groceryOrderProvider(widget.orderNumber).future)]);
+                },
                 child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 24), children: [
                   _Header(order: o),
                   const SizedBox(height: 12),

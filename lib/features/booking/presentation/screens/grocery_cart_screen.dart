@@ -962,34 +962,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     }),
                     ),
                   ),
-
-                  InkWell(
-                    onTap: () {
-                      // Back to the Groceries home to keep shopping.
-                      _goShopGroceries();
-                    },
-                    borderRadius: const BorderRadius.vertical(
-                        bottom: Radius.circular(18)),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 13),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.eco_rounded,
-                              size: 16, color: AppColors.groceryGreen),
-                          SizedBox(width: 6),
-                          Text(
-                            'Add More Farm Produce',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.groceryGreen,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),

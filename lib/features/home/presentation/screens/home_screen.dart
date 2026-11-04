@@ -1,4 +1,6 @@
 import '../../../../core/utils/restart_widget.dart';
+import '../../../../core/refresh/refresh_runner.dart';
+import '../../data/home_studio_repository.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../widgets/home_load_gate.dart';
 import 'dart:async';
@@ -100,6 +102,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Scrolling back to the top eases it back to 0.
   final _scroll = ScrollController();
   final _collapse = ValueNotifier<double>(0);
+  /// Shows the "Back to top" button once the customer has scrolled well down the page.
+  final _showBackToTop = ValueNotifier<bool>(false);
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
   DateTime? _lastHomeTapAt;
 
@@ -130,21 +134,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
+    final far = _scroll.offset > 900;
+    if (far != _showBackToTop.value) _showBackToTop.value = far;
     final t = ((_scroll.offset - _collapseStart) / (_collapseEnd - _collapseStart)).clamp(0.0, 1.0);
     if ((t - _collapse.value).abs() > 0.004) _collapse.value = t;
   }
 
   @override
   void dispose() {
+    _resumeRefresh.detach();
     _scroll.dispose();
     _collapse.dispose();
+    _showBackToTop.dispose();
     super.dispose();
   }
+
+  /// Reloads Home the way the big shopping / delivery apps do: the content the customer is looking at (the
+  /// published Home page, the top cards, the categories) is awaited, but never for longer than
+  /// [RefreshRunner.defaultLimit]; the below-the-fold lists reload in the background and fill in when ready.
+  /// The old data stays on screen meanwhile, and a failure is reported instead of swallowed.
+  Future<void> _refreshHome(String studioKey, {bool quiet = false}) async {
+    ref.invalidate(homeStudioPageProvider);
+    ref.invalidate(homepageConfigProvider);
+    ref.invalidate(categoriesProvider);
+    ref.invalidate(groceryProduceProvider);
+    ref.invalidate(popularServicesProvider);
+    ref.invalidate(myBookingsProvider(null));
+    ref.invalidate(availableCouponsProvider);
+    await RefreshRunner.run(
+      context,
+      [
+        () => ref.read(homeStudioPageProvider(studioKey).future),
+        () => ref.read(homepageConfigProvider.future),
+        () => ref.read(categoriesProvider.future),
+      ],
+      quiet: quiet,
+    );
+  }
+
+  /// Coming back to the app after 5+ minutes away reloads Home quietly (no spinner, no error toast).
+  late final ResumeRefresh _resumeRefresh = ResumeRefresh(onStale: () {
+    if (!mounted) return;
+    final mode = ref.read(homeFlowModeProvider);
+    unawaited(_refreshHome(mode == HomeFlowMode.groceries ? 'grocery_home' : 'services_home', quiet: true));
+  });
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _resumeRefresh.attach();
     // Fixed 2026-09-21 per explicit bug report ("In starting of the
     // application it request to turn the GPS then detect the current
     // location but it does not fix the current location at all"): GPS
@@ -428,22 +467,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               // each section's own loading state (shimmer skeleton below,
               // or a spinner where a skeleton doesn't fit the shape) shows
               // during that window, then reveals the refreshed content.
-              onRefresh: () async {
-                ref.invalidate(categoriesProvider);
-                ref.invalidate(groceryProduceProvider);
-                ref.invalidate(popularServicesProvider);
-                ref.invalidate(homepageConfigProvider);
-                ref.invalidate(myBookingsProvider(null));
-                ref.invalidate(availableCouponsProvider);
-                await Future.wait([
-                  _refreshIgnoringErrors(ref.read(categoriesProvider.future)),
-                  _refreshIgnoringErrors(ref.read(groceryProduceProvider.future)),
-                  _refreshIgnoringErrors(ref.read(popularServicesProvider.future)),
-                  _refreshIgnoringErrors(ref.read(homepageConfigProvider.future)),
-                  _refreshIgnoringErrors(ref.read(myBookingsProvider(null).future)),
-                  _refreshIgnoringErrors(ref.read(availableCouponsProvider.future)),
-                ]);
-              },
+              onRefresh: () => _refreshHome(
+                flowMode == HomeFlowMode.groceries ? 'grocery_home' : 'services_home',
+              ),
               child: CustomScrollView(
           controller: _scroll,
           physics: const BouncingScrollPhysics(
@@ -663,6 +689,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               topCategoryTiles: topCategoryTiles,
             ),
           ),
+                  // "Back to top": appears after a long scroll, one tap returns to the top of Home.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 92,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _showBackToTop,
+              builder: (context, show, _) => IgnorePointer(
+                ignoring: !show,
+                child: AnimatedOpacity(
+                  opacity: show ? 1 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: Center(
+                    child: Semantics(
+                      button: true,
+                      label: 'Back to top',
+                      child: GestureDetector(
+                        onTap: () {
+                          if (_scroll.hasClients) {
+                            _scroll.animateTo(0, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
+                          }
+                          ref.read(bottomNavVisibleProvider.notifier).state = true;
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE6222222),
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 3))],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text('Back to top', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -725,6 +797,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // filtered to services only so Groceries mode's own Book Again
       // strip doesn't repeat the exact same list.
       myBookingsAsync.when(
+        skipLoadingOnReload: true,
         loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
         error: (err, stack) => const SliverToBoxAdapter(child: SizedBox.shrink()),
         data: (bookings) {
@@ -891,6 +964,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
       popularServicesAsync.when(
+        skipLoadingOnReload: true,
         // Fixed 2026-10-07: bumped 236 -> 244 as a small defensive safety
         // margin on top of ProductCard's own text-scale lock (see
         // ProductCard._lockTextScale) — covers ordinary platform font-metric
@@ -969,6 +1043,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return [
       // ── Book Again (groceries only) ──
       myBookingsAsync.when(
+        skipLoadingOnReload: true,
         loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
         error: (err, stack) => const SliverToBoxAdapter(child: SizedBox.shrink()),
         data: (bookings) {
@@ -1476,6 +1551,7 @@ class _MarketplaceDepartmentCarousel extends ConsumerWidget {
     final pageAsync = ref.watch(marketplaceProductsByCategoryProvider(section.category.id));
 
     return pageAsync.when(
+      skipLoadingOnReload: true,
       loading: () => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1939,6 +2015,19 @@ class _UnifiedActiveModeBody extends StatelessWidget {
                   defaultPlaceholder: flowTheme.searchPlaceholder,
                 ),
               ),
+              const SizedBox(width: 4),
+              Semantics(
+                button: true,
+                label: 'Search by voice',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => context.push('/search?mode=${isGroceries ? 'groceries' : 'services'}&voice=1'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(Icons.mic_none_rounded, color: flowTheme.accent, size: 22),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -2370,6 +2459,18 @@ class _StickyHomeHeader extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12.5, color: AppColors.textHint),
+                        ),
+                      ),
+                      Semantics(
+                        button: true,
+                        label: 'Search by voice',
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => context.push('/search?mode=${isGroceries ? 'groceries' : 'services'}&voice=1'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(Icons.mic_none_rounded, color: flowTheme.accent, size: 20),
+                          ),
                         ),
                       ),
                     ],

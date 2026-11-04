@@ -18,6 +18,7 @@ import 'core/analytics/performance_monitor.dart';
 import 'core/foundation/crash_reporting.dart';
 import 'core/foundation/error_reporter.dart';
 import 'core/foundation/foundation_gate.dart';
+import 'core/foundation/in_app_messaging.dart';
 import 'core/push/push_manager.dart';
 import 'features/app_update/presentation/app_update_gate.dart';
 import 'features/booking/presentation/widgets/cart_zone_guard.dart';
@@ -96,6 +97,8 @@ void main() {
   // Analytics + API performance (Firebase), also in the background; off in debug builds.
   unawaited(AnalyticsManager.instance.init().then((_) => AnalyticsManager.instance.track(AnalyticsEvents.appOpen)));
   unawaited(PerformanceMonitor.instance.init());
+  // Firebase In-App Messaging (pop-ups created in Firebase Console), also in the background.
+  unawaited(InAppMessagingManager.instance.init());
 
   // Lock to portrait orientation for mobile
   SystemChrome.setPreferredOrientations([

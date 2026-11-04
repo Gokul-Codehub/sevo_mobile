@@ -98,6 +98,14 @@ class NotificationService {
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       await androidImpl?.createNotificationChannel(androidChannel);
+      // Default channel for pushes that name no channel (e.g. Firebase Console campaigns). Without it Android
+      // uses its own low-key fallback channel and the notification never pops up at the top of the screen.
+      await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
+        'sevo_default',
+        'SEVO notifications',
+        description: 'Offers, news and updates from SEVO',
+        importance: Importance.high,
+      ));
       // Channel named by the server's app-update pushes (FCM falls back to a default channel without it).
       await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
         'sevo_updates',

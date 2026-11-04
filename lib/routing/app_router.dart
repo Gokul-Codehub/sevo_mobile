@@ -303,6 +303,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final screen = SearchScreen(
                 mode: SearchModeX.fromWire(state.uri.queryParameters['mode']),
+                startVoice: state.uri.queryParameters['voice'] == '1',
               );
               return screen.mode == SearchMode.groceries
                   ? GuardedGroceryTheme(child: screen)

@@ -23,9 +23,12 @@ import '../../domain/search_keywords.dart';
 /// [mode] comes from the Home search bar (the active Groceries / Services
 /// tab); when it is missing the current Home mode is used.
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key, this.mode});
+  const SearchScreen({super.key, this.mode, this.startVoice = false});
 
   final SearchMode? mode;
+
+  /// Opened from the mic on the Home search bar: start listening right away.
+  final bool startVoice;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -60,6 +63,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   /// Mode colour (2026-10-27): grocery search is green, services navy.
   Color get _accent => _isGroceries ? AppColors.groceryGreen : AppColors.primary;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.startVoice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_startVoice());
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -262,7 +275,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           child: TextField(
             controller: _controller,
             focusNode: _focus,
-            autofocus: true,
+            autofocus: !widget.startVoice,
             textInputAction: TextInputAction.search,
             onChanged: _onChanged,
             onSubmitted: _submit,

@@ -118,6 +118,12 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     state = await AsyncValue.guard(_fetchAddresses);
   }
 
+  /// Pull-to-refresh: keeps the saved addresses on screen while reloading, and keeps them if the reload fails.
+  Future<void> refreshQuietly() async {
+    final next = await AsyncValue.guard(_fetchAddresses);
+    if (next.hasValue || !state.hasValue) state = next;
+  }
+
   // ── Add new address ───────────────────────────────────────────────────────
   Future<String?> addAddress(Address address) async {
     final result = await _repo.createAddress(address);

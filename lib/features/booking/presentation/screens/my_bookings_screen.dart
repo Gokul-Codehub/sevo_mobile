@@ -1,4 +1,5 @@
 import '../widgets/book_again_actions.dart';
+import '../../../../core/refresh/refresh_runner.dart';
 import '../../../auth/domain/auth_return.dart';
 import '../../../../shared/widgets/login_required_view.dart';
 import 'package:flutter/material.dart';
@@ -322,7 +323,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     final (activeOrders, pastOrders) = _orders();
     Future<void> refresh() async {
       ref.invalidate(groceryOrdersProvider);
-      await ref.refresh(myBookingsProvider(null).future);
+      await RefreshRunner.run(context, [() => ref.refresh(myBookingsProvider(null).future)]);
     }
 
     return Column(
