@@ -34,6 +34,7 @@ import '../widgets/gt_insurance_section.dart';
 import '../widgets/gt_assist_section.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
+import '../widgets/gt_compliance.dart';
 import '../widgets/gt_extras_section.dart';
 import '../widgets/gt_slot_picker.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
@@ -368,7 +369,7 @@ class _GoodsTransportBookingScreenState
   /// when to reveal the consignee/drop-contact-required hint in this UI.
   /// The server independently re-validates the real threshold; this is a
   /// convenience trigger, not the authoritative rule.
-  static const int _highValueThresholdHint = 25000;
+  static const int _highValueThresholdHint = 25000; // == kHighValueThreshold
 
   @override
   void dispose() {
@@ -386,8 +387,43 @@ class _GoodsTransportBookingScreenState
   /// 15-character GSTIN only. A half-typed value is neither quoted nor
   /// booked, so the quote's customer binding and the booking always agree.
   String? get _effectiveGstin {
-    final g = ref.read(customerGstinProvider).trim();
-    return g.length == 15 ? g : null;
+    final g = normalizeGstin(ref.read(customerGstinProvider));
+    return isValidGstin(g) ? g : null;
+  }
+
+  /// Same rules as the web booking page: a GSTIN, when typed, must be valid; the 12-digit e-way bill is required from
+  /// Rs 50,000 of declared value. Null when everything is fine. (The server re-checks with its own thresholds.)
+  String? get _complianceProblem {
+    final g = normalizeGstin(ref.read(customerGstinProvider));
+    if (g.isNotEmpty && !isValidGstin(g)) {
+      return 'Enter a valid 15-character GSTIN, or clear the GSTIN field.';
+    }
+    final value = _declaredValue?.toDouble() ?? 0;
+    return ewayBillError(ref.read(ewayBillNumberProvider), required: value >= kEwayBillThreshold);
+  }
+
+  /// Receiver's relationship to the sender; "Self" until the customer picks another (same default as the web).
+  String get _relationship {
+    final t = _consigneeRelationshipController.text.trim();
+    return t.isEmpty ? 'Self' : t;
+  }
+
+  /// High-value goods need a named receiver. When none is typed we use the booker, exactly like the web page.
+  String? _receiverName(String? bookerName) {
+    final t = _dropContactNameController.text.trim();
+    if (t.isNotEmpty) return t;
+    if (!_isHighValue) return null;
+    final b = (bookerName ?? '').trim();
+    return b.isEmpty ? null : b;
+  }
+
+  String? _receiverPhone(String? bookerPhone) {
+    final t = _dropContactPhoneController.text.trim();
+    if (t.isNotEmpty) return t;
+    if (!_isHighValue) return null;
+    final d = (bookerPhone ?? '').replaceAll(RegExp(r'\D'), '');
+    if (d.isEmpty) return null;
+    return d.length > 10 ? d.substring(d.length - 10) : d;
   }
 
   /// The one place the spot-quote key is built, so the fare shown on screen
@@ -501,7 +537,7 @@ class _GoodsTransportBookingScreenState
     final gstin = _effectiveGstin;
     if (gstin != null) extra['customer_gstin'] = gstin;
 
-    final eway = ref.read(ewayBillNumberProvider).trim();
+    final eway = ewayDigits(ref.read(ewayBillNumberProvider));
     if (eway.isNotEmpty) {
       if (!RegExp(r'^\d{12}$').hasMatch(eway)) {
         return fail('The e-way bill number must be exactly 12 digits.');
@@ -880,10 +916,9 @@ class _GoodsTransportBookingScreenState
       _warn(_declaredValueMessage);
       return;
     }
-    if (_isHighValue && _consigneeRelationshipController.text.trim().isEmpty) {
-      _warn(
-        'For high-value consignments, please describe your relationship to the consignee.',
-      );
+    final complianceProblem = _complianceProblem;
+    if (complianceProblem != null) {
+      _warn(complianceProblem);
       return;
     }
     if (_listedGoodsProblem != null) {
@@ -980,15 +1015,9 @@ class _GoodsTransportBookingScreenState
           dropLongitude: dropLocation.longitude,
           logisticsTier: selectedTier.id,
           declaredValue: _declaredValue,
-          consigneeRelationship: _isHighValue
-              ? _consigneeRelationshipController.text.trim()
-              : null,
-          dropContactName: _dropContactNameController.text.trim().isEmpty
-              ? null
-              : _dropContactNameController.text.trim(),
-          dropContactPhone: _dropContactPhoneController.text.trim().isEmpty
-              ? null
-              : _dropContactPhoneController.text.trim(),
+          consigneeRelationship: _isHighValue ? _relationship : null,
+          dropContactName: _receiverName(currentUser?.name),
+          dropContactPhone: _receiverPhone(currentUser?.phone),
           serviceCategoryOverride: vehicleCategory.serviceCategoryValue,
           idempotencyKey: _idemKey(
             'gt|${prep.total}|${selectedTier.id}|${selectedAddress.latitude},${selectedAddress.longitude}|${dropLocation.latitude},${dropLocation.longitude}|$dateFormatted|${selectedSlot.label}|${prep.cart}|${prep.paymentMethod}',
@@ -1340,6 +1369,8 @@ class _GoodsTransportBookingScreenState
           paymentMethod: pmMethod,
           insuranceOptedIn: pmInsured ? true : null,
           extraPayload: {
+            if (_effectiveGstin != null) 'customer_gstin': _effectiveGstin,
+            if (ewayDigits(ref.read(ewayBillNumberProvider)).isNotEmpty) 'eway_bill_number': ewayDigits(ref.read(ewayBillNumberProvider)),
             if (pmInsured) 'insurance_consent': true,
             if (stopsPayload.isNotEmpty) 'stops': stopsPayload,
             if (quote.isEstimate) 'accept_estimated_distance': true,
@@ -1351,15 +1382,9 @@ class _GoodsTransportBookingScreenState
           dropLongitude: dropLocation.longitude,
           logisticsTier: selectedTier.id,
           declaredValue: _declaredValue,
-          consigneeRelationship: _isHighValue
-              ? _consigneeRelationshipController.text.trim()
-              : null,
-          dropContactName: _dropContactNameController.text.trim().isEmpty
-              ? null
-              : _dropContactNameController.text.trim(),
-          dropContactPhone: _dropContactPhoneController.text.trim().isEmpty
-              ? null
-              : _dropContactPhoneController.text.trim(),
+          consigneeRelationship: _isHighValue ? _relationship : null,
+          dropContactName: _receiverName(currentUser?.name),
+          dropContactPhone: _receiverPhone(currentUser?.phone),
           serviceCategoryOverride:
               LogisticsVehicleCategory.packersMovers.serviceCategoryValue,
           cartDataOverride: cartDataOverride,
@@ -1405,6 +1430,8 @@ class _GoodsTransportBookingScreenState
     if (s.contains('consignee')) {
       target = 'Declared value';
       focus = _consigneeFocus;
+    } else if (s.contains('e-way') || s.contains('gstin')) {
+      target = 'GST & e-way bill';
     } else if (s.contains('declared value')) {
       target = 'Declared value';
     } else if (s.contains('described accurately')) {
@@ -2169,7 +2196,7 @@ class _GoodsTransportBookingScreenState
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Required. The value of what you are sending; it helps us handle valuable consignments with extra care.',
+                    'Required. What your goods are worth in total. It decides whether an e-way bill and a named receiver are needed.',
                     style: TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
@@ -2191,24 +2218,17 @@ class _GoodsTransportBookingScreenState
                       ),
                     )
                   else
-                    TextField(
+                    GtDeclaredValueField(
                       controller: _declaredValueController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      onChanged: (_) => setState(() {}),
-                      decoration: _fieldDecoration('e.g. 15000'),
+                      onChanged: () => setState(() {}),
                     ),
-                  if (_isHighValue) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _consigneeRelationshipController,
+                  GtValueGuidance(value: _declaredValue?.toDouble() ?? 0),
+                  if (_isHighValue)
+                    GtRelationshipPicker(
+                      value: _relationship,
                       focusNode: _consigneeFocus,
-                      decoration: _fieldDecoration(
-                        'Your relationship to the consignee (required for high-value goods)',
-                      ),
+                      onChanged: (v) => setState(() => _consigneeRelationshipController.text = v),
                     ),
-                  ],
                 ],
               ),
             ),
@@ -2230,7 +2250,10 @@ class _GoodsTransportBookingScreenState
               const SizedBox(height: 18),
             ],
             if (!isPackersMovers) ...[
-              GtOptionsSection(declaredValue: _declaredValue?.toDouble()),
+              KeyedSubtree(
+                key: _anchor('GST & e-way bill'),
+                child: GtOptionsSection(declaredValue: _declaredValue?.toDouble()),
+              ),
               const SizedBox(height: 18),
               KeyedSubtree(
                 key: _anchor('Goods declaration'),
@@ -2553,7 +2576,7 @@ class _GoodsTransportBookingScreenState
                           inputFormatters: [NoDigitsFormatter()],
                           textCapitalization: TextCapitalization.words,
                           decoration: _fieldDecoration(
-                            'Receiver name (optional)',
+                            _isHighValue ? 'Receiver name (we use yours if blank)' : 'Receiver name (optional)',
                           ),
                         ),
                       ),
@@ -2563,7 +2586,7 @@ class _GoodsTransportBookingScreenState
                           controller: _dropContactPhoneController,
                           keyboardType: TextInputType.phone,
                           decoration: _fieldDecoration(
-                            'Receiver phone (optional)',
+                            _isHighValue ? 'Receiver phone (we use yours if blank)' : 'Receiver phone (optional)',
                           ),
                         ),
                       ),
@@ -2771,7 +2794,14 @@ class _GoodsTransportBookingScreenState
               ),
             ),
             // The move's transit insurance (the other goods bookings show theirs with the options above).
-            if (isPackersMovers) GtInsuranceSection(declaredValue: _declaredValue?.toDouble()),
+            if (isPackersMovers) ...[
+              KeyedSubtree(
+                key: _anchor('GST & e-way bill'),
+                child: GtGstEwaySection(declaredValue: _declaredValue?.toDouble(), card: true),
+              ),
+              const SizedBox(height: 18),
+              GtInsuranceSection(declaredValue: _declaredValue?.toDouble()),
+            ],
             const SizedBox(height: 18),
             GtPoliciesSection(
               serviceCategory: vehicleCategory.serviceCategoryValue,
@@ -2858,10 +2888,9 @@ class _GoodsTransportBookingScreenState
         _warn(_declaredValueMessage);
         return;
       }
-      if (_isHighValue && _consigneeRelationshipController.text.trim().isEmpty) {
-        _warn(
-          'For high-value consignments, please describe your relationship to the consignee.',
-        );
+      final complianceProblem = _complianceProblem;
+      if (complianceProblem != null) {
+        _warn(complianceProblem);
         return;
       }
       if (_listedGoodsProblem != null) {

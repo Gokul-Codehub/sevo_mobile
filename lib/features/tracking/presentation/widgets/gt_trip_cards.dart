@@ -249,6 +249,223 @@ class GtDeliveryExceptionCard extends StatelessWidget {
   }
 }
 
+// ── Loading-time cargo mismatch: approve / reject the revised fare ──────────
+
+/// The driver found the load heavier / bigger / different from what was booked,
+/// so the server recalculated the fare (and maybe a bigger vehicle) and holds
+/// the trip until the customer decides
+/// (`GET/POST /booking/<id>/cargo-adjustment-decision/`, action APPROVE|REJECT).
+/// A higher fare on a prepaid trip must be topped up through the normal
+/// payment order before loading continues.
+class GtCargoAdjustmentCard extends ConsumerStatefulWidget {
+  const GtCargoAdjustmentCard({super.key, required this.bookingId, this.trackingToken});
+
+  final int bookingId;
+  final String? trackingToken;
+
+  @override
+  ConsumerState<GtCargoAdjustmentCard> createState() => _GtCargoAdjustmentCardState();
+}
+
+class _GtCargoAdjustmentCardState extends ConsumerState<GtCargoAdjustmentCard> {
+  Map<String, dynamic>? _adj;
+  bool _busy = false;
+  bool _mine = false;
+  String _msg = '';
+  Timer? _refresh;
+
+  String get _path => '/booking/${widget.bookingId}/cargo-adjustment-decision/';
+  Map<String, dynamic>? get _query =>
+      (widget.trackingToken ?? '').isEmpty ? null : {'token': widget.trackingToken};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _refresh = Timer.periodic(const Duration(seconds: 15), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _refresh?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await ref.read(apiClientProvider).get(_path, queryParameters: _query);
+      var data = res.data;
+      if (data is Map && data['data'] is Map) data = data['data'];
+      if (!mounted) return;
+      final adj = data is Map && data['adjustment'] is Map ? Map<String, dynamic>.from(data['adjustment'] as Map) : null;
+      setState(() => _adj = (adj == null || adj.isEmpty) ? null : adj);
+    } catch (_) {
+      // No adjustment (or no access): the card stays hidden.
+    }
+  }
+
+  Future<void> _decide(String action) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _msg = '';
+    });
+    try {
+      final res = await ref
+          .read(apiClientProvider)
+          .post(_path, data: {'action': action}, queryParameters: _query);
+      var d = res.data;
+      if (d is Map && d['data'] is Map) d = d['data'];
+      final m = d is Map ? d : const {};
+      final status = (m['status'] ?? '').toString().toUpperCase();
+      if (!mounted) return;
+      setState(() {
+        if (status == 'APPROVED_PENDING_PAYMENT') {
+          _msg = 'Approved. Pay the top-up of ₹${m['top_up_amount'] ?? m['topup_amount'] ?? ''} so loading can continue.';
+        } else if (status == 'APPROVED') {
+          _msg = 'Approved. Your driver will continue loading.';
+        } else {
+          _msg = 'Declined. Our team will contact you about the trip.';
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _msg = _errorText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+      await _load();
+    }
+  }
+
+  Future<void> _pay() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _mine = true;
+      _msg = '';
+    });
+    try {
+      await _startServerPricedPayment(ref, widget.bookingId);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _mine = false;
+          _msg = _errorText(e, 'Payment could not be started.');
+        });
+      }
+    }
+  }
+
+  String _s(dynamic v) => (v ?? '').toString();
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<PaymentState>(paymentControllerProvider, (prev, next) {
+      if (!_mine || !mounted) return;
+      if (next is PaymentSuccess) {
+        setState(() {
+          _busy = false;
+          _mine = false;
+          _msg = 'Payment received. Loading can continue.';
+        });
+        _load();
+      } else if (next is PaymentFailed) {
+        setState(() {
+          _busy = false;
+          _mine = false;
+          _msg = next.errorMessage;
+        });
+      }
+    });
+
+    final adj = _adj;
+    if (adj == null) return const SizedBox.shrink();
+    final status = _s(adj['status']).toUpperCase();
+    if (status != 'PENDING_CUSTOMER_APPROVAL' && status != 'APPROVED_PENDING_PAYMENT') {
+      return const SizedBox.shrink();
+    }
+    final awaitingPay = status == 'APPROVED_PENDING_PAYMENT';
+    final mismatches = adj['mismatches'] is List ? (adj['mismatches'] as List).map(_s).where((e) => e.isNotEmpty).toList() : <String>[];
+    final diff = double.tryParse(_s(adj['fare_difference'])) ?? 0;
+    final upgrade = adj['vehicle_upgrade_required'] == true;
+    final topUp = _s(adj['top_up_required']);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDeco(const Color(0xFFFFF7ED), const Color(0xFFFDBA74)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Your load differs from the booking',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF9A3412))),
+          const SizedBox(height: 6),
+          for (final m in mismatches)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text('• $m', style: const TextStyle(fontSize: 12.5, color: Color(0xFF7C2D12), height: 1.35)),
+            ),
+          const SizedBox(height: 6),
+          if (upgrade && _s(adj['recommended_vehicle_class']).isNotEmpty)
+            Text('A bigger vehicle is needed (${_s(adj['recommended_vehicle_class']).replaceAll('_', ' ')}).',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF7C2D12))),
+          Text(
+            'Fare ₹${_s(adj['original_fare'])} → ₹${_s(adj['revised_fare'])}'
+            '${diff > 0 ? '  (+₹${diff.toStringAsFixed(2)})' : ''}',
+            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: Color(0xFF9A3412)),
+          ),
+          const SizedBox(height: 10),
+          if (awaitingPay)
+            SizedBox(
+              height: 42,
+              child: FilledButton(
+                onPressed: _busy ? null : _pay,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.serviceBlue,
+                  minimumSize: const Size(160, 42),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(_busy ? 'Processing…' : 'Pay top-up${topUp.isEmpty ? '' : ' ₹$topUp'}',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            )
+          else
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : () => _decide('REJECT'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 42),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Decline', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _busy ? null : () => _decide('APPROVE'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.serviceBlue,
+                    minimumSize: const Size(0, 42),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(_busy ? 'Please wait…' : 'Approve new fare',
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ]),
+          if (_msg.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(_msg, style: const TextStyle(fontSize: 12.5, color: Color(0xFF7C2D12), fontWeight: FontWeight.w600)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 // ── Packers & Movers: decision on the surveyed quote ─────────────────────────
 
 /// Packers & Movers pre-move survey: the vendor confirms crew / vehicles and a

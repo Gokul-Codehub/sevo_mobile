@@ -968,6 +968,9 @@ class BookingDetailScreen extends ConsumerWidget {
         builder: (ctx, sheetRef, _) {
           final slot = sheetRef.watch(selectedTimeSlotProvider);
           final date = sheetRef.watch(selectedBookingDateProvider);
+          // Goods & Transport is booked by DATE only (the server ignores any
+          // slot), so no slot is asked for and none is needed to confirm.
+          final isGt = gtCategory != null;
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
@@ -980,15 +983,17 @@ class BookingDetailScreen extends ConsumerWidget {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.navy),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Pick a new date and time. Our team will confirm the change.',
+                  Text(
+                    isGt
+                        ? 'Pick a new date. Our team will confirm the change.'
+                        : 'Pick a new date and time. Our team will confirm the change.',
                     style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 14),
                   Flexible(
                     child: SingleChildScrollView(
                       child: gtCategory != null
-                          ? GtSlotPicker(category: gtCategory)
+                          ? GtSlotPicker(category: gtCategory, showSlots: false)
                           : const SlotPickerWidget(),
                     ),
                   ),
@@ -996,7 +1001,7 @@ class BookingDetailScreen extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: slot == null
+                      onPressed: (!isGt && slot == null)
                           ? null
                           : () async {
                               Navigator.pop(ctx);
@@ -1006,7 +1011,7 @@ class BookingDetailScreen extends ConsumerWidget {
                                   .rescheduleBooking(
                                     id: booking.id,
                                     date: formattedDate,
-                                    slot: slot.label,
+                                    slot: isGt ? 'Flexible (Anytime)' : slot!.label,
                                   );
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1025,7 +1030,7 @@ class BookingDetailScreen extends ConsumerWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
                       child: Text(
-                        slot == null ? 'Select a time slot' : 'Confirm Reschedule',
+                        (!isGt && slot == null) ? 'Select a time slot' : 'Confirm Reschedule',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                       ),
                     ),

@@ -726,6 +726,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         GtExtraChargesCard(charges: tracking.extraCharges),
                       if (tracking.deliveryException != null)
                         GtDeliveryExceptionCard(exception: tracking.deliveryException!),
+                      // Loading-time cargo mismatch: approve / reject the revised fare.
+                      if ((tracking.bookingId ?? widget.booking?.id) != null && tracking.deliveryException != null)
+                        GtCargoAdjustmentCard(
+                          bookingId: (tracking.bookingId ?? widget.booking?.id)!,
+                          trackingToken: widget.booking?.trackingIdentifier,
+                        ),
                       // En-route drop change: single-drop Goods Transport,
                       // live trip, accepted by a driver (same rule as the web).
                       if ((tracking.bookingId ?? widget.booking?.id) != null &&

@@ -319,24 +319,55 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
   }
 
   Future<void> _cancel(GroceryOrder o) async {
-    final sure = await showDialog<bool>(
+    const reasons = [
+      'Ordered by mistake',
+      'Want to change items or address',
+      'Found a better price elsewhere',
+      'Delivery is taking too long',
+      'Other',
+    ];
+    String picked = reasons.first;
+    final reason = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel this order?'),
-        content: const Text('The seller will stop preparing it. If you already paid, the amount is refunded.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Keep order')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC62828)),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Cancel order'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Cancel this order?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('The seller will stop preparing it. If you already paid, the amount is refunded.'),
+              const SizedBox(height: 10),
+              const Text('Why are you cancelling?', style: TextStyle(fontWeight: FontWeight.w700)),
+              for (final r in reasons)
+                InkWell(
+                  onTap: () => setLocal(() => picked = r),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(children: [
+                      Icon(picked == r ? Icons.radio_button_checked : Icons.radio_button_off,
+                          size: 20, color: picked == r ? const Color(0xFFC62828) : Colors.black45),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(r)),
+                    ]),
+                  ),
+                ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Keep order')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC62828)),
+              onPressed: () => Navigator.of(ctx).pop(picked),
+              child: const Text('Cancel order'),
+            ),
+          ],
+        ),
       ),
     );
-    if (sure != true || !mounted) return;
+    if (reason == null || !mounted) return;
     setState(() => _cancelling = true);
-    final r = await ref.read(groceryOrdersRepositoryProvider).cancel(o.orderNumber);
+    final r = await ref.read(groceryOrdersRepositoryProvider).cancel(o.orderNumber, reason: reason);
     if (!mounted) return;
     setState(() => _cancelling = false);
     switch (r) {

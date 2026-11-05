@@ -12,6 +12,7 @@ import '../../domain/gt_models.dart';
 import '../../domain/gt_providers.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
+import 'gt_compliance.dart';
 import 'gt_insurance_section.dart';
 
 // Goods & Transport sections wired to the updated backend:
@@ -1851,36 +1852,16 @@ class _FitmentBanner extends ConsumerWidget {
 
 // ── Options: loading help, insurance, GSTIN / e-way bill ────────────────────
 
-/// Goods worth this much or more need an e-way bill (same threshold as the web booking page).
-const double kEwayBillThreshold = 50000;
-
-class GtOptionsSection extends ConsumerStatefulWidget {
+class GtOptionsSection extends ConsumerWidget {
   const GtOptionsSection({super.key, required this.declaredValue});
 
   /// Parsed declared goods value (null / 0 when blank).
   final double? declaredValue;
 
   @override
-  ConsumerState<GtOptionsSection> createState() => _GtOptionsSectionState();
-}
-
-class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
-  final _gstinController = TextEditingController();
-  final _ewayController = TextEditingController();
-
-  @override
-  void dispose() {
-    _gstinController.dispose();
-    _ewayController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final loadingHelp = ref.watch(loadingHelpProvider);
     final ptl = ref.watch(ptlModeProvider);
-    final ewayRequired = (widget.declaredValue ?? 0) >= kEwayBillThreshold;
-    final ewayNumber = ref.watch(ewayBillNumberProvider);
 
     return _card(
       Column(
@@ -1901,53 +1882,149 @@ class _GtOptionsSectionState extends ConsumerState<GtOptionsSection> {
             ),
           // Transit insurance is sold again (owner decision, Nov 2026, same as the web): the server says whether it is
           // offered for this service and on what terms.
-          GtInsuranceSection(declaredValue: widget.declaredValue),
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              key: ValueKey('gst-eway-$ewayRequired'), // reopens when the value crosses the threshold
-              initiallyExpanded: ewayRequired,
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: EdgeInsets.zero,
-              title: Text(ewayRequired ? 'GST & e-way bill (e-way bill required)' : 'GST & e-way bill (optional)', style: _titleStyle),
-              children: [
-                TextField(
-                  controller: _gstinController,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: _decoration('Your GSTIN (15 characters)'),
-                  onChanged: (v) =>
-                      ref.read(customerGstinProvider.notifier).state = v.trim().toUpperCase(),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _ewayController,
-                  keyboardType: TextInputType.number,
-                  decoration: _decoration(ewayRequired ? 'E-way bill number (12 digits) *' : 'E-way bill number (12 digits)').copyWith(
-                    errorText: ewayRequired && ewayNumber.isNotEmpty && !RegExp(r'^\d{12}$').hasMatch(ewayNumber)
-                        ? 'Enter all 12 digits'
-                        : null,
-                  ),
-                  onChanged: (v) =>
-                      ref.read(ewayBillNumberProvider.notifier).state = v.trim(),
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    ewayRequired
-                        ? 'An e-way bill is required for goods worth ₹50,000 or more. Enter its number to continue.'
-                        : 'Goods of higher value may need an e-way bill. You are '
-                            'responsible for providing it to the driver at pickup.',
-                    style: ewayRequired ? _hintStyle.copyWith(color: const Color(0xFFB45309), fontWeight: FontWeight.w700) : _hintStyle,
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
+          GtInsuranceSection(declaredValue: declaredValue),
+          const SizedBox(height: 12),
+          GtGstEwaySection(declaredValue: declaredValue),
         ],
       ),
     );
+  }
+}
+
+/// GST invoice details and the e-way bill, asked the way the web booking page asks them:
+/// GSTIN is optional and never changes the fare; the 12-digit e-way bill is required from Rs 50,000 of declared value.
+class GtGstEwaySection extends ConsumerStatefulWidget {
+  const GtGstEwaySection({super.key, required this.declaredValue, this.card = false});
+
+  final double? declaredValue;
+
+  /// Wrap in its own card (used where the section is not already inside the options card).
+  final bool card;
+
+  @override
+  ConsumerState<GtGstEwaySection> createState() => _GtGstEwaySectionState();
+}
+
+class _GtGstEwaySectionState extends ConsumerState<GtGstEwaySection> {
+  late final TextEditingController _gstin;
+  late final TextEditingController _eway;
+
+  @override
+  void initState() {
+    super.initState();
+    _gstin = TextEditingController(text: ref.read(customerGstinProvider));
+    _eway = TextEditingController(
+      text: EwayBillFormatter()
+          .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: ref.read(ewayBillNumberProvider)))
+          .text,
+    );
+  }
+
+  @override
+  void dispose() {
+    _gstin.dispose();
+    _eway.dispose();
+    super.dispose();
+  }
+
+  Widget _label(String text, {String? tag, Color? tagColor}) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          children: [
+            Flexible(child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.navy))),
+            if (tag != null) ...[
+              const SizedBox(width: 6),
+              Text(tag, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: tagColor ?? AppColors.textSecondary)),
+            ],
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.declaredValue ?? 0;
+    final required = value >= kEwayBillThreshold;
+    final gstin = ref.watch(customerGstinProvider);
+    final eway = ref.watch(ewayBillNumberProvider);
+
+    final gstinComplete = gstin.length == 15;
+    final gstinValid = gstinComplete && isValidGstin(gstin);
+    final gstinError = gstinComplete && !gstinValid ? 'Enter a valid 15-character GSTIN.' : null;
+
+    final ewayError = eway.isEmpty ? null : ewayBillError(eway, required: false);
+    final ewayValid = eway.length == 12 && ewayError == null;
+    const amber = Color(0xFFB45309);
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.receipt_long_outlined, size: 18, color: AppColors.navy),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('GST & e-way bill', style: _titleStyle)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: (required ? amber : AppColors.textSecondary).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                required ? 'E-way bill required' : 'Optional',
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: required ? amber : AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (required)
+          GtNoticeCard(
+            tone: GtNoticeTone.warning,
+            title: 'E-way bill needed for ₹${formatInr(value)} of goods',
+            body: 'GST rules need an active 12-digit e-way bill for goods worth ₹50,000 or more. SEVO does not create it for '
+                'you: generate it on the government e-way bill portal and enter the number below. Keep the bill ready '
+                'to show the driver at pickup.',
+          )
+        else
+          const Text(
+            'Below ₹50,000 an e-way bill is optional. If you already have one, add it here. '
+            'You are responsible for any GST papers your goods need.',
+            style: _hintStyle,
+          ),
+        const SizedBox(height: 14),
+        _label('E-way bill number', tag: required ? 'required' : '(optional)', tagColor: required ? amber : null),
+        TextField(
+          controller: _eway,
+          keyboardType: TextInputType.number,
+          inputFormatters: [EwayBillFormatter()],
+          decoration: _decoration('1234 5678 9012').copyWith(
+            errorText: ewayError,
+            counterText: eway.isEmpty ? null : '${eway.length}/12',
+            suffixIcon: ewayValid ? const Icon(Icons.check_circle, size: 18, color: Color(0xFF15803D)) : null,
+          ),
+          onChanged: (v) => ref.read(ewayBillNumberProvider.notifier).state = ewayDigits(v),
+        ),
+        const SizedBox(height: 14),
+        _label('GSTIN for the invoice', tag: '(optional)'),
+        TextField(
+          controller: _gstin,
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+            LengthLimitingTextInputFormatter(15),
+          ],
+          decoration: _decoration('15-character GSTIN').copyWith(
+            errorText: gstinError,
+            counterText: gstin.isEmpty ? null : '${gstin.length}/15',
+            suffixIcon: gstinValid ? const Icon(Icons.check_circle, size: 18, color: Color(0xFF15803D)) : null,
+          ),
+          onChanged: (v) => ref.read(customerGstinProvider.notifier).state = normalizeGstin(v),
+        ),
+        const SizedBox(height: 4),
+        const Text('Add it if you want your business GSTIN on the tax invoice. It never changes your fare.', style: _hintStyle),
+      ],
+    );
+    return widget.card ? _card(body) : body;
   }
 }
 

@@ -214,7 +214,7 @@ class _ReviewFormSheetState extends ConsumerState<ReviewFormSheet> {
     setState(() => _busy = false);
     switch (r) {
       case Success():
-        AppToast.show(context, widget.existing != null ? 'Review updated.' : 'Thank you! Your review is live.', type: AppToastType.success);
+        AppToast.show(context, widget.existing != null ? 'Review updated.' : 'Thank you! Your review will appear once it is approved.', type: AppToastType.success);
         Navigator.of(context).pop(true);
       case Failure(:final error):
         AppToast.show(context, ErrorManager.present(error).body, type: AppToastType.error);

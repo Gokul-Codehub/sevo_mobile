@@ -49,6 +49,8 @@ const Map<String, BookingStage> _stageByStatus = {
   'vendor_confirmed': BookingStage.confirmed,
   'dispatched': BookingStage.confirmed,
   'on_hold': BookingStage.confirmed,
+  // Driver dropped the job; the server is finding another one.
+  'redispatching': BookingStage.confirmed,
   // A technician / driver has the job.
   'assigned': BookingStage.assigned,
   'received': BookingStage.assigned,
@@ -76,6 +78,8 @@ const Map<String, BookingStage> _stageByStatus = {
   'quotation_sent': BookingStage.inProgress,
   'customer_approved': BookingStage.inProgress,
   'repair_authorized': BookingStage.inProgress,
+  'quotation_created': BookingStage.inProgress,
+  'quotation_pending_approval': BookingStage.inProgress,
   'awaiting_verification': BookingStage.inProgress,
   'rework_requested': BookingStage.inProgress,
   'follow_up_required': BookingStage.inProgress,
@@ -185,6 +189,9 @@ const Map<String, String> _labels = {
   'quotation_sent': 'Quote Received',
   'customer_approved': 'Quote Approved',
   'repair_authorized': 'Repair Approved',
+  'quotation_created': 'Quote Being Prepared',
+  'quotation_pending_approval': 'Quote Awaiting Approval',
+  'redispatching': 'Finding Another Professional',
   'awaiting_verification': 'Awaiting Verification',
   'rework_requested': 'Rework Requested',
   'follow_up_required': 'Follow-up Required',
