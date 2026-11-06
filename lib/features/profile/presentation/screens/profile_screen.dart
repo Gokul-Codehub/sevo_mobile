@@ -411,7 +411,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Welcome to SEVO',
+            'Welcome to SEVONIQ',
             style: TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.navy),
           ),
@@ -556,7 +556,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy),
         ),
         content: const Text(
-          'Are you sure you want to sign out of SEVO?',
+          'Are you sure you want to sign out of SEVONIQ?',
           style: TextStyle(fontSize: 12),
         ),
         actions: [
@@ -603,7 +603,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ],
         ),
         content: const Text(
-          'Every service performed by SEVO professionals comes with our 30-Day Service Assurance Guarantee.\n\nIf the same issue recurs within 30 days of completion, we will send a technician for a complimentary inspection and rework at no extra service charge.',
+          'Every service performed by SEVONIQ professionals comes with our 30-Day Service Assurance Guarantee.\n\nIf the same issue recurs within 30 days of completion, we will send a technician for a complimentary inspection and rework at no extra service charge.',
           style: TextStyle(fontSize: 12, height: 1.4),
         ),
         actions: [
@@ -637,7 +637,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         content: const SingleChildScrollView(
           child: Text(
-            '1. Acceptance of Terms: By booking services through SEVO, you agree to abide by our service standards and cancellation rules.\n\n2. Pricing & Payments: All prices shown include applicable taxes and service fees. An advance deposit of 20% is required to secure your booking.\n\n3. Rescheduling & Cancellation: You may reschedule or cancel your booking without penalty up to 2 hours prior to the scheduled slot.\n\n4. Verified Professionals: All technicians are vetted and background-verified.',
+            '1. Acceptance of Terms: By booking services through SEVONIQ, you agree to abide by our service standards and cancellation rules.\n\n2. Pricing & Payments: All prices shown include applicable taxes and service fees. An advance deposit of 20% is required to secure your booking.\n\n3. Rescheduling & Cancellation: You may reschedule or cancel your booking without penalty up to 2 hours prior to the scheduled slot.\n\n4. Verified Professionals: All technicians are vetted and background-verified.',
             style: TextStyle(fontSize: 11.5, height: 1.4),
           ),
         ),
@@ -672,7 +672,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         content: const SingleChildScrollView(
           child: Text(
-            'SEVO is committed to protecting your personal data.\n\n1. Data Collection: We collect your phone number, name, email, and service addresses solely for booking fulfillment and technician dispatch.\n\n2. Encryption: All communications are encrypted using TLS 1.3. Sensitive tokens are stored securely in Android Keystore / EncryptedSharedPreferences.\n\n3. Payment Security: Payment details are handled exclusively by RBI-authorized payment aggregator Razorpay and never stored on our servers.\n\n4. Your Rights: You have the right to access, rectify, or request permanent deletion of your account and personal data at any time.',
+            'SEVONIQ is committed to protecting your personal data.\n\n1. Data Collection: We collect your phone number, name, email, and service addresses solely for booking fulfillment and technician dispatch.\n\n2. Encryption: All communications are encrypted using TLS 1.3. Sensitive tokens are stored securely in Android Keystore / EncryptedSharedPreferences.\n\n3. Payment Security: Payment details are handled exclusively by RBI-authorized payment aggregator Razorpay and never stored on our servers.\n\n4. Your Rights: You have the right to access, rectify, or request permanent deletion of your account and personal data at any time.',
             style: TextStyle(fontSize: 11.5, height: 1.4),
           ),
         ),

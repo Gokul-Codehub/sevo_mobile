@@ -100,6 +100,13 @@ class ErrorInterceptor extends Interceptor {
   ///   Shape D-a: {"detail": "..."}
   ///   Shape D-b: {"field_name": ["error message", ...], ...}
   ValidationError _parseValidationError(dynamic data) {
+    final v = _parseValidationErrorRaw(data);
+    final cleaned = cleanServerMessage(v.message);
+    if (cleaned == v.message) return v;
+    return ValidationError(cleaned, fieldErrors: v.fieldErrors, code: v.code, extra: v.extra);
+  }
+
+  ValidationError _parseValidationErrorRaw(dynamic data) {
     if (data == null) return const ValidationError('Bad request.');
 
     if (data is Map) {
@@ -230,4 +237,14 @@ class ErrorInterceptor extends Interceptor {
 
     return const ValidationError('Bad request.');
   }
+}
+
+/// Some server errors arrive as Python text, e.g.
+/// `{'detail': ErrorDetail(string='Maximum of 10 saved addresses allowed.', code='invalid')}`.
+/// Pulls the human sentence(s) out so customers never see that raw dump.
+String cleanServerMessage(String raw) {
+  if (!raw.contains('ErrorDetail(')) return raw;
+  final found = RegExp(r'''ErrorDetail\(string=(['"])(.*?)\1\s*,\s*code=''').allMatches(raw);
+  final parts = found.map((m) => (m.group(2) ?? '').trim()).where((t) => t.isNotEmpty).toList();
+  return parts.isEmpty ? raw : parts.join(' ');
 }

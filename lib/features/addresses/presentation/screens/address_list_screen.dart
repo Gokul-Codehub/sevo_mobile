@@ -105,7 +105,13 @@ class AddressListScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(16),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () => context.push('/addresses/add'),
+                  onTap: () {
+                    if (addresses.length >= kMaxSavedAddresses) {
+                      showAddressLimitDialog(context);
+                    } else {
+                      context.push('/addresses/add');
+                    }
+                  },
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 18, vertical: 18),
                     child: Row(
@@ -313,7 +319,9 @@ class _AddressCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Padding(
                     padding: const EdgeInsets.only(right: 8, top: 2),
-                    child: Container(
+                    child: isSelectionMode
+                        ? const SizedBox.shrink()
+                        : Container(
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(

@@ -131,7 +131,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
       if (q.isEmpty) return true;
       final haystack = [
         o.orderNumber,
-        stageTitle(o.stage),
+        o.stageLabel,
         o.statusLabel,
         o.sellerName,
         o.slot,
@@ -823,7 +823,7 @@ class _BookingCard extends ConsumerWidget {
                         ],
                         // A finished booking can be booked again in one tap (current price and slots are fetched fresh).
                         if ((booking.isCompleted || booking.isCancelled) && !booking.isGroceryBooking && booking.items.isNotEmpty) ...[
-                          AgainButton(label: 'Book again', onPressed: () => openServiceAgain(context, booking.items.first.service)),
+                          AgainButton(label: 'Book again', onPressed: () => openBookingAgain(context, booking)),
                           const SizedBox(width: 8),
                         ],
                         FilledButton(

@@ -102,15 +102,15 @@ class NotificationService {
       // uses its own low-key fallback channel and the notification never pops up at the top of the screen.
       await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
         'sevo_default',
-        'SEVO notifications',
-        description: 'Offers, news and updates from SEVO',
+        'SEVONIQ notifications',
+        description: 'Offers, news and updates from SEVONIQ',
         importance: Importance.high,
       ));
       // Channel named by the server's app-update pushes (FCM falls back to a default channel without it).
       await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
         'sevo_updates',
         'App updates',
-        description: 'Reminders when a new version of SEVO is available',
+        description: 'Reminders when a new version of SEVONIQ is available',
         importance: Importance.defaultImportance,
       ));
       // One channel per kind of notification (matches the channel ids the server sends), so each can be muted alone.

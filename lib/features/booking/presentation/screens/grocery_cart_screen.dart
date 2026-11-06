@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../domain/cart_warehouse.dart';
 import '../../domain/combo_key.dart';
@@ -51,7 +52,7 @@ import '../../../../shared/utils/date_utils.dart';
 /// 11:00-13:00, 14:00-16:00, 16:00-18:00 for "Jeemangalam Hub" today),
 /// fetched live via [marketplaceDeliverySlotsForDateProvider] — see that
 /// provider's doc comment for the full proxy chain.
-enum _DeliveryOption { quick, scheduled }
+enum _DeliveryOption { quick, scheduled, takeaway }
 
 /// The next 3 calendar dates (today + 2) a customer can pick a Scheduled
 /// delivery slot for — "List 3 dates with slots which is getting from the
@@ -130,6 +131,98 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   // this selector is unchanged.
   String _paymentMethod = 'COD';
 
+  // Take Away: the customer collects at the warehouse (no address, slot or rider). The warehouse comes from the server,
+  // which reads the cart; the confirmation box must be ticked before the order can be placed.
+  PickupLocation? _pickup;
+  bool _pickupLoading = false;
+  bool _takeawayConfirmed = false;
+  bool get _isTakeaway => _deliveryOption == _DeliveryOption.takeaway;
+
+  Future<void> _selectTakeaway() async {
+    if (_isTakeaway) return;
+    final items = marketplaceLines(ref.read(cartProvider));
+    if (items.isEmpty) return;
+    setState(() => _pickupLoading = true);
+    final result = await ref.read(groceryOrdersRepositoryProvider).pickupLocation(items);
+    if (!mounted) return;
+    setState(() => _pickupLoading = false);
+    switch (result) {
+      case Success(:final data):
+        if (!data.available) {
+          AppToast.show(context, 'Take Away needs all your items to come from one SEVONIQ warehouse. Please choose delivery.', type: AppToastType.error);
+          return;
+        }
+        setState(() {
+          _pickup = data.location ?? const PickupLocation();
+          _deliveryOption = _DeliveryOption.takeaway;
+          _selectedSlot = null;
+          _selectedSlotDate = null;
+          _takeawayConfirmed = false;
+        });
+      case Failure(:final error):
+        AppToast.show(context, ErrorManager.present(error).body, type: AppToastType.error);
+    }
+  }
+
+  String _takeawayAddressText() {
+    final p = _pickup;
+    final name = (p?.name ?? '').isEmpty ? 'SEVONIQ warehouse' : p!.name;
+    return 'Take Away - collect from $name${(p?.address ?? '').isEmpty ? '' : ', ${p!.address}'}';
+  }
+
+  Widget _buildTakeawayCard() {
+    final p = _pickup;
+    final name = (p?.name ?? '').isEmpty ? 'SEVONIQ warehouse' : p!.name;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: const Color(0xFF14532D).withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.storefront_outlined, size: 18, color: AppColors.groceryGreen),
+          SizedBox(width: 8),
+          Text('Pickup location', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.navy)),
+        ]),
+        const SizedBox(height: 8),
+        Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        if ((p?.address ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(p!.address, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.3))),
+        if ((p?.mapsUrl ?? '').isNotEmpty)
+          TextButton.icon(
+            onPressed: () => launchUrl(Uri.parse(p!.mapsUrl), mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.directions_outlined, size: 18),
+            label: const Text('View route on Google Maps'),
+          ),
+        const SizedBox(height: 4),
+        const Text(
+          'You collect the order yourself. We will notify you when it is ready and show a pickup code to give at the counter. '
+          'No delivery, platform or handling fee - prices include GST.',
+          style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.35),
+        ),
+        CheckboxListTile(
+          value: _takeawayConfirmed,
+          onChanged: (v) => setState(() => _takeawayConfirmed = v == true),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('I will come to the warehouse myself and pick up my order.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => setState(() {
+              _deliveryOption = null;
+              _takeawayConfirmed = false;
+            }),
+            child: const Text('Switch to home delivery'),
+          ),
+        ),
+      ]),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -166,8 +259,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   /// Places the order through the marketplace checkout, exactly like the web store: the order goes to the seller to
   /// pack, Seller Hub stock is reserved, and it is tracked on its own order page (also listed in My Bookings).
   Future<void> _placeMarketplaceOrder(BuildContext context, List<CartItem> items, Address? address) async {
+    final takeaway = _isTakeaway;
     final addr = address ?? ref.read(selectedAddressProvider);
-    if (addr == null) {
+    if (addr == null && !takeaway) {
       AppToast.show(context, 'Please choose a delivery address first.', type: AppToastType.error);
       return;
     }
@@ -178,12 +272,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     final online = _paymentMethod == 'ONLINE';
     final checkout = MarketplaceCheckout(
             paymentMethod: online ? 'UPI' : 'COD',
-            address: addr.formattedAddress,
+            takeaway: takeaway,
+            address: takeaway ? _takeawayAddressText() : addr!.formattedAddress,
             name: user?.name ?? '',
             phone: user?.phone ?? '',
             email: user?.email ?? '',
-            lat: addr.latitude,
-            lng: addr.longitude,
+            lat: takeaway ? _pickup?.latitude : addr?.latitude,
+            lng: takeaway ? _pickup?.longitude : addr?.longitude,
             instant: instant,
             slotId: slot?.id,
             slotLabel: slot == null ? null : (slot.label.isNotEmpty ? slot.label : _slotTimeRangeLabel(slot)),
@@ -202,7 +297,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         _orderKey = null;
         ref.read(cartProvider.notifier).removeMarketplaceLines();
         ref.invalidate(groceryOrdersProvider);
-        AppToast.show(context, online ? 'Payment received. Order placed!' : 'Order placed! Pay in cash on delivery.', type: AppToastType.success);
+        AppToast.show(context, online ? 'Payment received. Order placed!' : (takeaway ? 'Order placed! Pay in cash when you pick it up.' : 'Order placed! Pay in cash on delivery.'), type: AppToastType.success);
         // Land on Bookings (where grocery orders are listed) and open the order on top of it, so the Bookings tab is the
         // active one and Back returns to the list instead of leaving the customer somewhere unrelated.
         context.go('/bookings');
@@ -485,7 +580,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               ),
             ],
 
-            // ── Delivery address (moved up from the fixed bottom bar) ───────
+            // ── Delivery address (moved up from the fixed bottom bar) / pickup location (Take Away) ──
+            if (_isTakeaway) ...[
+              _buildTakeawayCard(),
+              const SizedBox(height: 14),
+            ] else ...[
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -563,6 +662,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               ),
             ),
             const SizedBox(height: 14),
+            ],
 
             // ── Free Delivery Incentive Card ────────────────────────────────
             if (!mkt) ...[
@@ -1011,8 +1111,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     children: [
                       Expanded(
                         child: _GroceryPaymentMethodOption(
-                          label: 'Cash on Delivery',
-                          subtitle: 'Cash / UPI on arrival',
+                          label: _isTakeaway ? 'Cash on Pickup' : 'Cash on Delivery',
+                          subtitle: _isTakeaway ? 'Pay at the warehouse counter' : 'Cash / UPI on arrival',
                           icon: Icons.payments_outlined,
                           selected: _paymentMethod == 'COD',
                           onTap: () => setState(() => _paymentMethod = 'COD'),
@@ -1673,6 +1773,16 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               });
             },
           ),
+          const SizedBox(height: 10),
+          _DeliveryOptionTile(
+            icon: Icons.storefront_outlined,
+            title: 'Take Away',
+            subtitle: _pickupLoading ? 'Checking the warehouse…' : 'Collect at the warehouse · no delivery fee',
+            isSelected: _isTakeaway,
+            onTap: () {
+              if (!_pickupLoading) _selectTakeaway();
+            },
+          ),
           const SizedBox(height: 14),
           label('Or schedule — pick a date'),
           const SizedBox(height: 8),
@@ -1825,6 +1935,14 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   /// whenever none has been chosen yet, and only calls through to
   /// [_handlePlaceOrder] once one has.
   void _onProceedToPayTapped(BuildContext context, Address? activeAddress) {
+    if (_isTakeaway) {
+      if (!_takeawayConfirmed) {
+        AppToast.show(context, 'Please tick the box to confirm you will come to the warehouse and pick up your order.', type: AppToastType.error);
+        return;
+      }
+      _handlePlaceOrder(context, ref, activeAddress);
+      return;
+    }
     if (_deliveryOption == null || _selectedSlot == null) {
       // The delivery slot card is on this page — point the customer at it
       // instead of opening a second picker.

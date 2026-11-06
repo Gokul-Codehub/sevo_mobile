@@ -5,6 +5,7 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:intl/intl.dart';
 
 import '../../../../core/utils/location_gate.dart';
@@ -35,6 +36,7 @@ import '../widgets/gt_assist_section.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
 import '../widgets/gt_compliance.dart';
+import '../widgets/gt_coverage_map.dart';
 import '../widgets/gt_extras_section.dart';
 import '../widgets/gt_slot_picker.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
@@ -732,7 +734,7 @@ class _GoodsTransportBookingScreenState
       final w = ref.read(ptlWeightKgProvider);
       return (w == null || w <= 0)
           ? null
-          : 'Part Truck Load, approx. ${w.toStringAsFixed(0)} kg';
+          : 'Part Truck Load, approx. ${kgUp(w)} kg';
     }
 
     final cargo = ref.read(cargoDeclarationProvider);
@@ -755,7 +757,7 @@ class _GoodsTransportBookingScreenState
       }).join(', '));
     }
     if (cargo.declaredWeightKg != null) {
-      parts.add('approx. ${cargo.declaredWeightKg!.toStringAsFixed(0)} kg');
+      parts.add('approx. ${kgUp(cargo.declaredWeightKg!)} kg');
     }
     return parts.join(' · ');
   }
@@ -818,7 +820,7 @@ class _GoodsTransportBookingScreenState
       final w = ref.read(ptlWeightKgProvider);
       final listed = _listedGoodsWeight;
       if (w != null && (w - listed).abs() > math.max(1, listed * 0.05)) {
-        return 'Cargo weight (${w.toStringAsFixed(0)} kg) does not match the goods you listed (${listed.toStringAsFixed(0)} kg).';
+        return 'Cargo weight (${kgUp(w)} kg) does not match the goods you listed (${kgUp(listed)} kg).';
       }
     }
     return null;
@@ -911,6 +913,13 @@ class _GoodsTransportBookingScreenState
       return;
     }
     _cargoDescription = builtDescription;
+
+    final fitProblem = await _cargoFitProblem();
+    if (!mounted) return;
+    if (fitProblem != null) {
+      _warn(fitProblem);
+      return;
+    }
 
     if (_declaredValueMissing) {
       _warn(_declaredValueMessage);
@@ -1814,21 +1823,27 @@ class _GoodsTransportBookingScreenState
                                       height: 1.2,
                                     ),
                                   ),
-                                  if (tier.capacityLabel != null &&
-                                      tier.capacityLabel!.isNotEmpty) ...[
+                                  // Max cargo capacity as configured by the admin for this vehicle (weight + body size).
+                                  if (_tierMaxWeightText(tier).isNotEmpty) ...[
                                     const SizedBox(height: 3),
                                     Text(
-                                      // Weight only — CFT is not shown to customers.
-                                      tier.capacityLabel!.replaceAll(
-                                        RegExp(r'\s*[•·,]\s*[\d.,]+\s*CFT', caseSensitive: false),
-                                        '',
-                                      ),
+                                      _tierMaxWeightText(tier),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
                                         color: AppColors.textSecondary,
                                       ),
+                                    ),
+                                  ],
+                                  if (tier.dimensionsText.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Size ${tier.dimensionsText}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                                     ),
                                   ],
                                   if (tier.startingPrice != null) ...[
@@ -2462,6 +2477,7 @@ class _GoodsTransportBookingScreenState
                           ),
                         ],
                       ),
+                      if (!(isPackersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City'))
                       _ServiceAreaBanner(
                         label: 'Stop ${i + 1}',
                         pincode: '',
@@ -2595,7 +2611,7 @@ class _GoodsTransportBookingScreenState
                 ],
               ),
             ),
-            if (dropLocation != null)
+            if (dropLocation != null && !(isPackersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City'))
               _ServiceAreaBanner(
                 label: 'Drop-off',
                 pincode: '',
@@ -2625,6 +2641,15 @@ class _GoodsTransportBookingScreenState
                   laneId: isPackersMovers ? null : ref.watch(selectedGtLaneProvider)?.id,
                 ),
               ),
+            GtCoverageMap(
+              serviceSlug: isPackersMovers ? 'packers_movers' : vehicleCategory.serviceCategoryValue,
+              vehicleClass: selectedTier?.vehicleClass,
+              pickup: (selectedAddress?.latitude != null && selectedAddress?.longitude != null)
+                  ? LatLng(selectedAddress!.latitude!, selectedAddress.longitude!)
+                  : null,
+              drop: dropLocation == null ? null : LatLng(dropLocation.latitude, dropLocation.longitude),
+              dropAnywhere: isPackersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City',
+            ),
             const SizedBox(height: 18),
             ],
             if (_step == 2) ...[
@@ -2701,11 +2726,29 @@ class _GoodsTransportBookingScreenState
                                     height: 1.4,
                                   ),
                                 ),
-                                data: (quote) => _PmFareQuoteView(
-                                  quote: quote,
-                                  surveyBusy: _surveyBusy,
-                                  onRequestSurvey: () => _requestSurvey(quote: quote),
-                                ),
+                                data: (quote) {
+                                  final city = selectedTier?.city ?? 'Hosur';
+                                  final sel = ref.watch(pmAddOnsSelectedProvider);
+                                  final catalog = ref.watch(pmAddOnsProvider(city)).valueOrNull ?? const <PmAddOn>[];
+                                  final effCft = double.tryParse(
+                                          '${quote.inventorySummary?['effective_cft'] ?? quote.inventorySummary?['total_cft'] ?? 0}') ??
+                                      0;
+                                  final addOnLines = <(String, double)>[];
+                                  for (final e in sel.entries) {
+                                    final svc = catalog.where((x) => x.code == e.key).firstOrNull;
+                                    if (svc == null) continue;
+                                    final qty = svc.pricingMode == 'FLAT' ? 1 : e.value;
+                                    final amount = svc.pricingMode == 'PER_CFT' ? svc.unitPrice * effCft : svc.unitPrice * qty;
+                                    addOnLines.add((qty > 1 ? '${svc.name} \u00d7 $qty' : svc.name, amount));
+                                  }
+                                  return _PmFareQuoteView(
+                                    quote: quote,
+                                    surveyBusy: _surveyBusy,
+                                    onRequestSurvey: () => _requestSurvey(quote: quote),
+                                    addOns: addOnLines,
+                                    helpers: ref.watch(pmHelpersRequestedProvider),
+                                  );
+                                },
                               );
                             },
                           ))
@@ -2864,9 +2907,44 @@ class _GoodsTransportBookingScreenState
     ));
   }
 
+  /// P&M "Intercity" moves may go to any destination: only the pickup is checked against the service area.
+  bool get _pmIntercity =>
+      ref.read(selectedVehicleCategoryProvider) == LogisticsVehicleCategory.packersMovers &&
+      ref.read(pmRelocationTypeProvider) != 'Within City';
+
+  /// A load the chosen vehicle cannot carry must not reach the next step. Returns the message to show, or null.
+  Future<String?> _cargoFitProblem() async {
+    final category = ref.read(selectedVehicleCategoryProvider);
+    if (category == LogisticsVehicleCategory.packersMovers || ref.read(ptlModeProvider)) return null;
+    final tier = ref.read(selectedLogisticsTierProvider);
+    final cargo = ref.read(cargoDeclarationProvider);
+    if (tier == null || cargo.isEmpty) return null;
+    CargoFitment fit;
+    try {
+      fit = await ref
+          .read(cargoFitmentProvider((cargo: cargo, city: tier.city ?? 'Hosur')).future)
+          .timeout(const Duration(seconds: 12));
+    } catch (_) {
+      return null; // could not check: the server still enforces it when the booking is placed
+    }
+    final errs = fit.cargoSummary['validation_errors'];
+    if (errs is List && errs.isNotEmpty && errs.first is Map) {
+      return friendlyFitMessage((errs.first as Map)['error']?.toString() ?? 'Some cargo details are invalid.');
+    }
+    if (!fit.hasSuitableVehicle) {
+      return friendlyFitMessage(fit.reason ?? 'No vehicle available can carry this load.');
+    }
+    if (!fit.suitableTierIds.contains(tier.id)) {
+      final why = friendlyFitMessage(fit.incompatibleReason(tier.id) ?? '${tier.name} cannot safely carry this load.');
+      final rec = fit.recommendedTier?['name'];
+      return rec == null ? why : '$why Try: $rec.';
+    }
+    return null;
+  }
+
   /// Validates the current step (same rules / messages as [_handleSubmit],
   /// which still re-checks everything on the final step) and moves on.
-  void _goNext() {
+  Future<void> _goNext() async {
     final vehicleCategory = ref.read(selectedVehicleCategoryProvider);
     if (_step == 0) {
       if (ref.read(selectedLogisticsTierProvider) == null) {
@@ -2882,6 +2960,12 @@ class _GoodsTransportBookingScreenState
                   ? 'Enter the cargo weight in kg for Part Truck Load.'
                   : 'Please add your cargo details (type of goods, items or weight).',
         );
+        return;
+      }
+      final fitProblem = await _cargoFitProblem();
+      if (!mounted) return;
+      if (fitProblem != null) {
+        _warn(fitProblem);
         return;
       }
       if (_declaredValueMissing) {
@@ -2931,18 +3015,20 @@ class _GoodsTransportBookingScreenState
         _warn('Your pickup location is outside our service area.');
         return;
       }
-      final dropArea = ref
-          .read(serviceabilityProvider((
-            pincode: '',
-            lat: drop.latitude,
-            lng: drop.longitude,
-          )))
-          .valueOrNull;
+      final dropArea = _pmIntercity
+          ? null
+          : ref
+              .read(serviceabilityProvider((
+                pincode: '',
+                lat: drop.latitude,
+                lng: drop.longitude,
+              )))
+              .valueOrNull;
       if (dropArea != null && !dropArea.isServiceable) {
         _warn('Your drop-off location is outside our service area.');
         return;
       }
-      final stops = ref.read(gtStopsProvider);
+      final stops = _pmIntercity ? const <PickedDropLocation>[] : ref.read(gtStopsProvider);
       for (var i = 0; i < stops.length; i++) {
         final area = ref
             .read(serviceabilityProvider((
@@ -2955,6 +3041,20 @@ class _GoodsTransportBookingScreenState
           _warn('Stop ${i + 1} is outside our service area.');
           return;
         }
+      }
+    }
+    if (_step == 2 &&
+        vehicleCategory != LogisticsVehicleCategory.packersMovers &&
+        !ref.read(ptlModeProvider)) {
+      // Truck / 2-wheeler trips are dispatched right away: nothing to book when today's dispatch has closed.
+      final tier = ref.read(selectedLogisticsTierProvider);
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final res = ref
+          .read(gtSlotsProvider((date: today, category: vehicleCategory.serviceCategoryValue, city: tier?.city)))
+          .valueOrNull;
+      if (res?.isSameDayClosed ?? false) {
+        _warn('Dispatch for today has closed. Please try again tomorrow.');
+        return;
       }
     }
     // Step 2 (schedule) needs no slot any more — see _handleSubmit.
@@ -3091,6 +3191,8 @@ class _FareQuoteView extends StatelessWidget {
     final surge = _num(b?['surge_multiplier']) ?? 1;
     final stops = b?['additional_stops'];
     final floors = _num(b?['carry_floors'])?.round() ?? 0;
+    final helpers = _num(b?['extra_helpers'])?.round() ?? 0;
+    final gstIncluded = _num(b?['gst_included']);
     final hasBreakdown = b != null;
 
     return Column(
@@ -3118,21 +3220,30 @@ class _FareQuoteView extends StatelessWidget {
             _FareRow(
               chargeableKm != null && ratePerKm != null
                   ? (chargeableKm > 0
-                      ? 'Distance Charge (${chargeableKm.toStringAsFixed(2)} km beyond base \u00d7 \u20b9${ratePerKm.toStringAsFixed(0)}/km)'
+                      ? 'Distance Charge (${chargeableKm.toStringAsFixed(2)} km${_positive(freeKm) ? ' beyond base' : ''} \u00d7 \u20b9${ratePerKm.toStringAsFixed(0)}/km)'
                       : 'Distance Charge (0.00 km chargeable)')
                   : 'Distance Charge',
               distanceCharge,
             ),
+          // Loading & unloading help: charged when asked for.
           if (_positive(_num(b['loading_unloading'])))
-            _FareRow('Loading & Unloading', _num(b['loading_unloading'])!),
+            _FareRow('Loading & unloading help', _num(b['loading_unloading'])!)
+          else if (b['loading_help'] == true)
+            const _FareTextRow('Loading & unloading help', 'Included'),
+          // Extra helpers beyond the driver.
           if (_positive(_num(b['helper_charge'])))
-            _FareRow('Extra helpers (${_num(b['extra_helpers'])?.round() ?? 0})', _num(b['helper_charge'])!),
+            _FareRow('Extra helpers ($helpers \u00d7 \u20b9${(_num(b['helper_charge'])! / (helpers == 0 ? 1 : helpers)).toStringAsFixed(0)})', _num(b['helper_charge'])!)
+          else if (helpers > 0)
+            _FareTextRow('Extra helpers ($helpers)', 'Included'),
+          // Stairs carrying: per floor, only for an end with no working lift.
           if (_positive(_num(b['carry_charge'])))
-            _FareRow('Stairs carrying ($floors floor${floors == 1 ? '' : 's'})', _num(b['carry_charge'])!),
+            _FareRow('Carrying by stairs ($floors floor${floors == 1 ? '' : 's'} \u00d7 \u20b9${(_num(b['carry_charge'])! / (floors == 0 ? 1 : floors)).toStringAsFixed(0)})', _num(b['carry_charge'])!),
+          if (_positive(_num(b['special_handling_charge'])))
+            _FareRow('Special handling (fragile / heavy items)', _num(b['special_handling_charge'])!),
           if (_positive(_num(b['additional_stop_charge'])))
-            _FareRow('Additional Stops (${stops ?? ''})', _num(b['additional_stop_charge'])!),
-          if (surge != 1)
-            _FareTextRow('Surge (${surge.toStringAsFixed(2)}\u00d7)', 'applied', color: AppColors.warning),
+            _FareRow('Additional stops (${stops ?? ''})', _num(b['additional_stop_charge'])!),
+          if (surge != 1 && _positive(_num(b['subtotal'])))
+            _FareRow('Surge (${surge.toStringAsFixed(2)}\u00d7)', (_num(b['subtotal'])! * (surge - 1))),
           if (b['minimum_fare_applied'] == true)
             const Padding(
               padding: EdgeInsets.only(top: 4),
@@ -3144,6 +3255,11 @@ class _FareQuoteView extends StatelessWidget {
         ] else
           _FareRow('Trip Fare', quote.total),
         const Divider(height: 18, color: AppColors.border),
+        if (_positive(gstIncluded))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: _FareTextRow('GST included in the fare', '\u20b9${gstIncluded!.toStringAsFixed(2)}'),
+          ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -3436,9 +3552,17 @@ class _PmFareQuoteView extends StatelessWidget {
     required this.quote,
     this.onRequestSurvey,
     this.surveyBusy = false,
+    this.addOns = const [],
+    this.helpers = 0,
   });
 
   final PackersMoversQuote quote;
+
+  /// Selected add-on services with their estimated price (label, amount).
+  final List<(String, double)> addOns;
+
+  /// Extra helpers requested (priced by the server when the booking is confirmed).
+  final int helpers;
   final VoidCallback? onRequestSurvey;
   final bool surveyBusy;
 
@@ -3515,6 +3639,39 @@ class _PmFareQuoteView extends StatelessWidget {
       );
     }
 
+    double? n(String k) {
+      final v = quote.pricing?[k];
+      if (v == null) return null;
+      return v is num ? v.toDouble() : double.tryParse(v.toString());
+    }
+
+    bool pos(double? v) => v != null && v > 0;
+    final p = quote.pricing;
+    final intercity = p?['is_intercity'] == true;
+    final addOnSum = addOns.fold<double>(0, (t, e) => t + e.$2);
+    final grand = quote.total! + addOnSum;
+    final distance = double.tryParse('${quote.route?['distance_km'] ?? ''}');
+    final packLabel = (p?['packing_label'] ?? '').toString();
+
+    final rows = <Widget>[
+      if (distance != null && distance > 0) _FareTextRow('Route distance', '${distance.toStringAsFixed(1)} km', bold: true),
+      if (pos(n('transport_base_fare'))) _FareRow('Vehicle base fare', n('transport_base_fare')!),
+      if (pos(n('transport_distance_charge')))
+        _FareRow(intercity ? 'Intercity distance (linehaul)' : 'Distance charge', n('transport_distance_charge')!),
+      if (pos(n('toll_allowance'))) _FareRow('Toll allowance', n('toll_allowance')!),
+      if (pos(n('intercity_fee'))) _FareRow('Intercity fee', n('intercity_fee')!),
+      if (pos(n('additional_stops_charge')))
+        _FareRow('Additional stops (${p?['additional_stops'] ?? ''})', n('additional_stops_charge')!),
+      if (pos(n('packing_charge'))) _FareRow(packLabel.isEmpty ? 'Packing materials' : 'Packing ($packLabel)', n('packing_charge')!),
+      if (pos(n('base_labor_charge'))) _FareRow('Labour (loading & unloading crew)', n('base_labor_charge')!),
+      if (pos(n('floor_labor_charge')))
+        _FareRow('Floor charges (carrying up / down stairs, no lift)', n('floor_labor_charge')!),
+      if (pos(n('dismantling_charge'))) _FareRow('Dismantling & re-assembly', n('dismantling_charge')!),
+      if (pos(n('unpacking_charge'))) _FareRow('Unpacking', n('unpacking_charge')!),
+      if (pos(n('date_surcharge'))) _FareRow('Peak-date surcharge', n('date_surcharge')!),
+      if (helpers > 0) _FareTextRow('Extra helpers ($helpers)', 'Added at confirmation'),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3522,26 +3679,31 @@ class _PmFareQuoteView extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Estimated Fare',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppColors.navy,
-              ),
+              'Fare Breakdown',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy),
             ),
             Text(
-              '₹${quote.total!.toStringAsFixed(0)}',
-              style: const TextStyle(
-                fontSize: 17.5,
-                fontWeight: FontWeight.w900,
-                color: AppColors.navy,
-              ),
+              '\u20b9${grand.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 17.5, fontWeight: FontWeight.w900, color: AppColors.navy),
             ),
           ],
         ),
-        const Divider(height: 20, color: AppColors.border),
-        if (quote.subtotal != null) _FareRow('Subtotal', quote.subtotal!),
-        if (quote.gstAmount != null) _FareRow('GST', quote.gstAmount!),
+        const SizedBox(height: 8),
+        ...rows,
+        if (quote.subtotal != null) ...[
+          const Divider(height: 18, color: AppColors.border),
+          _FareRow('Subtotal', quote.subtotal!),
+        ],
+        if (quote.gstAmount != null) _FareRow('GST${p?['gst_rate'] != null ? ' (${p!['gst_rate']})' : ''}', quote.gstAmount!),
+        for (final a in addOns) _FareRow(a.$1, a.$2),
+        const Divider(height: 18, color: AppColors.border),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Amount Payable', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.navy)),
+            Text('\u20b9${grand.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.navy)),
+          ],
+        ),
         const SizedBox(height: 8),
         const Text(
           'This is the same authoritative number the server records — it will not change unexpectedly when you confirm.',
@@ -3695,8 +3857,8 @@ const TimeSlot _kFlexibleSlot = TimeSlot(
   label: 'Flexible (Anytime)',
 );
 
-/// Truck / 2-Wheeler: "Urgent" (nearest driver right away) or "Schedule" (pick a later date on the calendar), like the web.
-/// Urgent is switched off when the server says same-day booking has closed (past the cut-off).
+/// Truck / 2-Wheeler: the nearest driver is dispatched right away. Scheduling a later date is only for Packers & Movers
+/// (and Part Truck Load, which has its own date picker). Shows a notice when today's dispatch has closed.
 class _UrgentOrScheduled extends ConsumerWidget {
   const _UrgentOrScheduled({required this.category, required this.city});
 
@@ -3707,69 +3869,50 @@ class _UrgentOrScheduled extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final res = ref.watch(gtSlotsProvider((date: today, category: category, city: city))).valueOrNull;
-    final sameDayClosed = res?.isSameDayClosed ?? false;
-    final scheduled = ref.watch(gtScheduledProvider) || sameDayClosed;
-
-    if (sameDayClosed && !ref.read(gtScheduledProvider)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(gtScheduledProvider.notifier).state = true);
-    }
-
-    Widget option(String title, String sub, IconData icon, bool selected, VoidCallback? onTap) => Expanded(
-          child: Opacity(
-            opacity: onTap == null ? 0.45 : 1,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: onTap,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.navy.withValues(alpha: 0.08) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: selected ? AppColors.navy : AppColors.border, width: selected ? 1.6 : 1),
+    final closed = res?.isSameDayClosed ?? false;
+    final color = closed ? AppColors.error : AppColors.navy;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: closed ? AppColors.errorLight : AppColors.navy.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 1.4),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(closed ? Icons.schedule_rounded : Icons.bolt_rounded, size: 22, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  closed ? 'Dispatch closed for today' : 'Immediate dispatch',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(icon, size: 20, color: AppColors.navy),
-                    const SizedBox(height: 6),
-                    Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
-                    const SizedBox(height: 2),
-                    Text(sub, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                  ],
+                const SizedBox(height: 3),
+                Text(
+                  closed
+                      ? 'Bookings for today have closed. Please try again tomorrow.'
+                      : 'Your nearest driver is sent right away. Choose Packers & Movers if you want to plan a move for a later date.',
+                  style: const TextStyle(fontSize: 11.5, height: 1.35, color: AppColors.textSecondary),
                 ),
-              ),
+              ],
             ),
           ),
-        );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            option(
-              'Urgent',
-              sameDayClosed ? 'Closed for today' : 'Nearest driver, right away',
-              Icons.bolt_rounded,
-              !scheduled,
-              sameDayClosed ? null : () => ref.read(gtScheduledProvider.notifier).state = false,
-            ),
-            const SizedBox(width: 10),
-            option(
-              'Schedule',
-              'Pick a later date',
-              Icons.event_outlined,
-              scheduled,
-              () => ref.read(gtScheduledProvider.notifier).state = true,
-            ),
-          ],
-        ),
-        if (scheduled) ...[
-          const SizedBox(height: 14),
-          GtSlotPicker(category: category, city: city, showSlots: false),
         ],
-      ],
+      ),
     );
   }
+}
+
+/// "Max 750 kg" from the admin-set maximum payload; falls back to the admin's capacity label (CFT stripped, whole kg).
+String _tierMaxWeightText(LogisticsTier tier) {
+  final w = tier.maxWeightKg;
+  if (w != null && w > 0) return 'Max ${kgUp(w)} kg';
+  final label = (tier.capacityLabel ?? '').trim();
+  if (label.isEmpty) return '';
+  return roundUpKgText(label.replaceAll(RegExp(r'\s*[•·,]\s*[\d.,]+\s*CFT', caseSensitive: false), ''));
 }

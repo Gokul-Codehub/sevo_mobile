@@ -71,6 +71,48 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   /// re-animated on EVERY rebuild (each poll, each OTP "copied" tick), which
   /// yanked the map back whenever the customer panned or zoomed.
   LatLng? _lastCameraTarget;
+
+  // ── Auto-focus ──
+  // The camera frames the driver AND the destination together (and the drawn route), re-framing as the driver
+  // moves. Once the customer pans/zooms it stops fighting them; "Re-center" turns auto-focus back on.
+  bool _autoFollow = true;
+  DateTime _programmaticUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  LatLng? _latestTech;
+  LatLng? _latestDest;
+
+  Future<void> _autoFocus({bool force = false}) async {
+    final controller = _mapController;
+    final tech = _latestTech;
+    final dest = _latestDest;
+    if (controller == null || !mounted || (!force && !_autoFollow)) return;
+    final pts = <LatLng>[?tech, ?dest, if (tech != null && dest != null) ..._roadRoute];
+    if (pts.isEmpty) return;
+    _programmaticUntil = DateTime.now().add(const Duration(milliseconds: 1800));
+    try {
+      var minLat = pts.first.latitude, maxLat = minLat, minLng = pts.first.longitude, maxLng = minLng;
+      for (final q in pts) {
+        if (q.latitude < minLat) minLat = q.latitude;
+        if (q.latitude > maxLat) maxLat = q.latitude;
+        if (q.longitude < minLng) minLng = q.longitude;
+        if (q.longitude > maxLng) maxLng = q.longitude;
+      }
+      final tiny = (maxLat - minLat).abs() < 0.0003 && (maxLng - minLng).abs() < 0.0003; // ~30 m
+      if (tiny) {
+        await controller.animateCamera(CameraUpdate.newLatLngZoom(pts.first, 16.5));
+      } else {
+        await controller.animateCamera(CameraUpdate.newLatLngBounds(
+          LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng)),
+          72,
+        ));
+      }
+    } catch (_) {
+      // Map not laid out yet (bounds before size) - fall back to following the driver / pin.
+      try {
+        final t = tech ?? dest;
+        if (t != null) await controller.animateCamera(CameraUpdate.newLatLngZoom(t, 15));
+      } catch (_) {}
+    }
+  }
   DateTime? _lastRouteFetchTime;
   bool _routeFetchInFlight = false;
 
@@ -166,6 +208,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
           _roadRouteDistanceKm = route.distanceKm;
           _roadRouteEtaMinutes = route.etaMinutes;
         });
+        if (_autoFollow) _autoFocus();
       } else if (_hasRoadGeometry) {
         setState(() {
           _hasRoadGeometry = false;
@@ -227,10 +270,17 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
     final technicianJobsCount = tracking.technicianJobsCompleted ?? technician?.completedJobsCount;
     final technicianPhoto = tracking.technicianPhoto ?? technician?.profilePictureUrl;
 
-    if (hasLiveData && techPos != null) {
-      if (_lastCameraTarget != techPos) {
+    _latestTech = techPos;
+    _latestDest = destPos;
+    // Re-frame when the driver has moved ~20 m (or first appears), unless the customer took over the map.
+    if (_autoFollow && _mapController != null && techPos != null) {
+      final last = _lastCameraTarget;
+      final moved = last == null
+          ? 999.0
+          : RoutingService.distanceMeters(last.latitude, last.longitude, techPos.latitude, techPos.longitude);
+      if (moved >= 20) {
         _lastCameraTarget = techPos;
-        _mapController?.animateCamera(CameraUpdate.newLatLng(techPos));
+        WidgetsBinding.instance.addPostFrameCallback((_) => _autoFocus());
       }
     }
 
@@ -314,7 +364,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
               icon: const Icon(Icons.share_rounded, color: AppColors.navy, size: 20),
               onPressed: () {
                 final id = (widget.booking?.trackingIdentifier ?? '').isNotEmpty ? widget.booking!.trackingIdentifier! : widget.identifier;
-                Share.share(trackingShareText(id), subject: 'Track my SEVO booking');
+                Share.share(trackingShareText(id), subject: 'Track my SEVONIQ booking');
               },
             ),
           Container(
@@ -373,7 +423,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 // no technician marker / route), with the status on top.
                 // The full-screen waiting state is only for bookings with
                 // no usable address coordinates.
-                if ((!hasLiveData || techPos == null) && destPos == null)
+                // Goods & Transport: no map at all until a driver is assigned.
+                if (tracking.isLogistics && !tracking.hasDriver || (!hasLiveData || techPos == null) && destPos == null)
                   // No real position has arrived yet — show an honest
                   // waiting state rather than a fake pin.
                   Container(
@@ -415,6 +466,14 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     ),
                     onMapCreated: (controller) {
                       _mapController = controller;
+                      // Frame everything once the map has its size.
+                      Future.delayed(const Duration(milliseconds: 400), () => _autoFocus(force: true));
+                    },
+                    onCameraMoveStarted: () {
+                      // A move we did not start = the customer panning/zooming: stop auto-focus until Re-center.
+                      if (_autoFollow && DateTime.now().isAfter(_programmaticUntil)) {
+                        setState(() => _autoFollow = false);
+                      }
                     },
                     markers: {
                       if (techPos != null)
@@ -508,9 +567,40 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     zoomControlsEnabled: false,
                   ),
 
+                // Re-center: turns auto-focus back on after the customer moved the map.
+                if (!_autoFollow && (techPos != null || destPos != null))
+                  Positioned(
+                    right: 14,
+                    bottom: 14,
+                    child: Material(
+                      color: Colors.white,
+                      elevation: 3,
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          setState(() => _autoFollow = true);
+                          _lastCameraTarget = techPos;
+                          _autoFocus(force: true);
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.my_location_rounded, size: 16, color: AppColors.navy),
+                              SizedBox(width: 6),
+                              Text('Re-center', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.navy)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
                 // Map shown with only the address pin: say why there is no
                 // technician / driver marker yet (waiting, or signal lost).
-                if ((!hasLiveData || techPos == null) && destPos != null)
+                if ((!hasLiveData || techPos == null) && destPos != null && !(tracking.isLogistics && !tracking.hasDriver))
                   Positioned(
                     top: 14,
                     left: 20,

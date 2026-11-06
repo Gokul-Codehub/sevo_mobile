@@ -97,7 +97,7 @@ class _HomeLoadGateState extends ConsumerState<HomeLoadGate> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Flexible(
-                      child: BrandedLoader(tagline: _slow ? 'Still trying to reach SEVO…\nPlease check your connection.' : BrandedLoader.defaultTagline),
+                      child: BrandedLoader(tagline: _slow ? 'Still trying to reach SEVONIQ…\nPlease check your connection.' : BrandedLoader.defaultTagline),
                     ),
                     if (_slow)
                       Padding(

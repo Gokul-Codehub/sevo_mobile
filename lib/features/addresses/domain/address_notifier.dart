@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error.dart';
@@ -7,6 +8,34 @@ import '../../../core/storage/secure_storage.dart';
 import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../data/address_repository.dart';
 import 'address_models.dart';
+
+/// The server allows at most this many saved addresses per customer.
+const int kMaxSavedAddresses = 10;
+
+const String kAddressLimitMessage =
+    'You can save up to 10 addresses and you already have 10. Delete one you no longer use, then add the new one.';
+
+/// True when [raw] is the server's "maximum addresses" refusal (any wording / raw Python-dict text).
+bool isAddressLimitMessage(String raw) {
+  final t = raw.toLowerCase();
+  return t.contains('maximum') && t.contains('address');
+}
+
+/// Friendly dialog for the address limit. Returns true when the customer chose "Manage addresses".
+Future<bool> showAddressLimitDialog(BuildContext context) async {
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Address limit reached'),
+      content: const Text(kAddressLimitMessage),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Not now')),
+        TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Manage addresses')),
+      ],
+    ),
+  );
+  return go == true;
+}
 
 /// What the customer last chose to deliver to, as remembered on the phone: a saved address ([id]), or a place they
 /// searched / detected ([placeChosen] with no id). Nothing remembered means "use the default address".
@@ -126,6 +155,7 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
 
   // ── Add new address ───────────────────────────────────────────────────────
   Future<String?> addAddress(Address address) async {
+    if ((state.valueOrNull?.length ?? 0) >= kMaxSavedAddresses) return kAddressLimitMessage;
     final result = await _repo.createAddress(address);
     switch (result) {
       case Success(:final data):
@@ -142,7 +172,7 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
         ref.read(selectedAddressProvider.notifier).state = data;
         return null;
       case Failure(:final error):
-        return error.message;
+        return isAddressLimitMessage(error.message) ? kAddressLimitMessage : error.message;
     }
   }
 

@@ -46,7 +46,49 @@ const List<StageInfo> kOrderStages = [
   StageInfo(OrderStage.delivered, 'Delivered', 'Successfully delivered', Icons.home_outlined),
 ];
 
+/// Take Away orders skip the rider: the customer collects the order at the warehouse counter.
+const List<StageInfo> kTakeawayStages = [
+  StageInfo(OrderStage.confirmed, 'Confirmed', 'Order received', Icons.check_circle_outline),
+  StageInfo(OrderStage.packing, 'Being packed', 'Your items are being packed at the warehouse', Icons.inventory_2_outlined),
+  StageInfo(OrderStage.readyForPickup, 'Ready to collect', 'Show your pickup code at the warehouse counter', Icons.storefront_outlined),
+  StageInfo(OrderStage.delivered, 'Picked up', 'You collected your order', Icons.shopping_bag_outlined),
+];
+
 String stageTitle(OrderStage s) => s == OrderStage.cancelled ? 'Cancelled' : kOrderStages.firstWhere((i) => i.stage == s).title;
+
+/// Title of a stage for this kind of order ("Ready to collect" / "Picked up" for Take Away).
+String stageTitleFor(OrderStage s, {required bool takeaway}) =>
+    takeaway && s != OrderStage.cancelled ? (kTakeawayStages.where((i) => i.stage == s).firstOrNull?.title ?? stageTitle(s)) : stageTitle(s);
+
+/// The warehouse a Take Away order is collected from.
+class PickupLocation {
+  const PickupLocation({this.name = '', this.address = '', this.phone = '', this.mapsUrl = '', this.latitude, this.longitude});
+  final String name;
+  final String address;
+  final String phone;
+  final String mapsUrl;
+  final double? latitude;
+  final double? longitude;
+
+  static PickupLocation? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    return PickupLocation(
+      name: (raw['name'] ?? '').toString(),
+      address: (raw['address'] ?? '').toString(),
+      phone: (raw['contact_phone'] ?? '').toString(),
+      mapsUrl: (raw['maps_url'] ?? '').toString(),
+      latitude: _d(raw['latitude']),
+      longitude: _d(raw['longitude']),
+    );
+  }
+}
+
+/// Whether the cart can be collected (needs every item from one Sevo warehouse) and where.
+class PickupAvailability {
+  const PickupAvailability({required this.available, this.location});
+  final bool available;
+  final PickupLocation? location;
+}
 
 double? _d(Object? v) => v == null ? null : double.tryParse(v.toString());
 DateTime? _t(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
@@ -138,6 +180,9 @@ class GroceryOrder {
     this.rider,
     this.cancellationPending = false,
     this.canReturn = false,
+    this.takeaway = false,
+    this.pickupCode,
+    this.pickupLocation,
   });
 
   final String orderNumber;
@@ -161,10 +206,24 @@ class GroceryOrder {
   final bool cancellationPending;
   final bool canReturn;
 
+  /// Take Away: collected at the warehouse, no rider. [pickupCode] is only sent while the order is ready to collect.
+  final bool takeaway;
+  final String? pickupCode;
+  final PickupLocation? pickupLocation;
+
+  bool get isTakeaway => takeaway;
+  List<StageInfo> get stages => takeaway ? kTakeawayStages : kOrderStages;
+
+  /// Position of the current stage on this order's tracker (-1 when cancelled).
+  int get stepIndex => stage == OrderStage.cancelled ? -1 : stages.indexWhere((s) => s.stage == stage).clamp(0, stages.length - 1).toInt();
+
+  String get stageLabel => stageTitleFor(stage, takeaway: takeaway);
+  bool get showPickupCode => takeaway && stage == OrderStage.readyForPickup && (pickupCode ?? '').isNotEmpty;
+
   bool get isActive => stage != OrderStage.delivered && stage != OrderStage.cancelled;
 
   /// 0..1 along the five tracker steps (a cancelled order shows no progress).
-  double get progress => stage == OrderStage.cancelled ? 0 : (stage.index + 1) / kOrderStages.length;
+  double get progress => stage == OrderStage.cancelled ? 0 : (stepIndex + 1) / stages.length;
 
   /// Only until the rider has it. Mirrors the server rule: once out for delivery the order can no longer be cancelled.
   bool get canCancel => !cancellationPending && (stage == OrderStage.confirmed || stage == OrderStage.packing || stage == OrderStage.readyForPickup);
@@ -216,6 +275,9 @@ class GroceryOrder {
       rider: rider,
       cancellationPending: raw['cancellation_pending'] == true,
       canReturn: raw['can_return'] == true,
+      takeaway: raw['is_takeaway'] == true || (raw['delivery_type'] ?? '').toString().toUpperCase() == 'TAKEAWAY',
+      pickupCode: (raw['pickup_code'] ?? '').toString().isEmpty ? null : raw['pickup_code'].toString(),
+      pickupLocation: PickupLocation.tryParse(raw['pickup_location']),
     );
   }
 }
@@ -282,7 +344,11 @@ class MarketplaceCheckout {
     this.slotDate,
     this.slotStart,
     this.slotEnd,
+    this.takeaway = false,
   });
+
+  /// Take Away: the customer collects at the warehouse (no address, slot or rider).
+  final bool takeaway;
 
   final String address;
   final String name;
@@ -307,6 +373,20 @@ class MarketplaceCheckout {
   static double? _six(double? v) => v == null ? null : double.parse(v.toStringAsFixed(6));
 
   Map<String, Object?> toJson() {
+    if (takeaway) {
+      return {
+        'delivery_address': address,
+        'customer_name': name,
+        'customer_phone': phone,
+        'customer_email': email,
+        'payment_method': paymentMethod,
+        'fulfilment_type': 'STORE_PICKUP',
+        'delivery_type': 'TAKEAWAY',
+        'delivery_slot': 'Take Away',
+        if (_six(lat) != null) 'delivery_latitude': _six(lat),
+        if (_six(lng) != null) 'delivery_longitude': _six(lng),
+      };
+    }
     final scheduled = !instant && slotDate != null;
     return {
       'delivery_address': address,
@@ -353,6 +433,23 @@ class GroceryOrdersRepository {
         final orders = [for (final o in all) ?GroceryOrder.tryParse(o)];
         if (orders.isEmpty) throw const ParseError();
         return orders;
+      });
+    } on Exception catch (e) {
+      return Failure(_err(e));
+    }
+  }
+
+  /// Take Away: can the cart be collected, and from where? The server reads the cart's warehouse, so the cart is put
+  /// on the server first (same as at checkout).
+  Future<Result<PickupAvailability>> pickupLocation(List<CartItem> items) async {
+    final entries = marketplaceCartEntries(items);
+    if (entries.isEmpty) return const Failure(ValidationError('Your cart has nothing that can be ordered.'));
+    try {
+      await _putCartOnServer(entries);
+      final response = await _step('pickup-location', () => api.get('/orders/marketplace/pickup-location/'));
+      return ResponseNormalizer.extract(response, (data) {
+        final m = data is Map ? data : const {};
+        return PickupAvailability(available: m['available'] == true, location: PickupLocation.tryParse(m['location']));
       });
     } on Exception catch (e) {
       return Failure(_err(e));

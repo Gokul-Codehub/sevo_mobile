@@ -10,7 +10,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
+import '../widgets/gt_coverage_map.dart';
 import '../../../../shared/maps/sevo_map_style.dart';
 
 /// Drop-off location picker for Goods & Transport.
@@ -403,6 +405,12 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
   @override
   Widget build(BuildContext context) {
     final target = LatLng(_lat, _lng);
+    // Service area for the selected GT service, drawn on the map.
+    final category = ref.watch(selectedVehicleCategoryProvider);
+    final vehicleClass = ref.watch(selectedLogisticsTierProvider)?.vehicleClass;
+    final intercity = category == LogisticsVehicleCategory.packersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City';
+    final zones = zonesFor(ref.watch(gtServiceZonesProvider(category.serviceCategoryValue)).valueOrNull ?? const <GtZone>[], vehicleClass);
+    final inside = insideService(zones, _lat, _lng);
     final topPad = MediaQuery.of(context).padding.top;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
@@ -417,6 +425,8 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
               cloudMapId: SevoMap.cloudMapId,
               initialCameraPosition: CameraPosition(target: target, zoom: 16),
               onMapCreated: (c) => _mapController = c,
+              circles: zoneCircles(zones),
+              polygons: zonePolygons(zones),
               mapType: _satellite ? MapType.hybrid : MapType.normal,
               onCameraMove: (pos) {
                 _lat = pos.target.latitude;
@@ -523,7 +533,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
           // Locate-me / map-type buttons
           Positioned(
             right: 14,
-            bottom: 268 + bottomPad,
+            bottom: 318 + bottomPad,
             child: Column(
               children: [
                 _circleButton(Icons.my_location_rounded, _isLocating ? () {} : _handleUseCurrentLocation, loading: _isLocating),
@@ -619,6 +629,39 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
                       ],
                     ),
                   ),
+                  if (zones.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(
+                          intercity
+                              ? Icons.public_rounded
+                              : (inside == true ? Icons.check_circle_rounded : Icons.error_rounded),
+                          size: 16,
+                          color: intercity
+                              ? AppColors.navy
+                              : (inside == true ? const Color(0xFF15803D) : AppColors.error),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            intercity
+                                ? 'Intercity move: the drop-off can be in any city (shaded area = pickup coverage).'
+                                : (inside == true
+                                    ? 'Inside our service area (shaded on the map).'
+                                    : 'Outside our service area. Move the pin into the shaded area.'),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: intercity
+                                  ? AppColors.navy
+                                  : (inside == true ? const Color(0xFF15803D) : AppColors.error),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,

@@ -42,8 +42,9 @@ Color _stageColor(OrderStage s) => switch (s) {
     };
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip(this.stage);
+  const _StatusChip(this.stage, {this.takeaway = false});
   final OrderStage stage;
+  final bool takeaway;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +54,7 @@ class _StatusChip extends StatelessWidget {
       decoration: BoxDecoration(color: c.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         if (stage == OrderStage.outForDelivery) ...[Icon(Icons.circle, size: 8, color: c), const SizedBox(width: 5)],
-        Text(stageTitle(stage), style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12)),
+        Text(stageTitleFor(stage, takeaway: takeaway), style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12)),
       ]),
     );
   }
@@ -180,10 +181,10 @@ class _OrderCardState extends ConsumerState<OrderCard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(color: const Color(0xFFEFF2F6), borderRadius: BorderRadius.circular(6)),
-              child: const Text('GROCERY', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+              child: Text(o.isTakeaway ? 'TAKE AWAY' : 'GROCERY', style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
             ),
             const Spacer(),
-            _StatusChip(o.stage),
+            _StatusChip(o.stage, takeaway: o.isTakeaway),
           ]),
           const SizedBox(height: 10),
           if (o.items.isNotEmpty) ...[
@@ -212,20 +213,26 @@ class _OrderCardState extends ConsumerState<OrderCard> {
           ],
           if (o.stage != OrderStage.cancelled) ...[
             Text(
-              o.stage == OrderStage.delivered
-                  ? 'Delivered'
-                  : (o.slot.isNotEmpty ? 'Delivery slot: ${o.slot}' : 'Estimated delivery will be shared soon'),
+              o.isTakeaway
+                  ? (o.stage == OrderStage.delivered
+                      ? 'Picked up'
+                      : o.stage == OrderStage.readyForPickup
+                          ? 'Ready to collect - show your pickup code at the warehouse'
+                          : 'Take Away - collect at the warehouse when it is ready')
+                  : o.stage == OrderStage.delivered
+                      ? 'Delivered'
+                      : (o.slot.isNotEmpty ? 'Delivery slot: ${o.slot}' : 'Estimated delivery will be shared soon'),
               style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 8),
-            StageProgressBar(stage: o.stage, compact: true),
+            StageProgressBar(stage: o.stage, compact: true, takeaway: o.isTakeaway),
             const SizedBox(height: 12),
           ],
           Row(children: [
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Seller', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                Text(o.sellerName.isEmpty ? 'SEVO Partner' : o.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                Text(o.sellerName.isEmpty ? 'SEVONIQ Partner' : o.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -249,16 +256,18 @@ class _OrderCardState extends ConsumerState<OrderCard> {
 
 /// The segmented bar from the shipments reference: one segment per step, filled up to the current one.
 class StageProgressBar extends StatelessWidget {
-  const StageProgressBar({super.key, required this.stage, this.compact = false});
+  const StageProgressBar({super.key, required this.stage, this.compact = false, this.takeaway = false});
   final OrderStage stage;
   final bool compact;
+  final bool takeaway;
 
   @override
   Widget build(BuildContext context) {
-    final current = stage == OrderStage.cancelled ? -1 : stage.index;
+    final stages = takeaway ? kTakeawayStages : kOrderStages;
+    final current = stage == OrderStage.cancelled ? -1 : stages.indexWhere((s) => s.stage == stage).clamp(0, stages.length - 1).toInt();
     return Column(children: [
       Row(children: [
-        for (var i = 0; i < kOrderStages.length; i++) ...[
+        for (var i = 0; i < stages.length; i++) ...[
           Expanded(
             child: Container(
               height: 6,
@@ -268,16 +277,16 @@ class StageProgressBar extends StatelessWidget {
               ),
             ),
           ),
-          if (i != kOrderStages.length - 1) const SizedBox(width: 4),
+          if (i != stages.length - 1) const SizedBox(width: 4),
         ],
       ]),
       if (!compact) ...[
         const SizedBox(height: 8),
         Row(children: [
-          for (var i = 0; i < kOrderStages.length; i++)
+          for (var i = 0; i < stages.length; i++)
             Expanded(
               child: Text(
-                ['Confirmed', 'Packing', 'Ready', 'On the way', 'Delivered'][i],
+                (takeaway ? ['Confirmed', 'Packing', 'Ready', 'Picked up'] : ['Confirmed', 'Packing', 'Ready', 'On the way', 'Delivered'])[i],
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 10.5, fontWeight: i == current ? FontWeight.w800 : FontWeight.w500, color: i <= current ? AppColors.navy : AppColors.textSecondary),
               ),
@@ -401,6 +410,7 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
                 child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 24), children: [
                   _Header(order: o),
                   const SizedBox(height: 12),
+                  if (o.isTakeaway && o.stage != OrderStage.cancelled) _TakeawayCard(order: o),
                   if (o.showOtp) _OtpCard(otp: o.deliveryOtp!),
                   if (o.stage == OrderStage.outForDelivery) _RiderCard(order: o),
                   if (o.stage != OrderStage.cancelled) _ProgressCard(order: o) else _CancelledCard(order: o),
@@ -409,7 +419,7 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
                   _ItemsCard(order: o),
                   if (o.stage == OrderStage.delivered) OrderInvoicesCard(orderNumber: o.orderNumber),
                   OrderReturnsCard(order: o),
-                  _InfoCard(icon: Icons.location_on_outlined, title: 'Delivery address', body: o.deliveryAddress.isEmpty ? 'Not available' : o.deliveryAddress),
+                  if (!o.isTakeaway) _InfoCard(icon: Icons.location_on_outlined, title: 'Delivery address', body: o.deliveryAddress.isEmpty ? 'Not available' : o.deliveryAddress),
                   _PaymentCard(order: o),
                   _HelpCard(),
                 ]),
@@ -481,7 +491,7 @@ class _Header extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Wrap(spacing: 8, runSpacing: 6, children: [
-          _StatusChip(o.stage),
+          _StatusChip(o.stage, takeaway: o.isTakeaway),
           if (o.paymentStatus.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -542,6 +552,75 @@ class _OtpCard extends StatelessWidget {
       );
 }
 
+/// Take Away: where to collect, how to get there and the pickup code.
+class _TakeawayCard extends StatelessWidget {
+  const _TakeawayCard({required this.order});
+  final GroceryOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    final o = order;
+    final loc = o.pickupLocation;
+    final name = (loc?.name ?? '').isNotEmpty ? loc!.name : (o.warehouseName.isNotEmpty ? o.warehouseName : 'SEVONIQ warehouse');
+    final address = loc?.address ?? '';
+    return _Card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.storefront_outlined, color: _green, size: 20),
+          SizedBox(width: 8),
+          Text('Take Away - collect from', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.textSecondary)),
+        ]),
+        const SizedBox(height: 6),
+        Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.navy)),
+        if (address.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(address, style: const TextStyle(fontSize: 12.5, height: 1.35, color: AppColors.textSecondary))),
+        if ((loc?.mapsUrl ?? '').isNotEmpty || (loc?.phone ?? '').isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 6, children: [
+            if ((loc?.mapsUrl ?? '').isNotEmpty)
+              FilledButton.icon(
+                onPressed: () => launchUrl(Uri.parse(loc!.mapsUrl), mode: LaunchMode.externalApplication),
+                icon: const Icon(Icons.directions_outlined, size: 18),
+                label: const Text('Get directions'),
+              ),
+            if ((loc?.phone ?? '').isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () => launchUrl(Uri(scheme: 'tel', path: loc!.phone)),
+                icon: const Icon(Icons.call_outlined, size: 18),
+                label: const Text('Call warehouse'),
+              ),
+          ]),
+        ],
+        const Divider(height: 24),
+        if (o.showPickupCode)
+          Row(children: [
+            const Icon(Icons.key_outlined, color: _green),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Pickup code\nShow this at the warehouse counter', style: TextStyle(fontSize: 12.5, height: 1.35))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(color: _greenSoft, borderRadius: BorderRadius.circular(10)),
+              child: Text(o.pickupCode!, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: 3, color: _green)),
+            ),
+          ])
+        else if (o.stage == OrderStage.delivered)
+          const Row(children: [
+            Icon(Icons.verified_outlined, color: _green, size: 20),
+            SizedBox(width: 8),
+            Expanded(child: Text('Picked up. Thank you for shopping with us!', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _green))),
+          ])
+        else
+          const Row(children: [
+            Icon(Icons.schedule_outlined, size: 20, color: AppColors.textSecondary),
+            SizedBox(width: 8),
+            Expanded(child: Text('We will notify you when your order is ready. Your pickup code appears here then.', style: TextStyle(fontSize: 12.5, height: 1.35))),
+          ]),
+        const SizedBox(height: 8),
+        const Text('No delivery fee, platform fee or handling fee. Prices include GST.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+      ]),
+    );
+  }
+}
+
 class _RiderCard extends StatelessWidget {
   const _RiderCard({required this.order});
   final GroceryOrder order;
@@ -592,12 +671,13 @@ class _ProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final current = order.stage.index;
+    final stages = order.stages;
+    final current = order.stepIndex;
     return _Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _SectionTitle('Delivery progress', sub: order.slot.isEmpty ? null : 'Delivery slot: ${order.slot}'),
-        for (var i = 0; i < kOrderStages.length; i++)
-          _TimelineRow(info: kOrderStages[i], index: i, done: i < current || order.stage == OrderStage.delivered, current: i == current && order.stage != OrderStage.delivered, last: i == kOrderStages.length - 1),
+        _SectionTitle(order.isTakeaway ? 'Pickup progress' : 'Delivery progress', sub: order.isTakeaway || order.slot.isEmpty ? null : 'Delivery slot: ${order.slot}'),
+        for (var i = 0; i < stages.length; i++)
+          _TimelineRow(info: stages[i], index: i, done: i < current || order.stage == OrderStage.delivered, current: i == current && order.stage != OrderStage.delivered, last: i == stages.length - 1),
       ]),
     );
   }
@@ -672,7 +752,7 @@ class _SellerLinesCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(children: [
-                Expanded(child: Text(l.sellerName.isEmpty ? 'SEVO Partner' : l.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
+                Expanded(child: Text(l.sellerName.isEmpty ? 'SEVONIQ Partner' : l.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
                 _StatusChip(l.stage),
               ]),
             ),
@@ -745,7 +825,7 @@ class _ItemsCard extends StatelessWidget {
           if (o.deliveryFee != null) _AmountRow('Delivery fee', o.deliveryFee == 0 ? 'Free' : _rupees(o.deliveryFee!)),
         ],
         const Divider(height: 22),
-        _AmountRow(o.isCod && o.paymentStatus.toUpperCase() != 'PAID' ? 'Amount to pay on delivery' : 'Order total', _rupees(o.total), bold: true),
+        _AmountRow(o.isCod && o.paymentStatus.toUpperCase() != 'PAID' ? (o.isTakeaway ? 'Amount to pay on pickup' : 'Amount to pay on delivery') : 'Order total', _rupees(o.total), bold: true),
       ]),
     );
   }
@@ -796,7 +876,7 @@ class _PaymentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final o = order;
-    final method = o.isCod ? 'Cash on Delivery' : (o.paymentMethod.isEmpty ? 'Online payment' : o.paymentMethod);
+    final method = o.isCod ? (o.isTakeaway ? 'Cash on Pickup' : 'Cash on Delivery') : (o.paymentMethod.isEmpty ? 'Online payment' : o.paymentMethod);
     return _InfoCard(
       icon: Icons.payments_outlined,
       title: 'Payment method',

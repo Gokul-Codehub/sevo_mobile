@@ -72,7 +72,7 @@ class HomeFlowTheme {
     gradientTop: Color(0xFF8EC3F2),
     searchPlaceholder: "Search for 'AC service'",
     categoryGridTitle: 'Browse by Category',
-    trustSectionTitle: 'Why Choose SEVO?',
+    trustSectionTitle: 'Why Choose SEVONIQ?',
     trustBadges: [
       (Icons.verified_user_rounded, 'Verified\nProfessionals'),
       (Icons.currency_rupee_rounded, 'Transparent\nPricing'),
@@ -92,7 +92,7 @@ class HomeFlowTheme {
     gradientTop: Color(0xFFF9C93A),
     searchPlaceholder: "Search for 'fresh vegetables'...",
     categoryGridTitle: 'Shop by Category',
-    trustSectionTitle: 'Why Shop With SEVO?',
+    trustSectionTitle: 'Why Shop With SEVONIQ?',
     trustBadges: [
       (Icons.eco_rounded, 'Farm-Fresh\nQuality'),
       (Icons.local_shipping_rounded, 'Fast\nDelivery'),

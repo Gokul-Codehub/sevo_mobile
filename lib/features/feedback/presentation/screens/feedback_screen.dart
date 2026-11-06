@@ -163,7 +163,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Your review helps us maintain high quality standards across all SEVO service professionals.',
+                  'Your review helps us maintain high quality standards across all SEVONIQ service professionals.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textSecondary,

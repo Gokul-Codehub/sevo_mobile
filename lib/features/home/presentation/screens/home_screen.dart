@@ -2659,7 +2659,7 @@ class _HomeFooter extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            '\u00a9 ${DateTime.now().year} SEVO. All rights reserved.',
+            '\u00a9 ${DateTime.now().year} SEVONIQ. All rights reserved.',
             style: const TextStyle(fontSize: 10.5, color: AppColors.textHint),
           ),
         ],
@@ -3673,7 +3673,7 @@ class _PromoBanner {
 // same flow-accent rule applied across catalog, checkout & bookings.
 const _promoBanners = <_PromoBanner>[
   _PromoBanner(
-    eyebrow: 'Reliable. Fast. SEVO.',
+    eyebrow: 'Reliable. Fast. SEVONIQ.',
     title: 'Quality services\nat your doorstep',
     ctaLabel: 'Book Now',
     routeKeywords: ['appliance', 'ac'],

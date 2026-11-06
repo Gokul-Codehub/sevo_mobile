@@ -138,7 +138,7 @@ class CalServicesApp extends ConsumerWidget {
     });
 
     return MaterialApp.router(
-      title: 'SEVO',
+      title: 'SEVONIQ',
       locale: ref.watch(localeProvider),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -266,3 +266,26 @@ class GtRelationshipPicker extends StatelessWidget {
     );
   }
 }
+
+// ── Weights: always whole kilograms, rounded up ─────────────────────────────
+
+/// 20.00 -> "20", 2.1 -> "3".
+String kgUp(num v) => v.ceil().toString();
+
+/// Rounds every "12.50 kg" in [text] up to whole kilograms ("13 kg").
+String roundUpKgText(String text) => text.replaceAllMapped(
+      RegExp(r'(\d+(?:\.\d+)?)(\s*)(kg|KG|Kg)\b'),
+      (m) {
+        final v = double.tryParse(m[1]!);
+        return v == null ? m[0]! : '${v.ceil()}${m[2]}${m[3]}';
+      },
+    );
+
+/// The server's "Cargo weight (30.00 kg) exceeds vehicle payload limit (20.00 kg)" in plain words, in whole kg.
+String friendlyFitMessage(String raw) {
+  final m = RegExp(r'Cargo weight \(([\d.]+) kg\) exceeds vehicle payload limit \(([\d.]+) kg\)').firstMatch(raw);
+  if (m == null) return roundUpKgText(raw);
+  String kg(String v) => kgUp(double.tryParse(v) ?? 0);
+  return 'Your goods weigh about ${kg(m.group(1)!)} kg, but this vehicle can carry only ${kg(m.group(2)!)} kg. '
+      'Pick a bigger vehicle or remove some items.';
+}

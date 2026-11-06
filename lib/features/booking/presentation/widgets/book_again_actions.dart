@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../catalog/domain/catalog_models.dart';
+import '../../domain/booking_models.dart';
 
 /// "Book again" for a past service: opens that service's page, ready to book. The page fetches the CURRENT price and
 /// slots itself; only a service that no longer has a page in the catalog falls back to the old snapshot.
@@ -13,6 +14,26 @@ void openServiceAgain(BuildContext context, ServiceItem service) {
   }
   final hasSlug = service.slug.isNotEmpty;
   context.push('/services/${hasSlug ? service.slug : 'svc-${service.id}'}', extra: hasSlug ? null : service);
+}
+
+/// "Book again" from a booking card. A Goods & Transport / Packers & Movers booking always reopens the transport
+/// booking page (vehicle category pre-selected, vehicles show their max cargo capacity) - never the generic service page.
+void openBookingAgain(BuildContext context, Booking booking) {
+  if (booking.isLogistics) {
+    final t = '${booking.serviceCategory ?? ''} ${booking.logisticsTierName ?? ''} ${booking.items.isNotEmpty ? booking.items.first.service.title : ''}'
+        .toLowerCase();
+    String? cat;
+    if (t.contains('packer') || t.contains('mover') || t.contains('relocation') || t.contains('shifting')) {
+      cat = 'packers_movers';
+    } else if (t.contains('wheeler') || t.contains('bike') || t.contains('scooter')) {
+      cat = 'two_wheeler';
+    } else if (t.contains('truck') || t.contains('tempo') || t.contains('pickup') || t.contains('goods')) {
+      cat = 'truck';
+    }
+    context.push(cat == null ? '/goods-transport/booking' : '/goods-transport/booking?category=$cat');
+    return;
+  }
+  if (booking.items.isNotEmpty) openServiceAgain(context, booking.items.first.service);
 }
 
 /// The compact outlined pill used for "Book again" / "Order again" on the Bookings & Orders cards.

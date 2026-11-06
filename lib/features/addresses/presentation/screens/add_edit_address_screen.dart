@@ -278,6 +278,15 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
     setState(() => _isLoading = false);
 
     if (error != null) {
+      if (error == kAddressLimitMessage) {
+        final manage = await showAddressLimitDialog(context);
+        if (!mounted) return;
+        if (manage) {
+          context.goBack();
+          context.push('/addresses');
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error), backgroundColor: AppColors.error),
       );
@@ -755,7 +764,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("SEVO isn't available here",
+                  Text("SEVONIQ isn't available here",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.navy)),
                   SizedBox(height: 4),
                   Text("We're expanding our service and hope to reach you soon.",

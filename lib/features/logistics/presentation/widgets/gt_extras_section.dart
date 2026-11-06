@@ -499,7 +499,9 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
           _fieldLabel('Approximate total weight'),
           TextField(
             controller: _weightController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            // Whole kilograms only (no decimals).
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: _decoration('e.g. 150').copyWith(
               prefixIcon: const Icon(Icons.monitor_weight_outlined,
                   size: 20, color: AppColors.textSecondary),
@@ -533,10 +535,10 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
               children: [
                 if (itemCount > 0) _summaryPill(Icons.inventory_2_outlined, '$itemCount item${itemCount == 1 ? '' : 's'}'),
                 if (cargo.declaredWeightKg != null)
-                  _summaryPill(Icons.scale_outlined, '~${cargo.declaredWeightKg!.toStringAsFixed(0)} kg'),
+                  _summaryPill(Icons.scale_outlined, '~${kgUp(cargo.declaredWeightKg!)} kg'),
                 if (customWeight > 0)
                   _summaryPill(Icons.scale_outlined,
-                      'Unlisted ${customWeight.toStringAsFixed(customWeight % 1 == 0 ? 0 : 1)} kg'),
+                      'Unlisted ${kgUp(customWeight)} kg'),
               ],
             ),
           ],
@@ -911,7 +913,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
         if (_num(_weight) > 0)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text('Unit: ${_n(_num(_weight))} kg · Total: ${_n((totalW * 10).round() / 10)} kg', style: _hintStyle),
+            child: Text('Unit: ${_n(_num(_weight))} kg · Total: ${kgUp(totalW)} kg', style: _hintStyle),
           ),
         if (_num(_weight) >= 50)
           const Padding(
@@ -1111,7 +1113,7 @@ class _CustomLineTile extends StatelessWidget {
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
             ),
             TextSpan(
-              text: ' · ${line.weightKg == null ? '' : _n(line.weightKg!)} kg each'
+              text: ' · ${line.weightKg == null ? '' : kgUp(line.weightKg!)} kg each'
                   '${line.declaredValue == null ? '' : ' · ₹${_n(line.declaredValue!)}'}'
                   '${flags.isEmpty ? '' : ' · ${flags.join(', ')}'}',
               style: _hintStyle,
@@ -1362,7 +1364,7 @@ class GtPaymentMethodPicker extends ConsumerWidget {
       if (wallet != null && wallet > 0)
         (
           id: 'wallet',
-          label: 'SEVO wallet (₹${wallet.toStringAsFixed(wallet % 1 == 0 ? 0 : 2)})',
+          label: 'SEVONIQ wallet (₹${wallet.toStringAsFixed(wallet % 1 == 0 ? 0 : 2)})',
           hint: walletEnough
               ? 'Pay the full fare from your wallet'
               : canSplit
@@ -1435,10 +1437,7 @@ class GtPaymentMethodPicker extends ConsumerWidget {
 }
 
 /// "12" for 12.0, "12.5" otherwise.
-String _kg(double v) {
-  final r = (v * 10).round() / 10;
-  return r == r.roundToDouble() ? r.toStringAsFixed(0) : r.toStringAsFixed(1);
-}
+String _kg(double v) => kgUp(v);
 
 /// Total weight of everything picked so far (listed items x quantity + custom lines), shown above the item table.
 class _TotalWeightBar extends ConsumerWidget {
@@ -1752,7 +1751,7 @@ class _FitmentBanner extends ConsumerWidget {
           final recId = fit.recommendedTierId;
           final sameCategory = rec != null && rec['category']?.toString() == t.category;
           return _note(
-            why,
+            friendlyFitMessage(why),
             error: true,
             footer: rec == null
                 ? null
@@ -1790,7 +1789,8 @@ class _FitmentBanner extends ConsumerWidget {
         if (fit.requiresSurvey) {
           return _note('This load may need a closer look before pricing is final.');
         }
-        final w = summary['total_weight_kg']?.toString();
+        final wNum = double.tryParse('${summary['total_weight_kg'] ?? ''}');
+        final w = wNum == null ? null : kgUp(wNum);
         return _note(
           t != null
               ? '${t.name} can carry this load${w != null ? ' (~$w kg)' : ''}.'
@@ -1981,7 +1981,7 @@ class _GtGstEwaySectionState extends ConsumerState<GtGstEwaySection> {
           GtNoticeCard(
             tone: GtNoticeTone.warning,
             title: 'E-way bill needed for ₹${formatInr(value)} of goods',
-            body: 'GST rules need an active 12-digit e-way bill for goods worth ₹50,000 or more. SEVO does not create it for '
+            body: 'GST rules need an active 12-digit e-way bill for goods worth ₹50,000 or more. SEVONIQ does not create it for '
                 'you: generate it on the government e-way bill portal and enter the number below. Keep the bill ready '
                 'to show the driver at pickup.',
           )

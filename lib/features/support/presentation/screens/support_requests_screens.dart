@@ -416,7 +416,7 @@ class _Bubble extends StatelessWidget {
           border: fromCustomer ? null : Border.all(color: const Color(0xFFE3E8EE)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (!fromCustomer) const Text('SEVO Support', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
+          if (!fromCustomer) const Text('SEVONIQ Support', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
           Text(text, style: TextStyle(fontSize: 13.5, height: 1.35, color: fromCustomer ? Colors.white : Colors.black87)),
           if (at != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text(formatDmy(at!), style: TextStyle(fontSize: 10, color: fromCustomer ? Colors.white70 : Colors.black45))),
         ]),

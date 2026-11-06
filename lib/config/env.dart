@@ -78,7 +78,7 @@ class Env {
   static const String wsOtpPath = '/ws/auth/otp/';
 
   // ── App metadata ──
-  static const String appName = 'SEVO';
+  static const String appName = 'SEVONIQ';
   static const String appVersion = '1.0.0';
 
   // ── Payment Gateway ──
