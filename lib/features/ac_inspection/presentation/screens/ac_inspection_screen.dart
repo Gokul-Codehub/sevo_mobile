@@ -150,8 +150,14 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Could not load the inspection details.'),
-                const SizedBox(height: 12),
+                const Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.textHint),
+                const SizedBox(height: 10),
+                const Text('Could not load the inspection details.',
+                    textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.navy)),
+                const SizedBox(height: 4),
+                const Text('Please check your connection and try again.',
+                    textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                const SizedBox(height: 14),
                 OutlinedButton(onPressed: () => ref.invalidate(acInspectionConfigProvider), child: const Text('Retry')),
               ],
             ),
@@ -159,11 +165,52 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
         ),
         data: (config) {
           if (!config.isActive) {
-            return const Center(child: Text('AC inspection is not available right now.'));
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.ac_unit_rounded, size: 44, color: AppColors.textHint),
+                    SizedBox(height: 10),
+                    Text('AC inspection is not available right now',
+                        textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy)),
+                    SizedBox(height: 4),
+                    Text('Please check back soon.', style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            );
           }
           return _body(config);
         },
       ),
+      // Confirm stays in reach however long the form is.
+      bottomNavigationBar: configAsync.valueOrNull?.isActive == true
+          ? SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Color(0xFFE6EAF2))),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF0B2337),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: _submitting ? null : () => _submit(config),
+                            child: _submitting
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : Text('Confirm booking - ₹${config.fee}', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
+                          ),
+                ),
+              ),
+            )
+          : null,
     );
   }
 
@@ -227,7 +274,7 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
     if (selected != null && !list.any((a) => a.id == selected.id)) list.insert(0, selected);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
         _card(
           child: Column(
@@ -339,13 +386,13 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
                     child: Text('How many ACs?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.navy)),
                   ),
                   IconButton(
-        tooltip: 'Delete',
+                    tooltip: 'Remove one AC',
                     onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
                     icon: const Icon(Icons.remove_circle_outline_rounded),
                   ),
                   Text('$_qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                   IconButton(
-        tooltip: 'Add',
+                    tooltip: 'Add one more AC',
                     onPressed: _qty < 50 ? () => setState(() => _qty++) : null,
                     icon: const Icon(Icons.add_circle_outline_rounded),
                   ),
@@ -387,7 +434,8 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
                     const SizedBox(width: 12),
                     const Expanded(child: Text('Photo attached', style: TextStyle(fontWeight: FontWeight.w700))),
                     IconButton(
-        tooltip: 'Close',onPressed: () => setState(() { _photo = null; _photoName = null; }), icon: const Icon(Icons.close_rounded)),
+                        tooltip: 'Remove photo',
+                        onPressed: () => setState(() { _photo = null; _photoName = null; }), icon: const Icon(Icons.close_rounded)),
                   ],
                 ),
             ],
@@ -455,7 +503,7 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
               Row(
                 children: [
                   const Expanded(child: Text('Inspection & diagnosis fee')),
-                  Text('Rs ${config.fee}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.navy)),
+                  Text('₹${config.fee}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.navy)),
                 ],
               ),
               const SizedBox(height: 4),
@@ -465,17 +513,6 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
           ),
         ),
 
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF0B2337),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          onPressed: _submitting ? null : () => _submit(config),
-          child: _submitting
-              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text('Confirm booking - Rs ${config.fee}', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
-        ),
       ],
     );
   }

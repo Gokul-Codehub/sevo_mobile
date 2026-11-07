@@ -509,7 +509,8 @@ class _GoodsTransportBookingScreenState
     ref.read(gtStopsProvider.notifier).state = next;
   }
 
-  String _apiMsg(Object e) => e is ApiError ? e.message : e.toString();
+  String _apiMsg(Object e) =>
+      e is ApiError ? e.message : 'Something went wrong. Please check your connection and try again.';
 
   /// Locks the fare with the server and builds the booking's quote echo
   /// (`cart_data[0].quote_id/quote_hash/expires_at` + the exact quoted

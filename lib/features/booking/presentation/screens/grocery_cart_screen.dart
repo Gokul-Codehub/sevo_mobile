@@ -266,6 +266,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       return;
     }
     final user = ref.read(currentUserProvider);
+    if (user == null || !user.hasMobileNumber) {
+      AppToast.show(context, 'Please add your mobile number in Profile so the delivery partner can reach you.', type: AppToastType.error);
+      return;
+    }
     final instant = _deliveryOption == _DeliveryOption.quick;
     final slot = _selectedSlot;
     _orderKey ??= 'app-${DateTime.now().microsecondsSinceEpoch}';
@@ -1996,7 +2000,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       await _placeMarketplaceOrder(context, cartItems, activeAddress);
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = e.toString());
+        setState(() => _errorMessage = "We couldn't place your order just now. Please check your connection and try again.");
       }
     } finally {
       if (mounted) {
