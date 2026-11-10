@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/painting.dart' show ImageConfiguration;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -147,8 +149,9 @@ class HomeStudioRepository {
     // Fast path: when a saved copy exists, show it if the network is slow
     // (> 1.5 s) instead of making the customer wait, then refresh quietly
     // once the real answer arrives ([onLateFresh]).
-    final cached = await _readCache(pageKey);
+    // Start the network request FIRST: reading the saved copy (encrypted storage) must not delay it.
     final fetch = _fetch(pageKey);
+    final cached = await _readCache(pageKey);
     if (cached == null) {
       return (await fetch) ?? _readCache(pageKey);
     }
@@ -166,8 +169,36 @@ class HomeStudioRepository {
 
   /// Network fetch; saves/clears the cache. Null on any failure.
   Future<StudioPage?> _fetch(String pageKey) async {
+    // One quick retry: the very first request after install often fails while the connection warms up.
+    final first = await _fetchOnce(pageKey);
+    if (first != null) return first;
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    return _fetchOnce(pageKey);
+  }
+
+  /// Starts downloading the first banner images into the app's image cache so they are on screen the moment the
+  /// sections build, instead of popping in one by one. Fire-and-forget; failures are ignored.
+  void _warmImages(StudioPage page) {
+    var budget = 8;
+    for (final section in page.sections) {
+      final urls = <String>[
+        if (section.titleImage.isNotEmpty) section.titleImage,
+        for (final slide in section.slides) slide.imageUrl,
+      ];
+      for (final url in urls) {
+        if (budget == 0) return;
+        if (!url.startsWith('http')) continue;
+        budget--;
+        try {
+          CachedNetworkImageProvider(url).resolve(ImageConfiguration.empty);
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<StudioPage?> _fetchOnce(String pageKey) async {
     try {
-      final response = await api.get('/home/pages/$pageKey/').timeout(const Duration(seconds: 6));
+      final response = await api.get('/home/pages/$pageKey/').timeout(const Duration(seconds: 7));
       final body = response.data;
       if (body is Map) {
         final inner = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : Map<String, dynamic>.from(body);
@@ -175,7 +206,9 @@ class HomeStudioRepository {
         if (page.useLegacy) {
           await _clear(pageKey);
         } else {
-          await _save(pageKey, inner);
+          _warmImages(page);
+          // Saving the copy is not needed to show the page - do not make the customer wait for the disk.
+          unawaited(_save(pageKey, inner));
         }
         return page;
       }

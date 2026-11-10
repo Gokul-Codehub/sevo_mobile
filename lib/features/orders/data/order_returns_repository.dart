@@ -30,6 +30,50 @@ ReturnStage returnStageFrom(String? status) => switch ((status ?? '').toUpperCas
       _ => ReturnStage.requested,
     };
 
+/// One step of the return's progress (requested -> approved -> picked up -> received -> refunded).
+class ReturnStep {
+  const ReturnStep({required this.label, required this.done, this.current = false, this.failed = false, this.at});
+  final String label;
+  final bool done;
+  final bool current;
+  final bool failed;
+  final DateTime? at;
+
+  static ReturnStep? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final label = (raw['label'] ?? '').toString();
+    if (label.isEmpty) return null;
+    return ReturnStep(
+      label: label,
+      done: raw['done'] == true,
+      current: raw['current'] == true,
+      failed: raw['failed'] == true,
+      at: DateTime.tryParse((raw['at'] ?? '').toString())?.toLocal(),
+    );
+  }
+}
+
+/// The delivery partner collecting the returned items (`pickup`). The OTP only appears while they are at the door.
+class ReturnPickup {
+  const ReturnPickup({this.partnerName = '', this.windowStart, this.windowEnd, this.otp = '', this.jobStatus = ''});
+  final String partnerName;
+  final DateTime? windowStart;
+  final DateTime? windowEnd;
+  final String otp;
+  final String jobStatus;
+
+  static ReturnPickup? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    return ReturnPickup(
+      partnerName: (raw['partner_name'] ?? '').toString(),
+      windowStart: DateTime.tryParse((raw['window_start'] ?? '').toString())?.toLocal(),
+      windowEnd: DateTime.tryParse((raw['window_end'] ?? '').toString())?.toLocal(),
+      otp: (raw['otp'] ?? '').toString(),
+      jobStatus: (raw['job_status'] ?? '').toString(),
+    );
+  }
+}
+
 class ReturnRequest {
   const ReturnRequest({
     required this.returnNumber,
@@ -41,7 +85,17 @@ class ReturnRequest {
     this.rejectionReason = '',
     this.sellerNotes = '',
     this.createdAt,
+    this.trackingLabel = '',
+    this.trackingStatus = '',
+    this.timeline = const [],
+    this.pickup,
   });
+
+  /// Server's plain-words progress (e.g. "Items checked - refund being processed"), its step list and pickup details.
+  final String trackingLabel;
+  final String trackingStatus;
+  final List<ReturnStep> timeline;
+  final ReturnPickup? pickup;
 
   final String returnNumber;
   final ReturnStage stage;
@@ -80,6 +134,13 @@ class ReturnRequest {
       rejectionReason: (raw['rejection_reason'] ?? '').toString(),
       sellerNotes: (raw['seller_notes'] ?? '').toString(),
       createdAt: DateTime.tryParse((raw['created_at'] ?? raw['requested_at'] ?? '').toString())?.toLocal(),
+      trackingLabel: (raw['tracking_label'] ?? '').toString(),
+      trackingStatus: (raw['tracking_status'] ?? '').toString(),
+      timeline: [
+        if (raw['timeline'] is List)
+          for (final e in raw['timeline'] as List) ?ReturnStep.tryParse(e),
+      ],
+      pickup: ReturnPickup.tryParse(raw['pickup']),
     );
   }
 }

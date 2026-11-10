@@ -202,10 +202,10 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
-                            onPressed: _submitting ? null : () => _submit(config),
+                            onPressed: _submitting ? null : () => _submit(configAsync.requireValue),
                             child: _submitting
                                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : Text('Confirm booking - ₹${config.fee}', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
+                                : Text('Confirm booking - ₹${configAsync.requireValue.fee}', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
                           ),
                 ),
               ),

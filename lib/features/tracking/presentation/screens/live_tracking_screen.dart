@@ -270,6 +270,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
     final technicianJobsCount = tracking.technicianJobsCompleted ?? technician?.completedJobsCount;
     final technicianPhoto = tracking.technicianPhoto ?? technician?.profilePictureUrl;
 
+    // Terminal bookings (cancelled / completed) keep their normal view even if no partner was ever assigned.
+    final waitingForPartner = !tracking.hasDriver && !tracking.isTerminal;
     _latestTech = techPos;
     _latestDest = destPos;
     // Re-frame when the driver has moved ~20 m (or first appears), unless the customer took over the map.
@@ -423,8 +425,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 // no technician marker / route), with the status on top.
                 // The full-screen waiting state is only for bookings with
                 // no usable address coordinates.
-                // Goods & Transport: no map at all until a driver is assigned.
-                if (tracking.isLogistics && !tracking.hasDriver || (!hasLiveData || techPos == null) && destPos == null)
+                // Every service: no map until a technician / driver / delivery partner has accepted - show "searching".
+                if (waitingForPartner || (!hasLiveData || techPos == null) && destPos == null)
                   // No real position has arrived yet — show an honest
                   // waiting state rather than a fake pin.
                   Container(
@@ -600,7 +602,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
 
                 // Map shown with only the address pin: say why there is no
                 // technician / driver marker yet (waiting, or signal lost).
-                if ((!hasLiveData || techPos == null) && destPos != null && !(tracking.isLogistics && !tracking.hasDriver))
+                if ((!hasLiveData || techPos == null) && destPos != null && !waitingForPartner)
                   Positioned(
                     top: 14,
                     left: 20,
