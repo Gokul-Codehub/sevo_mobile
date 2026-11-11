@@ -85,7 +85,7 @@ void _installDiagnosticErrorHandlers() {
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     AppLogger.d('[P0-CRASH]', 'Uncaught async error: $error');
     ErrorReporter.record(error, level: 'fatal');
-    return false; // still forward to the default platform handler
+    return true; // handled: prevent OS process crash
   };
 }
 
@@ -93,12 +93,22 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   _installDiagnosticErrorHandlers();
   // Crash reporting (Firebase Crashlytics): wraps the handlers above, in the background, never blocks start-up.
-  unawaited(CrashReporting.instance.initFromPlatform());
+  unawaited(CrashReporting.instance.initFromPlatform().catchError((e) {
+    AppLogger.d('[P0-CRASH]', 'CrashReporting init error: $e');
+  }));
   // Analytics + API performance (Firebase), also in the background; off in debug builds.
-  unawaited(AnalyticsManager.instance.init().then((_) => AnalyticsManager.instance.track(AnalyticsEvents.appOpen)));
-  unawaited(PerformanceMonitor.instance.init());
+  unawaited(AnalyticsManager.instance.init().then((_) {
+    AnalyticsManager.instance.track(AnalyticsEvents.appOpen);
+  }).catchError((e) {
+    AppLogger.d('[P0-CRASH]', 'Analytics init error: $e');
+  }));
+  unawaited(PerformanceMonitor.instance.init().catchError((e) {
+    AppLogger.d('[P0-CRASH]', 'PerformanceMonitor init error: $e');
+  }));
   // Firebase In-App Messaging (pop-ups created in Firebase Console), also in the background.
-  unawaited(InAppMessagingManager.instance.init());
+  unawaited(InAppMessagingManager.instance.init().catchError((e) {
+    AppLogger.d('[P0-CRASH]', 'InAppMessaging init error: $e');
+  }));
 
   // Lock to portrait orientation for mobile
   SystemChrome.setPreferredOrientations([
@@ -138,7 +148,7 @@ class CalServicesApp extends ConsumerWidget {
     });
 
     return MaterialApp.router(
-      title: 'SEVONIQ',
+      title: 'SevoNiq',
       locale: ref.watch(localeProvider),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

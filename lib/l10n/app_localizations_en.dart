@@ -22,7 +22,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goBack => 'Go back';
 
   @override
-  String get maintenanceTitleDefault => 'We are upgrading SEVO';
+  String get maintenanceTitleDefault => 'We are upgrading SevoNiq';
 
   @override
   String get maintenanceMessageDefault => 'We will be back shortly.';
@@ -49,7 +49,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'We are working on it. Please try again in a little while.';
 
   @override
-  String get serverUnreachable => 'We could not reach SEVO. Retrying...';
+  String get serverUnreachable => 'We could not reach SevoNiq. Retrying...';
 
   @override
   String get permContinue => 'Continue';
@@ -70,7 +70,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get devicesTitle => 'Your devices';
 
   @override
-  String get devicesIntro => 'These phones are signed in to your SEVO account.';
+  String get devicesIntro =>
+      'These phones are signed in to your SevoNiq account.';
 
   @override
   String get thisDevice => 'This device';
@@ -86,7 +87,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notifSettingsIntro =>
-      'Choose what SEVO tells you about. Updates about an active booking are always saved in your notification list.';
+      'Choose what SevoNiq tells you about. Updates about an active booking are always saved in your notification list.';
 
   @override
   String get feedbackTitle => 'Send feedback';

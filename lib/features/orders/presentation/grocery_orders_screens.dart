@@ -232,7 +232,7 @@ class _OrderCardState extends ConsumerState<OrderCard> {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Seller', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                Text(o.sellerName.isEmpty ? 'SEVONIQ Partner' : o.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                Text(o.sellerName.isEmpty ? 'SevoNiq Partner' : o.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -561,7 +561,7 @@ class _TakeawayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = order;
     final loc = o.pickupLocation;
-    final name = (loc?.name ?? '').isNotEmpty ? loc!.name : (o.warehouseName.isNotEmpty ? o.warehouseName : 'SEVONIQ warehouse');
+    final name = (loc?.name ?? '').isNotEmpty ? loc!.name : (o.warehouseName.isNotEmpty ? o.warehouseName : 'SevoNiq warehouse');
     final address = loc?.address ?? '';
     return _Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -752,7 +752,7 @@ class _SellerLinesCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(children: [
-                Expanded(child: Text(l.sellerName.isEmpty ? 'SEVONIQ Partner' : l.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
+                Expanded(child: Text(l.sellerName.isEmpty ? 'SevoNiq Partner' : l.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
                 _StatusChip(l.stage),
               ]),
             ),

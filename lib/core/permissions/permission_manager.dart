@@ -68,27 +68,27 @@ class PermissionRationale {
     AppPermission.location: PermissionRationale(
       icon: Icons.location_on_rounded,
       title: 'Allow location access',
-      body: 'SEVO uses your location to fill in your address and find the nearest technician or delivery slot. '
+      body: 'SevoNiq uses your location to fill in your address and find the nearest technician or delivery slot. '
           'You can also enter your address manually.',
-      settingsHint: 'Location is turned off for SEVO. Open settings and allow location to use this feature, or enter your address manually.',
+      settingsHint: 'Location is turned off for SevoNiq. Open settings and allow location to use this feature, or enter your address manually.',
     ),
     AppPermission.notifications: PermissionRationale(
       icon: Icons.notifications_active_rounded,
       title: 'Stay updated',
       body: 'Get alerts when your technician is assigned, on the way, or when your order status changes.',
-      settingsHint: 'Notifications are turned off for SEVO. Open settings to turn them on.',
+      settingsHint: 'Notifications are turned off for SevoNiq. Open settings to turn them on.',
     ),
     AppPermission.camera: PermissionRationale(
       icon: Icons.photo_camera_rounded,
       title: 'Allow camera access',
-      body: 'SEVO needs the camera to take photos for your booking, such as the issue to be fixed.',
-      settingsHint: 'Camera access is turned off for SEVO. Open settings to allow it, or choose a photo from your gallery.',
+      body: 'SevoNiq needs the camera to take photos for your booking, such as the issue to be fixed.',
+      settingsHint: 'Camera access is turned off for SevoNiq. Open settings to allow it, or choose a photo from your gallery.',
     ),
     AppPermission.photos: PermissionRationale(
       icon: Icons.photo_library_rounded,
       title: 'Allow photo access',
-      body: 'SEVO needs access to your photos so you can attach them to a booking or message.',
-      settingsHint: 'Photo access is turned off for SEVO. Open settings to allow it.',
+      body: 'SevoNiq needs access to your photos so you can attach them to a booking or message.',
+      settingsHint: 'Photo access is turned off for SevoNiq. Open settings to allow it.',
     ),
   };
 }

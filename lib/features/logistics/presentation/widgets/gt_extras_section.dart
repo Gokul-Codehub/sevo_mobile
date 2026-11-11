@@ -1364,7 +1364,7 @@ class GtPaymentMethodPicker extends ConsumerWidget {
       if (wallet != null && wallet > 0)
         (
           id: 'wallet',
-          label: 'SEVONIQ wallet (₹${wallet.toStringAsFixed(wallet % 1 == 0 ? 0 : 2)})',
+          label: 'SevoNiq wallet (₹${wallet.toStringAsFixed(wallet % 1 == 0 ? 0 : 2)})',
           hint: walletEnough
               ? 'Pay the full fare from your wallet'
               : canSplit
@@ -1981,7 +1981,7 @@ class _GtGstEwaySectionState extends ConsumerState<GtGstEwaySection> {
           GtNoticeCard(
             tone: GtNoticeTone.warning,
             title: 'E-way bill needed for ₹${formatInr(value)} of goods',
-            body: 'GST rules need an active 12-digit e-way bill for goods worth ₹50,000 or more. SEVONIQ does not create it for '
+            body: 'GST rules need an active 12-digit e-way bill for goods worth ₹50,000 or more. SevoNiq does not create it for '
                 'you: generate it on the government e-way bill portal and enter the number below. Keep the bill ready '
                 'to show the driver at pickup.',
           )

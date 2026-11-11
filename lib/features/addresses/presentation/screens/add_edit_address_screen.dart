@@ -764,7 +764,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("SEVONIQ isn't available here",
+                  Text("SevoNiq isn't available here",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.navy)),
                   SizedBox(height: 4),
                   Text("We're expanding our service and hope to reach you soon.",

@@ -60,6 +60,6 @@ class TrackingHistoryCard extends StatelessWidget {
 
 /// The text shared from "Share tracking": a link anyone can open to follow this booking, without signing in.
 String trackingShareText(String identifier, {String? serviceName}) {
-  final what = (serviceName ?? '').trim().isEmpty ? 'my SEVO booking' : 'my SEVO booking (${serviceName!.trim()})';
+  final what = (serviceName ?? '').trim().isEmpty ? 'my SevoNiq booking' : 'my SevoNiq booking (${serviceName!.trim()})';
   return 'Follow $what live: https://sevo.co.in/tracking/${Uri.encodeComponent(identifier)}';
 }

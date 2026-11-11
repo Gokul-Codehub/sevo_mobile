@@ -78,8 +78,8 @@ class Env {
   static const String wsOtpPath = '/ws/auth/otp/';
 
   // ── App metadata ──
-  static const String appName = 'SEVONIQ';
-  static const String appVersion = '1.0.0';
+  static const String appName = 'SevoNiq';
+  static const String appVersion = '1.1.0';
 
   // ── Payment Gateway ──
   static const String defaultRazorpayKeyId = 'rzp_live_caldimservices';

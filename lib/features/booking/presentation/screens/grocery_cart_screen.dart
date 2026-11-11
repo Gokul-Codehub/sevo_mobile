@@ -149,7 +149,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     switch (result) {
       case Success(:final data):
         if (!data.available) {
-          AppToast.show(context, 'Take Away needs all your items to come from one SEVONIQ warehouse. Please choose delivery.', type: AppToastType.error);
+          AppToast.show(context, 'Take Away needs all your items to come from one SevoNiq warehouse. Please choose delivery.', type: AppToastType.error);
           return;
         }
         setState(() {
@@ -166,13 +166,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
   String _takeawayAddressText() {
     final p = _pickup;
-    final name = (p?.name ?? '').isEmpty ? 'SEVONIQ warehouse' : p!.name;
+    final name = (p?.name ?? '').isEmpty ? 'SevoNiq warehouse' : p!.name;
     return 'Take Away - collect from $name${(p?.address ?? '').isEmpty ? '' : ', ${p!.address}'}';
   }
 
   Widget _buildTakeawayCard() {
     final p = _pickup;
-    final name = (p?.name ?? '').isEmpty ? 'SEVONIQ warehouse' : p!.name;
+    final name = (p?.name ?? '').isEmpty ? 'SevoNiq warehouse' : p!.name;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

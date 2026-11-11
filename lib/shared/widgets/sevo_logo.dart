@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// SEVONIQ brand wordmark (assets/images/sevoniq_logo.png): transparent background, blue wordmark with the green
+/// SevoNiq brand wordmark (assets/images/sevoniq_logo.png): transparent background, blue wordmark with the green
 /// "E" bar and "N". Every logo in the app (splash, login, Home, footer) goes through this one widget, so changing
 /// the artwork only ever means replacing that file.
 ///
@@ -26,7 +26,7 @@ class SevoLogo extends StatelessWidget {
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
       gaplessPlayback: true,
-      semanticLabel: 'SEVONIQ',
+      semanticLabel: 'SevoNiq',
     );
   }
 }
