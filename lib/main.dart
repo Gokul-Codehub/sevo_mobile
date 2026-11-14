@@ -1,3 +1,4 @@
+import 'package:calservices_customer/shared/theme/app_colors.dart';
 import 'l10n/app_localizations.dart';
 import 'core/l10n/locale_controller.dart';
 import 'dart:async';
@@ -23,6 +24,7 @@ import 'core/push/push_manager.dart';
 import 'features/app_update/presentation/app_update_gate.dart';
 import 'features/booking/presentation/widgets/cart_zone_guard.dart';
 import 'routing/app_router.dart';
+import 'shared/layout/responsive.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/connectivity_gate.dart';
 import 'shared/widgets/motion.dart';
@@ -60,11 +62,11 @@ void _installDiagnosticErrorHandlers() {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFF0D253A)),
+                Icon(Icons.error_outline_rounded, size: 40, color: AppColors.primary),
                 SizedBox(height: 10),
                 Text('Something went wrong here',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0D253A))),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary)),
                 SizedBox(height: 6),
                 Text('Please go back and try again. We have been notified.',
                     textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.black54)),
@@ -91,6 +93,10 @@ void _installDiagnosticErrorHandlers() {
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Release builds must not write auth/API traces to the device log.
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
   _installDiagnosticErrorHandlers();
   // Crash reporting (Firebase Crashlytics): wraps the handlers above, in the background, never blocks start-up.
   unawaited(CrashReporting.instance.initFromPlatform());
@@ -100,10 +106,13 @@ void main() {
   // Firebase In-App Messaging (pop-ups created in Firebase Console), also in the background.
   unawaited(InAppMessagingManager.instance.init());
 
-  // Lock to portrait orientation for mobile
-  SystemChrome.setPreferredOrientations([
+  // Portrait on phones; landscape allowed too so tablets / foldables can use
+  // the full screen. Layouts adapt via [AppResponsive] / [AdaptiveWidth].
+  SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
   ]);
 
   // Set system UI overlay style
@@ -154,23 +163,37 @@ class CalServicesApp extends ConsumerWidget {
       // Internet" screen app-wide (see ConnectivityGate's doc comment)
       // instead of customers only discovering they're offline when an
       // individual screen's API call happens to fail.
-      builder: (context, child) => ConnectivityGate(
-        // App update management: optional prompt / mandatory update screen
-        // (checked in the background; startup never waits on it).
-        child: FoundationGate(
-          // Server-driven config: maintenance mode, feature flags, remote settings.
-          child: AppUpdateGate(
-            // Push (Firebase): device token registration + update / booking notifications.
-            child: PushGate(
-              child: BookingNotificationWatcher(
-                child: CustomerNotificationWatcher(
-                  child: CartZoneGuard(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        // Keep system text scaling usable on tablets without blowing up phone layouts.
+        final scaled = MediaQuery(
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(
+              minScaleFactor: 0.9,
+              maxScaleFactor: 1.3,
+            ),
+          ),
+          child: ConnectivityGate(
+            child: FoundationGate(
+              child: AppUpdateGate(
+                child: PushGate(
+                  child: BookingNotificationWatcher(
+                    child: CustomerNotificationWatcher(
+                      // Center + cap width on tablets so phone layouts don't stretch.
+                      child: AdaptiveWidth(
+                        child: CartZoneGuard(
+                          child: child ?? const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+        return scaled;
+      },
     );
   }
 }

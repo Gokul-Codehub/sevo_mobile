@@ -153,8 +153,10 @@ class PaymentController extends Notifier<PaymentState> {
     try {
       _razorpay.open(options);
     } catch (e) {
+      debugPrint('Razorpay launch failed: $e');
       state = PaymentFailed(
-        errorMessage: 'Unable to launch Razorpay checkout: $e',
+        errorMessage:
+            "We couldn't open the payment screen. Please try again in a moment.",
       );
     }
   }

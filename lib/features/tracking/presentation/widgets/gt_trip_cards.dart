@@ -129,13 +129,13 @@ class _GtBalanceDueCardState extends ConsumerState<GtBalanceDueCard> {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: _cardDeco(const Color(0xFFEFF6FF), const Color(0xFF93C5FD)),
+      decoration: _cardDeco(const Color(0xFFEFF6FF), AppColors.blue300),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Balance due: ₹${widget.amount}',
               style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF1E3A8A))),
+                  fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.blue900)),
           const SizedBox(height: 4),
           const Text(
             'The final fare is higher than what you paid online (extra distance, stops or waiting time).',
@@ -241,7 +241,7 @@ class GtDeliveryExceptionCard extends StatelessWidget {
           Text(
             'Your driver reported this at the ${atPickup ? 'pickup' : 'drop'} point. '
             'Please reach out to the driver or contact support so the trip can continue.',
-            style: const TextStyle(fontSize: 12.5, color: Color(0xFF7C2D12), height: 1.35),
+            style: const TextStyle(fontSize: 12.5, color: AppColors.swatch7C2D12, height: 1.35),
           ),
         ],
       ),
@@ -404,12 +404,12 @@ class _GtCargoAdjustmentCardState extends ConsumerState<GtCargoAdjustmentCard> {
           for (final m in mismatches)
             Padding(
               padding: const EdgeInsets.only(bottom: 3),
-              child: Text('• $m', style: const TextStyle(fontSize: 12.5, color: Color(0xFF7C2D12), height: 1.35)),
+              child: Text('• $m', style: const TextStyle(fontSize: 12.5, color: AppColors.swatch7C2D12, height: 1.35)),
             ),
           const SizedBox(height: 6),
           if (upgrade && _s(adj['recommended_vehicle_class']).isNotEmpty)
             Text('A bigger vehicle is needed (${_s(adj['recommended_vehicle_class']).replaceAll('_', ' ')}).',
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF7C2D12))),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.swatch7C2D12)),
           Text(
             'Fare ₹${_s(adj['original_fare'])} → ₹${_s(adj['revised_fare'])}'
             '${diff > 0 ? '  (+₹${diff.toStringAsFixed(2)})' : ''}',
@@ -458,7 +458,7 @@ class _GtCargoAdjustmentCardState extends ConsumerState<GtCargoAdjustmentCard> {
             ]),
           if (_msg.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(_msg, style: const TextStyle(fontSize: 12.5, color: Color(0xFF7C2D12), fontWeight: FontWeight.w600)),
+            Text(_msg, style: const TextStyle(fontSize: 12.5, color: AppColors.swatch7C2D12, fontWeight: FontWeight.w600)),
           ],
         ],
       ),
@@ -643,7 +643,7 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: _cardDeco(const Color(0xFFFFFBEB), const Color(0xFFFDE68A)),
+      decoration: _cardDeco(AppColors.amber50, AppColors.amber200),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -670,7 +670,7 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
                   TextSpan(
                     text: '${diff > 0 ? '+' : '-'}₹${diff.abs().toStringAsFixed(2)}',
                     style: strong.copyWith(
-                        color: diff > 0 ? const Color(0xFFB91C1C) : const Color(0xFF1E3A8A)),
+                        color: diff > 0 ? AppColors.red700 : AppColors.blue900),
                   ),
                   TextSpan(
                     text: diff > 0
@@ -699,12 +699,12 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: timedOut ? const Color(0xFFB91C1C) : const Color(0xFF92400E)),
+                  color: timedOut ? AppColors.red700 : AppColors.amber800),
             ),
           ],
           if (_msg.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(_msg, style: const TextStyle(fontSize: 12.5, color: Color(0xFF92400E))),
+            Text(_msg, style: const TextStyle(fontSize: 12.5, color: AppColors.amber800)),
           ],
           const SizedBox(height: 10),
           if (approval == 'PENDING_CUSTOMER_APPROVAL' && !timedOut)
@@ -714,7 +714,7 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
                   child: FilledButton(
                     onPressed: _busy ? null : () => _decide('APPROVE'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0D253A),
+                      backgroundColor: AppColors.primary,
                       minimumSize: const Size(0, 44),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -726,8 +726,8 @@ class _PmSurveyDecisionCardState extends ConsumerState<PmSurveyDecisionCard> {
                   child: FilledButton(
                     onPressed: _busy ? null : () => _decide('CANCEL'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFFEE2E2),
-                      foregroundColor: const Color(0xFFB91C1C),
+                      backgroundColor: AppColors.errorLight,
+                      foregroundColor: AppColors.red700,
                       minimumSize: const Size(0, 44),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -795,7 +795,7 @@ class GtRateTripCard extends StatelessWidget {
               color: const Color(0xFFFFF4D6),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.star_rounded, color: Color(0xFFF59E0B)),
+            child: const Icon(Icons.star_rounded, color: AppColors.warning),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -958,7 +958,7 @@ class _GtChangeDropCardState extends ConsumerState<GtChangeDropCard> {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: _cardDeco(const Color(0xFFF8FAFC), const Color(0xFFBFDBFE)),
+      decoration: _cardDeco(AppColors.background, const Color(0xFFBFDBFE)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1145,7 +1145,7 @@ class _GtPtlRequoteCardState extends ConsumerState<GtPtlRequoteCard> {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: _cardDeco(const Color(0xFFF8FAFC), const Color(0xFFBFDBFE)),
+      decoration: _cardDeco(AppColors.background, const Color(0xFFBFDBFE)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1395,7 +1395,7 @@ class _GtStopsEditorCardState extends ConsumerState<GtStopsEditorCard> {
             if (_saved.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Text(_saved, style: const TextStyle(color: Color(0xFF047857), fontSize: 12.5, fontWeight: FontWeight.w600)),
+                child: Text(_saved, style: const TextStyle(color: AppColors.emerald700, fontSize: 12.5, fontWeight: FontWeight.w600)),
               ),
             if (_loading)
               const Padding(
@@ -1627,7 +1627,7 @@ class _GtStopsAmendmentCardState extends ConsumerState<GtStopsAmendmentCard> {
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(12),
-      decoration: _cardDeco(const Color(0xFFFFFBEB), const Color(0xFFFDE68A)),
+      decoration: _cardDeco(AppColors.amber50, AppColors.amber200),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1648,7 +1648,7 @@ class _GtStopsAmendmentCardState extends ConsumerState<GtStopsAmendmentCard> {
           if (_msg.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(_msg, style: const TextStyle(fontSize: 12.5, color: Color(0xFF92400E))),
+              child: Text(_msg, style: const TextStyle(fontSize: 12.5, color: AppColors.amber800)),
             ),
           const SizedBox(height: 10),
           Wrap(
@@ -1827,7 +1827,7 @@ class _BookingChatCardState extends ConsumerState<BookingChatCard> {
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                             constraints: const BoxConstraints(maxWidth: 260),
                             decoration: BoxDecoration(
-                              color: mine ? AppColors.navy : const Color(0xFFF1F5F9),
+                              color: mine ? AppColors.navy : AppColors.surfaceVariant,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Column(

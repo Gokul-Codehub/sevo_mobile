@@ -110,7 +110,7 @@ class GtAssistSection extends ConsumerWidget {
                       dense: true,
                       title: Text('Carry goods up or down the stairs (${_rupees(t.carryChargePerFloor)} per floor, only where there is no lift)', style: const TextStyle(fontSize: 12.5)),
                       subtitle: a.carry && !a.hasStairs
-                          ? const Text('No floor charge yet: choose a floor above ground with "No, stairs only" at pickup or drop.', style: TextStyle(fontSize: 11, color: Color(0xFFB45309)))
+                          ? const Text('No floor charge yet: choose a floor above ground with "No, stairs only" at pickup or drop.', style: TextStyle(fontSize: 11, color: AppColors.amber700))
                           : null,
                     ),
                 ]),
@@ -121,10 +121,10 @@ class GtAssistSection extends ConsumerWidget {
                 width: double.infinity,
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFFDE68A))),
+                decoration: BoxDecoration(color: AppColors.amber50, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.amber200)),
                 child: const Text(
                   'Note: Standard transport covers ground level / vehicle tailboard. If goods must be carried upstairs via stairs or across a long walking distance, please ensure helper assistance is arranged or select an extra helper to avoid driver delays.',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF92400E), height: 1.4),
+                  style: TextStyle(fontSize: 11, color: AppColors.amber800, height: 1.4),
                 ),
               ),
           ],

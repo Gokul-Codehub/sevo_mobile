@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/foundation/foundation_controller.dart' show remoteConfigProvider;
 import '../../../../core/errors/api_error.dart';
 import '../../../../shared/theme/app_colors.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../data/support_repository.dart';
 import '../../domain/support_models.dart';
 
@@ -31,6 +33,40 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Contacts are set by the admin (Settings > App config: support_phone, support_whatsapp), so they can change
+    // without an app release. A contact that is not configured is simply not shown, never a placeholder number.
+    final remote = ref.watch(remoteConfigProvider);
+    final phone = remote.stringSetting('support_phone', fallback: '').replaceAll(RegExp(r'[^0-9+]'), '');
+    final whatsapp = remote.stringSetting('support_whatsapp', fallback: '').replaceAll(RegExp(r'[^0-9]'), '');
+    final contactCards = <Widget>[
+      if (whatsapp.isNotEmpty)
+        _ContactCard(
+          icon: Icons.chat_bubble_outline_rounded,
+          label: 'WhatsApp',
+          subtitle: 'Instant Chat',
+          color: const Color(0xFF25D366),
+          onTap: () => launchUrl(
+            Uri.parse('https://wa.me/$whatsapp?text=${Uri.encodeComponent('Hello SEVONIQ Support, I need help with my booking.')}'),
+            mode: LaunchMode.externalApplication,
+          ),
+        ),
+      if (phone.isNotEmpty)
+        _ContactCard(
+          icon: Icons.phone_in_talk_outlined,
+          label: 'Call Us',
+          subtitle: phone,
+          color: AppColors.primary,
+          onTap: () => launchUrl(Uri.parse('tel:$phone')),
+        ),
+      _ContactCard(
+        icon: Icons.mail_outline_rounded,
+        label: 'Email',
+        subtitle: 'sevo.support',
+        color: AppColors.accent,
+        onTap: () => launchUrl(Uri.parse('mailto:sevo.support@gmail.com')),
+      ),
+    ];
 
     final filteredFaqs = CalServicesFaqs.all.where((faq) {
       final matchesCategory = _selectedCategory == 'All' ||
@@ -95,44 +131,20 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
             ),
             const SizedBox(height: 16),
 
-            Row(
-              children: [
-                _ContactCard(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  label: 'WhatsApp',
-                  subtitle: 'Instant Chat',
-                  color: const Color(0xFF25D366),
-                  onTap: () {
-                    final uri = Uri.parse(
-                      'https://wa.me/919999999999?text=Hello%20CalServices%20Support,%20I%20need%20help%20with%20my%20service%20booking.',
-                    );
-                    launchUrl(uri, mode: LaunchMode.externalApplication);
-                  },
-                ),
-                const SizedBox(width: 12),
-                _ContactCard(
-                  icon: Icons.phone_in_talk_outlined,
-                  label: 'Call Us',
-                  subtitle: '1800-123-4567',
-                  color: AppColors.primary,
-                  onTap: () {
-                    final uri = Uri.parse('tel:18001234567');
-                    launchUrl(uri);
-                  },
-                ),
-                const SizedBox(width: 12),
-                _ContactCard(
-                  icon: Icons.mail_outline_rounded,
-                  label: 'Email',
-                  subtitle: 'support@caldim',
-                  color: AppColors.accent,
-                  onTap: () {
-                    final uri = Uri.parse('mailto:support@caldimservices.online');
-                    launchUrl(uri);
-                  },
-                ),
-              ],
-            ),
+            if (contactCards.isEmpty)
+              const Text(
+                'Need help? Raise a support request above and our team will reply in the app.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+              )
+            else
+              Row(
+                children: [
+                  for (var i = 0; i < contactCards.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 12),
+                    contactCards[i],
+                  ],
+                ],
+              ),
 
             const SizedBox(height: 28),
 
@@ -221,32 +233,37 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                     separatorBuilder: (context, index) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final faq = filteredFaqs[index];
-                      return ExpansionTile(
-                        tilePadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        title: Text(
-                          faq.question,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                      return FadeSlideIn(
+                        index: index,
+                        offset: 8,
+                        duration: const Duration(milliseconds: 300),
+                        child: ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
                           ),
-                        ),
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              faq.answer,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                color: AppColors.textSecondary,
-                                height: 1.4,
-                              ),
+                          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          title: Text(
+                            faq.question,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                faq.answer,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppColors.textSecondary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       );
                     },
                   ),
@@ -302,13 +319,15 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton.tonal(
-                    onPressed: () => _showRaiseTicketModal(context),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      minimumSize: const Size(0, 36),
+                  PressScale(
+                    child: FilledButton.tonal(
+                      onPressed: () => _showRaiseTicketModal(context),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: const Size(0, 36),
+                      ),
+                      child: const Text('Raise Ticket', style: TextStyle(fontSize: 11)),
                     ),
-                    child: const Text('Raise Ticket', style: TextStyle(fontSize: 11)),
                   ),
                 ],
               ),
@@ -364,9 +383,9 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                 decoration: const InputDecoration(labelText: 'Issue Category'),
                 items: [
                   'General Inquiry',
-                  'Booking Problem',
+                  'Booking / Order Problem',
                   'Payment Issue',
-                  'Technician Feedback',
+                  'Technician/Driver/Delivery Feedback',
                   'Warranty Claim',
                 ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                 onChanged: (val) {

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../features/booking/domain/booking_status.dart';
 import '../theme/app_colors.dart';
+import 'motion.dart';
 import 'status_page.dart';
+
+export 'motion.dart';
 
 /// Animated shimmer block with configurable dimensions, shape, and corner radius.
 class ShimmerBox extends StatefulWidget {
@@ -333,13 +336,18 @@ class _EmptyStateWidgetState extends State<EmptyStateWidget>
       opacity: _fadeAnim,
       child: SlideTransition(
         position: _slideAnim,
-        child: StatusPage(
-          kind: StatusKind.empty,
-          compact: true,
-          title: widget.title,
-          message: widget.subtitle,
-          actionLabel: widget.actionLabel,
-          onAction: widget.action,
+        child: AttentionPulse(
+          enabled: true,
+          minScale: 1.0,
+          maxScale: 1.015,
+          child: StatusPage(
+            kind: StatusKind.empty,
+            compact: true,
+            title: widget.title,
+            message: widget.subtitle,
+            actionLabel: widget.actionLabel,
+            onAction: widget.action,
+          ),
         ),
       ),
     );
@@ -361,13 +369,15 @@ class ErrorStateWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final lower = message.toLowerCase();
     final offline = lower.contains('internet') || lower.contains('network') || lower.contains('connection');
-    return StatusPage(
-      kind: offline ? StatusKind.noInternet : StatusKind.error,
-      compact: true,
-      title: offline ? 'No internet connection' : 'Something went wrong',
-      message: offline ? 'Please check your network' : message,
-      actionLabel: 'Try again',
-      onAction: onRetry,
+    return FadeSlideIn(
+      child: StatusPage(
+        kind: offline ? StatusKind.noInternet : StatusKind.error,
+        compact: true,
+        title: offline ? 'No internet connection' : 'Something went wrong',
+        message: offline ? 'Please check your network' : message,
+        actionLabel: 'Try again',
+        onAction: onRetry,
+      ),
     );
   }
 }
@@ -388,12 +398,12 @@ class BookingStatusChip extends StatelessWidget {
   // snake_case, and the chip always agrees with the trackers.
   static (Color, Color) _colorsFor(BookingStage stage) => switch (stage) {
         BookingStage.requested => (const Color(0xFFDDEDFF), AppColors.statusNewRequest),
-        BookingStage.confirmed => (const Color(0xFFE8EDF7), AppColors.navy),
+        BookingStage.confirmed => (AppColors.swatchE8EDF7, AppColors.navy),
         BookingStage.assigned => (const Color(0xFFF3E8FF), AppColors.statusAssigned),
         BookingStage.onTheWay ||
         BookingStage.inProgress =>
           (const Color(0xFFFFF7E6), AppColors.statusInProgress),
-        BookingStage.completed => (const Color(0xFFE8EDF7), AppColors.navy),
+        BookingStage.completed => (AppColors.swatchE8EDF7, AppColors.navy),
         BookingStage.ended => (AppColors.shimmerBase, AppColors.textSecondary),
         BookingStage.cancelled => (AppColors.errorLight, AppColors.statusCancelled),
       };
@@ -406,18 +416,33 @@ class BookingStatusChip extends StatelessWidget {
         : _colorsFor(bookingStageOf(normalized));
     final label = grocery ? groceryStatusLabel(normalized) : bookingStatusLabel(normalized);
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: textColor.withValues(alpha: 0.12),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: Text(
+          label,
+          key: ValueKey(label),
+          style: TextStyle(
+            color: textColor,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );

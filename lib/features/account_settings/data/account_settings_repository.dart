@@ -1,11 +1,15 @@
 import 'package:dio/dio.dart';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/errors/api_error.dart';
 import '../../app_update/data/app_version_repository.dart' show AppUpdateStore, InstalledAppReader, PackageInfoReader;
 import '../../../core/foundation/foundation_repository.dart' show FoundationRepository;
 import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
+import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 
 class DeviceSession {
   const DeviceSession({
@@ -108,26 +112,57 @@ class AccountSettingsRepository {
     }
   }
 
-  Future<Result<Map<String, bool>>> preferences() async {
+  // Notification switches belong to THIS PHONE, not to a login: they are kept on the device (and, when the
+  // customer is signed in, also copied to the account so the server can honour them).
+  static const _prefsKey = 'device_notification_prefs_v1';
+  static const _local = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
+
+  Future<Map<String, bool>> localPreferences() async {
+    try {
+      final raw = await _local.read(key: _prefsKey);
+      final data = raw == null || raw.isEmpty ? const {} : jsonDecode(raw);
+      return {
+        for (final k in kNotificationToggles.keys) k: data is Map && data[k] is bool ? data[k] as bool : _defaultFor(k),
+      };
+    } catch (_) {
+      return {for (final k in kNotificationToggles.keys) k: _defaultFor(k)};
+    }
+  }
+
+  /// Everything is on by default except promotional offers (the server's own default too).
+  static bool _defaultFor(String key) => key != 'promotional_offers';
+
+  Future<void> _saveLocal(String field, bool value) async {
+    try {
+      final map = await localPreferences();
+      map[field] = value;
+      await _local.write(key: _prefsKey, value: jsonEncode(map));
+    } catch (_) {}
+  }
+
+  Future<Result<Map<String, bool>>> preferences({bool signedIn = false}) async {
+    if (!signedIn) return Success(await localPreferences());
     try {
       final response = await api.get('/auth/notification-preferences/');
       final data = response.data;
       if (data is! Map) return const Failure(ParseError('Unexpected response.'));
       return Success({for (final k in kNotificationToggles.keys) k: data[k] != false});
-    } on DioException catch (e) {
-      return Failure(e.error is ApiError ? e.error! as ApiError : const NetworkError());
+    } on DioException {
+      return Success(await localPreferences());
     } catch (_) {
-      return const Failure(NetworkError());
+      return Success(await localPreferences());
     }
   }
 
-  Future<bool> setPreference(String field, bool value) async {
+  Future<bool> setPreference(String field, bool value, {bool signedIn = false}) async {
+    await _saveLocal(field, value);
+    if (!signedIn) return true;
     try {
       await api.patch('/auth/notification-preferences/', data: {field: value});
-      return true;
     } catch (_) {
-      return false;
+      // Saved on this phone already; the account copy catches up the next time it is changed.
     }
+    return true;
   }
 }
 
@@ -146,7 +181,8 @@ final deviceSessionsProvider = FutureProvider.autoDispose<List<DeviceSession>>((
 });
 
 final notificationPreferencesProvider = FutureProvider.autoDispose<Map<String, bool>>((ref) async {
-  final result = await ref.watch(accountSettingsRepositoryProvider).preferences();
+  final signedIn = ref.watch(isUserAuthenticatedProvider);
+  final result = await ref.watch(accountSettingsRepositoryProvider).preferences(signedIn: signedIn);
   return switch (result) {
     Success(:final data) => data,
     Failure(:final error) => throw error,

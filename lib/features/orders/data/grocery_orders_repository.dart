@@ -1,4 +1,6 @@
+import '../../catalog/data/pack_label.dart';
 import 'dart:typed_data';
+import 'package:decimal/decimal.dart';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 
@@ -39,8 +41,8 @@ class StageInfo {
 }
 
 const List<StageInfo> kOrderStages = [
-  StageInfo(OrderStage.confirmed, 'Confirmed', 'Order received by seller', Icons.check_circle_outline),
-  StageInfo(OrderStage.packing, 'Seller is packing', 'Items are being packaged', Icons.inventory_2_outlined),
+  StageInfo(OrderStage.confirmed, 'Confirmed', 'Order received', Icons.check_circle_outline),
+  StageInfo(OrderStage.packing, 'Being packed', 'Your items are being packed', Icons.inventory_2_outlined),
   StageInfo(OrderStage.readyForPickup, 'Ready for pickup', 'Waiting for courier dispatch', Icons.local_shipping_outlined),
   StageInfo(OrderStage.outForDelivery, 'On the way', 'Out for delivery to your doorstep', Icons.delivery_dining_outlined),
   StageInfo(OrderStage.delivered, 'Delivered', 'Successfully delivered', Icons.home_outlined),
@@ -84,6 +86,13 @@ class PickupLocation {
 }
 
 /// Whether the cart can be collected (needs every item from one Sevo warehouse) and where.
+/// What the server says these items cost, and whether every line is still available.
+class MarketplaceQuote {
+  const MarketplaceQuote({required this.total, required this.valid});
+  final Decimal total;
+  final bool valid;
+}
+
 class PickupAvailability {
   const PickupAvailability({required this.available, this.location});
   final bool available;
@@ -127,7 +136,7 @@ class OrderLine {
       unitPrice: unit,
       amount: _d(raw['line_amount']) ?? unit * qty,
       image: img.isEmpty ? null : img,
-      pack: (raw['pack_size'] ?? raw['unit'] ?? '').toString(),
+      pack: groceryPackLabel(raw['pack_size']?.toString(), raw['unit']?.toString()),
     );
   }
 }
@@ -183,6 +192,11 @@ class GroceryOrder {
     this.takeaway = false,
     this.pickupCode,
     this.pickupLocation,
+    this.refundStatus = '',
+    this.refundId = '',
+    this.refundAmount,
+    this.refundInitiatedAt,
+    this.refundProcessedAt,
   });
 
   final String orderNumber;
@@ -205,6 +219,13 @@ class GroceryOrder {
   final RiderInfo? rider;
   final bool cancellationPending;
   final bool canReturn;
+
+  /// Refund tracking from the server: '' (none) | INITIATED | PROCESSED | FAILED.
+  final String refundStatus;
+  final String refundId;
+  final double? refundAmount;
+  final DateTime? refundInitiatedAt;
+  final DateTime? refundProcessedAt;
 
   /// Take Away: collected at the warehouse, no rider. [pickupCode] is only sent while the order is ready to collect.
   final bool takeaway;
@@ -278,6 +299,16 @@ class GroceryOrder {
       takeaway: raw['is_takeaway'] == true || (raw['delivery_type'] ?? '').toString().toUpperCase() == 'TAKEAWAY',
       pickupCode: (raw['pickup_code'] ?? '').toString().isEmpty ? null : raw['pickup_code'].toString(),
       pickupLocation: PickupLocation.tryParse(raw['pickup_location']),
+      // The server tracks refunds as NONE | INITIATED | PROCESSING | PROCESSED | FAILED; the app shows none / in progress / sent / issue.
+      refundStatus: switch ((raw['refund_status'] ?? '').toString().toUpperCase()) {
+        'NONE' => '',
+        'PROCESSING' => 'INITIATED',
+        final v => v,
+      },
+      refundId: (raw['refund_transaction_id'] ?? raw['refund_id'] ?? '').toString(),
+      refundAmount: (_d(raw['refund_amount']) ?? 0) > 0 ? _d(raw['refund_amount']) : null,
+      refundInitiatedAt: _t(raw['refund_initiated_at']),
+      refundProcessedAt: _t(raw['refund_completed_at'] ?? raw['refund_processed_at']),
     );
   }
 }
@@ -419,6 +450,7 @@ class GroceryOrdersRepository {
     if (entries.isEmpty) return const Failure(ValidationError('Your cart has nothing that can be ordered.'));
     try {
       await _putCartOnServer(entries);
+      await _ensureAvailable();
       final response = await _step(
         'checkout',
         () => api.post(
@@ -436,6 +468,27 @@ class GroceryOrdersRepository {
       });
     } on Exception catch (e) {
       return Failure(_err(e));
+    }
+  }
+
+  /// The server's price for these items right now (`POST /api/carts/marketplace/quote/`). Does not touch the saved
+  /// cart. Returns null when the quote could not be fetched, in which case the order simply goes ahead as before.
+  Future<MarketplaceQuote?> quote(List<CartItem> items) async {
+    final entries = marketplaceCartEntries(items);
+    if (entries.isEmpty) return null;
+    try {
+      final response = await api.post(
+        '/carts/marketplace/quote/',
+        data: {'items': [for (final e in entries) e.toJson()]},
+      );
+      final body = response.data;
+      final data = body is Map ? body['data'] : null;
+      if (data is! Map) return null;
+      final total = Decimal.tryParse((data['total'] ?? '').toString());
+      if (total == null) return null;
+      return MarketplaceQuote(total: total, valid: data['valid'] == true);
+    } on Exception {
+      return null;
     }
   }
 
@@ -506,9 +559,67 @@ class GroceryOrdersRepository {
     }
   }
 
+  /// Before any order or payment starts, ask the server whether every line is still available in the quantity asked
+  /// for, so the customer hears it now with a clear message instead of a rejected order at the last step. A failure of
+  /// this check itself never blocks the order; the checkout still enforces stock.
+  ///
+  /// For stock shortfalls, [ValidationError.extra] carries `stockCaps`:
+  /// `{sellerProductId: availableQty}` so the cart can highlight those lines
+  /// instead of only showing a vague banner.
+  Future<void> _ensureAvailable() async {
+    try {
+      final response = await api.post('/carts/marketplace/revalidate/', data: <String, dynamic>{});
+      final body = response.data;
+      final data = body is Map ? body['data'] : null;
+      if (data is Map && data['valid'] == false) {
+        final lines = data['items'] is List ? data['items'] as List : const [];
+        final stockCaps = <int, int>{};
+        var stock = false;
+        for (final raw in lines) {
+          if (raw is! Map) continue;
+          final code = (raw['code'] ?? '').toString().toUpperCase();
+          if (code != 'INSUFFICIENT_STOCK') continue;
+          stock = true;
+          final pid = int.tryParse(
+                (raw['seller_product_id'] ?? raw['product_id'] ?? raw['id'] ?? '').toString(),
+              ) ??
+              0;
+          final available = int.tryParse(
+                (raw['available_quantity'] ?? raw['available'] ?? raw['stock'] ?? '').toString(),
+              ) ??
+              0;
+          if (pid > 0) stockCaps[pid] = available < 0 ? 0 : available;
+        }
+        throw ValidationError(
+          stock
+              ? (stockCaps.isEmpty
+                  ? 'Some items exceed what is left in stock. Please reduce the quantity and try again.'
+                  : 'Please reduce quantity on the highlighted items — only the in-stock amount can be ordered.')
+              : 'Some items in your cart are no longer available. Please remove them and try again.',
+          code: stock ? 'INSUFFICIENT_STOCK' : 'PRODUCT_UNAVAILABLE',
+          extra: stockCaps.isEmpty ? const {} : {'stockCaps': stockCaps},
+        );
+      }
+    } on DioException {
+      // Could not reach the check; carry on and let checkout decide.
+    }
+  }
+
   /// Start from an empty server cart so the order is exactly what the customer sees, not what an earlier attempt (or
   /// the website) left behind.
   Future<void> _putCartOnServer(List<MarketplaceCartEntry> entries) async {
+    // One request, one transaction: a rejected line leaves the existing cart untouched. Older servers without this
+    // endpoint answer 404/405, and then the original clear-and-add-each sequence runs.
+    try {
+      await _step(
+        'cart-replace',
+        () => api.post('/carts/marketplace/replace/', data: {'items': [for (final e in entries) e.toJson()]}),
+      );
+      return;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code != 404 && code != 405) rethrow;
+    }
     await _step('cart-clear', () => api.post('/carts/marketplace/clear/', data: <String, dynamic>{}));
     for (final e in entries) {
       await _step('cart-add', () => api.post('/carts/marketplace/items/', data: e.toJson()));
@@ -528,6 +639,7 @@ class GroceryOrdersRepository {
     PaymentOrder order;
     try {
       await _putCartOnServer(entries);
+      await _ensureAvailable();
       final response = await _step('payment-start', () => api.post('/orders/marketplace/checkout/initiate-payment/', data: checkout.toJson()));
       final init = ResponseNormalizer.extract(response, (data) => PaymentOrder.fromJson(data is Map ? Map<String, dynamic>.from(data) : const {}));
       switch (init) {

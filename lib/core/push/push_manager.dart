@@ -283,6 +283,13 @@ class _PushGateState extends ConsumerState<PushGate> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(ref.read(pushManagerProvider).start());
+      // The phone's "Allow notifications" prompt belongs to the app on this phone, not to a login: ask once the app
+      // has settled (a few seconds in, so it does not stack on the first screen or the location prompt).
+      unawaited(Future<void>.delayed(const Duration(seconds: 6), () async {
+        if (!mounted) return;
+        await NotificationService.instance.requestPermission();
+        if (mounted) unawaited(ref.read(pushManagerProvider).onSignedIn()); // re-send the device row with the new permission state
+      }));
     });
   }
 
@@ -292,9 +299,6 @@ class _PushGateState extends ConsumerState<PushGate> {
       final manager = ref.read(pushManagerProvider);
       if (next && previous != true) {
         unawaited(manager.onSignedIn());
-        // Now that the customer has an account (so bookings and orders to be told about), ask to allow notifications.
-        // A moment later, so it does not land on top of the sign-in screen's own transition.
-        unawaited(Future<void>.delayed(const Duration(milliseconds: 1500), () => NotificationService.instance.requestPermission()));
         final pending = PendingLink.take();
         final context = rootNavigatorKey.currentContext;
         if (pending != null && context != null) {

@@ -97,7 +97,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: AppColors.swatchF6F8FA,
       appBar: AppBar(
         title: const Text('Delete account', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy, fontSize: 18)),
         leading: BackButton(onPressed: context.goBack),
@@ -193,7 +193,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
   Widget _card({required IconData icon, required String title, required List<Widget> children, Color color = AppColors.navy}) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE3E8EE))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.swatchE3E8EE)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

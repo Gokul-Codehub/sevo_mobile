@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/map_lollipop_pin.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
 import '../widgets/gt_coverage_map.dart';
@@ -293,7 +294,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
                   child: Container(
                     width: 40,
                     height: 4,
-                    decoration: BoxDecoration(color: const Color(0xFFD5DAE1), borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(color: AppColors.swatchD5DAE1, borderRadius: BorderRadius.circular(2)),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -408,7 +409,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
     // Service area for the selected GT service, drawn on the map.
     final category = ref.watch(selectedVehicleCategoryProvider);
     final vehicleClass = ref.watch(selectedLogisticsTierProvider)?.vehicleClass;
-    final intercity = category == LogisticsVehicleCategory.packersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City';
+    final intercity = category == LogisticsVehicleCategory.packersMovers && ref.watch(pmRelocationTypeProvider) == 'Intercity';
     final zones = zonesFor(ref.watch(gtServiceZonesProvider(category.serviceCategoryValue)).valueOrNull ?? const <GtZone>[], vehicleClass);
     final inside = insideService(zones, _lat, _lng);
     final topPad = MediaQuery.of(context).padding.top;
@@ -449,7 +450,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
             ),
           ),
 
-          // Fixed centre pin + hint tooltip (the map moves under it).
+          // Fixed centre lollipop pin + hint (map moves under the stem tip).
           Align(
             alignment: Alignment.center,
             child: IgnorePointer(
@@ -460,14 +461,24 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                      decoration: BoxDecoration(color: AppColors.navy, borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(
+                        color: AppColors.navy,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
                       child: const Text(
                         'Move pin to set your exact location',
                         style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Icon(Icons.location_on_rounded, size: 52, color: AppColors.navy),
+                    const SizedBox(height: 6),
+                    const MapLollipopPin(),
                   ],
                 ),
               ),
@@ -565,7 +576,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
                     child: Container(
                       width: 40,
                       height: 4,
-                      decoration: BoxDecoration(color: const Color(0xFFD5DAE1), borderRadius: BorderRadius.circular(2)),
+                      decoration: BoxDecoration(color: AppColors.swatchD5DAE1, borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -584,14 +595,14 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Row(
                       children: [
                         Container(
                           width: 58,
                           height: 58,
-                          decoration: BoxDecoration(color: const Color(0xFFE6ECF4), borderRadius: BorderRadius.circular(12)),
+                          decoration: BoxDecoration(color: AppColors.swatchE6ECF4, borderRadius: BorderRadius.circular(12)),
                           child: const Icon(Icons.location_on_rounded, color: AppColors.navy, size: 28),
                         ),
                         const SizedBox(width: 12),
@@ -640,7 +651,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
                           size: 16,
                           color: intercity
                               ? AppColors.navy
-                              : (inside == true ? const Color(0xFF15803D) : AppColors.error),
+                              : (inside == true ? AppColors.groceryGreen : AppColors.error),
                         ),
                         const SizedBox(width: 6),
                         Expanded(
@@ -655,7 +666,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
                               fontWeight: FontWeight.w700,
                               color: intercity
                                   ? AppColors.navy
-                                  : (inside == true ? const Color(0xFF15803D) : AppColors.error),
+                                  : (inside == true ? AppColors.groceryGreen : AppColors.error),
                             ),
                           ),
                         ),

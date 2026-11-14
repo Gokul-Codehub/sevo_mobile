@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../addresses/domain/address_notifier.dart' show selectedAddressProvider;
 
 /// Where a Home Studio banner / link goes when tapped.
 class StudioDestination {
@@ -118,6 +119,10 @@ class StudioPage {
   final bool useLegacy;
   final List<StudioSection> sections;
 
+  /// What is visible right now (section + banner ids). The server switches scheduled sections/banners on and off
+  /// without changing [version], so this is what tells us the page really changed.
+  String get signature => sections.map((s) => '${s.id}:${s.slides.map((x) => x.id).join(',')}').join('|');
+
   factory StudioPage.fromJson(Map<String, dynamic> j) => StudioPage(
         pageKey: (j['page'] ?? '').toString(),
         version: int.tryParse(j['version']?.toString() ?? '') ?? 0,
@@ -140,20 +145,21 @@ class HomeStudioRepository {
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
-  String _cacheKey(String pageKey) => 'sevo_home_studio_v1_$pageKey';
+  // The saved copy is per city: a banner targeted at one city must not be replayed to another.
+  String _cacheKey(String pageKey, String city) => 'sevo_home_studio_v1_${pageKey}_${city.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')}';
 
   /// Latest published page. Network first; on any failure falls back to the
   /// last good copy stored on this phone. Returns null when there is nothing
   /// to show, in which case Home keeps its legacy layout.
-  Future<StudioPage?> load(String pageKey, {void Function()? onLateFresh}) async {
+  Future<StudioPage?> load(String pageKey, {String city = '', void Function()? onLateFresh}) async {
     // Fast path: when a saved copy exists, show it if the network is slow
     // (> 1.5 s) instead of making the customer wait, then refresh quietly
     // once the real answer arrives ([onLateFresh]).
     // Start the network request FIRST: reading the saved copy (encrypted storage) must not delay it.
-    final fetch = _fetch(pageKey);
-    final cached = await _readCache(pageKey);
+    final fetch = _fetch(pageKey, city);
+    final cached = await _readCache(pageKey, city);
     if (cached == null) {
-      return (await fetch) ?? _readCache(pageKey);
+      return (await fetch) ?? _readCache(pageKey, city);
     }
     try {
       final fresh = await fetch.timeout(const Duration(milliseconds: 1500));
@@ -161,19 +167,19 @@ class HomeStudioRepository {
     } on TimeoutException {
       unawaited(fetch.then((fresh) {
         // Only refresh when the server really has something newer.
-        if (fresh != null && fresh.version != cached.version) onLateFresh?.call();
+        if (fresh != null && (fresh.version != cached.version || fresh.signature != cached.signature)) onLateFresh?.call();
       }).catchError((_) {}));
       return cached;
     }
   }
 
   /// Network fetch; saves/clears the cache. Null on any failure.
-  Future<StudioPage?> _fetch(String pageKey) async {
+  Future<StudioPage?> _fetch(String pageKey, String city) async {
     // One quick retry: the very first request after install often fails while the connection warms up.
-    final first = await _fetchOnce(pageKey);
+    final first = await _fetchOnce(pageKey, city);
     if (first != null) return first;
     await Future<void>.delayed(const Duration(milliseconds: 400));
-    return _fetchOnce(pageKey);
+    return _fetchOnce(pageKey, city);
   }
 
   /// Starts downloading the first banner images into the app's image cache so they are on screen the moment the
@@ -196,19 +202,19 @@ class HomeStudioRepository {
     }
   }
 
-  Future<StudioPage?> _fetchOnce(String pageKey) async {
+  Future<StudioPage?> _fetchOnce(String pageKey, String city) async {
     try {
-      final response = await api.get('/home/pages/$pageKey/').timeout(const Duration(seconds: 7));
+      final response = await api.get('/home/pages/$pageKey/', queryParameters: {if (city.isNotEmpty) 'city': city}).timeout(const Duration(seconds: 7));
       final body = response.data;
       if (body is Map) {
         final inner = body['data'] is Map ? Map<String, dynamic>.from(body['data'] as Map) : Map<String, dynamic>.from(body);
         final page = StudioPage.fromJson(inner);
         if (page.useLegacy) {
-          await _clear(pageKey);
+          await _clear(pageKey, city);
         } else {
           _warmImages(page);
           // Saving the copy is not needed to show the page - do not make the customer wait for the disk.
-          unawaited(_save(pageKey, inner));
+          unawaited(_save(pageKey, city, inner));
         }
         return page;
       }
@@ -218,21 +224,21 @@ class HomeStudioRepository {
     return null;
   }
 
-  Future<void> _save(String pageKey, Map<String, dynamic> raw) async {
+  Future<void> _save(String pageKey, String city, Map<String, dynamic> raw) async {
     try {
-      await _storage.write(key: _cacheKey(pageKey), value: jsonEncode(raw));
+      await _storage.write(key: _cacheKey(pageKey, city), value: jsonEncode(raw));
     } catch (_) {}
   }
 
-  Future<void> _clear(String pageKey) async {
+  Future<void> _clear(String pageKey, String city) async {
     try {
-      await _storage.delete(key: _cacheKey(pageKey));
+      await _storage.delete(key: _cacheKey(pageKey, city));
     } catch (_) {}
   }
 
-  Future<StudioPage?> _readCache(String pageKey) async {
+  Future<StudioPage?> _readCache(String pageKey, String city) async {
     try {
-      final raw = await _storage.read(key: _cacheKey(pageKey));
+      final raw = await _storage.read(key: _cacheKey(pageKey, city));
       if (raw == null || raw.isEmpty) return null;
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return null;
@@ -257,14 +263,31 @@ final homeStudioPageProvider =
   // on/off) in the admin reaches phones that are already running, instead of
   // keeping the answer from app start. While refreshing, the previous value
   // stays on screen (no flicker).
-  final timer = Timer(const Duration(seconds: 90), ref.invalidateSelf);
-  ref.onDispose(timer.cancel);
   var disposed = false;
   ref.onDispose(() => disposed = true);
-  return ref.watch(homeStudioRepositoryProvider).load(
+  // Targeting: the server hides city-targeted sections/banners unless it knows the customer's city.
+  final city = ref.watch(selectedAddressProvider.select((a) => (a?.city ?? '').trim()));
+  final page = await ref.watch(homeStudioRepositoryProvider).load(
     pageKey,
+    city: city,
     onLateFresh: () {
       if (!disposed) ref.invalidateSelf();
     },
   );
+  // A failed first load (null: no network answer and nothing saved) must NOT stay for 90 s - that left Home on the
+  // old layout until the customer pulled to refresh. Retry quickly (3 s, 6 s, 12 s ...) until it arrives.
+  if (page == null) {
+    final n = (_studioFailures[pageKey] ?? 0) + 1;
+    _studioFailures[pageKey] = n;
+    final wait = Duration(seconds: (3 * n).clamp(3, 15));
+    final retry = Timer(wait, ref.invalidateSelf);
+    ref.onDispose(retry.cancel);
+  } else {
+    _studioFailures.remove(pageKey);
+    final timer = Timer(const Duration(seconds: 90), ref.invalidateSelf);
+    ref.onDispose(timer.cancel);
+  }
+  return page;
 });
+
+final Map<String, int> _studioFailures = {};

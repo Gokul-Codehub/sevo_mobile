@@ -11,6 +11,7 @@ import '../../../../shared/utils/app_toast.dart';
 import '../../../coverage/data/coverage_repository.dart';
 import '../../domain/place_search.dart';
 import '../widgets/place_suggestions_panel.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 
 /// "Enter location manually" for people who are not logged in.
 ///
@@ -161,9 +162,9 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: AppColors.swatchF7F9FC,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F9FC),
+        backgroundColor: AppColors.swatchF7F9FC,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
@@ -174,101 +175,119 @@ class _GuestLocationPickerScreenState extends ConsumerState<GuestLocationPickerS
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
-            const Text(
-              'Tell us where you need service. You only need an account when you book.',
-              style: TextStyle(fontSize: 14, height: 1.4, color: Color(0xFF6B7280)),
+            const FadeSlideIn(
+              child: Text(
+                'Tell us where you need service. You only need an account when you book.',
+                style: TextStyle(fontSize: 14, height: 1.4, color: AppColors.swatch6B7280),
+              ),
             ),
             const SizedBox(height: 18),
-            TextField(
-              controller: _searchCtl,
-              textInputAction: TextInputAction.search,
-              onChanged: (v) => _places.onChanged(v, lat: ref.read(customerLocationProvider).latitude, lng: ref.read(customerLocationProvider).longitude),
-              decoration: _dec('Search your area, street or pincode', Icons.search_rounded),
+            FadeSlideIn(
+              index: 1,
+              child: TextField(
+                controller: _searchCtl,
+                textInputAction: TextInputAction.search,
+                onChanged: (v) => _places.onChanged(v, lat: ref.read(customerLocationProvider).latitude, lng: ref.read(customerLocationProvider).longitude),
+                decoration: _dec('Search your area, street or pincode', Icons.search_rounded),
+              ),
             ),
             PlaceSuggestionsPanel(search: _places, manualHint: 'Fill in the address below instead.', onPick: _pickSuggestion),
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _useGps,
-              icon: const Icon(Icons.my_location_rounded, size: 20),
-              label: const Text('Use my current location'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.navy,
-                minimumSize: const Size.fromHeight(52),
-                side: const BorderSide(color: AppColors.navy),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            FadeSlideIn(
+              index: 2,
+              child: PressScale(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _useGps,
+                  icon: const Icon(Icons.my_location_rounded, size: 20),
+                  label: const Text('Use my current location'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.navy,
+                    minimumSize: const Size.fromHeight(52),
+                    side: const BorderSide(color: AppColors.navy),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
               ),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Row(children: [
                 Expanded(child: Divider()),
-                Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('or enter it', style: TextStyle(color: Color(0xFF9CA3AF)))),
+                Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('or enter it', style: TextStyle(color: AppColors.gray400))),
                 Expanded(child: Divider()),
               ]),
             ),
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _addressLine,
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: _dec('Address line (house / flat / building)', Icons.home_outlined),
-                    validator: (v) => (v ?? '').trim().length < 3 ? 'Enter your address line' : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _area,
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: _dec('Area, street or landmark', Icons.place_outlined),
-                    validator: (v) => (v ?? '').trim().length < 3 ? 'Enter your area or street' : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _city,
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: _dec('City', Icons.location_city_outlined),
-                    validator: (v) => (v ?? '').trim().length < 2 ? 'Enter your city' : null,
-                  ),
-                  const SizedBox(height: 14),
-                  DropdownButtonFormField<String>(
-                    value: _state,
-                    isExpanded: true,
-                    menuMaxHeight: 320,
-                    decoration: _dec('State', Icons.map_outlined),
-                    items: [
-                      for (final st in _states) DropdownMenuItem(value: st, child: Text(st, overflow: TextOverflow.ellipsis)),
-                    ],
-                    onChanged: (v) => setState(() => _state = v),
-                    validator: (v) => (v == null || v.isEmpty) ? 'Select your state' : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _pincode,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-                    decoration: _dec('Pincode', Icons.pin_drop_outlined),
-                    validator: (v) => RegExp(r'^\d{6}$').hasMatch((v ?? '').trim()) ? null : 'Enter a 6-digit pincode',
-                    onFieldSubmitted: (_) => _confirm(),
-                  ),
-                ],
+            FadeSlideIn(
+              index: 3,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _addressLine,
+                      textInputAction: TextInputAction.next,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: _dec('Address line (house / flat / building)', Icons.home_outlined),
+                      validator: (v) => (v ?? '').trim().length < 3 ? 'Enter your address line' : null,
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _area,
+                      textInputAction: TextInputAction.next,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: _dec('Area, street or landmark', Icons.place_outlined),
+                      validator: (v) => (v ?? '').trim().length < 3 ? 'Enter your area or street' : null,
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _city,
+                      textInputAction: TextInputAction.next,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: _dec('City', Icons.location_city_outlined),
+                      validator: (v) => (v ?? '').trim().length < 2 ? 'Enter your city' : null,
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      value: _state,
+                      isExpanded: true,
+                      menuMaxHeight: 320,
+                      decoration: _dec('State', Icons.map_outlined),
+                      items: [
+                        for (final st in _states) DropdownMenuItem(value: st, child: Text(st, overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (v) => setState(() => _state = v),
+                      validator: (v) => (v == null || v.isEmpty) ? 'Select your state' : null,
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _pincode,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+                      decoration: _dec('Pincode', Icons.pin_drop_outlined),
+                      validator: (v) => RegExp(r'^\d{6}$').hasMatch((v ?? '').trim()) ? null : 'Enter a 6-digit pincode',
+                      onFieldSubmitted: (_) => _confirm(),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 22),
-            ElevatedButton(
-              onPressed: _busy ? null : _confirm,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.navy,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            FadeSlideIn(
+              index: 4,
+              child: PressScale(
+                child: ElevatedButton(
+                  onPressed: _busy ? null : _confirm,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.navy,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  ),
+                  child: _busy
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                      : const Text('Confirm location', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                ),
               ),
-              child: _busy
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                  : const Text('Confirm location', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             ),
           ],
         ),

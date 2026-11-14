@@ -59,6 +59,8 @@ class QuoteRepository {
     String token,
     String decision, {
     String? reasonNotes,
+    bool termsAcknowledged = false,
+    String? reasonCode,
   }) async {
     try {
       final response = await api.post(
@@ -66,6 +68,15 @@ class QuoteRepository {
         data: {
           'action': decision,
           if (reasonNotes != null && reasonNotes.trim().isNotEmpty) 'reason_notes': reasonNotes.trim(),
+          // Decline reasons are stored as a code (TOO_EXPENSIVE, DELAYED_TIMELINE ...) so the team's analytics group them.
+          if (reasonCode != null && reasonCode.isNotEmpty) 'reason_code': reasonCode,
+          // The server refuses to approve a priced quotation unless the customer acknowledged the terms and the
+          // repair advisory (error TERMS_NOT_ACKNOWLEDGED). Same three keys the website sends.
+          if (termsAcknowledged) ...{
+            'terms_acknowledged': true,
+            'terms_accepted': true,
+            'acknowledged_terms': true,
+          },
         },
       );
       return ResponseNormalizer.extract(response, (data) {

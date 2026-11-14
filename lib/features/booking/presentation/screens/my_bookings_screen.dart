@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../widgets/book_again_actions.dart';
 import '../../../../core/refresh/refresh_runner.dart';
 import '../../../auth/domain/auth_return.dart';
@@ -13,6 +15,7 @@ import '../../../../shared/widgets/common_widgets.dart';
 import '../../../auth/domain/auth_notifier.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
+import '../../domain/mason_rules.dart' show bookingAmountLabel;
 import '../../domain/booking_status.dart' show bookingStatusLabel;
 import '../../../orders/data/grocery_orders_repository.dart';
 import '../../../orders/presentation/grocery_orders_screens.dart' show OrderCard;
@@ -20,7 +23,7 @@ import 'booking_detail_screen.dart' show bookingItemImageProvider;
 import '../../../../shared/utils/date_utils.dart';
 import '../../../../shared/widgets/motion.dart';
 
-const Color _mbBg = Color(0xFFF8F4EF);
+const Color _mbBg = AppColors.swatchF8F4EF;
 
 /// Screen listing customer bookings separated into Upcoming and History tabs.
 class MyBookingsScreen extends ConsumerStatefulWidget {
@@ -39,16 +42,26 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   _BookingCategoryFilter _categoryFilter = _BookingCategoryFilter.all;
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  Timer? _poll;
+  bool _inForeground = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addObserver(this);
+    // QA GAVM06: statuses only moved after a manual refresh. Re-read the lists quietly (the old list stays on screen)
+    // every 12 s while this screen is open and the app is in the foreground.
+    _poll = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (!mounted || !_inForeground) return;
+      ref.invalidate(myBookingsProvider);
+      ref.invalidate(groceryOrdersProvider);
+    });
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     _tabController.dispose();
@@ -66,6 +79,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   // status instead of whatever was last fetched before backgrounding.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _inForeground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(myBookingsProvider);
       ref.invalidate(groceryOrdersProvider);
@@ -133,7 +147,6 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
         o.orderNumber,
         o.stageLabel,
         o.statusLabel,
-        o.sellerName,
         o.slot,
         'grocery',
         for (final i in o.items) i.title,
@@ -172,9 +185,9 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
 
     if (user == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF7F9FC),
+        backgroundColor: AppColors.swatchF7F9FC,
         appBar: AppBar(
-          backgroundColor: const Color(0xFFF7F9FC),
+          backgroundColor: AppColors.swatchF7F9FC,
           title: const Text('Bookings & Orders'),
         ),
         body: LoginRequiredView(
@@ -214,7 +227,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.05),
+                    color: AppColors.blue900.withValues(alpha: 0.05),
                     blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),
@@ -337,7 +350,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
             style: const TextStyle(fontSize: 14),
             decoration: InputDecoration(
               hintText: 'Search bookings, services, technician…',
-              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+              hintStyle: const TextStyle(fontSize: 13, color: AppColors.gray400),
               prefixIcon: const Icon(Icons.search_rounded, size: 20),
               suffixIcon: _query.isEmpty
                   ? null
@@ -355,11 +368,11 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE3E8F0)),
+                borderSide: const BorderSide(color: AppColors.swatchE3E8F0),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE3E8F0)),
+                borderSide: const BorderSide(color: AppColors.swatchE3E8F0),
               ),
             ),
           ),
@@ -450,7 +463,7 @@ class _CategoryFilterChip extends StatelessWidget {
           color: selected ? color : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? color : const Color(0xFFE3E8F0),
+            color: selected ? color : AppColors.swatchE3E8F0,
             width: 1,
           ),
         ),
@@ -488,18 +501,22 @@ class _BookingListView extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
+          child: FadeSlideIn(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE8EDF7),
-                  shape: BoxShape.circle,
+              AttentionPulse(
+                maxScale: 1.04,
+                child: Container(
+                  width: 88,
+                  height: 88,
+                  decoration: const BoxDecoration(
+                    color: AppColors.swatchE8EDF7,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded,
+                      size: 40, color: AppColors.navy),
                 ),
-                child: const Icon(Icons.receipt_long_rounded,
-                    size: 40, color: AppColors.navy),
               ),
               const SizedBox(height: 18),
               Text(
@@ -517,28 +534,31 @@ class _BookingListView extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 12,
                   height: 1.4,
-                  color: Color(0xFF6B7788),
+                  color: AppColors.swatch6B7788,
                 ),
               ),
               const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  onPressed: () => context.go('/'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.navy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              PressScale(
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: () => context.go('/'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.navy,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
+                    child: const Text('Book a Service',
+                        style: TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.w800)),
                   ),
-                  child: const Text('Book a Service',
-                      style: TextStyle(
-                          fontSize: 13.5, fontWeight: FontWeight.w800)),
                 ),
               ),
             ],
+          ),
           ),
         ),
       );
@@ -586,7 +606,7 @@ class _BookingCard extends ConsumerWidget {
       imageLoading = lookup.isLoading;
     }
 
-    const grey = Color(0xFF6B7788);
+    const grey = AppColors.swatch6B7788;
 
     return Container(
       decoration: BoxDecoration(
@@ -594,7 +614,7 @@ class _BookingCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+            color: AppColors.blue900.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -634,7 +654,7 @@ class _BookingCard extends ConsumerWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              color: AppColors.surfaceVariant,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -654,6 +674,27 @@ class _BookingCard extends ConsumerWidget {
                     BookingStatusChip(status: booking.status, grocery: booking.isGroceryBooking),
                   ],
                 ),
+                if (booking.hasPendingReschedule) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7E6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule_rounded, size: 14, color: Color(0xFF9A6700)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Reschedule requested - waiting for approval',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF9A6700)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
 
                 // Thumbnail + title / schedule / technician
@@ -679,7 +720,7 @@ class _BookingCard extends ConsumerWidget {
                                 fallbackWidget: Container(
                                   width: 68,
                                   height: 68,
-                                  color: const Color(0xFFE8EDF7),
+                                  color: AppColors.swatchE8EDF7,
                                   child: Icon(
                                     booking.isGroceryBooking
                                         ? Icons.shopping_basket_outlined
@@ -772,7 +813,7 @@ class _BookingCard extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Divider(height: 1, thickness: 1, color: Color(0xFFEDF0F5)),
+                const Divider(height: 1, thickness: 1, color: AppColors.swatchEDF0F5),
                 const SizedBox(height: 12),
 
                 // Footer: price and available actions
@@ -780,7 +821,7 @@ class _BookingCard extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '₹${booking.totalAmount}',
+                      bookingAmountLabel(booking),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
@@ -810,7 +851,7 @@ class _BookingCard extends ConsumerWidget {
                                 style: TextStyle(fontSize: 11.5)),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.navy,
-                              side: const BorderSide(color: Color(0xFFD5DCE8)),
+                              side: const BorderSide(color: AppColors.swatchD5DCE8),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 4),
                               minimumSize: const Size(0, 34),
@@ -870,7 +911,7 @@ class _BookingCardSkeleton extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+            color: AppColors.blue900.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -907,7 +948,7 @@ class _BookingCardSkeleton extends StatelessWidget {
             ],
           ),
           SizedBox(height: 12),
-          Divider(height: 1, thickness: 1, color: Color(0xFFEDF0F5)),
+          Divider(height: 1, thickness: 1, color: AppColors.swatchEDF0F5),
           SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

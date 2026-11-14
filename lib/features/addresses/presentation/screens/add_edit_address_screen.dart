@@ -16,6 +16,8 @@ import '../../domain/address_notifier.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../shared/utils/focus_first_error.dart';
 import '../../../../shared/maps/sevo_map_style.dart';
+import '../../../../shared/widgets/map_lollipop_pin.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 
 /// Screen to create or edit a customer address with live map pin & service zone check.
 class AddEditAddressScreen extends ConsumerStatefulWidget {
@@ -448,11 +450,13 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
             ),
           ),
 
-          // Fixed centre pin + hint tooltip (the map moves under it).
+          // Fixed centre lollipop pin + hint (map moves under the stem tip).
           Align(
             alignment: Alignment.center,
             child: IgnorePointer(
               child: FractionalTranslation(
+                // Shift up by half the column height so the stem tip (bottom)
+                // sits on the exact map coordinate.
                 translation: const Offset(0, -0.5),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -462,6 +466,13 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.navy,
                         borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: const Text(
                         'Move pin to set your exact location',
@@ -471,9 +482,8 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                             fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Icon(Icons.location_on_rounded,
-                        size: 52, color: AppColors.navy),
+                    const SizedBox(height: 6),
+                    const MapLollipopPin(),
                   ],
                 ),
               ),
@@ -600,7 +610,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD5DAE1),
+                        color: AppColors.swatchD5DAE1,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -629,7 +639,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Row(
                       children: [
@@ -637,7 +647,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                           width: 58,
                           height: 58,
                           decoration: BoxDecoration(
-                            color: Color(0xFFE6ECF4),
+                            color: AppColors.swatchE6ECF4,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.location_on_rounded,
@@ -687,20 +697,22 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: FilledButton(
-                      onPressed: _goToDetails,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.navy,
-                        minimumSize: const Size(88, 54),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                  PressScale(
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: FilledButton(
+                        onPressed: _goToDetails,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.navy,
+                          minimumSize: const Size(88, 54),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: const Text('Confirm and add details',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w800)),
                       ),
-                      child: const Text('Confirm and add details',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w800)),
                     ),
                   ),
                 ],
@@ -724,7 +736,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFD5DAE1),
+              color: AppColors.swatchD5DAE1,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -817,8 +829,8 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
       floatingLabelStyle: const TextStyle(
           fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      border: border(const Color(0xFFE2E8F0)),
-      enabledBorder: border(const Color(0xFFE2E8F0)),
+      border: border(AppColors.border),
+      enabledBorder: border(AppColors.border),
       focusedBorder: border(AppColors.navy, 1.5),
       errorBorder: border(AppColors.error),
       focusedErrorBorder: border(AppColors.error, 1.5),
@@ -833,10 +845,10 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         child: Container(
           height: 46,
           decoration: BoxDecoration(
-            color: selected ? Color(0xFFE6ECF4) : Colors.white,
+            color: selected ? AppColors.swatchE6ECF4 : Colors.white,
             borderRadius: BorderRadius.circular(23),
             border: Border.all(
-              color: selected ? AppColors.navy : const Color(0xFFE2E8F0),
+              color: selected ? AppColors.navy : AppColors.border,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -873,9 +885,9 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
     final target = LatLng(_currentLat, _currentLng);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: AppColors.swatchF7F9FC,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F9FC),
+        backgroundColor: AppColors.swatchF7F9FC,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleSpacing: 0,
@@ -914,7 +926,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: AppColors.border),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Column(
@@ -991,7 +1003,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                               width: 38,
                               height: 38,
                               decoration: const BoxDecoration(
-                                color: Color(0xFFE6ECF4),
+                                color: AppColors.swatchE6ECF4,
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.location_on_rounded,
@@ -1119,7 +1131,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: const Row(
                       children: [
@@ -1139,9 +1151,9 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: result.isUnknown
-                          ? const Color(0xFFF1F5F9)
+                          ? AppColors.surfaceVariant
                           : result.isServiceable
-                              ? const Color(0xFFE6ECF4)
+                              ? AppColors.swatchE6ECF4
                               : AppColors.errorLight,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1186,7 +1198,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -1208,26 +1220,28 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
       bottomNavigationBar: Container(
         padding: EdgeInsets.fromLTRB(
             16, 10, 16, 14 + MediaQuery.of(context).padding.bottom),
-        color: const Color(0xFFF7F9FC),
-        child: SizedBox(
-          height: 54,
-          child: FilledButton(
-            onPressed: _isLoading ? null : _handleSave,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.navy,
-              minimumSize: const Size(88, 54),
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: AppColors.swatchF7F9FC,
+        child: PressScale(
+          child: SizedBox(
+            height: 54,
+            child: FilledButton(
+              onPressed: _isLoading ? null : _handleSave,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.navy,
+                minimumSize: const Size(88, 54),
+                shape:
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Save Address',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
             ),
-            child: _isLoading
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Save Address',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
           ),
         ),
       ),
@@ -1252,7 +1266,12 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
           }
         });
       },
-      child: _stage == 0 ? _buildMapStage() : _buildDetailsStage(),
+      child: FadeThrough(
+        child: KeyedSubtree(
+          key: ValueKey(_stage),
+          child: _stage == 0 ? _buildMapStage() : _buildDetailsStage(),
+        ),
+      ),
     );
   }
 }

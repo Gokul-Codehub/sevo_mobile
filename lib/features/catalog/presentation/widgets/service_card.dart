@@ -353,7 +353,7 @@ class ServiceCard extends ConsumerWidget {
                                 gradient: const LinearGradient(
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
-                                  colors: [Color(0xFF1E3A8A), Color(0xFF0D253A)],
+                                  colors: [AppColors.blue900, AppColors.primary],
                                 ),
                                 borderRadius: BorderRadius.circular(18),
                               ),
@@ -504,7 +504,7 @@ class ServiceCard extends ConsumerWidget {
                     ElevatedButton(
                       onPressed: onTap ?? () => _navigateToDetail(context),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFFE8EDF7),
+                        backgroundColor: AppColors.swatchE8EDF7,
                         foregroundColor: AppColors.navy,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
@@ -538,16 +538,15 @@ class ServiceCard extends ConsumerWidget {
   /// Details" sit below it, unchanged in spirit from the original bottom
   /// row, just without the left-thumbnail Row this replaces.
   /// Services listing card (redesigned 2026-10-14 from the supplied reference):
-  /// a large rounded photo with a mint "X% OFF" pill, and a white panel that
-  /// overlaps the photo's bottom edge holding a dark duration disc, the title +
-  /// blurb, and a mint price block with the "View Details" action.
+  /// a large rounded photo with a rose offer "% OFF" pill, and a white panel
+  /// that overlaps the photo's bottom edge holding a dark duration disc, the
+  /// title + blurb, and a mint price block with the "View Details" action.
   Widget _buildServiceHeroContent(
     BuildContext context,
     WidgetRef ref, {
     required int quantityInCart,
   }) {
-    const mint = Color(0xFFE8EDF7);
-    const mintText = Color(0xFF1E3A8A);
+    const mint = AppColors.swatchE8EDF7;
     const overlap = 30.0;
 
     final showDiscount = service.discountPercent != null && !service.hasPackageOptions;
@@ -597,8 +596,19 @@ class ServiceCard extends ConsumerWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                           decoration: BoxDecoration(
-                            color: AppColors.navy,
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFFFBBF24), Color(0xFFD97706)],
+                            ),
                             borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFD97706).withValues(alpha: 0.35),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -609,7 +619,7 @@ class ServiceCard extends ConsumerWidget {
                                 service.badgeLabel!,
                                 style: const TextStyle(
                                   fontSize: 10,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w800,
                                   color: Colors.white,
                                 ),
                               ),
@@ -617,25 +627,42 @@ class ServiceCard extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    // Top-right: mint "X% OFF" pill (from the real discount),
-                    // or the rating when there is no discount to show.
+                    // Top-right: rose offer "X% OFF" pill (from the real
+                    // discount), or the rating when there is no discount.
                     Positioned(
                       right: 10,
                       top: 10,
                       child: showDiscount
                           ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: mint,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                '${service.discountPercent}% OFF',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  color: mintText,
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFF43F5E), AppColors.swatchE11D48],
                                 ),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.swatchE11D48.withValues(alpha: 0.35),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.local_offer_rounded, size: 12, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${service.discountPercent}% OFF',
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           : (!service.hasReviews ? const SizedBox.shrink() : Container(

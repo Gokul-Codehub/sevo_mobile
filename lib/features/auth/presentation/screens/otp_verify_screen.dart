@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_notifier.dart';
 import '../../domain/otp_autofill.dart';
@@ -20,11 +21,15 @@ class OtpVerifyScreen extends ConsumerStatefulWidget {
     required this.identifier,
     required this.channel,
     this.resendAfterSeconds = 60,
+    this.signup = false,
   });
 
   final String identifier;
   final String channel;
   final int resendAfterSeconds;
+
+  /// True when this code finishes a new-account signup (email + password).
+  final bool signup;
 
   @override
   ConsumerState<OtpVerifyScreen> createState() => _OtpVerifyScreenState();
@@ -135,6 +140,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
     } else if (index > 0) {
       _focusNodes[index - 1].requestFocus();
     }
+    if (mounted) setState(() {});
   }
 
   /// Spreads a pasted/autofilled multi-digit string across boxes
@@ -196,6 +202,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
   Future<void> _handleVerify() async {
     final otp = _getOtpCode();
     if (otp.length != 6) {
+      AppHaptics.light();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter all 6 digits of the OTP code'),
@@ -205,13 +212,16 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       return;
     }
 
+    AppHaptics.success();
     setState(() => _isLoading = true);
 
-    final result = await ref.read(authProvider.notifier).verifyOtp(
-          identifier: widget.identifier,
-          otp: otp,
-          channel: widget.channel,
-        );
+    final result = widget.signup
+        ? await ref.read(authProvider.notifier).verifySignup(email: widget.identifier, otp: otp)
+        : await ref.read(authProvider.notifier).verifyOtp(
+              identifier: widget.identifier,
+              otp: otp,
+              channel: widget.channel,
+            );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -227,8 +237,10 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       final user = ref.read(currentUserProvider);
       // Email sign-ins must also give a mobile number (QA CME07 - same rule as
       // the web app's sign-in flow), so they go through profile completion too.
-      if (result.isNewUser ||
-          (user != null && (!user.isProfileComplete || !user.hasMobileNumber))) {
+      // A new email+password signup already gave name and mobile number, so it skips profile completion.
+      if (!widget.signup &&
+          (result.isNewUser ||
+              (user != null && (!user.isProfileComplete || !user.hasMobileNumber)))) {
         context.pushReplacement(AppRoutes.profileComplete);
       } else {
         final pendingAction = ref.read(pendingActionProvider);
@@ -271,7 +283,16 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Logged in successfully!'),
+              content: Row(
+                children: [
+                  CelebrationBurst(
+                    size: 28,
+                    child: Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                  ),
+                  SizedBox(width: 10),
+                  Text('Logged in successfully!'),
+                ],
+              ),
               backgroundColor: AppColors.success,
             ),
           );
@@ -300,10 +321,12 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
 
     setState(() => _isLoading = true);
 
-    final result = await ref.read(authProvider.notifier).requestOtp(
-          identifier: widget.identifier,
-          channel: widget.channel,
-        );
+    final result = widget.signup
+        ? await ref.read(authProvider.notifier).resendSignup(email: widget.identifier)
+        : await ref.read(authProvider.notifier).requestOtp(
+              identifier: widget.identifier,
+              channel: widget.channel,
+            );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -344,14 +367,15 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Column(
+          child: FadeSlideIn(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 12),
 
               // ── Title & Subtitle ──
-              const Text(
-                'Verify your number',
+              Text(
+                (widget.channel == 'phone' || widget.channel == 'sms') ? 'Verify your number' : 'Verify your email',
                 style: TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.w800,
@@ -390,54 +414,57 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 46,
-                    height: 58,
-                    child: TextFormField(
-                      controller: _digitControllers[index],
-                      focusNode: _focusNodes[index],
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      autofocus: index == 0,
-                      // Fixed 2026-10-07 ("speed otp entry is not
-                      // allowed"): `maxLength: 1` used to truncate any
-                      // multi-character update — a pasted code, SMS
-                      // autofill, or just typing fast — down to one digit
-                      // and threw the rest away. [_onDigitChanged] now
-                      // does its own single-digit enforcement and spreads
-                      // a longer update across the remaining boxes, so the
-                      // cap on this field is gone.
-                      style: const TextStyle(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.navy,
-                        height: 1.0,
+                  return BounceOnChange(
+                    value: _digitControllers[index].text,
+                    child: SizedBox(
+                      width: 46,
+                      height: 58,
+                      child: TextFormField(
+                        controller: _digitControllers[index],
+                        focusNode: _focusNodes[index],
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        autofocus: index == 0,
+                        // Fixed 2026-10-07 ("speed otp entry is not
+                        // allowed"): `maxLength: 1` used to truncate any
+                        // multi-character update — a pasted code, SMS
+                        // autofill, or just typing fast — down to one digit
+                        // and threw the rest away. [_onDigitChanged] now
+                        // does its own single-digit enforcement and spreads
+                        // a longer update across the remaining boxes, so the
+                        // cap on this field is gone.
+                        style: const TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.navy,
+                          height: 1.0,
+                        ),
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          counterText: '',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.border, width: 1.5),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.border, width: 1.5),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.primary, width: 2.5),
+                          ),
+                        ),
+                        // Lets the keyboard offer the code from the SMS (Gboard / iOS), no permission needed.
+                        autofillHints: const [AutofillHints.oneTimeCode],
+                        onChanged: (val) => _onDigitChanged(val, index),
                       ),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: AppColors.border, width: 1.5),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: AppColors.border, width: 1.5),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: AppColors.primary, width: 2.5),
-                        ),
-                      ),
-                      // Lets the keyboard offer the code from the SMS (Gboard / iOS), no permission needed.
-                      autofillHints: const [AutofillHints.oneTimeCode],
-                      onChanged: (val) => _onDigitChanged(val, index),
                     ),
                   );
                 }),
@@ -474,35 +501,41 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
               const SizedBox(height: 28),
 
               // ── Navy Primary Verify Button ──
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleVerify,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.navy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Verify',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
+              AttentionPulse(
+                enabled: !_isLoading && _getOtpCode().length == 6,
+                maxScale: 1.03,
+                child: PressScale(
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _handleVerify,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.navy,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        elevation: 0,
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Verify',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  ),
                 ),
               ),
 
@@ -541,6 +574,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
 
               const SizedBox(height: 16),
             ],
+          ),
           ),
         ),
       ),

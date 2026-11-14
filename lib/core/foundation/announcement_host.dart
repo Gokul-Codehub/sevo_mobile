@@ -1,3 +1,4 @@
+import 'package:calservices_customer/shared/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -63,7 +64,7 @@ final visibleAnnouncementsProvider = Provider<List<AppAnnouncement>>((ref) {
 /// The visible announcements of one `kind` (banner | modal | info). Each kind has its own look:
 ///  * banner - a slim strip at the very top
 ///  * modal  - a centred pop-up card over the app
-///  * info   - a floating card above the bottom navigation
+///  * info   - a floating card at the top, below the status bar
 final announcementsOfKindProvider = Provider.family<List<AppAnnouncement>, String>((ref, kind) {
   return [for (final a in ref.watch(visibleAnnouncementsProvider)) if (a.kind == kind) a];
 });
@@ -79,7 +80,7 @@ void closeAnnouncement(WidgetRef ref, AppAnnouncement a) {
 
 Color announcementAccent(String severity) => switch (severity) {
       'critical' => const Color(0xFFB3261E),
-      'warning' => const Color(0xFFB26A00),
+      'warning' => AppColors.swatchB26A00,
       _ => const Color(0xFF1565C0),
     };
 
@@ -97,8 +98,8 @@ class AnnouncementBanner extends ConsumerWidget {
 
   static Color _bg(String severity) => switch (severity) {
         'critical' => const Color(0xFFB3261E),
-        'warning' => const Color(0xFFB26A00),
-        _ => const Color(0xFF0D253A),
+        'warning' => AppColors.swatchB26A00,
+        _ => AppColors.primary,
       };
 
   @override
@@ -184,10 +185,10 @@ class AnnouncementModal extends ConsumerWidget {
                       child: Icon(announcementIcon(a.severity), color: accent, size: 30),
                     ),
                     const SizedBox(height: 16),
-                    Text(a.title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF0D253A))),
+                    Text(a.title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.primary)),
                     if (a.body.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Text(a.body, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, height: 1.4, color: Color(0xFF475569))),
+                      Text(a.body, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.slate600)),
                     ],
                     const SizedBox(height: 20),
                     if (a.ctaLabel != null && a.ctaRoute != null && onNavigate != null) ...[
@@ -235,7 +236,7 @@ class AnnouncementInfoCard extends ConsumerWidget {
     return Positioned(
       left: 14,
       right: 14,
-      bottom: 96 + MediaQuery.paddingOf(context).bottom,
+      top: 8 + MediaQuery.paddingOf(context).top,
       child: Material(
         color: Colors.transparent,
         child: Container(
@@ -260,8 +261,8 @@ class AnnouncementInfoCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(a.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF0D253A))),
-                    if (a.body.isNotEmpty) Text(a.body, style: const TextStyle(fontSize: 12.5, height: 1.35, color: Color(0xFF475569))),
+                    Text(a.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: AppColors.primary)),
+                    if (a.body.isNotEmpty) Text(a.body, style: const TextStyle(fontSize: 12.5, height: 1.35, color: AppColors.slate600)),
                     if (a.ctaLabel != null && a.ctaRoute != null && onNavigate != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
@@ -277,7 +278,7 @@ class AnnouncementInfoCard extends ConsumerWidget {
                 button: true,
                 label: 'Dismiss',
                 child: IconButton(
-                  icon: const Icon(Icons.close, size: 18, color: Color(0xFF64748B)),
+                  icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
                   onPressed: () => closeAnnouncement(ref, a),
                 ),
               ),

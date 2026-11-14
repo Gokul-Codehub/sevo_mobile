@@ -19,23 +19,34 @@ const _unavailableWhy = {
 /// come from the server (`/logistics/insurance-terms/`), the very figures that are billed. Sold with online / wallet
 /// payment only. When it cannot be sold the customer is told why, and that the goods will not be insured.
 class GtInsuranceSection extends ConsumerWidget {
-  const GtInsuranceSection({super.key, required this.declaredValue});
+  const GtInsuranceSection({super.key, required this.declaredValue, this.card = false});
 
   /// The booking's declared goods value (null / 0 until entered).
   final double? declaredValue;
 
-  Widget _notice(String title, String body) => Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border, width: 0.8),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
-          const SizedBox(height: 4),
-          Text(body, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4)),
+  /// When true, wraps content in a white bordered card (Fare step).
+  final bool card;
+
+  Widget _shell(Widget child, {EdgeInsetsGeometry? margin}) {
+    final body = Container(
+      width: double.infinity,
+      margin: margin ?? (card ? EdgeInsets.zero : const EdgeInsets.only(top: 8)),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border, width: 0.8),
+      ),
+      child: child,
+    );
+    return body;
+  }
+
+  Widget _notice(String title, String body) => _shell(
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy)),
+          const SizedBox(height: 6),
+          Text(body, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.45)),
         ]),
       );
 
@@ -64,15 +75,8 @@ class GtInsuranceSection extends ConsumerWidget {
         final prepaid = ref.watch(gtPaymentMethodProvider) != 'cod';
         final value = declaredValue ?? 0;
 
-        return Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border, width: 0.8),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        return _shell(
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
               dense: true,
@@ -86,17 +90,17 @@ class GtInsuranceSection extends ConsumerWidget {
             if (!enabled)
               const Text(
                 'Without insurance your goods are not insured; our liability for loss or damage is limited as set out in the Terms of Service.',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
+                style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.45),
               ),
             if (enabled && !prepaid)
               const Text(
                 'Insurance is available with online or wallet payment. Choose one under Payment to add it.',
-                style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309), height: 1.4),
+                style: TextStyle(fontSize: 11.5, color: AppColors.amber700, height: 1.4),
               ),
             if (enabled && prepaid && value <= 0)
               const Text(
                 'Enter the declared value of your goods above to see the premium.',
-                style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309), height: 1.4),
+                style: TextStyle(fontSize: 11.5, color: AppColors.amber700, height: 1.4),
               ),
             if (enabled && prepaid && value > 0)
               _Terms(
@@ -126,11 +130,11 @@ class _Terms extends StatelessWidget {
         ),
         error: (_, __) => const Text(
           'We could not get the premium right now. You can still book without insurance.',
-          style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309)),
+          style: TextStyle(fontSize: 11.5, color: AppColors.amber700),
         ),
         data: (t) {
           if (!t.offered) {
-            return const Text('Insurance is not available for this booking.', style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309)));
+            return const Text('Insurance is not available for this booking.', style: TextStyle(fontSize: 11.5, color: AppColors.amber700));
           }
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
@@ -166,7 +170,7 @@ class _Terms extends StatelessWidget {
                 if (!consent)
                   const Text(
                     'Tick the box to add cover. Without it your booking is not insured.',
-                    style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309)),
+                    style: TextStyle(fontSize: 11.5, color: AppColors.amber700),
                   ),
               ]),
             ),

@@ -9,7 +9,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show ValueListenable;
 import '../../../notifications/presentation/widgets/notification_bell.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,6 +19,7 @@ import '../../../../shared/theme/color_contrast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/banner_media.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../../shared/widgets/sevo_logo.dart';
 import '../../../../shared/navigation/admin_link_resolver.dart';
 import '../../../addresses/presentation/widgets/location_sheet.dart';
@@ -34,6 +34,7 @@ import '../../../catalog/domain/catalog_providers.dart';
 import '../../../catalog/presentation/widgets/product_card.dart';
 import '../../../catalog/presentation/screens/grocery_hub_category_screen.dart';
 import '../../../logistics/domain/logistics_providers.dart';
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/providers/bottom_nav_visibility_provider.dart';
 import '../../../../core/services/home_live_updates.dart';
 import '../../data/homepage_repository.dart';
@@ -101,11 +102,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// away — at which point a compact copy of the three is pinned at the top.
   /// Scrolling back to the top eases it back to 0.
   final _scroll = ScrollController();
-  final _collapse = ValueNotifier<double>(0);
+  final _collapse = ValueNotifier<double>(100000);
   /// Shows the "Back to top" button once the customer has scrolled well down the page.
   final _showBackToTop = ValueNotifier<bool>(false);
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
   DateTime? _lastHomeTapAt;
+  /// Reveals the bottom nav after a short idle while hidden.
+  Timer? _navIdleTimer;
+  static const _navIdleReveal = Duration(milliseconds: 850);
+  /// Accumulated scroll deltas so tiny direction flickers don't toggle the nav.
+  double _navHideAccum = 0;
+  double _navShowAccum = 0;
+  static const _navHideThreshold = 14.0;
+  static const _navShowThreshold = 8.0;
+  static const _navAlwaysShowOffset = 24.0;
 
   /// Home tab tapped while on Home: 1st tap -> scroll to top; a 2nd tap within
   /// 2 seconds -> scroll to top and reload everything (same as pull-to-refresh).
@@ -129,19 +139,101 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  static const _collapseStart = 200.0;
-  static const _collapseEnd = 260.0;
+  /// Marks the page's own header block (mode tabs + search bar ...) so the sticky copy can follow its REAL position.
+  final _headerKey = GlobalKey();
+
+  // Layout of the header block: tabs (84) + two 10 px gaps + the search bar row (2 + 48 + 8).
+  static const _searchBottomInHeader = 84.0 + 10 + 10 + 58;
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
     final far = _scroll.offset > 900;
     if (far != _showBackToTop.value) _showBackToTop.value = far;
-    final t = ((_scroll.offset - _collapseStart) / (_collapseEnd - _collapseStart)).clamp(0.0, 1.0);
-    if ((t - _collapse.value).abs() > 0.004) _collapse.value = t;
+    // [_collapse] holds the on-screen y of the page's search bar bottom. The sticky header slides in exactly as that
+    // edge scrolls off the top, so the two headers hand over in one continuous motion (no jump, no doubled bar).
+    final ro = _headerKey.currentContext?.findRenderObject();
+    if (ro is RenderBox && ro.attached && ro.hasSize) {
+      final y = ro.localToGlobal(Offset.zero).dy + _searchBottomInHeader;
+      if ((y - _collapse.value).abs() > 0.5) _collapse.value = y;
+    }
+  }
+
+  void _cancelNavIdleReveal() {
+    _navIdleTimer?.cancel();
+    _navIdleTimer = null;
+  }
+
+  void _resetNavScrollAccum() {
+    _navHideAccum = 0;
+    _navShowAccum = 0;
+  }
+
+  void _scheduleNavIdleReveal() {
+    _cancelNavIdleReveal();
+    _navIdleTimer = Timer(_navIdleReveal, () {
+      if (!mounted) return;
+      _resetNavScrollAccum();
+      final notifier = ref.read(bottomNavVisibleProvider.notifier);
+      if (!notifier.state) notifier.state = true;
+    });
+  }
+
+  void _setBottomNavVisible(bool visible) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final notifier = ref.read(bottomNavVisibleProvider.notifier);
+      if (notifier.state != visible) notifier.state = visible;
+    });
+  }
+
+  void _onHomeNavScroll(ScrollNotification notification) {
+    // Ignore horizontal carousels / nested sideways lists.
+    if (notification.metrics.axis != Axis.vertical) return;
+
+    // Near the top the bar stays visible so landing / pull-to-refresh never
+    // fight a hidden footer.
+    if (_scroll.hasClients && _scroll.offset <= _navAlwaysShowOffset) {
+      _cancelNavIdleReveal();
+      _resetNavScrollAccum();
+      _setBottomNavVisible(true);
+      return;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final dy = notification.scrollDelta ?? 0;
+      if (dy.abs() < 0.5) return;
+
+      if (dy > 0) {
+        // Scrolling down → tuck the bar away after a small travel threshold.
+        _navHideAccum += dy;
+        _navShowAccum = 0;
+        if (_navHideAccum >= _navHideThreshold) {
+          _cancelNavIdleReveal();
+          _setBottomNavVisible(false);
+          _navHideAccum = 0;
+        }
+      } else {
+        // Scrolling up → bring it back a bit sooner than hide.
+        _navShowAccum += -dy;
+        _navHideAccum = 0;
+        if (_navShowAccum >= _navShowThreshold) {
+          _cancelNavIdleReveal();
+          _setBottomNavVisible(true);
+          _navShowAccum = 0;
+        }
+      }
+      return;
+    }
+
+    if (notification is ScrollEndNotification) {
+      _resetNavScrollAccum();
+      _scheduleNavIdleReveal();
+    }
   }
 
   @override
   void dispose() {
+    _cancelNavIdleReveal();
     _resumeRefresh.detach();
     _scroll.dispose();
     _collapse.dispose();
@@ -262,13 +354,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             MobileTopCardItem(
               id: 'groceries',
               label: 'Groceries',
-              imageUrl: groceryQuickAccessCategory?.image,
+              imageUrl: null, // bundled artwork shows until admin sets one
               link: '/categories/vegetables_groceries',
             ),
             MobileTopCardItem(
               id: 'services',
               label: 'Services',
-              imageUrl: serviceQuickAccessCategory?.image,
+              imageUrl: null, // bundled artwork shows until admin sets one
               link: '/categories',
             ),
           ];
@@ -417,41 +509,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           SafeArea(
-            child: NotificationListener<UserScrollNotification>(
-              // Added 2026-09-30 per explicit request ("only the footer
-              // should show otherwise hidden... smooth animation"): hides
-              // AppShell's bottom nav while scrolling down through Home's
-              // content (more room to browse), shows it again while
-              // scrolling back up — same pattern Zepto/Blinkit use on
-              // their own home feeds. AppShell owns the actual animation;
-              // this only flips the shared visibility flag it reads.
-              onNotification: (notification) {
-                // Fixed 2026-09-30: this notification fires WHILE the
-                // CustomScrollView below is still mid-layout (scroll
-                // notifications bubble up during the scroll/layout phase,
-                // not after it). Flipping the provider synchronously here
-                // made AppShell rebuild/relayout its bottom nav re-entrantly
-                // inside that same layout pass, tripping Flutter's
-                // '!_debugDoingThisLayout' assertion on every scroll
-                // ("Failed assertion: line 2857 pos 12"). Deferring the
-                // actual state write to the end of the current frame (same
-                // fix Flutter's own docs recommend for provider/setState
-                // calls triggered from scroll notifications) lets this
-                // frame's layout finish first.
-                final desiredVisible = notification.direction == ScrollDirection.reverse
-                    ? false
-                    : notification.direction == ScrollDirection.forward
-                        ? true
-                        : null;
-                if (desiredVisible != null) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted) return;
-                    final notifier = ref.read(bottomNavVisibleProvider.notifier);
-                    if (notifier.state != desiredVisible) {
-                      notifier.state = desiredVisible;
-                    }
-                  });
+            child: Listener(
+              // Any touch while the nav is hidden restarts the idle reveal
+              // countdown so a brief pause after interaction brings it back.
+              onPointerDown: (_) {
+                if (!ref.read(bottomNavVisibleProvider)) {
+                  _scheduleNavIdleReveal();
                 }
+              },
+              child: NotificationListener<ScrollNotification>(
+              // Hides on scroll-down, shows on scroll-up, with travel
+              // thresholds so micro direction changes don't flicker the bar.
+              // Idle / touch pause reveals it again; AppShell animates.
+              onNotification: (notification) {
+                _onHomeNavScroll(notification);
                 return false;
               },
               child: RefreshIndicator(
@@ -500,7 +571,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // background and dark navy text, so it reads clearly no matter
             // what's behind it or how the sections above are reordered.
             SliverToBoxAdapter(
-              child: Padding(
+              child: FadeSlideIn(
+                child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: GestureDetector(
@@ -514,11 +586,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // header background. Tap target is unchanged.
                     child: Row(
                       children: [
-                        const SevoLogo(height: 20),
-                        const SizedBox(width: 10),
+                        const SevoLogo(height: 14),
+                        const SizedBox(width: 8),
                         Container(
                           width: 1,
-                          height: 22,
+                          height: 18,
                           color: const Color(0x26000000),
                         ),
                         const SizedBox(width: 10),
@@ -582,6 +654,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
+              ),
             ),
 
             // ── 2. Top Cards: Groceries / Services quick-access ──
@@ -599,23 +672,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // the user's annotated layout (Images 1 & 2).
             if (switcherCards.isNotEmpty)
               SliverToBoxAdapter(
-                child: _UnifiedActiveModeSection(
-                  flowMode: flowMode,
-                  flowTheme: flowTheme,
-                  themeGroceries: themeGroceries,
-                  themeServices: themeServices,
-                  switcherCards: switcherCards,
-                  onModeCardTap: (card) {
-                    final mode = _flowModeForCard(card);
-                    if (mode != null) {
-                      if (mode != flowMode) _animateModeContent = true;
-                      ref.read(homeFlowModeProvider.notifier).state = mode;
-                    }
-                  },
-                  greetingText: greetingText,
-                  topCategoryTiles: topCategoryTiles,
-                  extraQuickAccessCards: extraQuickAccessCards,
-                  liveCategories: liveCategories,
+                child: FadeSlideIn(
+                  index: 1,
+                  child: KeyedSubtree(
+                    key: _headerKey,
+                    child: _UnifiedActiveModeSection(
+                    flowMode: flowMode,
+                    flowTheme: flowTheme,
+                    themeGroceries: themeGroceries,
+                    themeServices: themeServices,
+                    switcherCards: switcherCards,
+                    onModeCardTap: (card) {
+                      final mode = _flowModeForCard(card);
+                      if (mode != null) {
+                        if (mode != flowMode) _animateModeContent = true;
+                        ref.read(homeFlowModeProvider.notifier).state = mode;
+                      }
+                    },
+                    greetingText: greetingText,
+                    topCategoryTiles: topCategoryTiles,
+                    extraQuickAccessCards: extraQuickAccessCards,
+                    liveCategories: liveCategories,
+                  ),
+                  ),
                 ),
               ),
 
@@ -667,6 +746,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ),
+              ),
               ),
           // Compact header pinned over the page once the real one scrolls away.
           Positioned(
@@ -809,10 +889,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             return const SliverToBoxAdapter(child: SizedBox.shrink());
           }
 
-          final cardWidth = (screenWidth - 32 - 30) / 4;
+          final cardWidth = (screenWidth - 32 - 20) / 3.15;
 
           return SliverToBoxAdapter(
-            child: Padding(
+            child: FadeSlideIn(
+              index: 2,
+              child: Padding(
               padding: const EdgeInsets.only(bottom: 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -851,18 +933,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Color(0xFFF1F6FB),
+                          AppColors.swatchF1F6FB,
                           Color(0xFFEAF1F8),
-                          Color(0xFFF1F6FB),
+                          AppColors.swatchF1F6FB,
                         ],
                       ),
                       border: Border(
                         top: BorderSide(
-                          color: Color(0xFFD6E3F0),
+                          color: AppColors.swatchD6E3F0,
                           width: 1.0,
                         ),
                         bottom: BorderSide(
-                          color: Color(0xFFD6E3F0),
+                          color: AppColors.swatchD6E3F0,
                           width: 1.0,
                         ),
                       ),
@@ -888,6 +970,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           );
         },
@@ -1055,10 +1138,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             return const SliverToBoxAdapter(child: SizedBox.shrink());
           }
 
-          final cardWidth = (screenWidth - 32 - 30) / 4;
+          final cardWidth = (screenWidth - 32 - 20) / 3.15;
 
           return SliverToBoxAdapter(
-            child: Padding(
+            child: FadeSlideIn(
+              index: 2,
+              child: Padding(
               padding: const EdgeInsets.only(bottom: 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1097,18 +1182,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Color(0xFFF1F6FB),
+                          AppColors.swatchF1F6FB,
                           Color(0xFFEAF1F8),
-                          Color(0xFFF1F6FB),
+                          AppColors.swatchF1F6FB,
                         ],
                       ),
                       border: Border(
                         top: BorderSide(
-                          color: Color(0xFFD6E3F0),
+                          color: AppColors.swatchD6E3F0,
                           width: 1.0,
                         ),
                         bottom: BorderSide(
-                          color: Color(0xFFD6E3F0),
+                          color: AppColors.swatchD6E3F0,
                           width: 1.0,
                         ),
                       ),
@@ -1134,6 +1219,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           );
         },
@@ -1233,30 +1319,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: adminBestsellers.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 14,
-                childAspectRatio: 0.82,
-              ),
-              itemBuilder: (context, i) => _AdminBestsellerTile(
-                key: ValueKey('admin-bestseller-${adminBestsellers[i].id}'),
-                item: adminBestsellers[i],
-                onTap: () => _handleAdminLinkTap(
-                  context,
-                  adminBestsellers[i].link,
-                  // Updated 2026-09-30 — see AppRoutes.sellerHubVegetables's
-                  // doc comment: Bestsellers with no admin link configured
-                  // fall back to the Seller Hub Marketplace tree now, same
-                  // as Groceries, instead of the old Vegetable Inventory
-                  // module.
-                  fallbackPath: '/vegetables/seller-hub',
-                ),
-              ),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final cols = AppResponsive.bestsellerColumns(c.maxWidth);
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: adminBestsellers.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cols,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 14,
+                    childAspectRatio: 0.78,
+                  ),
+                  itemBuilder: (context, i) => _AdminBestsellerTile(
+                    key: ValueKey('admin-bestseller-${adminBestsellers[i].id}'),
+                    item: adminBestsellers[i],
+                    onTap: () => _handleAdminLinkTap(
+                      context,
+                      adminBestsellers[i].link,
+                      // Updated 2026-09-30 — see AppRoutes.sellerHubVegetables's
+                      // doc comment: Bestsellers with no admin link configured
+                      // fall back to the Seller Hub Marketplace tree now, same
+                      // as Groceries, instead of the old Vegetable Inventory
+                      // module.
+                      fallbackPath: '/vegetables/seller-hub',
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -1278,27 +1369,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: groceryHubCategories.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 14,
-                childAspectRatio: 0.82,
-              ),
-              itemBuilder: (context, i) => _GroceryHubBestsellerTile(
-                key: ValueKey('grocery-hub-bestseller-${groceryHubCategories[i].name}'),
-                group: groceryHubCategories[i],
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => GroceryHubCategoryScreen(
-                      group: groceryHubCategories[i],
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final cols = AppResponsive.bestsellerColumns(c.maxWidth);
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: groceryHubCategories.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cols,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 14,
+                    childAspectRatio: 0.78,
+                  ),
+                  itemBuilder: (context, i) => _GroceryHubBestsellerTile(
+                    key: ValueKey('grocery-hub-bestseller-${groceryHubCategories[i].name}'),
+                    group: groceryHubCategories[i],
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => GroceryHubCategoryScreen(
+                          group: groceryHubCategories[i],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),
@@ -2085,7 +2181,7 @@ class _UnifiedActiveModeBody extends StatelessWidget {
         ? ColorContrast.readable(activeTheme.cardTextColor!, panelMiddle)
         : ColorContrast.inkOn(
             panelMiddle,
-            dark: isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy,
+            dark: isGroceries ? AppColors.swatch1A1A1A : AppColors.navy,
           );
 
     // Resolve Groceries on left and Services on right
@@ -2236,7 +2332,7 @@ class _UnifiedActiveModeBody extends StatelessWidget {
                                 icon: Icons.grid_view_rounded,
                                 color: isGroceries ? AppColors.groceryGreen : flowTheme.accent,
                                 labelColor: textOnContainer,
-                                indicatorColor: isGroceries ? const Color(0xFF1A1A1A) : flowTheme.accent,
+                                indicatorColor: isGroceries ? AppColors.swatch1A1A1A : flowTheme.accent,
                                 isViewAll: true,
                                 isActive: true,
                                 // Fixed 2026-10-08 ("when i click 'ALL' in the
@@ -2398,7 +2494,7 @@ class _StickyHomeHeader extends StatelessWidget {
         ? ColorContrast.readable(adminTheme.cardTextColor!, ColorContrast.middle(colors))
         : ColorContrast.inkOn(
             ColorContrast.middle(colors),
-            dark: isGroceries ? const Color(0xFF1A1A1A) : AppColors.navy,
+            dark: isGroceries ? AppColors.swatch1A1A1A : AppColors.navy,
           );
     final groceriesCard = switcherCards.firstWhere(
       (c) => _flowModeForCard(c) == HomeFlowMode.groceries,
@@ -2544,20 +2640,52 @@ class _StickyHomeHeader extends StatelessWidget {
       ),
     );
 
+    // Solid (no fade): a see-through bar let the page's own header show through mid-scroll, doubling the search box.
+    return _SlideReveal(anchor: collapse, child: bar);
+  }
+}
+
+/// Slides [child] down from above the top edge in lock-step with the scroll: fully hidden while the page's own
+/// search bar (whose bottom edge is [anchor], in screen y) is still lower than the child's height, fully shown once
+/// that edge has scrolled off the top. 1 px of scroll = 1 px of movement, so it never jumps or lags the content.
+class _SlideReveal extends StatefulWidget {
+  const _SlideReveal({required this.anchor, required this.child});
+
+  final ValueListenable<double> anchor;
+  final Widget child;
+
+  @override
+  State<_SlideReveal> createState() => _SlideRevealState();
+}
+
+class _SlideRevealState extends State<_SlideReveal> {
+  final _childKey = GlobalKey();
+  double _height = 0;
+
+  @override
+  Widget build(BuildContext context) {
     return ValueListenableBuilder<double>(
-      valueListenable: collapse,
-      child: bar,
-      builder: (context, t, child) {
-        if (t <= 0.001) return const SizedBox.shrink();
-        return IgnorePointer(
-          ignoring: t < 0.6,
-          child: ClipRect(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              heightFactor: Curves.easeOut.transform(t),
-              // Solid (no fade): a see-through bar let the page's own header
-              // show through mid-scroll, doubling the search box and tabs.
-              child: child,
+      valueListenable: widget.anchor,
+      builder: (context, anchor, _) {
+        // Never read a size while building (the render object is not laid out yet): measure after the frame.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final ro = _childKey.currentContext?.findRenderObject();
+          if (ro is RenderBox && ro.attached && ro.hasSize) {
+            final measured = ro.size.height;
+            if (measured > 0 && (measured - _height).abs() > 0.5) setState(() => _height = measured);
+          }
+        });
+        final h = _height > 0 ? _height : 190.0;
+        final shown = (h - anchor).clamp(0.0, h);
+        return Offstage(
+          // Offstage still lays the bar out (so it can be measured) but paints nothing - no shadow leaking at the top.
+          offstage: shown <= 0.5,
+          child: IgnorePointer(
+            ignoring: shown < h * 0.7,
+            child: Transform.translate(
+              offset: Offset(0, shown - h),
+              child: SizedBox(key: _childKey, child: widget.child),
             ),
           ),
         );
@@ -2919,11 +3047,13 @@ class _ModeContentFade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Soft fade when switching Services ↔ Groceries (keyed by mode).
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: animate ? 0.0 : 1.0, end: 1.0),
-      duration: const Duration(milliseconds: 380),
-      curve: Curves.easeOut,
-      builder: (context, value, child) => SliverOpacity(opacity: value, sliver: child),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) =>
+          SliverOpacity(opacity: value.clamp(0.0, 1.0), sliver: child!),
       child: SliverMainAxisGroup(slivers: slivers),
     );
   }
@@ -2982,7 +3112,7 @@ class _TopCardBanner extends StatelessWidget {
         // Active tab seamlessly merges into the unified container background painter
         backgroundGradient = null;
         solidBackgroundColor = Colors.transparent;
-        textColor = outlineColor ?? (isGroceriesCard ? const Color(0xFF1A1A1A) : AppColors.navy);
+        textColor = outlineColor ?? (isGroceriesCard ? AppColors.swatch1A1A1A : AppColors.navy);
         shadows = null;
         border = null;
       } else if (isGroceriesCard) {
@@ -3024,17 +3154,19 @@ class _TopCardBanner extends StatelessWidget {
       // Inactive tab: clean light surface flush against the header
       backgroundGradient = null;
       solidBackgroundColor = inactiveColor ?? const Color(0xFFF1F6FA);
-      textColor = isGroceriesCard ? const Color(0xFF1E293B) : const Color(0xFF475569);
+      textColor = isGroceriesCard ? const Color(0xFF1E293B) : AppColors.slate600;
       shadows = null;
       border = Border.all(color: AppColors.divider, width: 0.8);
     }
 
-    return GestureDetector(
+    return PressScale(
+      scale: 0.97,
+      child: GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         margin: (isUnifiedBackground && !isSelected) ? const EdgeInsets.only(bottom: 4) : EdgeInsets.zero,
@@ -3057,7 +3189,10 @@ class _TopCardBanner extends StatelessWidget {
           children: [
             SizedBox(
               height: 42,
-              child: (card.imageUrl != null && card.imageUrl!.isNotEmpty) || bundledAsset != null
+              // Admin-supplied image wins; the bundled Groceries/Services
+              // artwork is the fallback when the admin panel returns nothing
+              // (or the image fails to load).
+              child: (card.imageUrl != null && card.imageUrl!.isNotEmpty)
                   ? AppRemoteImage(
                       imageUrl: card.imageUrl,
                       rawPath: card.imageUrl,
@@ -3067,7 +3202,9 @@ class _TopCardBanner extends StatelessWidget {
                           ? Image.asset(bundledAsset, fit: BoxFit.contain)
                           : Icon(fallbackIcon, size: 28, color: textColor),
                     )
-                  : Icon(fallbackIcon, size: 28, color: textColor),
+                  : (bundledAsset != null
+                      ? Image.asset(bundledAsset, fit: BoxFit.contain)
+                      : Icon(fallbackIcon, size: 28, color: textColor)),
             ),
             const SizedBox(height: 4),
             AnimatedDefaultTextStyle(
@@ -3086,6 +3223,7 @@ class _TopCardBanner extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -3318,14 +3456,8 @@ class _CategoryQuickTile extends StatelessWidget {
   }
 }
 
-/// One "Bestsellers" category tile — a 2x2 grid of the category's first
-/// four real product photos (from the Grocery Hub) with a "+N more" pill
-/// overlapping its bottom-right corner, and the category name below.
-/// Matches the reference screenshot's layout exactly. When the category
-/// has fewer than 4 products, the remaining grid cells repeat/clip the
-/// available images rather than showing empty gaps, and the "+N more"
-/// pill is simply omitted once every product actually fits in the 2x2
-/// preview.
+/// One "Bestsellers" category card — outer rounded card wraps the 2x2
+/// collage AND the title. Centered white "+N more" pill over the images.
 class _GroceryHubBestsellerTile extends StatelessWidget {
   const _GroceryHubBestsellerTile({super.key, required this.group, required this.onTap});
 
@@ -3340,90 +3472,95 @@ class _GroceryHubBestsellerTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: GridView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: 4,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 4,
-                      mainAxisSpacing: 4,
-                    ),
-                    itemBuilder: (context, i) {
-                      final product = previewCount == 0
-                          ? null
-                          : products[i % previewCount];
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          color: Colors.white,
-                          child: product == null
-                              ? null
-                              : AppRemoteImage(
-                                  imageUrl: product.image,
-                                  title: product.name,
-                                  fit: BoxFit.contain,
-                                ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (remaining > 0)
-                  Positioned(
-                    right: 4,
-                    bottom: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            blurRadius: 4,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                alignment: Alignment.bottomCenter,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+                    child: GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: 4,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 2,
+                        mainAxisSpacing: 2,
+                      ),
+                      itemBuilder: (context, i) {
+                        final product = previewCount == 0
+                            ? null
+                            : products[i % previewCount];
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: ColoredBox(
+                            color: Colors.white,
+                            child: product == null
+                                ? null
+                                : AppRemoteImage(
+                                    imageUrl: product.image,
+                                    title: product.name,
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
-                        ],
-                      ),
-                      child: Text(
-                        '+$remaining more',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.navy,
+                        );
+                      },
+                    ),
+                  ),
+                  if (remaining > 0)
+                    Positioned(
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.10),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          '+$remaining more',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.swatch6B7280,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            group.name,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.navy,
-              height: 1.2,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+              child: Text(
+                group.name,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.gray900,
+                  height: 1.2,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -3454,91 +3591,96 @@ class _AdminBestsellerTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: previewCount == 0
-                      ? const Center(
-                          child: Icon(
-                            Icons.local_grocery_store_rounded,
-                            color: AppColors.groceryGreenDark,
-                            size: 32,
-                          ),
-                        )
-                      : GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: 4,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 4,
-                            mainAxisSpacing: 4,
-                          ),
-                          itemBuilder: (context, i) => ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: Container(
-                              color: Colors.white,
-                              child: AppRemoteImage(
-                                imageUrl: thumbnails[i % previewCount],
-                                title: item.title,
-                                fit: BoxFit.contain,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                alignment: Alignment.bottomCenter,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+                    child: previewCount == 0
+                        ? const Center(
+                            child: Icon(
+                              Icons.local_grocery_store_rounded,
+                              color: AppColors.groceryGreenDark,
+                              size: 32,
+                            ),
+                          )
+                        : GridView.builder(
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: 4,
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 2,
+                              mainAxisSpacing: 2,
+                            ),
+                            itemBuilder: (context, i) => ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: ColoredBox(
+                                color: Colors.white,
+                                child: AppRemoteImage(
+                                  imageUrl: thumbnails[i % previewCount],
+                                  title: item.title,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                           ),
+                  ),
+                  if (item.productCount > 0)
+                    Positioned(
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.10),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
                         ),
-                ),
-                if (item.productCount > 0)
-                  Positioned(
-                    right: 4,
-                    bottom: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            blurRadius: 4,
+                        child: Text(
+                          '+${item.productCount} more',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.swatch6B7280,
                           ),
-                        ],
-                      ),
-                      child: Text(
-                        '+${item.productCount} more',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.navy,
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            item.title,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.navy,
-              height: 1.2,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+              child: Text(
+                item.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.gray900,
+                  height: 1.2,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -3560,8 +3702,8 @@ class _WhyChooseItem extends StatelessWidget {
   final Color color;
 
   static const List<List<Color>> _badgeGradients = [
-    [Color(0xFF3B82F6), AppColors.serviceBlueDark], // Royal Blue
-    [Color(0xFF10B981), Color(0xFF059669)], // Emerald Green
+    [AppColors.info, AppColors.serviceBlueDark], // Royal Blue
+    [AppColors.success, AppColors.emerald600], // Emerald Green
     [AppColors.warning, Color(0xFFD97706)], // Amber Orange
     [Color(0xFF8B5CF6), Color(0xFF6D28D9)], // Violet Purple
   ];
@@ -3679,7 +3821,7 @@ const _promoBanners = <_PromoBanner>[
     routeKeywords: ['appliance', 'ac'],
     icon: Icons.engineering_rounded,
     gradientColors: [AppColors.navy, AppColors.serviceBlueDark],
-    accentColor: Color(0xFF93C5FD),
+    accentColor: AppColors.blue300,
   ),
   _PromoBanner(
     eyebrow: 'Farm-Fresh, Same Day',
@@ -3687,7 +3829,7 @@ const _promoBanners = <_PromoBanner>[
     ctaLabel: 'Shop Now',
     routeKeywords: ['vegetable', 'grocer', 'farm', 'produce'],
     icon: Icons.eco_rounded,
-    gradientColors: [Color(0xFF14532D), AppColors.groceryGreen],
+    gradientColors: [AppColors.green900, AppColors.groceryGreen],
     accentColor: Color(0xFF86EFAC),
   ),
   _PromoBanner(
@@ -3697,7 +3839,7 @@ const _promoBanners = <_PromoBanner>[
     routeKeywords: ['electric', 'plumb', 'carpent'],
     icon: Icons.build_rounded,
     gradientColors: [AppColors.navyLight, AppColors.serviceBlue],
-    accentColor: Color(0xFF93C5FD),
+    accentColor: AppColors.blue300,
   ),
   _PromoBanner(
     eyebrow: 'Spotless Guarantee',
@@ -3706,7 +3848,7 @@ const _promoBanners = <_PromoBanner>[
     routeKeywords: ['clean'],
     icon: Icons.cleaning_services_rounded,
     gradientColors: [AppColors.navy, AppColors.serviceBlueDark],
-    accentColor: Color(0xFF93C5FD),
+    accentColor: AppColors.blue300,
   ),
 ];
 
@@ -3967,7 +4109,7 @@ class _PromoBannerCarouselState extends ConsumerState<_PromoBannerCarousel> {
                   ? const [Color(0xFF0072F5), Color(0xFF0056B3)]
                   : const [Color(0xFF52B700), Color(0xFF2E7D32)],
               accentColor: widget.mode == HomeFlowMode.services
-                  ? const Color(0xFF93C5FD)
+                  ? AppColors.blue300
                   : const Color(0xFF86EFAC),
               assetFallback: widget.mode == HomeFlowMode.services
                   ? 'assets/images/hero_banner_services.webp'
@@ -4043,7 +4185,7 @@ class _CrossSellPromoSection extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: const Color(0xFFD6E3F0),
+            color: AppColors.swatchD6E3F0,
             width: 1.0,
           ),
           boxShadow: [
@@ -4146,7 +4288,7 @@ class _GoodsTransportCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFFF1F6FB), Color(0xFFE2EDF8)],
+                    colors: [AppColors.swatchF1F6FB, Color(0xFFE2EDF8)],
                   ),
                 ),
               ),
@@ -4218,7 +4360,7 @@ class _GoodsTransportCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF475569),
+                          color: AppColors.slate600,
                         ),
                       ),
                     ],
@@ -4499,7 +4641,7 @@ class _GroceriesCard extends StatelessWidget {
                               AppColors.serviceBlueTint.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                              color: const Color(0xFF93C5FD), width: 0.8),
+                              color: AppColors.blue300, width: 0.8),
                         ),
                         child: const Text(
                           'DAILY DEALS',

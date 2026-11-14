@@ -1,10 +1,20 @@
 import '../../../core/l10n/locale_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
+import '../../../core/services/notification_service.dart';
+import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
+
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 import '../../../core/navigation/safe_back.dart';
+import '../../auth/domain/auth_return.dart';
+import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
+import '../../../shared/widgets/login_required_view.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/app_toast.dart';
+import '../../../shared/widgets/motion.dart';
+import '../../../shared/widgets/state_widgets.dart';
 import '../data/account_settings_repository.dart';
 
 String _ago(DateTime? t) {
@@ -71,10 +81,10 @@ class DevicesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final devices = ref.watch(deviceSessionsProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: AppColors.swatchF6F8FA,
       appBar: _bar(context, context.l10n.devicesTitle),
       body: devices.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingState(),
         error: (e, _) => _error('We could not load your devices.', () => ref.invalidate(deviceSessionsProvider)),
         data: (list) {
           if (list.isEmpty) {
@@ -84,28 +94,41 @@ class DevicesScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(context.l10n.devicesIntro, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+              FadeSlideIn(
+                child: Text(context.l10n.devicesIntro, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+              ),
               const SizedBox(height: 12),
-              for (final d in list)
-                Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFE3E8EE))),
-                  child: ListTile(
-                    leading: const Icon(Icons.smartphone_rounded, color: AppColors.navy),
-                    title: Text(d.model, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text([if (d.osVersion.isNotEmpty) d.osVersion, if (d.current) context.l10n.thisDevice else _ago(d.lastSeen)].join(' - ')),
-                    trailing: d.current
-                        ? null
-                        : TextButton(onPressed: () => _signOut(context, ref, d), child: const Text('Sign out')),
+              for (var i = 0; i < list.length; i++)
+                FadeSlideIn(
+                  index: i + 1,
+                  child: PressScale(
+                    scale: 0.985,
+                    child: Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.swatchE3E8EE)),
+                      child: ListTile(
+                        leading: const Icon(Icons.smartphone_rounded, color: AppColors.navy),
+                        title: Text(list[i].model, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text([if (list[i].osVersion.isNotEmpty) list[i].osVersion, if (list[i].current) context.l10n.thisDevice else _ago(list[i].lastSeen)].join(' - ')),
+                        trailing: list[i].current
+                            ? null
+                            : TextButton(onPressed: () => _signOut(context, ref, list[i]), child: const Text('Sign out')),
+                      ),
+                    ),
                   ),
                 ),
               if (others > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: OutlinedButton(
-                    onPressed: () => _signOutOthers(context, ref),
-                    child: Text(context.l10n.signOutAllOthers),
+                FadeSlideIn(
+                  index: list.length + 1,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: PressScale(
+                      child: OutlinedButton(
+                        onPressed: () => _signOutOthers(context, ref),
+                        child: Text(context.l10n.signOutAllOthers),
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -124,12 +147,45 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
 }
 
-class _NotificationSettingsScreenState extends ConsumerState<NotificationSettingsScreen> {
+class _NotificationSettingsScreenState extends ConsumerState<NotificationSettingsScreen> with WidgetsBindingObserver {
   final Map<String, bool> _pending = {}; // optimistic values while saving
+  bool? _osAllowed; // is the phone's own notification permission on?
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkPermission(); // back from the phone's settings
+  }
+
+  Future<void> _checkPermission() async {
+    try {
+      final granted = await ph.Permission.notification.isGranted;
+      if (mounted) setState(() => _osAllowed = granted);
+    } catch (_) {}
+  }
+
+  /// Shows the Android "Allow notifications" prompt; once the phone stops asking, opens the app's settings page.
+  Future<void> _allowOnPhone() async {
+    await NotificationService.instance.requestPermission();
+    await _checkPermission();
+    if (_osAllowed != true) await ph.openAppSettings();
+  }
 
   Future<void> _toggle(String field, bool value) async {
     setState(() => _pending[field] = value);
-    final ok = await ref.read(accountSettingsRepositoryProvider).setPreference(field, value);
+    final ok = await ref.read(accountSettingsRepositoryProvider).setPreference(field, value, signedIn: ref.read(isUserAuthenticatedProvider));
     if (!mounted) return;
     if (!ok) AppToast.show(context, 'Could not save that change. Check your connection.', type: AppToastType.error);
     setState(() => _pending.remove(field));
@@ -138,29 +194,94 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
 
   @override
   Widget build(BuildContext context) {
-    final prefs = ref.watch(notificationPreferencesProvider);
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
-      appBar: _bar(context, context.l10n.notifSettingsTitle),
-      body: prefs.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _error('We could not load your settings.', () => ref.invalidate(notificationPreferencesProvider)),
-        data: (map) => ListView(
-          padding: const EdgeInsets.all(16),
+    // The switches are saved on the customer's account, so a guest has nothing to load: say so instead of showing a
+    // load error, and still give them the phone's own notification switch.
+    if (!ref.watch(isUserAuthenticatedProvider)) {
+      return Scaffold(
+        backgroundColor: AppColors.swatchF6F8FA,
+        appBar: _bar(context, context.l10n.notifSettingsTitle),
+        body: Column(
           children: [
-            Text(context.l10n.notifSettingsIntro, style: const TextStyle(color: Colors.black54, fontSize: 13)),
-            const SizedBox(height: 8),
-            for (final e in kNotificationToggles.entries)
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                activeThumbColor: AppColors.navy,
-                title: Text(e.value.label, style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text(e.value.hint, style: const TextStyle(fontSize: 12)),
-                value: _pending[e.key] ?? map[e.key] ?? true,
-                onChanged: (v) => _toggle(e.key, v),
+            Expanded(
+              child: LoginRequiredView(
+                title: 'Log in to choose your alerts',
+                subtitle: 'Your notification choices (booking updates, offers, order status) are saved to your account. '
+                    'Log in or sign up to turn each one on or off.',
+                buttonLabel: 'Login / Sign Up',
+                icon: Icons.notifications_active_outlined,
+                onPressed: () => requireLogin(context, ref),
               ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+              child: TextButton.icon(
+                onPressed: () => ph.openAppSettings(),
+                icon: const Icon(Icons.settings_outlined, size: 18),
+                label: const Text('Phone notification settings'),
+              ),
+            ),
           ],
         ),
+      );
+    }
+    final prefs = ref.watch(notificationPreferencesProvider);
+    return Scaffold(
+      backgroundColor: AppColors.swatchF6F8FA,
+      appBar: _bar(context, context.l10n.notifSettingsTitle),
+      body: prefs.when(
+        loading: () => const LoadingState(),
+        error: (e, _) => _error('We could not load your settings.', () => ref.invalidate(notificationPreferencesProvider)),
+        data: (map) {
+          final entries = kNotificationToggles.entries.toList();
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              FadeSlideIn(
+                child: Text(context.l10n.notifSettingsIntro, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+              ),
+              const SizedBox(height: 8),
+              if (_osAllowed == false)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8, top: 4),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFFF4E5), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.notifications_off_outlined, color: Color(0xFFB45309)),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Notifications are turned off for SEVONIQ on this phone, so you will not receive any.',
+                          style: TextStyle(fontSize: 12.5, height: 1.3),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _allowOnPhone,
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.navy),
+                        child: const Text('Allow'),
+                      ),
+                    ],
+                  ),
+                ),
+              for (var i = 0; i < entries.length; i++)
+                FadeSlideIn(
+                  index: i + 1,
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeThumbColor: AppColors.navy,
+                    title: Text(entries[i].value.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(entries[i].value.hint, style: const TextStyle(fontSize: 12)),
+                    value: _pending[entries[i].key] ?? map[entries[i].key] ?? true,
+                    onChanged: (v) {
+                      AppHaptics.selection();
+                      _toggle(entries[i].key, v);
+                    },
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }

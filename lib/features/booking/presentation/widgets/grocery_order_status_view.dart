@@ -9,9 +9,9 @@ import '../../domain/booking_models.dart';
 import '../../domain/booking_status.dart';
 import '../../domain/grocery_fee_split.dart';
 
-const _green = Color(0xFF1B7F4B);
+const _green = AppColors.swatch1B7F4B;
 const _greenSoft = Color(0xFFE8F6EE);
-const _line = Color(0xFFE2E8F0);
+const _line = AppColors.border;
 
 /// The five steps a grocery / vegetable order shows. There is no map for these orders - only status.
 class GroceryStep {
@@ -24,7 +24,7 @@ class GroceryStep {
 
 const List<GroceryStep> kGrocerySteps = [
   GroceryStep('Placed', 'Order Placed', 'Your order has been received', Icons.receipt_long_outlined),
-  GroceryStep('Confirmed', 'Order Confirmed', 'The seller has accepted your order', Icons.check_circle_outline),
+  GroceryStep('Confirmed', 'Order Confirmed', 'Your order has been accepted', Icons.check_circle_outline),
   GroceryStep('Packed', 'Packed', 'Your items are packed and ready', Icons.inventory_2_outlined),
   GroceryStep('On the way', 'Out for Delivery', 'Your order is on the way to you', Icons.delivery_dining_outlined),
   GroceryStep('Delivered', 'Delivered', 'Your order has been delivered', Icons.home_outlined),
@@ -144,7 +144,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = step == null ? booking.statusLabel : kGrocerySteps[step!].title;
-    final color = step == null ? const Color(0xFFC62828) : (step == 4 ? _green : const Color(0xFFE65100));
+    final color = step == null ? AppColors.red800 : (step == 4 ? _green : const Color(0xFFE65100));
     return _Card(
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(
@@ -244,7 +244,7 @@ class _TimelineRow extends StatelessWidget {
             Container(
               width: 28,
               height: 28,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: reached ? _green : const Color(0xFFF1F5F9)),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: reached ? _green : AppColors.surfaceVariant),
               child: Icon(done ? Icons.check_rounded : info.icon, size: 16, color: reached ? Colors.white : AppColors.textSecondary),
             ),
             if (!last) Expanded(child: Container(width: 2, color: done ? _green : _line)),
@@ -262,7 +262,7 @@ class _TimelineRow extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: const Color(0xFFFFF4E5), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Current', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFFB45309))),
+                    child: const Text('Current', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.amber700)),
                   ),
                 ],
               ]),
@@ -290,7 +290,7 @@ class _EndedCard extends StatelessWidget {
     };
     return _Card(
       child: Row(children: [
-        const Icon(Icons.cancel_outlined, color: Color(0xFFC62828)),
+        const Icon(Icons.cancel_outlined, color: AppColors.red800),
         const SizedBox(width: 12),
         Expanded(child: Text(text, style: const TextStyle(fontSize: 13, height: 1.35))),
       ]),
@@ -320,7 +320,8 @@ class _PartnerCard extends StatelessWidget {
         if (phone.isNotEmpty)
           IconButton.filledTonal(
             tooltip: 'Call delivery partner',
-            onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
+            // Disabled once the order is delivered / cancelled.
+            onPressed: isBookingFinished(booking.status) ? null : () => launchUrl(Uri(scheme: 'tel', path: phone)),
             icon: const Icon(Icons.call_rounded),
           ),
       ]),
@@ -432,7 +433,7 @@ class _PaymentCard extends StatelessWidget {
         const SizedBox(height: 10),
         Text(cod ? 'Cash on Delivery' : 'Online payment', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         const SizedBox(height: 2),
-        Text(paid ? 'Paid' : 'Payment pending', style: TextStyle(fontSize: 12, color: paid ? _green : const Color(0xFFB45309))),
+        Text(paid ? 'Paid' : 'Payment pending', style: TextStyle(fontSize: 12, color: paid ? _green : AppColors.amber700)),
         const SizedBox(height: 6),
         Text('Total: ${_rupees(booking.totalAmount.toDouble())}', style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
       ]),
@@ -457,7 +458,7 @@ class _HelpCard extends StatelessWidget {
             if (onCancel != null)
               OutlinedButton(
                 onPressed: onCancel,
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), foregroundColor: const Color(0xFFC62828), side: const BorderSide(color: Color(0xFFFFCDD2))),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), foregroundColor: AppColors.red800, side: const BorderSide(color: Color(0xFFFFCDD2))),
                 child: const Text('Cancel order'),
               ),
           ]),

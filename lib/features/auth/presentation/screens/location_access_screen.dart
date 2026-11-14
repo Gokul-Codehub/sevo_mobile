@@ -8,6 +8,7 @@ import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../../../../shared/utils/app_toast.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 
 /// Screen 3: Location Access
 /// Redesigned 2026-10-22: map-pin photo hero over a curved white sheet, same
@@ -158,91 +159,109 @@ class _LocationAccessScreenState extends ConsumerState<LocationAccessScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Where do you need\nthe service?',
-                          style: TextStyle(
-                            fontSize: 23,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.navy,
-                            height: 1.2,
-                            letterSpacing: -0.4,
+                        const FadeSlideIn(
+                          child: Text(
+                            'Where do you need\nthe service?',
+                            style: TextStyle(
+                              fontSize: 23,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.navy,
+                              height: 1.2,
+                              letterSpacing: -0.4,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          "We'll show services near your location, with the right slots and prices for your area.",
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            height: 1.45,
-                            color: AppColors.textSecondary,
+                        const FadeSlideIn(
+                          index: 1,
+                          child: Text(
+                            "We'll show services near your location, with the right slots and prices for your area.",
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.45,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
                         const Spacer(),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton.icon(
-                            onPressed: _isLoadingGps ? null : _handleUseCurrentLocation,
-                            icon: _isLoadingGps
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(Icons.my_location_rounded, size: 20),
-                            label: Text(
-                              _isLoadingGps ? 'Locating...' : 'Use Current Location',
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.navy,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: AppColors.navy.withValues(alpha: 0.6),
-                              disabledForegroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                        FadeSlideIn(
+                          index: 2,
+                          child: PressScale(
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: ElevatedButton.icon(
+                                onPressed: _isLoadingGps ? null : _handleUseCurrentLocation,
+                                icon: _isLoadingGps
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.my_location_rounded, size: 20),
+                                label: Text(
+                                  _isLoadingGps ? 'Locating...' : 'Use Current Location',
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.navy,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: AppColors.navy.withValues(alpha: 0.6),
+                                  disabledForegroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: OutlinedButton.icon(
-                            onPressed: _handleEnterManually,
-                            icon: const Icon(Icons.search_rounded, size: 20, color: AppColors.navy),
-                            label: const Text(
-                              'Enter Location Manually',
-                              style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.navy,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppColors.navy, width: 1.2),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                        FadeSlideIn(
+                          index: 3,
+                          child: PressScale(
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: OutlinedButton.icon(
+                                onPressed: _handleEnterManually,
+                                icon: const Icon(Icons.search_rounded, size: 20, color: AppColors.navy),
+                                label: const Text(
+                                  'Enter Location Manually',
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.navy,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppColors.navy, width: 1.2),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 12),
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.lock_outline_rounded, size: 13, color: AppColors.textHint),
-                            SizedBox(width: 6),
-                            Text(
-                              'Your location is only used to find nearby services',
-                              style: TextStyle(fontSize: 11, color: AppColors.textHint),
-                            ),
-                          ],
+                        const FadeSlideIn(
+                          index: 4,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.lock_outline_rounded, size: 13, color: AppColors.textHint),
+                              SizedBox(width: 6),
+                              Text(
+                                'Your location is only used to find nearby services',
+                                style: TextStyle(fontSize: 11, color: AppColors.textHint),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 14),
                       ],

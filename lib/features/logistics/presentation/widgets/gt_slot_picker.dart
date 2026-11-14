@@ -318,14 +318,14 @@ class _SlotTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.navy
-              : (available ? Colors.white : const Color(0xFFE8ECF1)),
+              : (available ? Colors.white : AppColors.swatchE8ECF1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
                 ? AppColors.navy
                 : (available
-                    ? const Color(0xFFE2E8F0)
-                    : const Color(0xFFE8ECF1)),
+                    ? AppColors.border
+                    : AppColors.swatchE8ECF1),
           ),
         ),
         child: Column(
@@ -438,12 +438,12 @@ class _MonthCalendarState extends State<_MonthCalendar> {
           height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: AppColors.border),
             color: Colors.white,
           ),
           child: Icon(icon,
               size: 20,
-              color: enabled ? AppColors.navy : const Color(0xFFCBD5E1)),
+              color: enabled ? AppColors.navy : AppColors.textMuted),
         ),
       );
     }
@@ -453,7 +453,7 @@ class _MonthCalendarState extends State<_MonthCalendar> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         children: [
@@ -546,7 +546,7 @@ class _MonthCalendarState extends State<_MonthCalendar> {
                     ? AppColors.navy
                     : (inMonth
                         ? const Color(0xFFB6BFCC)
-                        : const Color(0xFFCBD5E1))),
+                        : AppColors.textMuted)),
           ),
         ),
       ),

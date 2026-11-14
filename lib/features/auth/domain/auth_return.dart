@@ -10,7 +10,7 @@ import '../../../routing/app_router.dart';
 final returnAfterLoginProvider = StateProvider<bool>((ref) => false);
 
 /// Names of the pages that make up the sign-in flow (the route names in app_router.dart).
-const _authPageNames = {'login', 'otp-verify', 'profile-complete'};
+const _authPageNames = {'login', 'otp-verify', 'profile-complete', 'signup'};
 
 /// "You need an account for this": opens sign-in over the current screen and remembers to come back.
 /// Use this instead of `context.push('/login')` at every login gate.

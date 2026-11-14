@@ -13,6 +13,7 @@ import '../features/auth/presentation/screens/auth_prompt_screen.dart';
 import '../features/auth/presentation/screens/location_access_screen.dart';
 import '../features/auth/presentation/screens/otp_verify_screen.dart';
 import '../features/auth/presentation/screens/phone_auth_screen.dart';
+import '../features/auth/presentation/screens/signup_screen.dart';
 import '../features/auth/presentation/screens/profile_completion_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/booking/domain/booking_models.dart';
@@ -60,6 +61,7 @@ import '../features/booking/domain/marketplace_cart.dart' show isLegacyGroceryIt
 import '../features/orders/presentation/order_returns.dart' show ReturnRequestScreen;
 import '../features/work_extension/presentation/screens/work_extension_screen.dart';
 import '../shared/widgets/app_shell.dart';
+import '../shared/widgets/motion.dart';
 import '../shared/widgets/status_page.dart';
 
 // ── Route path constants ────────────────────────────────────────────────────
@@ -107,6 +109,7 @@ abstract final class AppRoutes {
   static const String editAddress = '/addresses/edit';
   static const String login = '/login';
   static const String otpVerify = '/login/verify';
+  static const String signup = '/login/signup';
   static const String profileComplete = '/login/profile';
   static const String myBookings = '/bookings';
   static const String bookingDetail = '/bookings/:id';
@@ -342,13 +345,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             // The old in-house grocery / vegetable categories are not sold any more: send those links (old
             // notifications, bookmarks) to the Seller Hub store, which is what the web store shows.
             redirect: (context, state) => legacyGroceryCategoryRoute(state.pathParameters['slug'] ?? ''),
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final slug = state.pathParameters['slug'] ?? '';
               final extra = state.extra;
-              return CategoryDetailScreen(
-                categorySlug: slug,
-                initialCategory: extra is Category ? extra : null,
-                initialSubcategorySlug: state.uri.queryParameters['sub'],
+              return softFadeSlidePage(
+                key: state.pageKey,
+                child: CategoryDetailScreen(
+                  categorySlug: slug,
+                  initialCategory: extra is Category ? extra : null,
+                  initialSubcategorySlug: state.uri.queryParameters['sub'],
+                ),
               );
             },
           ),
@@ -384,27 +390,33 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final extra = state.extra;
               return extra is ServiceItem && isLegacyGroceryItem(extra) ? AppRoutes.sellerHubGroceries : null;
             },
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final slug = state.pathParameters['slug'] ?? '';
               final extra = state.extra;
               debugPrint(
                   '[AppRouter] Navigating to serviceDetail with slug: "$slug", extra: ${extra.runtimeType}');
-              return ServiceDetailScreen(
-                serviceSlug: slug,
-                initialService: extra is ServiceItem ? extra : null,
+              return softFadeSlidePage(
+                key: state.pageKey,
+                child: ServiceDetailScreen(
+                  serviceSlug: slug,
+                  initialService: extra is ServiceItem ? extra : null,
+                ),
               );
             },
           ),
           GoRoute(
             path: AppRoutes.groceryProductDetail,
             name: 'grocery-product-detail',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final slug = state.pathParameters['slug'] ?? '';
               final extra = state.extra;
-              return GuardedGroceryTheme(
-                child: GroceryProductDetailScreen(
-                  productSlug: slug,
-                  initialProduct: extra is ServiceItem ? extra : null,
+              return softFadeSlidePage(
+                key: state.pageKey,
+                child: GuardedGroceryTheme(
+                  child: GroceryProductDetailScreen(
+                    productSlug: slug,
+                    initialProduct: extra is ServiceItem ? extra : null,
+                  ),
                 ),
               );
             },
@@ -441,26 +453,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.bookingSuccess,
             name: 'booking-success',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final idString = state.pathParameters['id'] ?? '0';
               final id = int.tryParse(idString) ?? 0;
               final extra = state.extra;
-              return BookingSuccessScreen(
-                bookingId: id,
-                initialBooking: extra is Booking ? extra : null,
+              return softFadeSlidePage(
+                key: state.pageKey,
+                child: BookingSuccessScreen(
+                  bookingId: id,
+                  initialBooking: extra is Booking ? extra : null,
+                ),
               );
             },
           ),
           GoRoute(
             path: AppRoutes.bookingDetail,
             name: 'booking-detail',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final idString = state.pathParameters['id'] ?? '0';
               final id = int.tryParse(idString) ?? 0;
               final extra = state.extra;
-              return BookingDetailScreen(
-                bookingId: id,
-                initialBooking: extra is Booking ? extra : null,
+              return softFadeSlidePage(
+                key: state.pageKey,
+                child: BookingDetailScreen(
+                  bookingId: id,
+                  initialBooking: extra is Booking ? extra : null,
+                ),
               );
             },
           ),
@@ -498,12 +516,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.bookingCheckout,
         name: 'checkout',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final serviceSlug = state.uri.queryParameters['service'];
           final extra = state.extra;
-          return CheckoutScreen(
-            initialServiceSlug: serviceSlug,
-            initialService: extra is ServiceItem ? extra : null,
+          return softFadeSlidePage(
+            key: state.pageKey,
+            child: CheckoutScreen(
+              initialServiceSlug: serviceSlug,
+              initialService: extra is ServiceItem ? extra : null,
+            ),
           );
         },
       ),
@@ -572,6 +593,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   identifier: extra.identifier,
                   channel: extra.channel,
                   resendAfterSeconds: extra.resendAfterSeconds,
+                  signup: extra.signup,
                 );
               }
               final identifier =
@@ -586,6 +608,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 resendAfterSeconds: resendAfter,
               );
             },
+          ),
+          GoRoute(
+            path: 'signup',
+            name: 'signup',
+            builder: (context, state) => const SignupScreen(),
           ),
           GoRoute(
             path: 'profile',

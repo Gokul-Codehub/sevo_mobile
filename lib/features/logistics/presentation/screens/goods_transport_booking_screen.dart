@@ -41,6 +41,7 @@ import '../widgets/gt_extras_section.dart';
 import '../widgets/gt_slot_picker.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../shared/utils/focus_first_error.dart';
 
@@ -159,23 +160,32 @@ class _GoodsTransportBookingScreenState
     required VoidCallback onTap,
   }) {
     return Expanded(
+      flex: isSelected ? 12 : 10,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          height: 76,
+          curve: Curves.easeOut,
+          height: isSelected ? 96 : 80,
+          margin: EdgeInsets.symmetric(vertical: isSelected ? 0 : 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? AppColors.navy : AppColors.border,
-              width: isSelected ? 2.0 : 0.8,
+              color: isSelected ? AppColors.textMuted : AppColors.border,
+              width: isSelected ? 2 : 0.8,
             ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: AppColors.navy.withValues(alpha: 0.35),
+                      color: AppColors.textSecondary.withValues(alpha: 0.32),
+                      blurRadius: 16,
+                      spreadRadius: 1.5,
+                      offset: const Offset(0, 6),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.10),
                       blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      offset: const Offset(0, 3),
                     ),
                   ]
                 : [
@@ -190,95 +200,61 @@ class _GoodsTransportBookingScreenState
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // ── Background Image from Admin Panel ──
-              if (imageUrl != null && imageUrl.isNotEmpty)
-                AppRemoteImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.cover,
-                  fallbackWidget: Container(
-                    color: isSelected ? AppColors.navy : AppColors.divider,
-                    child: Center(
-                      child: Icon(
-                        fallbackIcon,
-                        size: 26,
-                        color: isSelected ? Colors.white : AppColors.textSecondary,
+              // Full photo — no dimming / navy wash over the image.
+              ColoredBox(
+                color: AppColors.surfaceVariant,
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? AppRemoteImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        fallbackWidget: Center(
+                          child: Icon(
+                            fallbackIcon,
+                            size: 28,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Icon(
+                          fallbackIcon,
+                          size: 28,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  color: isSelected ? AppColors.navy : AppColors.divider,
-                  child: Center(
-                    child: Icon(
-                      fallbackIcon,
-                      size: 26,
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
+              ),
 
-              // ── Gradient scrim overlay for high legibility ──
-              DecoratedBox(
+              // Thin bottom scrim only — keeps the title readable without
+              // hiding most of the photo.
+              const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: const [0.15, 1.0],
+                    stops: [0.55, 1.0],
                     colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: isSelected ? 0.75 : 0.65),
+                      Color(0x00000000),
+                      Color(0x99000000),
                     ],
                   ),
                 ),
               ),
 
-              // ── Active blue tint overlay when selected ──
-              if (isSelected)
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AppColors.navy.withValues(alpha: 0.28),
-                    ),
-                  ),
-                ),
-
-              // ── Active checkmark badge in top-right ──
-              if (isSelected)
-                Positioned(
-                  top: 5,
-                  right: 5,
-                  child: Container(
-                    width: 17,
-                    height: 17,
-                    decoration: const BoxDecoration(
-                      color: AppColors.navy,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 11,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-
-              // ── Service title from Admin Panel ──
               Positioned(
                 left: 4,
                 right: 4,
-                bottom: 6,
+                bottom: 7,
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    fontSize: 11,
+                    fontSize: isSelected ? 12 : 11,
                     color: Colors.white,
                     height: 1.15,
-                    shadows: [
+                    shadows: const [
                       Shadow(
                         color: Colors.black87,
                         blurRadius: 4,
@@ -1244,6 +1220,11 @@ class _GoodsTransportBookingScreenState
       _warn('Please add at least one item to move.');
       return;
     }
+    final moveDetailsProblem = _pmMoveDetailsProblem();
+    if (moveDetailsProblem != null) {
+      _warn(moveDetailsProblem);
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -1256,14 +1237,14 @@ class _GoodsTransportBookingScreenState
       dropLatitude: dropLocation.latitude,
       dropLongitude: dropLocation.longitude,
       inventory: inventoryLines,
-      packingTier: ref.read(pmPackingTierProvider),
+      packingTier: ref.read(pmPackingTierProvider)!,
       dismantlingRequired: ref.read(pmDismantlingRequiredProvider),
       unpackingRequired: ref.read(pmUnpackingRequiredProvider),
       pickupFloor: ref.read(pmPickupFloorProvider),
-      pickupHasLift: ref.read(pmPickupHasLiftProvider),
+      pickupHasLift: ref.read(pmPickupHasLiftProvider)!,
       dropFloor: ref.read(pmDropFloorProvider),
-      dropHasLift: ref.read(pmDropHasLiftProvider),
-      relocationType: ref.read(pmRelocationTypeProvider),
+      dropHasLift: ref.read(pmDropHasLiftProvider)!,
+      relocationType: ref.read(pmRelocationTypeProvider)!,
       moveDate: dateFormatted,
       moveTime: selectedSlot.label,
       stops: _stopsPayload(),
@@ -1458,10 +1439,37 @@ class _GoodsTransportBookingScreenState
       target = 'Select date & slot';
     } else if (s.contains('item to move')) {
       target = 'Items to move';
+    } else if (s.contains('packing') ||
+        s.contains('relocation') ||
+        s.contains('lift') ||
+        s.contains('move detail')) {
+      target = 'Move details';
     } else if (s.contains('cargo') || s.contains('weight')) {
       target = 'Cargo';
     }
     if (target != null) revealField(_anchor(target), focus: focus);
+  }
+
+  /// Packers & Movers Move Details: packing, relocation and lift answers must
+  /// be chosen by the customer (nothing is pre-selected).
+  String? _pmMoveDetailsProblem() {
+    if (ref.read(selectedVehicleCategoryProvider) !=
+        LogisticsVehicleCategory.packersMovers) {
+      return null;
+    }
+    if (ref.read(pmPackingTierProvider) == null) {
+      return 'Please select a packing option.';
+    }
+    if (ref.read(pmRelocationTypeProvider) == null) {
+      return 'Please select a relocation type.';
+    }
+    if (ref.read(pmPickupHasLiftProvider) == null) {
+      return 'Please say whether the pickup building has a lift.';
+    }
+    if (ref.read(pmDropHasLiftProvider) == null) {
+      return 'Please say whether the drop-off building has a lift.';
+    }
+    return null;
   }
 
   @override
@@ -1552,7 +1560,15 @@ class _GoodsTransportBookingScreenState
           'quantity': entry.value,
         });
       }
-      if (inventoryLines.isNotEmpty) {
+      final packing = ref.watch(pmPackingTierProvider);
+      final relocation = ref.watch(pmRelocationTypeProvider);
+      final pickupLift = ref.watch(pmPickupHasLiftProvider);
+      final dropLift = ref.watch(pmDropHasLiftProvider);
+      if (inventoryLines.isNotEmpty &&
+          packing != null &&
+          relocation != null &&
+          pickupLift != null &&
+          dropLift != null) {
         pmQuoteParam = PmQuoteParam(
           tierId: selectedTier.id,
           city: selectedTier.city ?? 'Hosur',
@@ -1561,14 +1577,14 @@ class _GoodsTransportBookingScreenState
           dropLatitude: dropLocation.latitude,
           dropLongitude: dropLocation.longitude,
           inventory: inventoryLines,
-          packingTier: ref.watch(pmPackingTierProvider),
+          packingTier: packing,
           dismantlingRequired: ref.watch(pmDismantlingRequiredProvider),
           unpackingRequired: ref.watch(pmUnpackingRequiredProvider),
           pickupFloor: ref.watch(pmPickupFloorProvider),
-          pickupHasLift: ref.watch(pmPickupHasLiftProvider),
+          pickupHasLift: pickupLift,
           dropFloor: ref.watch(pmDropFloorProvider),
-          dropHasLift: ref.watch(pmDropHasLiftProvider),
-          relocationType: ref.watch(pmRelocationTypeProvider),
+          dropHasLift: dropLift,
+          relocationType: relocation,
           moveDate: DateFormat('yyyy-MM-dd')
               .format(ref.watch(selectedBookingDateProvider)),
           moveTime: ref.watch(selectedTimeSlotProvider)?.label,
@@ -1583,7 +1599,7 @@ class _GoodsTransportBookingScreenState
         if (!didPop && _step > 0) setState(() => _step = _step - 1);
       },
       child: Scaffold(
-      backgroundColor: const Color(0xFFF8F4EF),
+      backgroundColor: AppColors.swatchF8F4EF,
       appBar: AppBar(
         centerTitle: false,
         scrolledUnderElevation: 0,
@@ -1605,7 +1621,7 @@ class _GoodsTransportBookingScreenState
             ),
           ],
         ),
-        backgroundColor: const Color(0xFFF8F4EF),
+        backgroundColor: AppColors.swatchF8F4EF,
         elevation: 0,
         leading: IconButton(
         tooltip: 'Back',
@@ -1623,7 +1639,8 @@ class _GoodsTransportBookingScreenState
         children: [
           _buildStepper(),
           Expanded(
-            child: SingleChildScrollView(
+            child: FadeThrough(
+              child: SingleChildScrollView(
               key: ValueKey(_step),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
@@ -1737,7 +1754,8 @@ class _GoodsTransportBookingScreenState
                             runSpacing: 10,
                             children: tiers.map((tier) {
                           final isSelected = selectedTier?.id == tier.id;
-                          return GestureDetector(
+                          return PressScale(
+                            child: GestureDetector(
                             onTap: () =>
                                 ref
                                         .read(
@@ -1746,12 +1764,14 @@ class _GoodsTransportBookingScreenState
                                         )
                                         .state =
                                     tier,
-                            child: Container(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
                               width: cardWidth,
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? Color(0xFFE8EDF7)
+                                    ? AppColors.swatchE8EDF7
                                     : Colors.white,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
@@ -1860,6 +1880,7 @@ class _GoodsTransportBookingScreenState
                                   ],
                                 ],
                               ),
+                            ),
                             ),
                           );
                         }).toList(),
@@ -2134,33 +2155,16 @@ class _GoodsTransportBookingScreenState
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: const Text(
-                        'Pickup building has a lift',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.navy,
-                        ),
-                      ),
+                    const SizedBox(height: 12),
+                    _PmLiftQuestion(
+                      label: 'Pickup building has a lift?',
                       value: ref.watch(pmPickupHasLiftProvider),
                       onChanged: (v) =>
                           ref.read(pmPickupHasLiftProvider.notifier).state = v,
                     ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: const Text(
-                        'Drop-off building has a lift',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.navy,
-                        ),
-                      ),
+                    const SizedBox(height: 10),
+                    _PmLiftQuestion(
+                      label: 'Drop-off building has a lift?',
                       value: ref.watch(pmDropHasLiftProvider),
                       onChanged: (v) =>
                           ref.read(pmDropHasLiftProvider.notifier).state = v,
@@ -2478,7 +2482,7 @@ class _GoodsTransportBookingScreenState
                           ),
                         ],
                       ),
-                      if (!(isPackersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City'))
+                      if (!(isPackersMovers && ref.watch(pmRelocationTypeProvider) == 'Intercity'))
                       _ServiceAreaBanner(
                         label: 'Stop ${i + 1}',
                         pincode: '',
@@ -2612,7 +2616,7 @@ class _GoodsTransportBookingScreenState
                 ],
               ),
             ),
-            if (dropLocation != null && !(isPackersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City'))
+            if (dropLocation != null && !(isPackersMovers && ref.watch(pmRelocationTypeProvider) == 'Intercity'))
               _ServiceAreaBanner(
                 label: 'Drop-off',
                 pincode: '',
@@ -2649,7 +2653,7 @@ class _GoodsTransportBookingScreenState
                   ? LatLng(selectedAddress!.latitude!, selectedAddress.longitude!)
                   : null,
               drop: dropLocation == null ? null : LatLng(dropLocation.latitude, dropLocation.longitude),
-              dropAnywhere: isPackersMovers && ref.watch(pmRelocationTypeProvider) != 'Within City',
+              dropAnywhere: isPackersMovers && ref.watch(pmRelocationTypeProvider) == 'Intercity',
             ),
             const SizedBox(height: 18),
             ],
@@ -2837,14 +2841,18 @@ class _GoodsTransportBookingScreenState
                 },
               ),
             ),
-            // The move's transit insurance (the other goods bookings show theirs with the options above).
+            // GST / e-way + transit insurance on the Fare step (consistent cards + spacing).
             if (isPackersMovers) ...[
+              const SizedBox(height: 18),
               KeyedSubtree(
                 key: _anchor('GST & e-way bill'),
                 child: GtGstEwaySection(declaredValue: _declaredValue?.toDouble(), card: true),
               ),
               const SizedBox(height: 18),
-              GtInsuranceSection(declaredValue: _declaredValue?.toDouble()),
+              KeyedSubtree(
+                key: _anchor('Transit insurance'),
+                child: GtInsuranceSection(declaredValue: _declaredValue?.toDouble(), card: true),
+              ),
             ],
             const SizedBox(height: 18),
             GtPoliciesSection(
@@ -2857,6 +2865,7 @@ class _GoodsTransportBookingScreenState
                 ],
               ),
             ),
+            ),
           ),
         ],
       ),
@@ -2868,40 +2877,47 @@ class _GoodsTransportBookingScreenState
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+              color: AppColors.blue900.withValues(alpha: 0.12),
               blurRadius: 22,
               offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: SizedBox(
-          height: 54,
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isLoading
-                ? null
-                : (_step < 3 ? _goNext : _handleSubmit),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.navy,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+        child: PressScale(
+          child: SizedBox(
+            height: 54,
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoading
+                  ? null
+                  : (_step < 3 ? _goNext : _handleSubmit),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.navy,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
               ),
-              elevation: 0,
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Text(
+                        _step < 3 ? 'Continue' : 'Confirm Booking',
+                        key: ValueKey(_step < 3),
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
                     ),
-                  )
-                : Text(
-                    _step < 3 ? 'Continue' : 'Confirm Booking',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                  ),
+            ),
           ),
         ),
       )),
@@ -2911,7 +2927,7 @@ class _GoodsTransportBookingScreenState
   /// P&M "Intercity" moves may go to any destination: only the pickup is checked against the service area.
   bool get _pmIntercity =>
       ref.read(selectedVehicleCategoryProvider) == LogisticsVehicleCategory.packersMovers &&
-      ref.read(pmRelocationTypeProvider) != 'Within City';
+      ref.read(pmRelocationTypeProvider) == 'Intercity';
 
   /// A load the chosen vehicle cannot carry must not reach the next step. Returns the message to show, or null.
   Future<String?> _cargoFitProblem() async {
@@ -2984,6 +3000,11 @@ class _GoodsTransportBookingScreenState
       }
       if (_goodsNotConfirmed) {
         _warn(_goodsConfirmMessage);
+        return;
+      }
+      final moveDetailsProblem = _pmMoveDetailsProblem();
+      if (moveDetailsProblem != null) {
+        _warn(moveDetailsProblem);
         return;
       }
     } else if (_step == 1) {
@@ -3071,32 +3092,54 @@ class _GoodsTransportBookingScreenState
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 30,
-            height: 30,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            width: active ? 34 : 30,
+            height: active ? 34 : 30,
             decoration: BoxDecoration(
               color: reached ? AppColors.navy : Colors.white,
               shape: BoxShape.circle,
               border: Border.all(
-                  color: reached ? AppColors.navy : const Color(0xFFCBD5E1),
+                  color: reached ? AppColors.navy : AppColors.textMuted,
                   width: 1.5),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: AppColors.navy.withValues(alpha: 0.28),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
             ),
             child: Center(
-              child: done
-                  ? const Icon(Icons.check_rounded, size: 18, color: Colors.white)
-                  : Text('${i + 1}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: reached ? Colors.white : AppColors.textHint)),
+              child: BounceOnChange(
+                value: done ? 'done' : (active ? 'active' : 'idle'),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: done
+                      ? const Icon(Icons.check_rounded,
+                          key: ValueKey('gt-check'), size: 18, color: Colors.white)
+                      : Text('${i + 1}',
+                          key: ValueKey('gt-n$i'),
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: reached ? Colors.white : AppColors.textHint)),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(labels[i],
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: reached ? FontWeight.w800 : FontWeight.w500,
-                  color: reached ? AppColors.navy : AppColors.textSecondary)),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 220),
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: reached ? FontWeight.w800 : FontWeight.w500,
+                color: reached ? AppColors.navy : AppColors.textSecondary),
+            child: Text(labels[i]),
+          ),
         ],
       );
     }
@@ -3104,24 +3147,38 @@ class _GoodsTransportBookingScreenState
     Widget line(bool filled) => Expanded(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 18),
-            child: Container(
+            child: AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
                 height: 2,
-                color: filled ? AppColors.navy : const Color(0xFFE2E8F0)),
+                color: filled ? AppColors.navy : AppColors.border),
           ),
         );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 6, 24, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          node(0),
-          line(_step > 0),
-          node(1),
-          line(_step > 1),
-          node(2),
-          line(_step > 2),
-          node(3),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              node(0),
+              line(_step > 0),
+              node(1),
+              line(_step > 1),
+              node(2),
+              line(_step > 2),
+              node(3),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SmoothProgressBar(
+            value: (_step + 1) / 4,
+            minHeight: 4,
+            color: AppColors.navy,
+            backgroundColor: AppColors.border,
+            borderRadius: 8,
+          ),
         ],
       ),
     );
@@ -3148,11 +3205,11 @@ class _GoodsTransportBookingScreenState
     contentPadding: const EdgeInsets.all(12),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFE3E8F0), width: 1),
+      borderSide: const BorderSide(color: AppColors.swatchE3E8F0, width: 1),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFE3E8F0), width: 1),
+      borderSide: const BorderSide(color: AppColors.swatchE3E8F0, width: 1),
     ),
   );
 
@@ -3354,7 +3411,7 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final w = _content();
+    final w = FadeSlideIn(child: _content());
     return anchorKey == null ? w : KeyedSubtree(key: anchorKey, child: w);
   }
 
@@ -3403,7 +3460,7 @@ class _SectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+            color: AppColors.blue900.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -3484,6 +3541,52 @@ class _PmChoiceChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Yes / No question with no default — null until the customer taps one.
+class _PmLiftQuestion extends StatelessWidget {
+  const _PmLiftQuestion({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool? value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.navy,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            _PmChoiceChip(
+              label: 'Yes',
+              selected: value == true,
+              onTap: () => onChanged(true),
+            ),
+            _PmChoiceChip(
+              label: 'No, stairs only',
+              selected: value == false,
+              onTap: () => onChanged(false),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -3777,11 +3880,7 @@ class _ServiceAreaBanner extends ConsumerWidget {
       child: async.when(
         loading: () => const Row(
           children: [
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            PulseDot(size: 8),
             SizedBox(width: 10),
             Text('Checking service area…', style: TextStyle(fontSize: 11.5)),
           ],
@@ -3793,7 +3892,7 @@ class _ServiceAreaBanner extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: ok ? const Color(0xFFE8EDF7) : AppColors.errorLight,
+              color: ok ? AppColors.swatchE8EDF7 : AppColors.errorLight,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(

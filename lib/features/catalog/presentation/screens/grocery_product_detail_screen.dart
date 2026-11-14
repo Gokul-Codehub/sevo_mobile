@@ -23,11 +23,11 @@ import '../../../../core/navigation/safe_back.dart';
 // Product page palette (matches the redesigned cart / bookings / services).
 const Color _gpHero = Color(0xFFF4F6F4);
 const Color _gpCream = Color(0xFFF4F6F4);
-const Color _gpGrey = Color(0xFF6B7788);
+const Color _gpGrey = AppColors.swatch6B7788;
 const Color _gpGreen = Color(0xFF157038); // matches the category page Add button
 // Offer colors — same golden yellow / amber orange the home page uses.
-const Color _gpOfferYellow = Color(0xFFF9C93A);
-const Color _gpOfferOrange = Color(0xFFF59E0B);
+const Color _gpOfferYellow = AppColors.swatchF9C93A;
+const Color _gpOfferOrange = AppColors.warning;
 const Color _gpOfferDeep = Color(0xFFD97706);
 const Color _gpGreenDark =Color(0xFF10612F); // matches the Go to Cart pill
 
@@ -428,13 +428,13 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
                           textBaseline: TextBaseline.alphabetic,
                           children: [
                             Text(
-                              '₹${product.effectivePrice}',
+                              '\u20b9${product.effectivePrice}',
                               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: _gpGreen),
                             ),
                             if (product.hasDiscount) ...[
                               const SizedBox(width: 10),
                               Text(
-                                'MRP ₹${product.price}',
+                                'MRP \u20b9${product.price}',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: AppColors.textHint,
@@ -483,7 +483,9 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
 
                         // Description — real admin/seller-entered copy only.
                         if ((effectiveDescription ?? '').trim().isNotEmpty) ...[
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 20),
+                          const Divider(height: 1, thickness: 1, color: Color(0xFFEEF1EF)),
+                          const SizedBox(height: 20),
                           _ProductAboutSection(text: effectiveDescription!.trim()),
                         ],
 
@@ -502,10 +504,7 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
 
                         if (relatedAsync != null) ...[
                           const SizedBox(height: 26),
-                          const Text(
-                            'Similar Products',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                          ),
+                          const _SectionHeading('Similar Products'),
                           const SizedBox(height: 12),
                           _SimilarProductsGrid(relatedAsync: relatedAsync, currentId: product.id),
                         ],
@@ -530,7 +529,7 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: const Color(0xFF14532D).withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, -4))],
+          boxShadow: [BoxShadow(color: AppColors.green900.withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, -4))],
         ),
         child: _BottomActions(product: product, quantityInCart: quantityInCart, cartCount: cartCount),
       ),
@@ -559,87 +558,200 @@ class _ProductAboutSection extends StatelessWidget {
     'country of origin',
     'storage',
     'storage temperature',
+    'product details',
+    'key features',
+    'features',
+    'key benefits',
+    'benefits',
+    'how to use',
+    'directions',
+    'usage',
+    'safety information',
+    'safety',
+    'precautions',
+    'warnings',
+    'ingredients',
+    'nutritional information',
+    'nutrition',
+    'specifications',
+    'manufacturer',
+    'care instructions',
   };
 
-  static bool _isLabelLine(String line) {
-    final normalized = line.trim().toLowerCase().replaceAll(RegExp(r':$'), '').trim();
-    return _knownLabels.contains(normalized);
+  /// Sections whose lines are a list of points (each line gets its own marker).
+  static const Set<String> _listLabels = {
+    'key features', 'features', 'key benefits', 'benefits', 'health benefits',
+    'safety information', 'safety', 'precautions', 'warnings',
+  };
+
+  static String _norm(String line) => line.trim().toLowerCase().replaceAll(RegExp(r':$'), '').trim();
+  static bool _isLabelLine(String line) => _knownLabels.contains(_norm(line));
+
+  /// "Brand: Femi9" - a label with its value.
+  static final RegExp _leadIn = RegExp(r'^([A-Za-z][A-Za-z0-9 &/()\-]{1,40}):\s+(.+)$');
+  static final RegExp _bullet = RegExp(r'^[-•*]\s+(.+)$');
+  static final RegExp _numbered = RegExp(r'^(\d{1,2})[.)]\s+(.+)$');
+
+  static const _body = TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: AppColors.textSecondary, height: 1.5);
+  static const _strong = TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.5);
+
+  static IconData _iconFor(String label) {
+    switch (_norm(label)) {
+      case 'product details':
+      case 'specifications':
+        return Icons.inventory_2_outlined;
+      case 'key features':
+      case 'features':
+      case 'key benefits':
+        return Icons.auto_awesome_outlined;
+      case 'description':
+        return Icons.notes_rounded;
+      case 'how to use':
+      case 'directions':
+      case 'usage':
+        return Icons.touch_app_outlined;
+      case 'safety information':
+      case 'safety':
+      case 'precautions':
+      case 'warnings':
+        return Icons.health_and_safety_outlined;
+      case 'health benefits':
+      case 'benefits':
+        return Icons.favorite_border_rounded;
+      case 'storage':
+      case 'storage temperature':
+        return Icons.kitchen_outlined;
+      case 'shelf life':
+        return Icons.schedule_rounded;
+      case 'country of origin':
+        return Icons.public_rounded;
+      case 'ingredients':
+      case 'nutritional information':
+      case 'nutrition':
+        return Icons.eco_outlined;
+      case 'customer care details':
+        return Icons.support_agent_rounded;
+      case 'disclaimer':
+        return Icons.info_outline_rounded;
+      default:
+        return Icons.label_outline_rounded;
+    }
   }
 
-  /// "Wheat-Semolina Vermicelli: The most common type..." — a bold lead-in
-  /// followed by its explanation.
-  static final RegExp _leadIn = RegExp(r'^([A-Za-z][A-Za-z0-9 &/\-]{2,40}):\s+(.+)$');
-  static final RegExp _bullet = RegExp(r'^[-\u2022*]\s+(.+)$');
+  static Widget _marker(IconData icon, Color color) =>
+      Padding(padding: const EdgeInsets.only(top: 3, right: 9), child: Icon(icon, size: 15, color: color));
 
-  /// A short line with no full stop or colon ("Types of Vermicelli") reads as
-  /// a sub-heading.
-  static bool _isSubheading(String line) =>
-      line.length <= 40 &&
-      !line.endsWith('.') &&
-      !line.contains(':') &&
-      line.split(' ').length <= 6;
+  Widget _bulletRow(String text, {required bool safety}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _marker(safety ? Icons.info_outline_rounded : Icons.check_circle_rounded, safety ? const Color(0xFFB7791F) : _gpGreen),
+          Expanded(child: Text(text, style: _body)),
+        ]),
+      );
 
-  static const _body = TextStyle(
-    fontSize: 12.5,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textSecondary,
-    height: 1.5,
-  );
-  static const _strong = TextStyle(
-    fontSize: 12.5,
-    fontWeight: FontWeight.w700,
-    color: AppColors.textPrimary,
-    height: 1.5,
-  );
+  Widget _stepRow(String n, String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 22,
+            height: 22,
+            margin: const EdgeInsets.only(right: 10, top: 1),
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(color: _gpGreen, shape: BoxShape.circle),
+            child: Text(n, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white)),
+          ),
+          Expanded(child: Text(text, style: _body)),
+        ]),
+      );
 
-  Widget _dot(Widget child) => Padding(
-        padding: const EdgeInsets.only(top: 3, bottom: 3, left: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 8, right: 9),
-              child: Icon(Icons.circle, size: 5, color: _gpGreen),
+  Widget _leadRow(String lead, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _marker(Icons.circle, _gpGreen),
+          Expanded(
+            child: Text.rich(TextSpan(children: [
+              TextSpan(text: '$lead: ', style: _strong),
+              TextSpan(text: value, style: _body),
+            ])),
+          ),
+        ]),
+      );
+
+  /// Label / value pairs as a clean two-column table with hairline dividers.
+  Widget _table(List<({String label, String value})> rows) => Column(children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const Divider(height: 1, thickness: 1, color: Color(0xFFE6EDE8)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(flex: 4, child: Text(rows[i].label, style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.4))),
+              const SizedBox(width: 12),
+              Expanded(flex: 6, child: Text(rows[i].value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.4))),
+            ]),
+          ),
+        ],
+      ]);
+
+  Widget _sectionBody(String label, List<String> body) {
+    final key = _norm(label);
+    final isList = _listLabels.contains(key);
+    final safety = key == 'safety information' || key == 'safety' || key == 'precautions' || key == 'warnings';
+
+    // Every line is "Label: value" -> a table.
+    if (body.length >= 2 && body.every((l) => _leadIn.hasMatch(l) && !_bullet.hasMatch(l))) {
+      return _table([
+        for (final l in body) (label: _leadIn.firstMatch(l)!.group(1)!, value: _leadIn.firstMatch(l)!.group(2)!),
+      ]);
+    }
+    // One long paragraph -> collapsible.
+    if (body.length == 1 && !_bullet.hasMatch(body.first) && !_numbered.hasMatch(body.first) && !_leadIn.hasMatch(body.first)) {
+      return _ExpandableText(text: body.first, style: _body);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      for (final l in body)
+        if (_numbered.hasMatch(l))
+          _stepRow(_numbered.firstMatch(l)!.group(1)!, _numbered.firstMatch(l)!.group(2)!)
+        else if (_bullet.hasMatch(l))
+          _bulletRow(_bullet.firstMatch(l)!.group(1)!, safety: safety)
+        else if (isList)
+          _bulletRow(l, safety: safety)
+        else if (_leadIn.hasMatch(l))
+          _leadRow(_leadIn.firstMatch(l)!.group(1)!, _leadIn.firstMatch(l)!.group(2)!)
+        else
+          Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Text(l, style: _body)),
+    ]);
+  }
+
+  Widget _card({required IconData icon, required String title, required Widget child}) => Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF6F9F7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE4ECE7)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(color: _gpGreen.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Icon(icon, size: 16, color: _gpGreen),
             ),
-            Expanded(child: child),
-          ],
-        ),
-      );
-
-  /// One line of prose: bullet, "Lead-in: text", sub-heading or paragraph.
-  Widget _line(String line, {bool lead = false}) {
-    final b = _bullet.firstMatch(line);
-    if (b != null) return _dot(Text(b.group(1)!, style: _body));
-
-    final m = _leadIn.firstMatch(line);
-    if (m != null) {
-      return _dot(
-        Text.rich(
-          TextSpan(children: [
-            TextSpan(text: '${m.group(1)}: ', style: _strong),
-            TextSpan(text: m.group(2), style: _body),
+            const SizedBox(width: 10),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary))),
           ]),
-        ),
+          const SizedBox(height: 8),
+          child,
+        ]),
       );
-    }
-    if (!lead && _isSubheading(line)) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 10, bottom: 2),
-        child: Text(line, style: _strong),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Text(line, style: lead ? _strong : _body),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final lines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
 
-    // Lines before the first known label are free-form description;
-    // everything after a label line belongs to that label.
+    // Lines before the first known heading are free-form description; everything after a heading belongs to it.
     final intro = <String>[];
     final sections = <({String label, List<String> body})>[];
     for (final line in lines) {
@@ -652,34 +764,19 @@ class _ProductAboutSection extends StatelessWidget {
       }
     }
 
-    final children = <Widget>[
-      for (var i = 0; i < intro.length; i++) _line(intro[i], lead: i == 0 && intro.length > 1),
-    ];
-
+    final quick = <({String label, String value})>[];
+    final cards = <Widget>[];
     for (final s in sections) {
       if (s.body.isEmpty) continue;
-      if (children.isNotEmpty) children.add(const SizedBox(height: 10));
-      final shortValue = s.body.length == 1 && s.body.first.length <= 36;
-      if (shortValue) {
-        // "Unit | 1 kg", "Shelf Life | 3 days" — compact two-column row.
-        children.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 118, child: Text(s.label, style: _strong)),
-                Expanded(child: Text(s.body.first, style: _body)),
-              ],
-            ),
-          ),
-        );
+      final isShort = s.body.length == 1 &&
+          s.body.first.length <= 36 &&
+          _norm(s.label) != 'description' &&
+          !_numbered.hasMatch(s.body.first) &&
+          !_bullet.hasMatch(s.body.first);
+      if (isShort) {
+        quick.add((label: s.label, value: s.body.first));
       } else {
-        children.add(Text(s.label, style: _strong));
-        children.add(const SizedBox(height: 2));
-        for (final l in s.body) {
-          children.add(_line(l));
-        }
+        cards.add(_card(icon: _iconFor(s.label), title: s.label, child: _sectionBody(s.label, s.body)));
       }
     }
 
@@ -688,15 +785,59 @@ class _ProductAboutSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'About this item',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-          ),
-          const SizedBox(height: 10),
-          ...children,
+          const _SectionHeading('About this item'),
+          const SizedBox(height: 12),
+          if (intro.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _sectionBody('intro', intro),
+            ),
+          if (quick.isNotEmpty) _card(icon: Icons.bolt_rounded, title: 'At a glance', child: _table(quick)),
+          ...cards,
         ],
       ),
     );
+  }
+}
+
+/// A long paragraph clamped to a few lines with "Read more" / "Show less".
+class _ExpandableText extends StatefulWidget {
+  const _ExpandableText({required this.text, required this.style});
+  final String text;
+  final TextStyle style;
+
+  @override
+  State<_ExpandableText> createState() => _ExpandableTextState();
+}
+
+class _ExpandableTextState extends State<_ExpandableText> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final long = widget.text.length > 220;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AnimatedSize(
+        duration: const Duration(milliseconds: 180),
+        alignment: Alignment.topCenter,
+        child: Text(
+          widget.text,
+          style: widget.style,
+          maxLines: (!long || _open) ? null : 4,
+          overflow: (!long || _open) ? TextOverflow.visible : TextOverflow.fade,
+        ),
+      ),
+      if (long)
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(_open ? 'Show less' : 'Read more',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _gpGreen)),
+          ),
+        ),
+    ]);
   }
 }
 
@@ -722,20 +863,16 @@ class _UnitSelector extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
-        color: _gpCream,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE9EEEA)),
       ),
       child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'SELECT PACK ${(attributeName ?? '').isNotEmpty ? attributeName!.toUpperCase() : 'SIZE'} / VARIANT',
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.6,
-            color: AppColors.textSecondary,
-          ),
+          'Select ${(attributeName ?? '').isNotEmpty ? attributeName! : 'pack size'}',
+          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -759,7 +896,7 @@ class _UnitSelector extends StatelessWidget {
                     color: selected ? _gpGreen.withValues(alpha: 0.08) : Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: selected ? _gpGreen : const Color(0xFFE3E8F0),
+                      color: selected ? _gpGreen : AppColors.swatchE3E8F0,
                       width: selected ? 1.6 : 1.1,
                     ),
                   ),
@@ -864,16 +1001,20 @@ class _ProductGalleryState extends State<_ProductGallery> {
 
   Widget _image(String? url) {
     final p = widget.product;
-    return AppRemoteImage(
-      imageUrl: url,
-      rawPath: url,
-      title: p.title,
-      categoryName: p.categoryName,
-      slug: p.slug,
-      semanticIcon: ImageUrlHelper.mapCategoryIcon(p.categoryName, p.slug),
-      width: double.infinity,
-      height: double.infinity,
-      fit: BoxFit.cover,
+    // The whole pack stays visible (contain) with breathing room around it, like quick-commerce product pages.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 64, 28, 46),
+      child: AppRemoteImage(
+        imageUrl: url,
+        rawPath: url,
+        title: p.title,
+        categoryName: p.categoryName,
+        slug: p.slug,
+        semanticIcon: ImageUrlHelper.mapCategoryIcon(p.categoryName, p.slug),
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.contain,
+      ),
     );
   }
 
@@ -917,6 +1058,19 @@ class _ProductGalleryState extends State<_ProductGallery> {
       ],
     );
   }
+}
+
+/// Section title with a short green accent bar.
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        Container(width: 4, height: 18, decoration: BoxDecoration(color: _gpGreen, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 10),
+        Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+      ]);
 }
 
 class _InfoRow extends StatelessWidget {
@@ -1033,7 +1187,7 @@ class _RoundIconButton extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  border: bordered ? Border.all(color: const Color(0xFFE3E8F0), width: 1.2) : null,
+                  border: bordered ? Border.all(color: AppColors.swatchE3E8F0, width: 1.2) : null,
                   boxShadow: bordered
                       ? null
                       : [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 10, offset: const Offset(0, 3))],
@@ -1089,13 +1243,13 @@ class _DiscountTag extends StatelessWidget {
           Container(
             width: 24,
             height: 24,
-            decoration: const BoxDecoration(color: Color(0xFF1F2937), shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: AppColors.gray800, shape: BoxShape.circle),
             child: const Icon(Icons.percent_rounded, size: 14, color: _gpOfferYellow),
           ),
           const SizedBox(width: 8),
           Text(
             '$percent% OFF',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.gray800),
           ),
         ],
       ),
@@ -1158,7 +1312,7 @@ class _StatStrip extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < cells.length; i++) ...[
-            if (i > 0) Container(width: 1, height: 30, color: const Color(0xFFE3E8F0)),
+            if (i > 0) Container(width: 1, height: 30, color: AppColors.swatchE3E8F0),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -1202,7 +1356,7 @@ class _BottomActions extends ConsumerWidget {
       return Container(
         height: _h,
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: const Color(0xFFEDF0F5), borderRadius: BorderRadius.circular(_h / 2)),
+        decoration: BoxDecoration(color: AppColors.swatchEDF0F5, borderRadius: BorderRadius.circular(_h / 2)),
         child: const Text(
           'Out of Stock',
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textHint),
@@ -1354,7 +1508,7 @@ class _RecipesRail extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(20)),
               child: Text(
                 '${recipes.length} ${recipes.length == 1 ? 'recipe' : 'recipes'}',
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _gpGrey),
@@ -1391,9 +1545,9 @@ class _RecipeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dietColor = switch (recipe.diet) {
-      RecipeDiet.veg => const Color(0xFF059669),
-      RecipeDiet.nonVeg => const Color(0xFFE11D48),
-      RecipeDiet.egg => const Color(0xFFB45309),
+      RecipeDiet.veg => AppColors.emerald600,
+      RecipeDiet.nonVeg => AppColors.swatchE11D48,
+      RecipeDiet.egg => AppColors.amber700,
     };
     return GestureDetector(
       onTap: () => context.push('/recipes/${Uri.encodeComponent(recipe.key)}'),
@@ -1402,7 +1556,7 @@ class _RecipeCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: AppColors.border),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
         ),
         clipBehavior: Clip.antiAlias,
@@ -1416,7 +1570,7 @@ class _RecipeCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   ColoredBox(
-                    color: const Color(0xFFF1F5F9),
+                    color: AppColors.surfaceVariant,
                     child: AppRemoteImage(imageUrl: recipe.coverImage, title: recipe.title, fit: BoxFit.cover),
                   ),
                   Positioned(

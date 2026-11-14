@@ -58,7 +58,55 @@ class InputValidators {
           ? 'Enter a valid email address'
           : 'Enter a valid email address or leave blank';
     }
+    // The shape is right, but a mistyped well-known provider ("gail.com") would never receive the code.
+    final fix = _domainSuggestion(t.split('@').last.toLowerCase());
+    if (fix != null) return 'Did you mean ${t.split('@').first}@$fix ?'.replaceAll(' ?', '?');
     return null;
+  }
+
+  static const _commonDomains = [
+    'gmail.com', 'yahoo.com', 'yahoo.in', 'outlook.com', 'hotmail.com', 'icloud.com', 'rediffmail.com', 'live.com',
+  ];
+
+  /// The well-known provider this domain was probably meant to be, or null when it is fine / unknown.
+  static String? _domainSuggestion(String domain) {
+    if (_commonDomains.contains(domain)) return null;
+    const known = {
+      'gmail.co': 'gmail.com', 'gmail.con': 'gmail.com', 'gmail.cm': 'gmail.com', 'gmail.om': 'gmail.com',
+      'gmai.com': 'gmail.com', 'gmial.com': 'gmail.com', 'gmal.com': 'gmail.com', 'gail.com': 'gmail.com',
+      'gamil.com': 'gmail.com', 'gnail.com': 'gmail.com', 'gmaill.com': 'gmail.com', 'gimail.com': 'gmail.com',
+      'yaho.com': 'yahoo.com', 'yahooo.com': 'yahoo.com', 'yahoo.con': 'yahoo.com', 'yhoo.com': 'yahoo.com',
+      'hotmal.com': 'hotmail.com', 'hotmial.com': 'hotmail.com', 'hotmail.con': 'hotmail.com',
+      'outlok.com': 'outlook.com', 'outlook.con': 'outlook.com', 'outllok.com': 'outlook.com',
+    };
+    final direct = known[domain];
+    if (direct != null) return direct;
+    for (final c in _commonDomains) {
+      if (_editDistanceAtMostOne(domain, c)) return c;
+    }
+    return null;
+  }
+
+  static bool _editDistanceAtMostOne(String a, String b) {
+    if ((a.length - b.length).abs() > 1) return false;
+    var i = 0, j = 0, edits = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] == b[j]) {
+        i++;
+        j++;
+        continue;
+      }
+      if (++edits > 1) return false;
+      if (a.length > b.length) {
+        i++;
+      } else if (a.length < b.length) {
+        j++;
+      } else {
+        i++;
+        j++;
+      }
+    }
+    return edits + (a.length - i) + (b.length - j) <= 1;
   }
 }
 

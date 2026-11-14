@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/booking_models.dart';
+import '../../../booking/domain/booking_status.dart';
 import '../../../booking/domain/booking_providers.dart';
 import '../../data/routing_service.dart';
 import '../../data/tracking_service.dart';
@@ -21,7 +22,7 @@ import '../../domain/tracking_models.dart';
 import '../widgets/gt_trip_cards.dart';
 import '../widgets/tracking_markers.dart';
 import '../../../../core/navigation/safe_back.dart';
-import '../../../../shared/widgets/motion.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../../shared/maps/sevo_map_style.dart';
 
 /// Route line color — changed 2026-09-16 from AppColors.primary (the app's
@@ -339,7 +340,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         !lockedLegs.contains((tracking.logisticsLeg ?? '').toUpperCase());
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4EF),
+      backgroundColor: AppColors.swatchF8F4EF,
       appBar: AppBar(
         centerTitle: false,
         title: const Text(
@@ -350,7 +351,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             fontSize: 16,
           ),
         ),
-        backgroundColor: const Color(0xFFF8F4EF),
+        backgroundColor: AppColors.swatchF8F4EF,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -374,7 +375,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: tracking.isLiveWs
-                  ? const Color(0xFFE8EDF7)
+                  ? AppColors.swatchE8EDF7
                   : AppColors.warningLight,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
@@ -387,25 +388,25 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: tracking.isLiveWs
-                        ? AppColors.navy
-                        : AppColors.warning,
-                    shape: BoxShape.circle,
-                  ),
+                PulseDot(
+                  size: 7,
+                  color: tracking.isLiveWs
+                      ? AppColors.navy
+                      : AppColors.warning,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  tracking.isLiveWs ? 'LIVE GPS' : 'SYNCING',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: tracking.isLiveWs
-                        ? AppColors.navy
-                        : const Color(0xFF92400E),
+                FadeThrough(
+                  duration: const Duration(milliseconds: 220),
+                  child: Text(
+                    tracking.isLiveWs ? 'LIVE GPS' : 'SYNCING',
+                    key: ValueKey(tracking.isLiveWs),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: tracking.isLiveWs
+                          ? AppColors.navy
+                          : AppColors.amber800,
+                    ),
                   ),
                 ),
               ],
@@ -531,8 +532,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           center: destPos,
                           radius: kArrivalRadiusMeters,
                           strokeWidth: 2,
-                          strokeColor: const Color(0xFF10B981),
-                          fillColor: const Color(0xFF10B981)
+                          strokeColor: AppColors.success,
+                          fillColor: AppColors.success
                               .withValues(alpha: arrived ? 0.30 : 0.15),
                         ),
                     },
@@ -661,65 +662,74 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     top: 14,
                     left: 20,
                     right: 20,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF1E3A8A)
-                                .withValues(alpha: 0.12),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: _kRouteColor.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
+                    child: FadeSlideIn(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.blue900
+                                  .withValues(alpha: 0.12),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
                             ),
-                            child: const Icon(
-                              Icons.schedule_rounded,
-                              color: _kRouteColor,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Estimated Arrival',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            AttentionPulse(
+                              enabled: (_roadRouteEtaMinutes ?? tracking.etaMinutes) != null,
+                              maxScale: 1.06,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _kRouteColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                Text(
-                                  [
-                                    if ((_roadRouteDistanceKm ?? tracking.distanceKm) != null)
-                                      '${(_roadRouteDistanceKm ?? tracking.distanceKm)!.toStringAsFixed(1)} km',
-                                    if ((_roadRouteEtaMinutes ?? tracking.etaMinutes) != null)
-                                      '${_roadRouteEtaMinutes ?? tracking.etaMinutes} mins away',
-                                  ].join(' · '),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.navy,
-                                  ),
+                                child: const Icon(
+                                  Icons.schedule_rounded,
+                                  color: _kRouteColor,
+                                  size: 20,
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Estimated Arrival',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  BounceOnChange(
+                                    value: '${_roadRouteEtaMinutes ?? tracking.etaMinutes}|${_roadRouteDistanceKm ?? tracking.distanceKm}',
+                                    child: Text(
+                                      [
+                                        if ((_roadRouteDistanceKm ?? tracking.distanceKm) != null)
+                                          '${(_roadRouteDistanceKm ?? tracking.distanceKm)!.toStringAsFixed(1)} km',
+                                        if ((_roadRouteEtaMinutes ?? tracking.etaMinutes) != null)
+                                          '${_roadRouteEtaMinutes ?? tracking.etaMinutes} mins away',
+                                      ].join(' · '),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.navy,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -734,7 +744,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
               decoration: const BoxDecoration(
-                color: Color(0xFFF8F4EF),
+                color: AppColors.swatchF8F4EF,
                 borderRadius:
                     BorderRadius.vertical(top: Radius.circular(24)),
                 boxShadow: [
@@ -768,9 +778,9 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                 ? 'Share this code with the delivery partner when you receive your order'
                                 : 'Share this code with the technician to begin service'),
                         otp: tracking.startOtp!,
-                        color: const Color(0xFF92400E),
+                        color: AppColors.amber800,
                         background: AppColors.warningLight,
-                        border: const Color(0xFFFDE68A),
+                        border: AppColors.amber200,
                         copied: _startOtpCopied,
                         onCopy: () => _copyOtp(tracking.startOtp!, isPayment: false),
                       ),
@@ -787,8 +797,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                             : 'Share with technician to confirm cash collection',
                         otp: tracking.paymentConfirmationOtp!,
                         color: AppColors.navy,
-                        background: const Color(0xFFE8EDF7),
-                        border: const Color(0xFFD5DCE8),
+                        background: AppColors.swatchE8EDF7,
+                        border: AppColors.swatchD5DCE8,
                         copied: _paymentOtpCopied,
                         onCopy: () => _copyOtp(tracking.paymentConfirmationOtp!, isPayment: true),
                       ),
@@ -852,8 +862,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                               'Share this code with the driver only after your goods have been delivered',
                           otp: tracking.deliveryOtp!,
                           color: AppColors.navy,
-                          background: const Color(0xFFE8EDF7),
-                          border: const Color(0xFFD5DCE8),
+                          background: AppColors.swatchE8EDF7,
+                          border: AppColors.swatchD5DCE8,
                           copied: _deliveryOtpCopied,
                           onCopy: () => _copyDeliveryOtp(tracking.deliveryOtp!),
                         ),
@@ -883,9 +893,9 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: AppColors.background,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -894,7 +904,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                                 style: TextStyle(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w800,
-                                    color: Color(0xFF475569))),
+                                    color: AppColors.slate600)),
                             const SizedBox(height: 2),
                             Text(
                               '${tracking.totalAmount != null ? '₹${tracking.totalAmount!.toStringAsFixed(tracking.totalAmount! % 1 == 0 ? 0 : 2)} · ' : ''}${tracking.gtPaymentLabel}',
@@ -929,7 +939,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF1E3A8A)
+                            color: AppColors.blue900
                                 .withValues(alpha: 0.06),
                             blurRadius: 16,
                             offset: const Offset(0, 4),
@@ -995,7 +1005,9 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                           ),
                           // Call Button — only shown with a real technician
                           // number, never a fallback support line.
-                          if (technicianPhone != null && technicianPhone.isNotEmpty)
+                          if (technicianPhone != null &&
+                              technicianPhone.isNotEmpty &&
+                              !isBookingFinished(tracking.status.isNotEmpty ? tracking.status : widget.booking?.status))
                             IconButton(
         tooltip: 'Call',
                               onPressed: () => callProfessional(
@@ -1029,7 +1041,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                        borderRadius: BorderRadius.circular(18),
                        boxShadow: [
                          BoxShadow(
-                           color: const Color(0xFF1E3A8A)
+                           color: AppColors.blue900
                                .withValues(alpha: 0.06),
                            blurRadius: 16,
                            offset: const Offset(0, 4),
@@ -1039,62 +1051,79 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    Text(
-                      tracking.isLogistics ? 'Trip Status' : (grocery ? 'Order Status' : 'Service Status'),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
+                    FadeThrough(
+                      child: Text(
+                        tracking.isLogistics ? 'Trip Status' : (grocery ? 'Order Status' : 'Service Status'),
+                        key: ValueKey(effectiveStatus),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.navy,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 14),
 
-                    _TimelineStep(
-                      title: grocery ? 'Order Confirmed' : 'Booking Confirmed',
-                      subtitle: grocery ? 'Your order has been placed' : 'Your request has been placed',
-                      isCompleted: currentStep > 0,
-                      isActive: currentStep == 0,
+                    FadeSlideIn(
+                      child: _TimelineStep(
+                        title: grocery ? 'Order Confirmed' : 'Booking Confirmed',
+                        subtitle: grocery ? 'Your order has been placed' : 'Your request has been placed',
+                        isCompleted: currentStep > 0,
+                        isActive: currentStep == 0,
+                      ),
                     ),
-                    _TimelineStep(
-                      title: tracking.isLogistics ? 'Driver Assigned' : (grocery ? 'Packed & Partner Assigned' : 'Technician Assigned'),
-                      subtitle: (currentStep == 1 && !tracking.hasDriver)
-                          ? (tracking.isLogistics
-                              ? 'Finding the nearest available driver'
-                              : (grocery ? 'Packing your items and finding a delivery partner' : 'Finding the nearest available professional'))
-                          : (tracking.isLogistics
-                              ? 'A driver and vehicle are allocated'
-                              : (grocery ? 'A delivery partner is allocated' : 'Expert professional allocated')),
-                      isCompleted: currentStep > 1,
-                      isActive: currentStep == 1,
+                    FadeSlideIn(
+                      index: 1,
+                      child: _TimelineStep(
+                        title: tracking.isLogistics ? 'Driver Assigned' : (grocery ? 'Packed & Partner Assigned' : 'Technician Assigned'),
+                        subtitle: (currentStep == 1 && !tracking.hasDriver)
+                            ? (tracking.isLogistics
+                                ? 'Finding the nearest available driver'
+                                : (grocery ? 'Packing your items and finding a delivery partner' : 'Finding the nearest available professional'))
+                            : (tracking.isLogistics
+                                ? 'A driver and vehicle are allocated'
+                                : (grocery ? 'A delivery partner is allocated' : 'Expert professional allocated')),
+                        isCompleted: currentStep > 1,
+                        isActive: currentStep == 1,
+                      ),
                     ),
-                    _TimelineStep(
-                      title: arrived ? 'Arrived' : 'On the Way',
-                      subtitle: arrived
-                          ? (tracking.isLogistics
-                              ? 'Driver has reached the pickup point'
-                              : (grocery ? 'Delivery partner has reached your address' : 'Technician has reached your address'))
-                          : (tracking.isLogistics
-                              ? 'Driver is on the way to the pickup'
-                              : (grocery ? 'Delivery partner is bringing your order' : 'Technician is en route to your address')),
-                      isCompleted: currentStep > 2,
-                      isActive: currentStep == 2,
+                    FadeSlideIn(
+                      index: 2,
+                      child: _TimelineStep(
+                        title: arrived ? 'Arrived' : 'On the Way',
+                        subtitle: arrived
+                            ? (tracking.isLogistics
+                                ? 'Driver has reached the pickup point'
+                                : (grocery ? 'Delivery partner has reached your address' : 'Technician has reached your address'))
+                            : (tracking.isLogistics
+                                ? 'Driver is on the way to the pickup'
+                                : (grocery ? 'Delivery partner is bringing your order' : 'Technician is en route to your address')),
+                        isCompleted: currentStep > 2,
+                        isActive: currentStep == 2,
+                      ),
                     ),
-                    _TimelineStep(
-                      title: tracking.isLogistics ? 'Goods in Transit' : (grocery ? 'Handing Over' : 'Service in Progress'),
-                      subtitle: tracking.isLogistics
-                          ? 'Pickup OTP verified, goods on the way'
-                          : (grocery ? 'Share the delivery code to receive your order' : 'OTP verification & work begins'),
-                      isCompleted: currentStep > 3,
-                      isActive: currentStep == 3,
+                    FadeSlideIn(
+                      index: 3,
+                      child: _TimelineStep(
+                        title: tracking.isLogistics ? 'Goods in Transit' : (grocery ? 'Handing Over' : 'Service in Progress'),
+                        subtitle: tracking.isLogistics
+                            ? 'Pickup OTP verified, goods on the way'
+                            : (grocery ? 'Share the delivery code to receive your order' : 'OTP verification & work begins'),
+                        isCompleted: currentStep > 3,
+                        isActive: currentStep == 3,
+                      ),
                     ),
-                    _TimelineStep(
-                      title: tracking.isLogistics || grocery ? 'Delivered' : 'Completed',
-                      subtitle: tracking.isLogistics
-                          ? 'Goods delivered & payment settled'
-                          : (grocery ? 'Order delivered' : 'Service finished & final invoice'),
-                      isCompleted: currentStep >= 4,
-                      isActive: currentStep == 4,
-                      isLast: true,
+                    FadeSlideIn(
+                      index: 4,
+                      child: _TimelineStep(
+                        title: tracking.isLogistics || grocery ? 'Delivered' : 'Completed',
+                        subtitle: tracking.isLogistics
+                            ? 'Goods delivered & payment settled'
+                            : (grocery ? 'Order delivered' : 'Service finished & final invoice'),
+                        isCompleted: currentStep >= 4,
+                        isActive: currentStep == 4,
+                        isLast: true,
+                      ),
                     ),
                       ],
                      ),
@@ -1324,33 +1353,47 @@ class _TimelineStep extends StatelessWidget {
       children: [
         Column(
           children: [
-            Container(
-              width: 22,
-              height: 22,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              width: isActive ? 24 : 22,
+              height: isActive ? 24 : 22,
               decoration: BoxDecoration(
                 color: (isCompleted || isActive)
                     ? AppColors.navy
                     : AppColors.divider,
                 shape: BoxShape.circle,
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: AppColors.navy.withValues(alpha: 0.28),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null,
               ),
               child: Center(
-                child: isCompleted
-                    ? const Icon(Icons.check_rounded,
-                        size: 14, color: Colors.white)
-                    : (isActive
-                        ? Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: isCompleted
+                      ? const Icon(Icons.check_rounded,
+                          key: ValueKey('done'),
+                          size: 14, color: Colors.white)
+                      : (isActive
+                          ? const PulseDot(
+                              key: ValueKey<String>('active'),
+                              size: 8,
                               color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          )
-                        : null),
+                            )
+                          : const SizedBox.shrink(key: ValueKey<String>('idle'))),
+                ),
               ),
             ),
             if (!isLast)
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
                 width: 2,
                 height: 32,
                 color: isCompleted
@@ -1364,8 +1407,8 @@ class _TimelineStep extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 220),
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
@@ -1373,12 +1416,17 @@ class _TimelineStep extends StatelessWidget {
                       ? AppColors.navy
                       : AppColors.textSecondary,
                 ),
+                child: Text(title),
               ),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
+              FadeThrough(
+                duration: const Duration(milliseconds: 220),
+                child: Text(
+                  subtitle,
+                  key: ValueKey(subtitle),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
               if (!isLast) const SizedBox(height: 14),

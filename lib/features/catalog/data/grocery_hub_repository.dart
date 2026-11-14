@@ -1,3 +1,4 @@
+import 'pack_label.dart';
 import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,7 +95,7 @@ class GroceryHubProduct {
       discountPercent: hasMrp && mrp != null && mrp > 0
           ? (((mrp - price) / mrp) * 100).round()
           : 0,
-      unit: p.packSize ?? p.unit,
+      unit: groceryPackLabel(p.packSize, p.unit),
       inStock: p.inStock,
       marketplaceItem: p.toServiceItem(),
     );

@@ -11,7 +11,9 @@ import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/slow_load_gate.dart';
+import '../../../../shared/widgets/state_widgets.dart';
 import '../../../booking/domain/cart_notifier.dart';
+import '../../../booking/domain/mason_rules.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
 import '../../../../core/navigation/safe_back.dart';
@@ -102,7 +104,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
       });
       return const Scaffold(
         backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator()),
+        body: LoadingState(lines: 3),
       );
     }
     if (effectiveService != null) {
@@ -286,7 +288,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF92400E),
+                                color: AppColors.amber800,
                               ),
                             ),
                           ],
@@ -477,10 +479,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEB),
+                        color: AppColors.amber50,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: const Color(0xFFFDE68A),
+                          color: AppColors.amber200,
                           width: 0.8,
                         ),
                       ),
@@ -490,7 +492,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           const Icon(
                             Icons.checklist_rounded,
                             size: 18,
-                            color: Color(0xFF92400E),
+                            color: AppColors.amber800,
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -502,7 +504,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: Color(0xFF92400E),
+                                    color: AppColors.amber800,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -522,7 +524,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                           child: Icon(
                                             Icons.circle,
                                             size: 5,
-                                            color: Color(0xFF92400E),
+                                            color: AppColors.amber800,
                                           ),
                                         ),
                                         const SizedBox(width: 8),
@@ -651,7 +653,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                           style: const TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
-                                            color: Color(0xFF92400E),
+                                            color: AppColors.amber800,
                                           ),
                                         ),
                                       ],
@@ -885,8 +887,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Total Price',
+                      Text(
+                        isMasonService(service) ? 'Site visit fee' : 'Total Price',
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textSecondary,
@@ -894,7 +896,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         ),
                       ),
                       Text(
-                        awaitingOption ? 'From ₹$shownPrice' : '₹$shownPrice',
+                        isMasonService(service) ? 'FREE' : awaitingOption ? 'From ₹$shownPrice' : '₹$shownPrice',
                         style: const TextStyle(
                           fontSize: 19.5,
                           fontWeight: FontWeight.w900,
@@ -942,7 +944,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         child: Text(
                           !service.isAvailable
                               ? 'Unavailable'
-                              : (awaitingOption ? 'Select an option' : 'Book Now'),
+                              : (awaitingOption ? 'Select an option' : (isMasonService(service) ? 'Book Site Visit' : 'Book Now')),
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -964,10 +966,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
   // How it works (connected steps) and a floating Book Now bar.
   // Services never use the shared cart, so there is no qty stepper / "Add".
   // ───────────────────────────────────────────────────────────────────────
-  static const Color _pageBg = Color(0xFFF8F4EF);
+  static const Color _pageBg = AppColors.swatchF8F4EF;
   static const Color _okGreen = AppColors.navy;
-  static const Color _mint = Color(0xFFE8EDF7);
-  static const Color _mintText = Color(0xFF1E3A8A);
+  static const Color _mint = AppColors.swatchE8EDF7;
+  static const Color _mintText = AppColors.blue900;
 
   Widget _modernCard({required Widget child, EdgeInsets? padding}) {
     return Container(
@@ -978,7 +980,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+            color: AppColors.blue900.withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, 5),
           ),
@@ -1358,10 +1360,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFFBEB),
+                      color: AppColors.amber50,
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
-                          color: const Color(0xFFFDE68A), width: 0.8),
+                          color: AppColors.amber200, width: 0.8),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1371,7 +1373,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF92400E),
+                            color: AppColors.amber800,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -1384,7 +1386,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                                 const Padding(
                                   padding: EdgeInsets.only(top: 6),
                                   child: Icon(Icons.circle,
-                                      size: 5, color: Color(0xFF92400E)),
+                                      size: 5, color: AppColors.amber800),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
@@ -1514,7 +1516,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
             borderRadius: BorderRadius.circular(26),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+                color: AppColors.blue900.withValues(alpha: 0.12),
                 blurRadius: 22,
                 offset: const Offset(0, 6),
               ),
@@ -1529,8 +1531,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (!showDiscount)
-                      const Text(
-                        'Total Price',
+                      Text(
+                        isMasonService(service) ? 'Site visit fee' : 'Total Price',
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textSecondary,
@@ -1545,7 +1547,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Text(
-                            awaitingOption
+                            isMasonService(service)
+                                ? 'FREE'
+                                : awaitingOption
                                 ? 'From ₹$shownPrice'
                                 : '₹$shownPrice',
                             style: const TextStyle(
@@ -1603,7 +1607,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     child: Text(
                       !service.isAvailable
                           ? 'Unavailable'
-                          : (awaitingOption ? 'Select an option' : 'Book Now'),
+                          : (awaitingOption ? 'Select an option' : (isMasonService(service) ? 'Book Site Visit' : 'Book Now')),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -1822,7 +1826,7 @@ class _PackageOptionPicker extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: o.id == selectedId ? Color(0xFFE8EDF7) : Colors.white,
+                  color: o.id == selectedId ? AppColors.swatchE8EDF7 : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: o.id == selectedId ? AppColors.navy : AppColors.border,
@@ -2026,7 +2030,7 @@ class _StepTile extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: const BoxDecoration(
-            color: Color(0xFFE8EDF7),
+            color: AppColors.swatchE8EDF7,
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -2199,7 +2203,7 @@ class _ServiceDetailSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4EF),
+      backgroundColor: AppColors.swatchF8F4EF,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

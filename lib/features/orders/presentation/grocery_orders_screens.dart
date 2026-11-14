@@ -16,13 +16,14 @@ import '../../../shared/theme/grocery_theme.dart';
 import '../../../shared/utils/app_toast.dart';
 import '../../../shared/utils/date_utils.dart';
 import '../../../shared/widgets/state_widgets.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../data/grocery_orders_repository.dart';
 import 'order_invoices_card.dart';
 import 'order_returns.dart';
 
-const _green = Color(0xFF1B7F4B);
+const _green = AppColors.swatch1B7F4B;
 const _greenSoft = Color(0xFFE8F6EE);
-const _page = Color(0xFFF6F8FA);
+const _page = AppColors.swatchF6F8FA;
 
 String _rupees(double v) => '₹${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2)}';
 
@@ -36,7 +37,7 @@ AppBar _bar(BuildContext context, String title) => AppBar(
 
 Color _stageColor(OrderStage s) => switch (s) {
       OrderStage.delivered => _green,
-      OrderStage.cancelled => const Color(0xFFC62828),
+      OrderStage.cancelled => AppColors.red800,
       OrderStage.outForDelivery => const Color(0xFFE65100),
       _ => AppColors.navy,
     };
@@ -49,12 +50,31 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = _stageColor(stage);
-    return Container(
+    final label = stageTitleFor(stage, takeaway: takeaway);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: c.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: c.withValues(alpha: 0.12), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (stage == OrderStage.outForDelivery) ...[Icon(Icons.circle, size: 8, color: c), const SizedBox(width: 5)],
-        Text(stageTitleFor(stage, takeaway: takeaway), style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12)),
+        if (stage == OrderStage.outForDelivery) ...[
+          PulseDot(size: 7, color: c),
+          const SizedBox(width: 5),
+        ],
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: Text(
+            label,
+            key: ValueKey(label),
+            style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12),
+          ),
+        ),
       ]),
     );
   }
@@ -69,11 +89,42 @@ Future<void> _reloadOrders(BuildContext context, WidgetRef ref) {
 }
 
 /// Profile -> My grocery orders. Active / Delivered / Cancelled, each order with a live progress bar.
-class GroceryOrdersScreen extends ConsumerWidget {
+class GroceryOrdersScreen extends ConsumerStatefulWidget {
   const GroceryOrdersScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GroceryOrdersScreen> createState() => _GroceryOrdersScreenState();
+}
+
+class _GroceryOrdersScreenState extends ConsumerState<GroceryOrdersScreen> with WidgetsBindingObserver {
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // QA GAVM06: order progress only moved after a manual refresh. Re-read the list quietly (the old list stays on
+    // screen) every 10 s while any order is still in flight.
+    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
+      final all = ref.read(groceryOrdersProvider).valueOrNull;
+      if (mounted && (all == null || all.any((o) => o.isActive))) ref.invalidate(groceryOrdersProvider);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) ref.invalidate(groceryOrdersProvider);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final orders = ref.watch(groceryOrdersProvider);
     return GroceryTheme(
       child: DefaultTabController(
@@ -132,7 +183,10 @@ class _OrderList extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         itemCount: orders.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => OrderCard(order: orders[i]),
+        itemBuilder: (_, i) => FadeSlideIn(
+          index: i,
+          child: OrderCard(order: orders[i]),
+        ),
       ),
     );
   }
@@ -164,7 +218,9 @@ class _OrderCardState extends ConsumerState<OrderCard> {
   Widget build(BuildContext context) {
     final order = widget.order;
     final o = order;
-    return InkWell(
+    return PressScale(
+      scale: 0.985,
+      child: InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => context.push('/grocery-orders/${o.orderNumber}'),
       child: Container(
@@ -195,8 +251,8 @@ class _OrderCardState extends ConsumerState<OrderCard> {
                   width: 44,
                   height: 44,
                   child: o.items.first.image == null
-                      ? Container(color: const Color(0xFFF1F5F9), child: const Icon(Icons.shopping_basket_outlined, size: 20, color: AppColors.textSecondary))
-                      : Image.network(o.items.first.image!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFFF1F5F9))),
+                      ? Container(color: AppColors.surfaceVariant, child: const Icon(Icons.shopping_basket_outlined, size: 20, color: AppColors.textSecondary))
+                      : Image.network(o.items.first.image!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.surfaceVariant)),
                 ),
               ),
               const SizedBox(width: 10),
@@ -231,8 +287,8 @@ class _OrderCardState extends ConsumerState<OrderCard> {
           Row(children: [
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Seller', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                Text(o.sellerName.isEmpty ? 'SEVONIQ Partner' : o.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                const Text('Order', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text('#${o.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -249,6 +305,7 @@ class _OrderCardState extends ConsumerState<OrderCard> {
             Align(alignment: Alignment.centerRight, child: AgainButton(label: 'Order again', busy: _reordering, onPressed: _orderAgain)),
           ],
         ]),
+      ),
       ),
     );
   }
@@ -269,10 +326,12 @@ class StageProgressBar extends StatelessWidget {
       Row(children: [
         for (var i = 0; i < stages.length; i++) ...[
           Expanded(
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
               height: 6,
               decoration: BoxDecoration(
-                color: i <= current ? _stageColor(stage == OrderStage.delivered ? OrderStage.delivered : OrderStage.confirmed) : const Color(0xFFE2E8F0),
+                color: i <= current ? _stageColor(stage == OrderStage.delivered ? OrderStage.delivered : OrderStage.confirmed) : AppColors.border,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -285,10 +344,13 @@ class StageProgressBar extends StatelessWidget {
         Row(children: [
           for (var i = 0; i < stages.length; i++)
             Expanded(
-              child: Text(
-                (takeaway ? ['Confirmed', 'Packing', 'Ready', 'Picked up'] : ['Confirmed', 'Packing', 'Ready', 'On the way', 'Delivered'])[i],
-                textAlign: TextAlign.center,
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 220),
                 style: TextStyle(fontSize: 10.5, fontWeight: i == current ? FontWeight.w800 : FontWeight.w500, color: i <= current ? AppColors.navy : AppColors.textSecondary),
+                child: Text(
+                  (takeaway ? ['Confirmed', 'Packing', 'Ready', 'Picked up'] : ['Confirmed', 'Packing', 'Ready', 'On the way', 'Delivered'])[i],
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
         ]),
@@ -315,7 +377,7 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
   void initState() {
     super.initState();
     // Statuses move on their own (seller packs, rider picks up), so keep the page fresh while the order is active.
-    _poll = Timer.periodic(const Duration(seconds: 30), (_) {
+    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
       final o = ref.read(groceryOrderProvider(widget.orderNumber)).valueOrNull;
       if (mounted && (o == null || o.isActive)) ref.invalidate(groceryOrderProvider(widget.orderNumber));
     });
@@ -345,7 +407,7 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('The seller will stop preparing it. If you already paid, the amount is refunded.'),
+              const Text('We will stop preparing it. If you already paid, the amount is refunded.'),
               const SizedBox(height: 10),
               const Text('Why are you cancelling?', style: TextStyle(fontWeight: FontWeight.w700)),
               for (final r in reasons)
@@ -355,7 +417,7 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(children: [
                       Icon(picked == r ? Icons.radio_button_checked : Icons.radio_button_off,
-                          size: 20, color: picked == r ? const Color(0xFFC62828) : Colors.black45),
+                          size: 20, color: picked == r ? AppColors.red800 : Colors.black45),
                       const SizedBox(width: 8),
                       Expanded(child: Text(r)),
                     ]),
@@ -366,7 +428,7 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
           actions: [
             TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Keep order')),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC62828)),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.red800),
               onPressed: () => Navigator.of(ctx).pop(picked),
               child: const Text('Cancel order'),
             ),
@@ -412,7 +474,11 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
                   const SizedBox(height: 12),
                   if (o.isTakeaway && o.stage != OrderStage.cancelled) _TakeawayCard(order: o),
                   if (o.showOtp) _OtpCard(otp: o.deliveryOtp!),
-                  if (o.stage == OrderStage.outForDelivery) _RiderCard(order: o),
+                  // Instant (FAST) orders now carry live tracking from the moment a delivery partner is assigned (heading to the
+                  // store), not only once the order is out for delivery. The server only sends a rider when tracking is allowed.
+                  if (o.stage == OrderStage.outForDelivery ||
+                      (o.rider != null && !o.cancellationPending && o.isActive && !o.takeaway))
+                    _RiderCard(order: o),
                   if (o.stage != OrderStage.cancelled) _ProgressCard(order: o) else _CancelledCard(order: o),
                   if (o.sellerLines.length > 1) _SellerLinesCard(lines: o.sellerLines),
                   if (o.events.isNotEmpty) _ActivityCard(events: o.events),
@@ -433,7 +499,7 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
                   child: SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFC62828), side: const BorderSide(color: Color(0xFFFFCDD2)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.red800, side: const BorderSide(color: Color(0xFFFFCDD2)), padding: const EdgeInsets.symmetric(vertical: 14)),
                       onPressed: _cancelling ? null : () => _cancel(o),
                       child: _cancelling ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Cancel order'),
                     ),
@@ -490,21 +556,29 @@ class _Header extends StatelessWidget {
     return _Card(
       margin: EdgeInsets.zero,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 8, runSpacing: 6, children: [
-          _StatusChip(o.stage, takeaway: o.isTakeaway),
-          if (o.paymentStatus.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)),
-              child: Text('Payment: ${o.paymentStatus}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+        FadeSlideIn(
+          child: Wrap(spacing: 8, runSpacing: 6, children: [
+            BounceOnChange(
+              value: o.stage,
+              child: _StatusChip(o.stage, takeaway: o.isTakeaway),
             ),
-        ]),
+            if (o.paymentStatus.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(20)),
+                child: Text('Payment: ${_paymentStatusLabel(o)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+              ),
+          ]),
+        ),
         const SizedBox(height: 10),
-        Text('Order #${o.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.navy)),
+        FadeSlideIn(
+          index: 1,
+          child: Text('Order #${o.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.navy)),
+        ),
         const SizedBox(height: 6),
         Wrap(spacing: 14, runSpacing: 2, children: [
-          if (o.sellerName.isNotEmpty) _Meta('Seller', o.sellerName),
-          if (o.warehouseName.isNotEmpty) _Meta('Warehouse', o.warehouseName),
+          // The warehouse is only named for Take Away, where the customer has to go there.
+          if (o.isTakeaway && o.warehouseName.isNotEmpty) _Meta('Collect from', o.warehouseName),
           if (o.slot.isNotEmpty) _Meta('Slot', o.slot),
         ]),
         if (o.createdAt != null) ...[
@@ -638,7 +712,9 @@ class _RiderCard extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(r?.name ?? 'Delivery Partner', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
               Text(
-                eta != null ? 'Arriving in about $eta min' : ((r?.live ?? false) ? 'On the way to you' : 'Waiting for the rider location'),
+                order.stage == OrderStage.outForDelivery
+                    ? (eta != null ? 'Arriving in about $eta min' : ((r?.live ?? false) ? 'On the way to you' : 'Waiting for the rider location'))
+                    : 'Partner assigned - heading to the store to pick up your order',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ]),
@@ -703,10 +779,10 @@ class _TimelineRow extends StatelessWidget {
               width: 28,
               height: 28,
               alignment: Alignment.center,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: reached ? _green : const Color(0xFFF1F5F9)),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: reached ? _green : AppColors.surfaceVariant),
               child: Icon(done ? Icons.check_rounded : info.icon, size: 17, color: reached ? Colors.white : AppColors.textSecondary),
             ),
-            if (!last) Expanded(child: Container(width: 2, color: done ? _green : const Color(0xFFE2E8F0))),
+            if (!last) Expanded(child: Container(width: 2, color: done ? _green : AppColors.border)),
           ]),
         ),
         const SizedBox(width: 12),
@@ -724,20 +800,160 @@ class _TimelineRow extends StatelessWidget {
   }
 }
 
+/// What the customer should read for the payment state. The server marks a cancelled prepaid order "REFUNDED" as soon
+/// the payment gateway ACCEPTS the refund, but the money only reaches the bank / UPI app days later - so the app says
+/// "initiated" rather than claiming it has already arrived.
+String _paymentStatusLabel(GroceryOrder o) {
+  final s = o.paymentStatus.toUpperCase();
+  final cancelled = o.stage == OrderStage.cancelled;
+  switch (s) {
+    case 'REFUNDED':
+      if (o.refundStatus == 'PROCESSED') return 'Refund sent';
+      if (o.refundStatus == 'FAILED') return 'Refund issue - support notified';
+      return 'Refund initiated';
+    case 'REFUND_PROCESSING':
+      return 'Refund processing';
+    case 'PAYMENT_CAPTURED_NEEDS_REFUND':
+      return 'Refund pending';
+    case 'PAID':
+      return (cancelled && !o.isCod) ? 'Refund processing' : 'Paid';
+    case 'PENDING':
+      return cancelled ? 'No payment taken' : 'Pay on ${o.isTakeaway ? 'pickup' : 'delivery'}';
+    default:
+      return o.paymentStatus;
+  }
+}
+
+String _cancelledNote(GroceryOrder o) {
+  final s = o.paymentStatus.toUpperCase();
+  final prepaid = !o.isCod && (s == 'REFUNDED' || s == 'REFUND_PROCESSING' || s == 'PAID' || s == 'PAYMENT_CAPTURED_NEEDS_REFUND');
+  if (!prepaid) return 'This order was cancelled. No payment was taken.';
+  return 'This order was cancelled. Follow your refund below.';
+}
+
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+String _shortDate(DateTime d) {
+  final l = d.toLocal();
+  return '${l.day} ${_months[l.month - 1]}';
+}
+
+bool _isPrepaidCancelled(GroceryOrder o) {
+  final s = o.paymentStatus.toUpperCase();
+  return !o.isCod && (s == 'REFUNDED' || s == 'REFUND_PROCESSING' || s == 'PAID' || s == 'PAYMENT_CAPTURED_NEEDS_REFUND');
+}
+
 class _CancelledCard extends StatelessWidget {
   const _CancelledCard({required this.order});
   final GroceryOrder order;
 
   @override
   Widget build(BuildContext context) => _Card(
-        child: Row(children: [
-          const Icon(Icons.cancel_outlined, color: Color(0xFFC62828)),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text('This order was cancelled. Any amount paid is refunded to the original payment method.', style: TextStyle(fontSize: 13, height: 1.35)),
-          ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.cancel_outlined, color: AppColors.red800),
+            const SizedBox(width: 12),
+            Expanded(child: Text(_cancelledNote(order), style: const TextStyle(fontSize: 13, height: 1.35))),
+          ]),
+          if (_isPrepaidCancelled(order)) ...[
+            const SizedBox(height: 14),
+            _RefundTimeline(order: order),
+          ],
         ]),
       );
+}
+
+enum _StepState { done, active, failed, waiting }
+
+/// Cancelled -> Refund initiated -> Refund sent: where the customer's money is. Driven by the server's refund status,
+/// so it moves on its own (live updates) when the gateway reports the refund as sent.
+class _RefundTimeline extends StatelessWidget {
+  const _RefundTimeline({required this.order});
+  final GroceryOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    final o = order;
+    final amount = _rupees(o.refundAmount ?? o.total);
+    final failed = o.refundStatus == 'FAILED';
+    final sent = o.refundStatus == 'PROCESSED';
+    final initiated = sent || failed || o.refundStatus == 'INITIATED' || o.paymentStatus.toUpperCase() == 'REFUNDED';
+    final expected = o.refundInitiatedAt?.add(const Duration(days: 7));
+
+    final steps = <(_StepState, String, String)>[
+      (_StepState.done, 'Order cancelled', 'Your payment of ${_rupees(o.total)} is being returned.'),
+      (
+        initiated ? _StepState.done : _StepState.active,
+        initiated ? 'Refund initiated' : 'Refund being arranged',
+        initiated
+            ? '$amount sent to your original payment method${o.refundInitiatedAt != null ? ' on ${_shortDate(o.refundInitiatedAt!)}' : ''}.'
+            : 'We are starting your refund of $amount. This page updates by itself.',
+      ),
+      if (failed)
+        (_StepState.failed, 'Refund needs attention', 'Your bank did not accept it. Our team is fixing this - contact support with order #${o.orderNumber} if it takes long.')
+      else if (sent)
+        (
+          _StepState.done,
+          'Refund sent to your bank',
+          'It can take 5-7 working days to show in your account${o.refundProcessedAt != null ? ' (sent ${_shortDate(o.refundProcessedAt!)})' : ''}.'
+        )
+      else
+        (
+          initiated ? _StepState.active : _StepState.waiting,
+          'Money reaches your account',
+          expected != null ? 'Usually by ${_shortDate(expected)} (5-7 working days).' : 'Usually within 5-7 working days.',
+        ),
+    ];
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      for (var i = 0; i < steps.length; i++)
+        _RefundStep(state: steps[i].$1, title: steps[i].$2, body: steps[i].$3, last: i == steps.length - 1),
+      if (o.refundId.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(left: 32, top: 2),
+          child: Text('Refund reference: ${o.refundId}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        ),
+    ]);
+  }
+}
+
+class _RefundStep extends StatelessWidget {
+  const _RefundStep({required this.state, required this.title, required this.body, required this.last});
+  final _StepState state;
+  final String title;
+  final String body;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color) = switch (state) {
+      _StepState.done => (Icons.check_circle, Colors.green.shade700),
+      _StepState.active => (Icons.timelapse_rounded, AppColors.navy),
+      _StepState.failed => (Icons.error_outline_rounded, AppColors.red800),
+      _StepState.waiting => (Icons.radio_button_unchecked, Colors.black38),
+    };
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+          width: 24,
+          child: Column(children: [
+            Icon(icon, size: 20, color: color),
+            if (!last) Expanded(child: Container(width: 2, margin: const EdgeInsets.symmetric(vertical: 2), color: Colors.black12)),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: last ? 4 : 12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: state == _StepState.waiting ? Colors.black45 : color)),
+              const SizedBox(height: 2),
+              Text(body, style: const TextStyle(fontSize: 12, height: 1.35, color: AppColors.textSecondary)),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
 }
 
 class _SellerLinesCard extends StatelessWidget {
@@ -748,12 +964,12 @@ class _SellerLinesCard extends StatelessWidget {
   Widget build(BuildContext context) => _Card(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const _SectionTitle('Shipments in this order'),
-          for (final l in lines)
+          for (var i = 0; i < lines.length; i++)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(children: [
-                Expanded(child: Text(l.sellerName.isEmpty ? 'SEVONIQ Partner' : l.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
-                _StatusChip(l.stage),
+                Expanded(child: Text('Shipment ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
+                _StatusChip(lines[i].stage),
               ]),
             ),
         ]),
@@ -774,7 +990,7 @@ class _ActivityCard extends StatelessWidget {
           Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(color: const Color(0xFFF6F8FA), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: AppColors.swatchF6F8FA, borderRadius: BorderRadius.circular(10)),
             child: Row(children: [
               Expanded(child: Text(e.label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
               if (e.at != null) Text(formatDmyTime(e.at!), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
@@ -805,8 +1021,8 @@ class _ItemsCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   child: i.image == null
-                      ? Container(color: const Color(0xFFF1F5F9), child: const Icon(Icons.shopping_basket_outlined, size: 20, color: AppColors.textSecondary))
-                      : Image.network(i.image!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFFF1F5F9))),
+                      ? Container(color: AppColors.surfaceVariant, child: const Icon(Icons.shopping_basket_outlined, size: 20, color: AppColors.textSecondary))
+                      : Image.network(i.image!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.surfaceVariant)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -819,10 +1035,10 @@ class _ItemsCard extends StatelessWidget {
               Text(_rupees(i.amount), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
             ]),
           ),
-        if (o.subtotal != null || o.deliveryFee != null) ...[
+        if (o.subtotal != null || o.deliveryFee != null || o.isTakeaway) ...[
           const Divider(height: 22),
           if (o.subtotal != null) _AmountRow('Items subtotal', _rupees(o.subtotal!)),
-          if (o.deliveryFee != null) _AmountRow('Delivery fee', o.deliveryFee == 0 ? 'Free' : _rupees(o.deliveryFee!)),
+          if (o.deliveryFee != null || o.isTakeaway) _AmountRow('Delivery fee', o.isTakeaway ? 'Not applicable' : (o.deliveryFee == 0 ? 'Free' : _rupees(o.deliveryFee!))),
         ],
         const Divider(height: 22),
         _AmountRow(o.isCod && o.paymentStatus.toUpperCase() != 'PAID' ? (o.isTakeaway ? 'Amount to pay on pickup' : 'Amount to pay on delivery') : 'Order total', _rupees(o.total), bold: true),
@@ -880,7 +1096,7 @@ class _PaymentCard extends StatelessWidget {
     return _InfoCard(
       icon: Icons.payments_outlined,
       title: 'Payment method',
-      body: '$method${o.paymentStatus.isEmpty ? '' : ' (${o.paymentStatus})'}',
+      body: '$method${o.paymentStatus.isEmpty ? '' : ' (${_paymentStatusLabel(o)})'}',
     );
   }
 }

@@ -345,6 +345,11 @@ class BookingRepository {
         query['status'] = statusFilter;
       }
 
+      // Fetch in pages of 50 so one huge response can't time out for customers with a long history.
+      // Servers that don't page return everything and no X-Total-Count header, which ends the loop below.
+      const pageSize = 50;
+      query['limit'] = pageSize;
+      query['offset'] = 0;
       final response = await api.get('/booking/my-bookings/', queryParameters: query);
       final dynamic body = response.data;
 
@@ -417,6 +422,23 @@ class BookingRepository {
           ));
         }
         bookings.add(Booking.fromJson(Map<String, dynamic>.from(item)));
+      }
+
+      final total = int.tryParse(response.headers.value('x-total-count') ?? '');
+      var fetched = listPayload.length;
+      var guard = 0;
+      while (total != null && fetched < total && fetched > 0 && guard++ < 40) {
+        final next = await api.get(
+          '/booking/my-bookings/',
+          queryParameters: {...query, 'offset': fetched},
+        );
+        final nb = next.data;
+        final dynamic more = nb is Map ? nb['data'] : nb;
+        if (more is! List || more.isEmpty) break;
+        for (final item in more) {
+          if (item is Map) bookings.add(Booking.fromJson(Map<String, dynamic>.from(item)));
+        }
+        fetched += more.length;
       }
 
       return Success(bookings);
@@ -570,11 +592,23 @@ class BookingRepository {
     try {
       final response = await api.get<List<int>>(
         path,
-        options: Options(responseType: ResponseType.bytes),
+        // The server returns the invoice as JSON (not a PDF) whenever the request says it accepts JSON, which the
+        // app's default headers do - so send a wildcard Accept (the server rejects application/pdf with 406 because it only lists JSON renderers).
+        options: Options(responseType: ResponseType.bytes, headers: const {'Accept': '*/*'}),
       );
       final data = response.data;
       if (data == null || data.isEmpty) {
         return Failure(ValidationError(emptyMessage));
+      }
+      // A real PDF starts with "%PDF-". Anything else (an HTML/JSON error page...) must not be shown as a document.
+      final looksLikePdf = data.length > 4 && data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46;
+      if (!looksLikePdf) {
+        String? msg;
+        try {
+          final decoded = jsonDecode(utf8.decode(data));
+          if (decoded is Map) msg = (decoded['message'] ?? decoded['error'] ?? decoded['detail'])?.toString();
+        } catch (_) {}
+        return Failure(ValidationError(msg ?? 'The server did not return a valid PDF (${data.length} bytes). Please try again.'));
       }
       return Success(Uint8List.fromList(data));
     } on DioException catch (e) {

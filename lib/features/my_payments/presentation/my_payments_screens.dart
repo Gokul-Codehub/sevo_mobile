@@ -7,6 +7,7 @@ import '../../../core/refresh/refresh_runner.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/date_utils.dart';
 import '../../../shared/widgets/state_widgets.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../data/my_payments_repository.dart';
 
 String rupees(double v) => '₹${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2)}';
@@ -43,7 +44,7 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
   Widget build(BuildContext context) {
     final history = ref.watch(paymentHistoryProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: AppColors.swatchF6F8FA,
       appBar: _bar(context, 'My payments'),
       body: history.when(
         skipLoadingOnReload: true,
@@ -59,20 +60,24 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Row(children: [
-                  Expanded(child: _Total(label: 'Total paid', value: rupees(h.totalPaid), color: AppColors.navy)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _Total(label: 'Refunded', value: rupees(h.totalRefunded), color: const Color(0xFF1B7F4B))),
-                ]),
+                FadeSlideIn(
+                  child: Row(children: [
+                    Expanded(child: _Total(label: 'Total paid', value: rupees(h.totalPaid), color: AppColors.navy)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _Total(label: 'Refunded', value: rupees(h.totalRefunded), color: AppColors.swatch1B7F4B)),
+                  ]),
+                ),
                 const SizedBox(height: 12),
                 Wrap(spacing: 8, children: [
                   for (final f in _filters)
-                    ChoiceChip(
-                      label: Text(f.$1),
-                      selected: _filter == f.$2,
-                      selectedColor: AppColors.navy,
-                      labelStyle: TextStyle(color: _filter == f.$2 ? Colors.white : AppColors.navy, fontWeight: FontWeight.w600),
-                      onSelected: (_) => setState(() => _filter = f.$2),
+                    PressScale(
+                      child: ChoiceChip(
+                        label: Text(f.$1),
+                        selected: _filter == f.$2,
+                        selectedColor: AppColors.navy,
+                        labelStyle: TextStyle(color: _filter == f.$2 ? Colors.white : AppColors.navy, fontWeight: FontWeight.w600),
+                        onSelected: (_) => setState(() => _filter = f.$2),
+                      ),
                     ),
                 ]),
                 const SizedBox(height: 8),
@@ -86,7 +91,8 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
                     ),
                   )
                 else
-                  for (final r in rows) _PaymentTile(record: r),
+                  for (var i = 0; i < rows.length; i++)
+                    FadeSlideIn(index: i, child: _PaymentTile(record: rows[i])),
                 Center(child: TextButton(onPressed: () => context.push('/support/new?topic=payment'), child: const Text('Problem with a payment? Ask support'))),
               ],
             ),
@@ -106,7 +112,7 @@ class _Total extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE3E8EE))),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.swatchE3E8EE)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
           const SizedBox(height: 4),
@@ -120,36 +126,39 @@ class _PaymentTile extends StatelessWidget {
   final PaymentRecord record;
 
   (Color, IconData) get _style => switch (record.outcome) {
-        PaymentOutcome.paid => (const Color(0xFF1B7F4B), Icons.check_circle_rounded),
+        PaymentOutcome.paid => (AppColors.swatch1B7F4B, Icons.check_circle_rounded),
         PaymentOutcome.refunded => (const Color(0xFF1E5AA8), Icons.undo_rounded),
         PaymentOutcome.failed => (AppColors.error, Icons.cancel_rounded),
-        PaymentOutcome.pending => (const Color(0xFFB26A00), Icons.schedule_rounded),
+        PaymentOutcome.pending => (AppColors.swatchB26A00, Icons.schedule_rounded),
       };
 
   @override
   Widget build(BuildContext context) {
     final (color, icon) = _style;
     final canOpen = record.bookingId != null;
-    return Card(
-      margin: const EdgeInsets.only(top: 10),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFE3E8EE))),
-      child: ListTile(
-        onTap: canOpen ? () => context.push('/bookings/${record.bookingId}') : null,
-        leading: Icon(icon, color: color),
-        title: Text(record.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text([
-          if (record.createdAt != null) formatDmy(record.createdAt!),
-          if (record.method.isNotEmpty) record.method,
-          if (record.reference.isNotEmpty) record.reference,
-        ].join(' - ')),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(rupees(record.amount), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-            Text(record.statusLabel, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700)),
-          ],
+    return PressScale(
+      scale: 0.985,
+      child: Card(
+        margin: const EdgeInsets.only(top: 10),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.swatchE3E8EE)),
+        child: ListTile(
+          onTap: canOpen ? () => context.push('/bookings/${record.bookingId}') : null,
+          leading: Icon(icon, color: color),
+          title: Text(record.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text([
+            if (record.createdAt != null) formatDmy(record.createdAt!),
+            if (record.method.isNotEmpty) record.method,
+            if (record.reference.isNotEmpty) record.reference,
+          ].join(' - ')),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(rupees(record.amount), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              Text(record.statusLabel, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700)),
+            ],
+          ),
         ),
       ),
     );
@@ -166,7 +175,7 @@ class RefundsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final refunds = ref.watch(myRefundsProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: AppColors.swatchF6F8FA,
       appBar: _bar(context, 'My refunds'),
       body: refunds.when(
         skipLoadingOnReload: true,
@@ -186,7 +195,8 @@ class RefundsScreen extends ConsumerWidget {
               return RefreshRunner.run(context, [() => ref.read(myRefundsProvider.future)]);
             },
             child: ListView(padding: const EdgeInsets.all(16), children: [
-              for (final r in list) RefundCard(refund: r),
+              for (var i = 0; i < list.length; i++)
+                FadeSlideIn(index: i, child: RefundCard(refund: list[i])),
               Center(child: TextButton(onPressed: () => context.push('/support/new?topic=refund'), child: const Text('Refund not received? Ask support'))),
             ]),
           );
@@ -224,11 +234,11 @@ class RefundCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rejected = refund.stage == RefundStage.rejected;
     final done = refund.stage == RefundStage.refunded;
-    final color = rejected ? AppColors.error : (done ? const Color(0xFF1B7F4B) : AppColors.navy);
+    final color = rejected ? AppColors.error : (done ? AppColors.swatch1B7F4B : AppColors.navy);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE3E8EE))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.swatchE3E8EE)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -245,7 +255,15 @@ class RefundCard extends StatelessWidget {
           Row(children: [
             for (var i = 0; i < _steps.length; i++) ...[
               _Dot(active: !rejected && i <= _reached, current: i == _reached, color: color),
-              if (i < _steps.length - 1) Expanded(child: Container(height: 2, color: !rejected && i < _reached ? color : const Color(0xFFD5DCE8))),
+              if (i < _steps.length - 1)
+                Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeOutCubic,
+                    height: 2,
+                    color: !rejected && i < _reached ? color : AppColors.swatchD5DCE8,
+                  ),
+                ),
             ],
           ]),
           const SizedBox(height: 6),
@@ -281,13 +299,18 @@ class _Dot extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => AnimatedContainer(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
         width: current ? 16 : 12,
         height: current ? 16 : 12,
         decoration: BoxDecoration(
           color: active ? color : Colors.white,
           shape: BoxShape.circle,
-          border: Border.all(color: active ? color : const Color(0xFFD5DCE8), width: 2),
+          border: Border.all(color: active ? color : AppColors.swatchD5DCE8, width: 2),
+          boxShadow: current
+              ? [BoxShadow(color: color.withValues(alpha: 0.28), blurRadius: 6, offset: const Offset(0, 2))]
+              : null,
         ),
         child: active ? const Icon(Icons.check, size: 9, color: Colors.white) : null,
       );

@@ -1,3 +1,4 @@
+import 'package:calservices_customer/shared/theme/app_colors.dart';
 import 'dart:async';
 
 import 'package:decimal/decimal.dart';
@@ -118,7 +119,7 @@ class _OffersRailState extends ConsumerState<OffersRail> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: StudioTitle(text: title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+              child: StudioTitle(text: title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.swatch1A1A1A)),
             ),
             SizedBox(
               height: 96,
@@ -190,8 +191,8 @@ class _OfferTicket extends StatelessWidget {
     final hasImage = image.isNotEmpty;
     final hasMin = coupon.minBooking > Decimal.zero;
     final detail = hasMin ? 'Code ${coupon.code} · On orders above \u20b9${coupon.minBooking}' : 'Code ${coupon.code}';
-    final head = hasImage ? (lightText ? Colors.white : const Color(0xFF111827)) : const Color(0xFF111827);
-    final sub = hasImage ? (lightText ? Colors.white.withOpacity(0.9) : const Color(0xFF374151)) : const Color(0xFF4B5563);
+    final head = hasImage ? (lightText ? Colors.white : AppColors.gray900) : AppColors.gray900;
+    final sub = hasImage ? (lightText ? Colors.white.withOpacity(0.9) : AppColors.gray700) : const Color(0xFF4B5563);
     return GestureDetector(
       onTap: () => _showCouponDetails(context, coupon, accent),
       child: ClipPath(
@@ -318,7 +319,7 @@ class _CouponDetailsSheet extends StatelessWidget {
             width: 40,
             height: 40,
             margin: const EdgeInsets.only(bottom: 10),
-            decoration: const BoxDecoration(color: Color(0xFF1F2937), shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: AppColors.gray800, shape: BoxShape.circle),
             child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
           ),
         ),
@@ -350,11 +351,11 @@ class _CouponDetailsSheet extends StatelessWidget {
                             child: Text(
                               coupon.title,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 20, height: 1.2, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+                              style: const TextStyle(fontSize: 20, height: 1.2, fontWeight: FontWeight.w800, color: AppColors.gray900),
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Center(child: Text(min, style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)))),
+                          Center(child: Text(min, style: const TextStyle(fontSize: 14, color: AppColors.swatch6B7280))),
                           const SizedBox(height: 12),
                           Center(
                             child: GestureDetector(
@@ -369,7 +370,7 @@ class _CouponDetailsSheet extends StatelessWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(coupon.code, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: Color(0xFF374151))),
+                                    Text(coupon.code, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: AppColors.gray700)),
                                     const SizedBox(width: 10),
                                     Icon(Icons.copy_rounded, size: 15, color: accent),
                                     const SizedBox(width: 4),
@@ -381,7 +382,7 @@ class _CouponDetailsSheet extends StatelessWidget {
                           ),
                           if (terms.isNotEmpty) ...[
                             const SizedBox(height: 22),
-                            const Text('Terms & Conditions', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                            const Text('Terms & Conditions', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.gray900)),
                             const SizedBox(height: 10),
                             for (final t in terms)
                               Padding(
@@ -389,8 +390,8 @@ class _CouponDetailsSheet extends StatelessWidget {
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('•  ', style: TextStyle(fontSize: 14, color: Color(0xFF374151))),
-                                    Expanded(child: Text(t, style: const TextStyle(fontSize: 14, height: 1.3, color: Color(0xFF374151)))),
+                                    const Text('•  ', style: TextStyle(fontSize: 14, color: AppColors.gray700)),
+                                    Expanded(child: Text(t, style: const TextStyle(fontSize: 14, height: 1.3, color: AppColors.gray700))),
                                   ],
                                 ),
                               ),
@@ -410,7 +411,7 @@ class _CouponDetailsSheet extends StatelessWidget {
                             icon: const Icon(Icons.copy_rounded, size: 18),
                             label: const Text('Copy Code'),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF111827),
+                              foregroundColor: AppColors.gray900,
                               side: const BorderSide(color: Color(0xFFD1D5DB)),
                               minimumSize: const Size.fromHeight(50),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

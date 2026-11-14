@@ -11,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error.dart';
@@ -33,6 +32,9 @@ import '../../data/booking_repository.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../widgets/active_quote_card.dart';
+import '../widgets/mason_quote_payment_card.dart';
+import '../../domain/mason_rules.dart' show bookingAmountLabel;
+import 'pdf_viewer_screen.dart';
 import '../widgets/grocery_order_status_view.dart';
 import '../../domain/grocery_fee_split.dart';
 import '../../../pricing/domain/pricing_providers.dart';
@@ -175,27 +177,36 @@ class BookingDetailScreen extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF6B7788),
+                              color: AppColors.swatch6B7788,
                               height: 1.3,
                             ),
                           ),
                           const SizedBox(height: 8),
-                          BookingStatusChip(status: booking.status, grocery: booking.isGroceryBooking),
+                          BounceOnChange(
+                            value: booking.status,
+                            child: BookingStatusChip(
+                              status: booking.status,
+                              grocery: booking.isGroceryBooking,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
                 const _BdDivider(),
-                Wrap(
-                  spacing: 18,
-                  runSpacing: 8,
-                  children: [
-                    _BdMeta(Icons.schedule_rounded, booking.scheduledTimeSlot),
-                    _BdMeta(Icons.calendar_today_outlined, formatDateString(booking.scheduledDate)),
-                    _BdMeta(Icons.shopping_bag_outlined,
-                        '$itemCount item${itemCount == 1 ? '' : 's'}'),
-                  ],
+                FadeSlideIn(
+                  index: 1,
+                  child: Wrap(
+                    spacing: 18,
+                    runSpacing: 8,
+                    children: [
+                      _BdMeta(Icons.schedule_rounded, booking.scheduledTimeSlot),
+                      _BdMeta(Icons.calendar_today_outlined, formatDateString(booking.scheduledDate)),
+                      _BdMeta(Icons.shopping_bag_outlined,
+                          '$itemCount item${itemCount == 1 ? '' : 's'}'),
+                    ],
+                  ),
                 ),
                 const _BdDivider(),
                 const Text(
@@ -204,7 +215,7 @@ class BookingDetailScreen extends ConsumerWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.4,
-                    color: Color(0xFF6B7788),
+                    color: AppColors.swatch6B7788,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -272,7 +283,7 @@ class BookingDetailScreen extends ConsumerWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.4,
-                    color: Color(0xFF6B7788),
+                    color: AppColors.swatch6B7788,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -305,7 +316,7 @@ class BookingDetailScreen extends ConsumerWidget {
                 const _BdDivider(),
                 _BillRow(
                   label: 'Total',
-                  amount: '₹${booking.totalAmount}',
+                  amount: bookingAmountLabel(booking),
                   isBold: true,
                 ),
               ],
@@ -322,6 +333,11 @@ class BookingDetailScreen extends ConsumerWidget {
           if (booking.hasActiveQuote) ...[
                   ActiveQuoteCard(booking: booking),
                   const SizedBox(height: 16),
+                  // Mason / waterproofing: accepted quote -> Quote Total / Advance / Remaining (web parity).
+                  if (isMasonQuoteBooking(booking) && (booking.quote?.isAccepted ?? false)) ...[
+                    MasonQuotePaymentCard(booking: booking),
+                    const SizedBox(height: 16),
+                  ],
                 ],
 
           // Logistics bookings: add / edit stops (a paid booking whose fare
@@ -359,7 +375,10 @@ class BookingDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _LiveTimelineTracker(booking: booking),
+                FadeSlideIn(
+                  index: 2,
+                  child: _LiveTimelineTracker(booking: booking),
+                ),
               ],
             ),
           ),
@@ -473,12 +492,15 @@ class BookingDetailScreen extends ConsumerWidget {
                                 Expanded(
                                   child: OutlinedButton.icon(
                                     // The server decides: a masked bridge call, or a direct dial when masking is off.
-                                    onPressed: () => callProfessional(
-                                      context,
-                                      ref,
-                                      bookingId: booking.id,
-                                      directNumber: booking.technician!.phone,
-                                    ),
+                                    // Disabled once the job is completed / cancelled: nobody should be ringing the pro afterwards.
+                                    onPressed: isBookingFinished(booking.status)
+                                        ? null
+                                        : () => callProfessional(
+                                              context,
+                                              ref,
+                                              bookingId: booking.id,
+                                              directNumber: booking.technician!.phone,
+                                            ),
                                     icon: const Icon(Icons.call, size: 16),
                                     label: Text(_isLogisticsBooking(booking)
                                         ? 'Call Driver'
@@ -489,7 +511,9 @@ class BookingDetailScreen extends ConsumerWidget {
                               ],
                               Expanded(
                                 child: FilledButton.icon(
-                                  onPressed: () {
+                                  onPressed: isBookingFinished(booking.status)
+                                      ? null
+                                      : () {
                                     final identifier =
                                         booking.trackingIdentifier ?? '${booking.id}';
                                     // Pass the full booking so the tracking
@@ -685,10 +709,16 @@ class BookingDetailScreen extends ConsumerWidget {
           final dir = await getTemporaryDirectory();
           final file = File('${dir.path}/Invoice-${booking.requestId}.pdf');
           await file.writeAsBytes(data, flush: true);
-          await Share.shareXFiles(
-            [XFile(file.path, mimeType: 'application/pdf')],
-            subject: 'Invoice ${booking.requestId}',
-          );
+          if (!context.mounted) return;
+          messenger.hideCurrentSnackBar();
+          // Open it on screen (Share / save stays in the viewer's app bar) rather than only the Android share sheet.
+          await Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => PdfViewerScreen(
+              filePath: file.path,
+              title: 'Invoice ${booking.requestId}',
+              shareSubject: 'Invoice ${booking.requestId}',
+            ),
+          ));
         } catch (_) {
           if (context.mounted) {
             messenger.showSnackBar(const SnackBar(
@@ -717,10 +747,15 @@ class BookingDetailScreen extends ConsumerWidget {
           final dir = await getTemporaryDirectory();
           final file = File('${dir.path}/Receipt-${booking.requestId}.pdf');
           await file.writeAsBytes(data, flush: true);
-          await Share.shareXFiles(
-            [XFile(file.path, mimeType: 'application/pdf')],
-            subject: 'Advance receipt ${booking.requestId}',
-          );
+          if (!context.mounted) return;
+          messenger.hideCurrentSnackBar();
+          await Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => PdfViewerScreen(
+              filePath: file.path,
+              title: 'Receipt ${booking.requestId}',
+              shareSubject: 'Advance receipt ${booking.requestId}',
+            ),
+          ));
         } catch (_) {
           if (context.mounted) {
             messenger.showSnackBar(const SnackBar(
@@ -1243,7 +1278,9 @@ class _TimelineTracker extends StatelessWidget {
           final stepIndex = index ~/ 2;
           final isCompleted = stepIndex < activeIndex;
           return Expanded(
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
               height: 2.5,
               color: isCompleted ? accent : AppColors.divider,
             ),
@@ -1257,9 +1294,11 @@ class _TimelineTracker extends StatelessWidget {
 
         return Column(
           children: [
-            Container(
-              width: 24,
-              height: 24,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              width: isCurrent ? 26 : 24,
+              height: isCurrent ? 26 : 24,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isCompleted
@@ -1273,25 +1312,35 @@ class _TimelineTracker extends StatelessWidget {
                       : AppColors.border,
                   width: isCurrent ? 2.5 : 1.5,
                 ),
+                boxShadow: isCurrent
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.28),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
               ),
               child: Center(
-                child: isCompleted
-                    ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
-                    : isCurrent
-                        ? Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: isCompleted
+                      ? const Icon(Icons.check_rounded,
+                          key: ValueKey('done'), size: 14, color: Colors.white)
+                      : isCurrent
+                          ? PulseDot(
+                              key: const ValueKey('active'),
+                              size: 8,
                               color: accent,
-                            ),
-                          )
-                        : null,
+                            )
+                          : const SizedBox.shrink(key: ValueKey('idle')),
+                ),
               ),
             ),
             const SizedBox(height: 5),
-            Text(
-              label,
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
               style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: (isCompleted || isCurrent)
@@ -1303,6 +1352,7 @@ class _TimelineTracker extends StatelessWidget {
                         ? accent
                         : AppColors.textSecondary,
               ),
+              child: Text(label),
             ),
           ],
         );
@@ -1373,7 +1423,7 @@ BoxDecoration _bdCardDecoration() => BoxDecoration(
       borderRadius: BorderRadius.circular(18),
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+          color: AppColors.blue900.withValues(alpha: 0.06),
           blurRadius: 16,
           offset: const Offset(0, 4),
         ),
@@ -1385,7 +1435,7 @@ class _BdDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: Divider(height: 1, thickness: 0.8, color: Color(0xFFEDF0F5)),
+        child: Divider(height: 1, thickness: 0.8, color: AppColors.swatchEDF0F5),
       );
 }
 
@@ -1397,7 +1447,7 @@ class _BdMeta extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF6B7788)),
+          Icon(icon, size: 16, color: AppColors.swatch6B7788),
           const SizedBox(width: 6),
           Text(text,
               style: const TextStyle(
@@ -1758,8 +1808,8 @@ List<Widget> _otpCards(Booking b) {
       'DELIVERY OTP',
       'Share this code with the driver only after your goods have been delivered',
       b.deliveryOtp!,
-      const Color(0xFF047857),
-      const Color(0xFFECFDF5),
+      AppColors.emerald700,
+      AppColors.swatchECFDF5,
     );
   }
   if (b.paymentConfirmationOtp != null) {
@@ -1769,8 +1819,8 @@ List<Widget> _otpCards(Booking b) {
           ? 'Driver reported cash collection. Share this code with your driver to confirm the payment.'
           : 'Technician reported cash collection. Share this code to confirm the payment.',
       b.paymentConfirmationOtp!,
-      const Color(0xFF1E3A8A),
-      const Color(0xFFE8EDF7),
+      AppColors.blue900,
+      AppColors.swatchE8EDF7,
     );
   }
   return out;

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/navigation/storefront_routes.dart';
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/navigation/admin_link_resolver.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
@@ -125,18 +127,14 @@ void openStudioDestination(BuildContext context, StudioDestination d, String pag
     case 'route':
       handleAdminLinkTap(context, v.startsWith('/') || v.startsWith('http') ? v : '/$v', fallbackPath: '/');
     case 'category':
-      final slug = d.slug.isNotEmpty ? d.slug : v;
-      if (slug.isEmpty) return;
-      context.push(grocery ? '/groceries/seller-hub?category=$slug' : '/categories/$slug');
     case 'product':
-      if (v.isNotEmpty) context.push('/products/$v');
     case 'service':
     case 'package':
-      if (v.isNotEmpty) context.push('/services/$v');
     case 'collection':
-      if (v.isNotEmpty) context.push('/baskets/$v');
     case 'search':
-      context.push('/search?mode=${grocery ? 'groceries' : 'services'}${v.isEmpty ? '' : '&q=${Uri.encodeQueryComponent(v)}'}');
+      // One decision point for category vs product (see StorefrontRoutes): a category ALWAYS opens its category page.
+      final path = StorefrontRoutes.forDestination(type: d.type, value: v, slug: d.slug, grocery: grocery);
+      if (path != null) context.push(path);
     case 'offer':
       context.push(_offerPath(v, grocery));
     default:
@@ -325,7 +323,7 @@ class _StudioBannerCarouselState extends State<StudioBannerCarousel> {
     if (widget.section.template == 'ad_carousel' && _slides.length >= 2) {
       return _StudioCoverflow(key: ValueKey('cf-${widget.section.id}'), section: widget.section, pageKey: widget.pageKey);
     }
-    final ratio = _aspect(widget.section.settings['aspect']?.toString());
+    final ratio = AppResponsive.bannerAspect(context, _aspect(widget.section.settings['aspect']?.toString()));
     final showDots = _slides.length > 1 && widget.section.flag('indicators', fallback: true);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -374,7 +372,7 @@ class _StudioBannerCarouselState extends State<StudioBannerCarousel> {
                   height: 6,
                   width: i == _index ? 18 : 6,
                   decoration: BoxDecoration(
-                    color: i == _index ? const Color(0xFF1A1A1A) : const Color(0x551A1A1A),
+                    color: i == _index ? AppColors.swatch1A1A1A : const Color(0x551A1A1A),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -448,7 +446,7 @@ class _StudioCoverflowState extends State<_StudioCoverflow> {
   @override
   Widget build(BuildContext context) {
     // Reference card shape is ~1.45:1 for the standard banner size.
-    final double ratio = (_aspect(widget.section.settings['aspect']?.toString()) / 1.38).clamp(0.8, 2.2).toDouble();
+    final double ratio = (AppResponsive.bannerAspect(context, _aspect(widget.section.settings['aspect']?.toString())) / 1.38).clamp(0.8, 2.4).toDouble();
     final showDots = widget.section.flag('indicators', fallback: true);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -515,7 +513,7 @@ class _StudioCoverflowState extends State<_StudioCoverflow> {
                   height: 6,
                   width: i == _cur % _n ? 18 : 6,
                   decoration: BoxDecoration(
-                    color: i == _cur % _n ? const Color(0xFF1A1A1A) : const Color(0x551A1A1A),
+                    color: i == _cur % _n ? AppColors.swatch1A1A1A : const Color(0x551A1A1A),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -577,7 +575,7 @@ class _QuickAccessCards extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.swatch1A1A1A),
                           ),
                         ],
                       ],
@@ -714,10 +712,10 @@ class _FestivalShowcase extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final st = section.settings;
-    final start = _hexColor(st['background'], const Color(0xFFF59E0B));
-    final end = _hexColor(st['background_end'], const Color(0xFFB45309));
+    final start = _hexColor(st['background'], AppColors.warning);
+    final end = _hexColor(st['background_end'], AppColors.amber700);
     final dark = (st['text_color'] ?? 'light').toString() == 'dark';
-    final fg = dark ? const Color(0xFF1F2937) : Colors.white;
+    final fg = dark ? AppColors.gray800 : Colors.white;
     final pos = (st['hero_position'] ?? 'right').toString();
     final title = section.title.isNotEmpty ? section.title : 'Festival Specials';
     final subtitle = (st['subtitle'] ?? '').toString();
@@ -853,18 +851,18 @@ class _CutoutPanel extends ConsumerWidget {
 
     int iv(String k, int d, int lo, int hi) => (int.tryParse(st[k]?.toString() ?? '') ?? d).clamp(lo, hi).toInt();
 
-    final c1 = _hexColor(st['panel_color'], const Color(0xFFF59E0B));
+    final c1 = _hexColor(st['panel_color'], AppColors.warning);
     final c2 = _hexColor(st['panel_color_end'], c1);
     final dir = (st['panel_gradient'] ?? 'vertical').toString();
     final begin = dir == 'horizontal' ? Alignment.centerLeft : (dir == 'diagonal' ? Alignment.topLeft : Alignment.topCenter);
     final end = dir == 'horizontal' ? Alignment.centerRight : (dir == 'diagonal' ? Alignment.bottomRight : Alignment.bottomCenter);
     final dark = (st['text_color'] ?? 'light').toString() == 'dark';
-    final fg = dark ? const Color(0xFF1F2937) : Colors.white;
+    final fg = dark ? AppColors.gray800 : Colors.white;
     final pad = iv('panel_padding', 14, 0, 32).toDouble();
     final heroH = iv('hero_height', 170, 80, 320).toDouble();
     final gap = iv('item_gap', 10, 4, 24).toDouble();
     final vertical = (st['list_orientation'] ?? 'horizontal').toString() == 'vertical';
-    final cols = iv('grid_columns', 2, 2, 5);
+    final cols = AppResponsive.sectionColumns(context, iv('grid_columns', 2, 2, 5));
     final rows = iv('rail_rows', 1, 1, 5);
     final cardW = iv('card_width', 150, 100, 220).toDouble();
 
@@ -1014,7 +1012,7 @@ class _BestsellerTiles extends ConsumerWidget {
         ? [for (final t in raw) if (t is Map && t['enabled'] != false) Map<String, dynamic>.from(t)]
         : <Map<String, dynamic>>[];
     if (tiles.isEmpty) return const SizedBox.shrink();
-    final cols = section.intSetting('columns', 3).clamp(2, 4);
+    final cols = AppResponsive.sectionColumns(context, section.intSetting('columns', 3).clamp(2, 4));
     final tree = ref.watch(marketplaceCategoryTreeProvider).valueOrNull ?? const <MarketplaceCategory>[];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1038,7 +1036,7 @@ class _BestsellerTiles extends ConsumerWidget {
               crossAxisCount: cols,
               crossAxisSpacing: 10,
               mainAxisSpacing: 14,
-              childAspectRatio: cols == 2 ? 0.92 : (cols == 4 ? 0.7 : 0.82),
+              childAspectRatio: cols == 2 ? 0.86 : (cols >= 4 ? 0.66 : 0.78),
             ),
             itemBuilder: (context, i) => _BestsellerTileCard(
               key: ValueKey('studio-bestseller-${tiles[i]['id'] ?? i}'),
@@ -1070,7 +1068,7 @@ class _BestsellerTileCard extends ConsumerWidget {
       }
     }
     final slug = (tile['category_slug'] ?? '').toString();
-    if (slug.isNotEmpty) context.push('/groceries/seller-hub?category=$slug');
+    if (slug.isNotEmpty) context.push(StorefrontRoutes.groceryCategory(slug));
   }
 
   @override
@@ -1095,63 +1093,97 @@ class _BestsellerTileCard extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () => _open(context),
-      child: Column(
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
-                  child: imagesPending
-                      ? const ShimmerBox(borderRadius: 8)
-                      : thumbs.isEmpty
-                      ? const Center(child: Icon(Icons.local_grocery_store_rounded, color: AppColors.groceryGreenDark, size: 32))
-                      : GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: 4,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 3,
-                            mainAxisSpacing: 3,
-                          ),
-                          itemBuilder: (context, i) => ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              color: Colors.white,
-                              child: SizedBox.expand(child: AppRemoteImage(imageUrl: thumbs[i % thumbs.length], title: title, fit: BoxFit.cover)),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                alignment: Alignment.bottomCenter,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+                    child: imagesPending
+                        ? const ShimmerBox(borderRadius: 8)
+                        : thumbs.isEmpty
+                            ? const Center(
+                                child: Icon(Icons.local_grocery_store_rounded,
+                                    color: AppColors.groceryGreenDark, size: 32),
+                              )
+                            : GridView.builder(
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: 4,
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 2,
+                                  mainAxisSpacing: 2,
+                                ),
+                                itemBuilder: (context, i) => ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: ColoredBox(
+                                    color: Colors.white,
+                                    child: SizedBox.expand(
+                                      child: AppRemoteImage(
+                                        imageUrl: thumbs[i % thumbs.length],
+                                        title: title,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                  ),
+                  if (more > 0)
+                    Positioned(
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.10),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
                             ),
+                          ],
+                        ),
+                        child: Text(
+                          '+$more more',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.swatch6B7280,
                           ),
                         ),
-                ),
-                if (more > 0)
-                  Positioned(
-                    right: 4,
-                    bottom: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 4)],
                       ),
-                      child: Text('+$more more',
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.navy)),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.navy, height: 1.2),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.gray900,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1193,7 +1225,7 @@ class _ServiceCategoryGrid extends ConsumerWidget {
         final limit = int.tryParse((section.content['limit'] ?? '').toString()) ?? 8;
         if (list.length > limit) list = list.sublist(0, limit);
         if (list.isEmpty) return const SizedBox.shrink();
-        final cols = (int.tryParse(section.settings['columns']?.toString() ?? '') ?? 3).clamp(2, 4);
+        final cols = AppResponsive.sectionColumns(context, (int.tryParse(section.settings['columns']?.toString() ?? '') ?? 3).clamp(2, 4));
         // Admin "Show on each card" switches.
         final showImage = section.flag('show_category_image', fallback: true);
         final showName = section.flag('show_category_name', fallback: true);
@@ -1210,7 +1242,7 @@ class _ServiceCategoryGrid extends ConsumerWidget {
               if (section.title.isNotEmpty || section.titleImage.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                  child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.swatch1A1A1A)),
                 ),
               if (circular)
                 SizedBox(
@@ -1241,7 +1273,7 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                               if (showImage && showName) const SizedBox(height: 6),
                               if (showName)
                                 Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.swatch1A1A1A)),
                             ],
                           ),
                         ),
@@ -1280,7 +1312,7 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                                   child: (c.image ?? '').isNotEmpty
                                       ? AppRemoteImage(imageUrl: c.image!, fit: BoxFit.cover)
                                       : Container(
-                                          color: const Color(0xFFF1F5F9),
+                                          color: AppColors.surfaceVariant,
                                           child: const Icon(Icons.category_rounded, color: AppColors.navy),
                                         ),
                                 ),
@@ -1296,7 +1328,7 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                                       children: [
                                         if (showName)
                                           Text(c.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.15, color: Color(0xFF1A1A1A))),
+                                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.15, color: AppColors.swatch1A1A1A)),
                                         if (countText(c) != null)
                                           Text(countText(c)!, style: const TextStyle(fontSize: 9.5, color: AppColors.textHint)),
                                       ],
@@ -1355,7 +1387,7 @@ class _ServiceDriven extends ConsumerWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                    child: StudioTitle(text: section.title, imageUrl: section.titleImage, font: section.titleFont, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.swatch1A1A1A)),
                   ),
                   if (showSeeAll)
                     GestureDetector(

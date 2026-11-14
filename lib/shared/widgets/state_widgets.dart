@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/errors/error_manager.dart';
 import '../theme/app_colors.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 
 /// Full-area error: icon, plain-language message and a Retry that re-runs the request.
 class ErrorState extends StatelessWidget {
@@ -31,24 +32,35 @@ class ErrorState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: EdgeInsets.all(compact ? 16 : 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(_icon, size: compact ? 36 : 52, color: AppColors.navy),
-            const SizedBox(height: 14),
-            Text(message.title,
-                textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy)),
-            const SizedBox(height: 6),
-            Text(message.body, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black54)),
-            if (message.retryable && onRetry != null) ...[
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: onRetry,
-                style: FilledButton.styleFrom(backgroundColor: AppColors.navy, minimumSize: const Size(140, 46)),
-                child: Text(context.l10n.tryAgain),
+        child: FadeSlideIn(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AttentionPulse(
+                maxScale: 1.04,
+                child: Icon(_icon, size: compact ? 36 : 52, color: AppColors.navy),
               ),
+              const SizedBox(height: 14),
+              Text(message.title,
+                  textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy)),
+              const SizedBox(height: 6),
+              Text(message.body, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black54)),
+              if (message.retryable && onRetry != null) ...[
+                const SizedBox(height: 16),
+                AttentionPulse(
+                  enabled: true,
+                  maxScale: 1.03,
+                  child: PressScale(
+                    child: FilledButton(
+                      onPressed: onRetry,
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.navy, minimumSize: const Size(140, 46)),
+                      child: Text(context.l10n.tryAgain),
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -69,19 +81,30 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(radius: 34, backgroundColor: const Color(0xFFEAF0F6), child: Icon(icon, size: 34, color: AppColors.navy)),
-            const SizedBox(height: 16),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy)),
-            const SizedBox(height: 6),
-            Text(body, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black54)),
-            if (actionLabel != null && onAction != null) ...[
+        child: FadeSlideIn(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AttentionPulse(
+                maxScale: 1.04,
+                child: CircleAvatar(
+                  radius: 34,
+                  backgroundColor: const Color(0xFFEAF0F6),
+                  child: Icon(icon, size: 34, color: AppColors.navy),
+                ),
+              ),
               const SizedBox(height: 16),
-              OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+              Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy)),
+              const SizedBox(height: 6),
+              Text(body, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black54)),
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 16),
+                PressScale(
+                  child: OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -131,7 +154,7 @@ class _LoadingStateState extends State<LoadingState> with SingleTickerProviderSt
             Container(
               height: 64,
               margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(color: const Color(0xFFE3E8EE), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: AppColors.swatchE3E8EE, borderRadius: BorderRadius.circular(12)),
             ),
         ],
       ),

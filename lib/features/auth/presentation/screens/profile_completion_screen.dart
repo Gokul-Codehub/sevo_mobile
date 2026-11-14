@@ -9,6 +9,7 @@ import '../../../../shared/utils/input_validators.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_notifier.dart';
 import '../../../../shared/utils/focus_first_error.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 
 /// Screen allowing newly registered customers to set their display name & optional email.
 class ProfileCompletionScreen extends ConsumerStatefulWidget {
@@ -133,16 +134,23 @@ class _ProfileCompletionScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                Text('Almost there!', style: theme.textTheme.headlineMedium),
+                FadeSlideIn(
+                  child: Text('Almost there!', style: theme.textTheme.headlineMedium),
+                ),
                 const SizedBox(height: 8),
-                Text(
-                  'Please provide your name so our service professionals know who they are assisting.',
-                  style: theme.textTheme.bodyMedium,
+                FadeSlideIn(
+                  index: 1,
+                  child: Text(
+                    'Please provide your name so our service professionals know who they are assisting.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
                 const SizedBox(height: 32),
 
                 // Name field (Required)
-                TextFormField(
+                FadeSlideIn(
+                  index: 2,
+                  child: TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
@@ -155,13 +163,16 @@ class _ProfileCompletionScreenState
                   inputFormatters: [NoDigitsFormatter()],
                   validator: InputValidators.fullName,
                 ),
+                ),
                 const SizedBox(height: 16),
 
                 // Email: already verified via OTP on the previous screen —
                 // show it as a read-only confirmation instead of asking for
                 // it again. Only shown when it's actually known.
                 if (_verifiedEmail != null)
-                  Container(
+                  FadeSlideIn(
+                    index: 3,
+                    child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
@@ -194,61 +205,76 @@ class _ProfileCompletionScreenState
                         ),
                       ],
                     ),
+                  ),
                   )
                 else
                   // Email field (Optional) — only shown when the customer
                   // signed up via phone and hasn't given an email yet.
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email Address (Optional)',
-                      hintText: 'For booking invoices and receipts',
-                      prefixIcon: Icon(Icons.email_outlined),
+                  FadeSlideIn(
+                    index: 3,
+                    child: TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Address (Optional)',
+                        hintText: 'For booking invoices and receipts',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (val) => InputValidators.email(val, required: false),
                     ),
-                    validator: (val) => InputValidators.email(val, required: false),
                   ),
 
                 if (_needsMobile) ...[
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    maxLength: 10,
-                    inputFormatters: [IndianMobileFormatter()],
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile Number *',
-                      hintText: '10-digit mobile number',
-                      prefixIcon: Icon(Icons.phone_outlined),
-                      prefixText: '+91 ',
-                      counterText: '',
+                  FadeSlideIn(
+                    index: 4,
+                    child: TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      inputFormatters: [IndianMobileFormatter()],
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile Number *',
+                        hintText: '10-digit mobile number',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                        prefixText: '+91 ',
+                        counterText: '',
+                      ),
+                      validator: InputValidators.indianMobile,
                     ),
-                    validator: InputValidators.indianMobile,
                   ),
                 ],
 
                 const SizedBox(height: 36),
 
-                FilledButton(
-                  onPressed: _isLoading ? null : _handleComplete,
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Save and Continue'),
+                FadeSlideIn(
+                  index: 5,
+                  child: PressScale(
+                    child: FilledButton(
+                      onPressed: _isLoading ? null : _handleComplete,
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Save and Continue'),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
                 if (!_needsMobile)
-                  Center(
-                    child: TextButton(
-                      onPressed: () => finishSignIn(context, ref),
-                      child: const Text('Skip for now'),
+                  FadeSlideIn(
+                    index: 6,
+                    child: Center(
+                      child: TextButton(
+                        onPressed: () => finishSignIn(context, ref),
+                        child: const Text('Skip for now'),
+                      ),
                     ),
                   ),
               ],

@@ -149,10 +149,15 @@ class AppRemoteImage extends StatelessWidget {
       // looks sharp) means the same image only ever gets decoded once, at
       // roughly the size it's actually shown at.
       final dpr = MediaQuery.of(context).devicePixelRatio;
+      // Give the decoder ONE size limit only. Passing both width and height made Flutter decode the picture at
+      // exactly width x height, which squashed or stretched any photo whose shape differed from the tile (so
+      // "cover" had nothing left to crop and category photos looked oblong). One side keeps the true proportions;
+      // the 1.6x margin keeps a landscape photo sharp once it is cropped to a square tile.
       final targetCacheWidth =
-          width != null && width!.isFinite ? (width! * dpr).round() : null;
-      final targetCacheHeight =
-          height != null && height!.isFinite ? (height! * dpr).round() : null;
+          width != null && width!.isFinite ? (width! * dpr * 1.6).round() : null;
+      final targetCacheHeight = targetCacheWidth == null && height != null && height!.isFinite
+          ? (height! * dpr * 1.6).round()
+          : null;
 
       // Primary: Try live production network image
       imageContent = CachedNetworkImage(

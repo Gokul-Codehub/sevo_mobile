@@ -10,6 +10,7 @@ import 'package:lottie/lottie.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../../routing/app_router.dart';
 import '../../../auth/domain/auth_notifier.dart';
 import '../../../catalog/domain/catalog_providers.dart';
@@ -20,7 +21,7 @@ import '../../../../shared/utils/date_utils.dart';
 
 /// Accent used by the redesigned chat (user bubble, send button, orb glow).
 const Color _kAiAccent = Color(0xFF12A4C8);
-const Color _kAiInk = Color(0xFF0D253A);
+const Color _kAiInk = AppColors.primary;
 
 /// Opens the AI Assistant chat sheet.
 ///
@@ -83,6 +84,14 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
     final i = name.lastIndexOf('.');
     final ext = i < 0 ? '' : name.substring(i + 1).toLowerCase();
     return const {'png', 'jpg', 'jpeg', 'webp', 'gif', 'heic'}.contains(ext);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _inputController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -226,26 +235,40 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
               else ...[
               if (chatState.handedOff) _buildHandoffBanner(),
               Expanded(
-                child: chatState.messages.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                child: FadeThrough(
+                  child: chatState.messages.isEmpty
+                      ? KeyedSubtree(
+                          key: const ValueKey('ai-empty'),
+                          child: _buildEmptyState(),
+                        )
+                      : ListView.builder(
+                          key: const ValueKey('ai-thread'),
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          itemCount:
+                              chatState.messages.length +
+                              (chatState.isSending ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index >= chatState.messages.length) {
+                              return const FadeSlideIn(
+                                child: _TypingIndicatorBubble(),
+                              );
+                            }
+                            return FadeSlideIn(
+                              key: ValueKey(
+                                'm-$index-${chatState.messages[index].content.hashCode}',
+                              ),
+                              index: index > 8 ? 0 : index,
+                              child: _ChatBubble(
+                                message: chatState.messages[index],
+                              ),
+                            );
+                          },
                         ),
-                        itemCount:
-                            chatState.messages.length +
-                            (chatState.isSending ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index >= chatState.messages.length) {
-                            return const _TypingIndicatorBubble();
-                          }
-                          return _ChatBubble(
-                            message: chatState.messages[index],
-                          );
-                        },
-                      ),
+                ),
               ),
               // Added 2026-10-08 — quick-reply chips for the support-intake
               // wizard's current step (an order to pick, a return reason,
@@ -266,7 +289,8 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
       {bool active = false}) {
     return Padding(
       padding: const EdgeInsets.only(left: 8),
-      child: Tooltip(
+      child: PressScale(
+        child: Tooltip(
         message: tooltip,
         child: Material(
           color: Colors.white,
@@ -283,6 +307,7 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -491,79 +516,83 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _AiOrb(size: 132),
-            const SizedBox(height: 18),
-            const Text(
-              'Need anything?',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: _kAiInk,
-                letterSpacing: -0.3,
+        child: FadeSlideIn(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _AiOrb(size: 132),
+              const SizedBox(height: 18),
+              const Text(
+                'Need anything?',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: _kAiInk,
+                  letterSpacing: -0.3,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Ask me about your bookings, services or groceries and I will help you find what you need quickly.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7788),
-                height: 1.4,
+              const SizedBox(height: 8),
+              const Text(
+                'Ask me about your bookings, services or groceries and I will help you find what you need quickly.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.swatch6B7788,
+                  height: 1.4,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            // Same four starters the web chat offers on a fresh conversation.
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final p in const [
-                  ('Bookings & Orders', 'Show my bookings', Icons.event_note_outlined),
-                  ('Popular Services', 'What are your popular services?', Icons.bolt_rounded),
-                  ('Doorstep Process', 'How does the doorstep service process work?', Icons.home_repair_service_outlined),
-                  ('Cancellation & refund policy', 'What is your cancellation and refund policy?', Icons.policy_outlined),
-                ])
-                  Material(
-                    color: Colors.white,
-                    elevation: 1.5,
-                    shadowColor: const Color(0x1F1E3A8A),
-                    shape: const StadiumBorder(),
-                    child: InkWell(
-                      customBorder: const StadiumBorder(),
-                      onTap: () {
-                        ref
-                            .read(aiChatControllerProvider.notifier)
-                            .sendMessage(p.$2, displayText: p.$1);
-                        _scrollToBottom();
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(p.$3, size: 15, color: _kAiInk),
-                            const SizedBox(width: 6),
-                            Text(
-                              p.$1,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: _kAiInk,
-                              ),
+              const SizedBox(height: 20),
+              // Same four starters the web chat offers on a fresh conversation.
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final p in const [
+                    ('Bookings & Orders', 'Show my bookings', Icons.event_note_outlined),
+                    ('Popular Services', 'What are your popular services?', Icons.bolt_rounded),
+                    ('Doorstep Process', 'How does the doorstep service process work?', Icons.home_repair_service_outlined),
+                    ('Cancellation & refund policy', 'What is your cancellation and refund policy?', Icons.policy_outlined),
+                  ])
+                    PressScale(
+                      child: Material(
+                        color: Colors.white,
+                        elevation: 1.5,
+                        shadowColor: const Color(0x1F1E3A8A),
+                        shape: const StadiumBorder(),
+                        child: InkWell(
+                          customBorder: const StadiumBorder(),
+                          onTap: () {
+                            ref
+                                .read(aiChatControllerProvider.notifier)
+                                .sendMessage(p.$2, displayText: p.$1);
+                            _scrollToBottom();
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(p.$3, size: 15, color: _kAiInk),
+                                const SizedBox(width: 6),
+                                Text(
+                                  p.$1,
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: _kAiInk,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -604,23 +633,25 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
         spacing: 8,
         runSpacing: 8,
         children: options.map((option) {
-          return Material(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
+          return PressScale(
+            child: Material(
+              color: AppColors.surfaceVariant,
               borderRadius: BorderRadius.circular(20),
-              onTap: isSending ? null : () => _tapOption(option),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 9,
-                ),
-                child: Text(
-                  option.label,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.navy,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: isSending ? null : () => _tapOption(option),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 9,
+                  ),
+                  child: Text(
+                    option.label,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.navy,
+                    ),
                   ),
                 ),
               ),
@@ -722,7 +753,7 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.08),
+                    color: AppColors.blue900.withValues(alpha: 0.08),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -764,28 +795,40 @@ class _AiChatSheetState extends ConsumerState<_AiChatSheet> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Material(
-                    color: _kAiAccent,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: isSending ? null : _send,
-                      child: Padding(
-                        padding: const EdgeInsets.all(11),
-                        child: isSending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.arrow_upward_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
+                  AttentionPulse(
+                    enabled: !isSending &&
+                        (_inputController.text.trim().isNotEmpty || _attachment != null),
+                    maxScale: 1.08,
+                    child: PressScale(
+                      child: Material(
+                        color: _kAiAccent,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: isSending ? null : _send,
+                          child: Padding(
+                            padding: const EdgeInsets.all(11),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              child: isSending
+                                  ? const SizedBox(
+                                      key: ValueKey('send-busy'),
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      key: ValueKey('send-idle'),
+                                      Icons.arrow_upward_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -999,7 +1042,16 @@ class _ChatBubble extends ConsumerWidget {
 
     final bubble = Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.92, end: 1),
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutBack,
+        builder: (context, scale, child) => Transform.scale(
+          scale: scale,
+          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+          child: child,
+        ),
+        child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(
@@ -1011,7 +1063,7 @@ class _ChatBubble extends ConsumerWidget {
               ? null
               : [
                   BoxShadow(
-                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+                    color: AppColors.blue900.withValues(alpha: 0.06),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -1122,6 +1174,7 @@ class _ChatBubble extends ConsumerWidget {
           ],
         ),
       ),
+      ),
     );
     if (isUser) return bubble;
     return Row(
@@ -1200,28 +1253,90 @@ class _TypingIndicatorBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: const SizedBox(
-          width: 24,
-          height: 16,
-          child: Center(
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.textSecondary,
-              ),
-            ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(right: 8, bottom: 6),
+            child: _BotAvatar(size: 28),
           ),
-        ),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomLeft: Radius.circular(5),
+                bottomRight: Radius.circular(18),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.blue900.withValues(alpha: 0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const _TypingDots(),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// Three bouncing dots while the assistant is composing a reply.
+class _TypingDots extends StatefulWidget {
+  const _TypingDots();
+
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+        ..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final t = ((_c.value + i * 0.18) % 1.0);
+            final lift = (t < 0.5 ? t : 1 - t) * 2; // 0→1→0
+            return Padding(
+              padding: EdgeInsets.only(left: i == 0 ? 0 : 5),
+              child: Transform.translate(
+                offset: Offset(0, -4 * Curves.easeOut.transform(lift)),
+                child: Opacity(
+                  opacity: 0.35 + 0.65 * lift,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: _kAiAccent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -1242,7 +1357,7 @@ class _BotAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.10),
+            color: AppColors.blue900.withValues(alpha: 0.10),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

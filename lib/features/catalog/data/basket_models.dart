@@ -1,3 +1,4 @@
+import 'pack_label.dart';
 import 'package:decimal/decimal.dart';
 
 import '../../../config/env.dart';
@@ -123,7 +124,7 @@ class BasketSlotOption {
       slug: 'seller-hub-$pid',
       price: hasMrp ? mrp! : (sellingPrice ?? Decimal.zero),
       discountedPrice: hasMrp ? sellingPrice : null,
-      unit: unit.isNotEmpty ? unit : (packSize.isNotEmpty ? packSize : null),
+      unit: groceryPackLabel(packSize, unit).isEmpty ? null : groceryPackLabel(packSize, unit),
       categorySlug: 'seller_hub_groceries',
       imageUrl: primaryImage,
       inStock: inStock,
@@ -235,7 +236,7 @@ class BasketItem {
       slug: 'seller-hub-$productId',
       price: hasMrp ? mrp! : (unitPrice ?? Decimal.zero),
       discountedPrice: hasMrp ? unitPrice : null,
-      unit: unit.isNotEmpty ? unit : (packSize.isNotEmpty ? packSize : null),
+      unit: groceryPackLabel(packSize, unit).isEmpty ? null : groceryPackLabel(packSize, unit),
       categorySlug: 'seller_hub_groceries',
       imageUrl: primaryImage,
     );

@@ -138,41 +138,53 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: AppColors.primary, size: 28),
-                SizedBox(width: 10),
-                Text(
-                  'Payment Successful',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    color: AppColors.navy,
+            title: const FadeSlideIn(
+              child: Row(
+                children: [
+                  CelebrationBurst(
+                    size: 44,
+                    child: Icon(Icons.check_circle, color: AppColors.primary, size: 28),
                   ),
-                ),
-              ],
-            ),
-            content: Text(
-              'Your payment has been received successfully.\n\nTransaction ID: ${next.paymentId}',
-              style: const TextStyle(fontSize: 12, height: 1.4),
-            ),
-            actions: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Payment Successful',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        color: AppColors.navy,
+                      ),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    context.go(widget.fromCheckout
-                        ? '/bookings/success/${widget.bookingId}'
-                        : '/bookings/${widget.bookingId}');
-                  },
-                  child: Text(widget.fromCheckout ? 'Continue' : 'View Booking'),
+                ],
+              ),
+            ),
+            content: FadeSlideIn(
+              index: 1,
+              child: Text(
+                'Your payment has been received successfully.\n\nTransaction ID: ${next.paymentId}',
+                style: const TextStyle(fontSize: 12, height: 1.4),
+              ),
+            ),
+            actions: [
+              PressScale(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      context.go(widget.fromCheckout
+                          ? '/bookings/success/${widget.bookingId}'
+                          : '/bookings/${widget.bookingId}');
+                    },
+                    child: Text(widget.fromCheckout ? 'Continue' : 'View Booking'),
+                  ),
                 ),
               ),
             ],
@@ -231,6 +243,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         ),
       ),
       body: bookingAsync.when(
+        // A live refresh keeps the screen as it is (no flash back to the skeleton).
+        skipLoadingOnReload: true,
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Column(
@@ -264,92 +278,103 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ...List.generate(_paymentMethods.length, (index) {
                   final method = _paymentMethods[index];
                   final isSelected = _selectedMethodIndex == index;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedMethodIndex = index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: isSelected
-                              ? _accent
-                              : Colors.transparent,
-                          width: 1.4,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.navy.withValues(alpha: 0.06),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: _accentLight,
-                              borderRadius: BorderRadius.circular(12),
+                  return FadeSlideIn(
+                    index: index,
+                    child: PressScale(
+                      scale: 0.985,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedMethodIndex = index),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isSelected
+                                  ? _accent
+                                  : Colors.transparent,
+                              width: 1.4,
                             ),
-                            child: Icon(method.icon,
-                                color: _accent, size: 22),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  method.title,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.navy,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  method.subtitle,
-                                  style: const TextStyle(
-                                    fontSize: 11.5,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
+                            boxShadow: [
+                              BoxShadow(
                                 color: isSelected
-                                    ? _accent
-                                    : AppColors.border,
-                                width: 1.6,
+                                    ? _accent.withValues(alpha: 0.14)
+                                    : AppColors.navy.withValues(alpha: 0.06),
+                                blurRadius: isSelected ? 16 : 14,
+                                offset: const Offset(0, 4),
                               ),
-                            ),
-                            child: isSelected
-                                ? Center(
-                                    child: Container(
-                                      width: 11,
-                                      height: 11,
-                                      decoration: BoxDecoration(
-                                        color: _accent,
-                                        shape: BoxShape.circle,
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: _accentLight,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(method.icon,
+                                    color: _accent, size: 22),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      method.title,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.navy,
                                       ),
                                     ),
-                                  )
-                                : null,
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      method.subtitle,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? _accent
+                                        : AppColors.border,
+                                    width: 1.6,
+                                  ),
+                                ),
+                                child: isSelected
+                                    ? Center(
+                                        child: Container(
+                                          width: 11,
+                                          height: 11,
+                                          decoration: BoxDecoration(
+                                            color: _accent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   );
@@ -403,24 +428,30 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   padding: EdgeInsets.symmetric(vertical: 14),
                   child: Divider(height: 1, color: AppColors.border),
                 ),
-                _SummaryRow(
-                  label: 'Total',
-                  value: '₹${amount ?? ''}',
-                  bold: true,
+                BounceOnChange(
+                  value: amount?.toString() ?? '0',
+                  child: _SummaryRow(
+                    label: 'Total',
+                    value: '₹${amount ?? ''}',
+                    bold: true,
+                  ),
                 ),
                 const SizedBox(height: 18),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.lock_outline_rounded,
-                        color: AppColors.textSecondary, size: 14),
-                    SizedBox(width: 6),
-                    Text(
-                      'Safe & secure, 256-bit encrypted payment',
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary),
-                    ),
-                  ],
+                const FadeSlideIn(
+                  index: 4,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.lock_outline_rounded,
+                          color: AppColors.textSecondary, size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        'Safe & secure, 256-bit encrypted payment',
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -434,48 +465,57 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: SafeArea(
           top: false,
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton(
-              onPressed: (processing || booking == null || amount == null)
-                  ? null
-                  : () {
-                      ref.read(paymentControllerProvider.notifier).startPayment(
-                            booking: booking,
-                            amount: amount,
-                            paymentType: widget.paymentType,
-                          );
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accent,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: _accent.withValues(alpha: 0.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+          child: AttentionPulse(
+            enabled: !processing && booking != null && amount != null,
+            child: PressScale(
+              child: SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: (processing || booking == null || amount == null)
+                    ? null
+                    : () {
+                        AppHaptics.success();
+                        ref.read(paymentControllerProvider.notifier).startPayment(
+                              booking: booking,
+                              amount: amount,
+                              paymentType: widget.paymentType,
+                            );
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accent,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _accent.withValues(alpha: 0.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  elevation: 0,
                 ),
-                elevation: 0,
+                child: processing
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : BounceOnChange(
+                        value: amount?.toString() ?? 'pay',
+                        child: Text(
+                          amount == null ? 'Pay' : 'Pay ₹$amount',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
               ),
-              child: processing
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      amount == null ? 'Pay' : 'Pay ₹$amount',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+            ),
             ),
           ),
         ),
       ),
-    ),
+      ),
     );
   }
 }

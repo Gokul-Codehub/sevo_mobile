@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
+import '../../domain/mason_rules.dart' show bookingAmountLabel;
 import '../../../../shared/utils/date_utils.dart';
 
 /// Screen 17: Order Confirmed Screen
@@ -40,34 +42,46 @@ class BookingSuccessScreen extends ConsumerWidget {
               const SizedBox(height: 10),
 
               // ── Green Check Icon with Animated Glowing Ring ──
-              const _AnimatedSuccessBadge(),
+              const FadeSlideIn(
+                child: CelebrationBurst(
+                  child: _AnimatedSuccessBadge(),
+                ),
+              ),
               const SizedBox(height: 20),
 
-              const Text(
-                'Booking Confirmed!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.navy,
-                  letterSpacing: -0.3,
+              const FadeSlideIn(
+                index: 1,
+                child: Text(
+                  'Booking Confirmed!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.navy,
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Your service request has been scheduled successfully. Our verified technician will arrive during your chosen time slot.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: AppColors.textSecondary,
-                  height: 1.45,
+              const FadeSlideIn(
+                index: 2,
+                child: Text(
+                  'Your service request has been scheduled successfully. Our verified technician will arrive during your chosen time slot.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
                 ),
               ),
               const SizedBox(height: 28),
 
               // ── Booking Summary Card ──
               if (booking != null) ...[
-                Container(
+                FadeSlideIn(
+                  index: 3,
+                  child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: AppColors.background,
@@ -103,7 +117,7 @@ class BookingSuccessScreen extends ConsumerWidget {
                       const SizedBox(height: 10),
                       _SummaryRow(
                         label: 'Total Amount',
-                        value: '₹${booking.totalAmount}',
+                        value: bookingAmountLabel(booking),
                       ),
                       if (booking.address != null) ...[
                         const Divider(height: 22, color: AppColors.border),
@@ -116,65 +130,76 @@ class BookingSuccessScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                ),
                 const SizedBox(height: 32),
               ],
 
               // ── CTA Buttons ──
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Fixed 2026-08-27: this pushed '/bookings/$bookingId/track',
-                    // a path that doesn't match any registered route (the real
-                    // live-tracking route is '/track/:identifier' — see
-                    // AppRoutes.liveTracking in app_router.dart). Every tap
-                    // fell through to go_router's errorBuilder ("Page Not
-                    // Found"), which is the "page error" after tapping Track
-                    // right after booking. Fixed to the real route, and to
-                    // the same trackingIdentifier-first pattern already used
-                    // by the Track button on the booking detail screen.
-                    final identifier =
-                        booking?.trackingIdentifier ?? '$bookingId';
-                    context.push('/track/$identifier', extra: booking);
-                  },
-                  icon: const Icon(Icons.navigation_rounded, size: 18),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  label: const Text(
-                    'Track Service',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+              FadeSlideIn(
+                index: 4,
+                child: PressScale(
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // Fixed 2026-08-27: this pushed '/bookings/$bookingId/track',
+                        // a path that doesn't match any registered route (the real
+                        // live-tracking route is '/track/:identifier' — see
+                        // AppRoutes.liveTracking in app_router.dart). Every tap
+                        // fell through to go_router's errorBuilder ("Page Not
+                        // Found"), which is the "page error" after tapping Track
+                        // right after booking. Fixed to the real route, and to
+                        // the same trackingIdentifier-first pattern already used
+                        // by the Track button on the booking detail screen.
+                        final identifier =
+                            booking?.trackingIdentifier ?? '$bookingId';
+                        context.push('/track/$identifier', extra: booking);
+                      },
+                      icon: const Icon(Icons.navigation_rounded, size: 18),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      label: const Text(
+                        'Track Service',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
 
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: () => context.go('/'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.navy,
-                    side: const BorderSide(color: AppColors.border, width: 1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Back to Home',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+              FadeSlideIn(
+                index: 5,
+                child: PressScale(
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: () => context.go('/'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.navy,
+                        side: const BorderSide(color: AppColors.border, width: 1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Back to Home',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ),

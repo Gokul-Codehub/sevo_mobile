@@ -91,7 +91,7 @@ class _Summary extends StatelessWidget {
                   Expanded(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(value: (s.distribution[star] ?? 0) / total, minHeight: 6, backgroundColor: const Color(0xFFE8ECF1), valueColor: const AlwaysStoppedAnimation(_star)),
+                      child: LinearProgressIndicator(value: (s.distribution[star] ?? 0) / total, minHeight: 6, backgroundColor: AppColors.swatchE8ECF1, valueColor: const AlwaysStoppedAnimation(_star)),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -139,7 +139,7 @@ class _ReviewTile extends StatelessWidget {
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: review.isMine ? AppColors.navy.withValues(alpha: 0.4) : const Color(0xFFE8ECF1))),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: review.isMine ? AppColors.navy.withValues(alpha: 0.4) : AppColors.swatchE8ECF1)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             _Stars(review.rating.toDouble()),
@@ -154,7 +154,7 @@ class _ReviewTile extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final url in review.photos)
-                  ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: 64, height: 64, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 64, height: 64, color: const Color(0xFFF1F5F9)))),
+                  ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: 64, height: 64, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 64, height: 64, color: AppColors.surfaceVariant))),
               ]),
             ),
           if (review.createdAt != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(formatDmy(review.createdAt!), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
@@ -269,7 +269,7 @@ class _ReviewFormSheetState extends ConsumerState<ReviewFormSheet> {
           if (room > 0) ReviewPhotoPicker(photos: _photos, max: room, onChanged: (p) => setState(() => _photos..clear()..addAll(p)), pick: widget.pickPhoto, title: 'Add photos (optional)'),
           const SizedBox(height: 12),
           Row(children: [
-            if (widget.existing != null) TextButton(onPressed: _busy ? null : _delete, child: const Text('Delete review', style: TextStyle(color: Color(0xFFC62828)))),
+            if (widget.existing != null) TextButton(onPressed: _busy ? null : _delete, child: const Text('Delete review', style: TextStyle(color: AppColors.red800))),
             const Spacer(),
             FilledButton(
               style: FilledButton.styleFrom(minimumSize: const Size(0, 46), padding: const EdgeInsets.symmetric(horizontal: 24)),

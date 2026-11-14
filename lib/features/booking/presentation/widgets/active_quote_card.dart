@@ -126,6 +126,16 @@ class ActiveQuoteCard extends ConsumerWidget {
               if (quote.balanceAmount != null && quote.balanceAmount! > Decimal.zero)
                 _AmountRow(label: 'Balance after the work', amount: quote.balanceAmount!),
             ],
+            if (quote.pendingAdminApproval) ...[
+              const SizedBox(height: 12),
+              const _InfoBanner(
+                icon: Icons.hourglass_top_rounded,
+                color: AppColors.warning,
+                text: 'This quotation is being reviewed by our team. You can accept or decline it as soon as it is approved.',
+              ),
+            ],
+            if (quote.hasWorkSchedule) _WorkSchedule(quote: quote),
+            if (_previousVersion(quote, booking.quotationHistory) case final prev?) _QuoteChanges(current: quote, previous: prev),
             if (quote.isDeclined) ...[
               const SizedBox(height: 12),
               _InfoBanner(
@@ -211,11 +221,13 @@ class ActiveQuoteCard extends ConsumerWidget {
   }
 
   Future<void> _acceptFlow(BuildContext context, WidgetRef ref, QuoteSummary quote) async {
+    var agreed = false;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
         title: Text(quote.isWithoutPrice ? 'Approve the scope?' : 'Accept Quotation?'),
-        content: Text(
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
           quote.isWithoutPrice
               ? 'Your technician will prepare the priced quotation once you approve the scope of work.'
               : (quote.advanceAmount != null && quote.advanceAmount! > Decimal.zero)
@@ -226,14 +238,38 @@ class ActiveQuoteCard extends ConsumerWidget {
               : 'You will be charged ₹${quote.displayTotal} for this work. '
                   'Once accepted, we\'ll create your service booking.',
         ),
+        // Mandatory advisory + terms tick: the server rejects approval of a priced quotation without it.
+        if (!quote.isWithoutPrice) ...[
+          const SizedBox(height: 10),
+          const Text(
+            'Mandatory company advisory: customer authorization is required before the technician begins additional '
+            'repair work or installs new spare parts.',
+            style: TextStyle(fontSize: 12, height: 1.35, color: Color(0xFF92400E)),
+          ),
+          CheckboxListTile(
+            value: agreed,
+            onChanged: (v) => setLocal(() => agreed = v ?? false),
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            title: Text(
+              'I have reviewed and agree to the scope of work and quotation charges (₹${quote.displayTotal}).',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+        ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Accept')),
+          FilledButton(
+            onPressed: (quote.isWithoutPrice || agreed) ? () => Navigator.pop(ctx, true) : null,
+            child: const Text('Accept'),
+          ),
         ],
-      ),
+      )),
     );
     if (confirmed != true || !context.mounted) return;
-    await _submitDecision(context, ref, quote, 'CUSTOMER_ACCEPTED');
+    await _submitDecision(context, ref, quote, 'CUSTOMER_ACCEPTED', termsAcknowledged: true);
   }
 
   Future<void> _declineFlow(BuildContext context, WidgetRef ref, QuoteSummary quote) async {
@@ -303,7 +339,14 @@ class ActiveQuoteCard extends ConsumerWidget {
       ),
     );
     if (result == null || !context.mounted) return;
-    await _submitDecision(context, ref, quote, 'DECLINED', reasonNotes: result);
+    const codes = <String, String>{
+      'Price is too high': 'TOO_EXPENSIVE',
+      'Found another provider': 'COMPETITOR_CHOSEN',
+      'No longer need this service': 'CHANGE_OF_PLANS',
+      'Taking too long': 'DELAYED_TIMELINE',
+    };
+    final code = codes[result];
+    await _submitDecision(context, ref, quote, 'DECLINED', reasonCode: code ?? 'OTHER', reasonNotes: code == null ? result : null);
   }
 
   Future<void> _requestChangesFlow(BuildContext context, WidgetRef ref, QuoteSummary quote) async {
@@ -342,6 +385,8 @@ class ActiveQuoteCard extends ConsumerWidget {
     QuoteSummary quote,
     String decision, {
     String? reasonNotes,
+    bool termsAcknowledged = false,
+    String? reasonCode,
   }) async {
     final token = quote.decisionToken;
     if (token == null) return;
@@ -350,6 +395,8 @@ class ActiveQuoteCard extends ConsumerWidget {
           decision: decision,
           parentBookingId: booking.id,
           reasonNotes: reasonNotes,
+          termsAcknowledged: termsAcknowledged,
+          reasonCode: reasonCode,
         );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -448,4 +495,167 @@ class _InfoBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+// ───────────── Work schedule + "what changed" (parity with the website's quotation card) ─────────────
+
+DateTime? _parseDay(String? s) => DateTime.tryParse((s ?? '').trim().split(' ').first.split('T').first);
+
+/// "09:30", "09:30:00" or "9:30 AM" -> (hour24, minute); null when it cannot be read.
+({int h, int m})? _parseClock(String? raw) {
+  final s = (raw ?? '').trim().toUpperCase();
+  final m = RegExp(r'^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$').firstMatch(s);
+  if (m == null) return null;
+  var h = int.parse(m.group(1)!);
+  final min = int.parse(m.group(2)!);
+  final ap = m.group(3);
+  if (ap == 'PM' && h < 12) h += 12;
+  if (ap == 'AM' && h == 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return (h: h, m: min);
+}
+
+String _clockLabel(String? raw) {
+  final c = _parseClock(raw);
+  if (c == null) return (raw ?? '').trim();
+  final h12 = c.h % 12 == 0 ? 12 : c.h % 12;
+  return '$h12:${c.m.toString().padLeft(2, '0')} ${c.h >= 12 ? 'PM' : 'AM'}';
+}
+
+String _dayLabel(String? raw) {
+  final d = _parseDay(raw);
+  if (d == null) return (raw ?? '').trim();
+  final today = DateTime.now();
+  final diff = DateTime(d.year, d.month, d.day).difference(DateTime(today.year, today.month, today.day)).inDays;
+  if (diff == 0) return 'Today';
+  if (diff == 1) return 'Tomorrow';
+  return DateFormat('EEE, dd MMM yyyy').format(d);
+}
+
+String? _durationLabel(QuoteSummary q) {
+  final sd = _parseDay(q.workStartDate);
+  final sc = _parseClock(q.workStartTime);
+  final ed = _parseDay(q.workEndDate) ?? sd;
+  final ec = _parseClock(q.workEndTime);
+  if (sd == null || sc == null || ed == null || ec == null) return null;
+  final start = DateTime(sd.year, sd.month, sd.day, sc.h, sc.m);
+  final end = DateTime(ed.year, ed.month, ed.day, ec.h, ec.m);
+  final mins = end.difference(start).inMinutes;
+  if (mins <= 0) return null;
+  final days = mins ~/ (24 * 60);
+  final hours = (mins % (24 * 60)) ~/ 60;
+  final rem = mins % 60;
+  return [
+    if (days > 0) '$days day${days > 1 ? 's' : ''}',
+    if (hours > 0) '$hours hr',
+    if (rem > 0 && days == 0) '$rem min',
+  ].join(' ');
+}
+
+/// Technician's estimated work start / completion, as on the website's quotation card.
+class _WorkSchedule extends StatelessWidget {
+  const _WorkSchedule({required this.quote});
+  final QuoteSummary quote;
+
+  Widget _cell(IconData icon, String title, String? date, String? time) {
+    final hasAny = (date ?? '').trim().isNotEmpty || (time ?? '').trim().isNotEmpty;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border, width: 0.8)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, size: 14, color: AppColors.primary),
+            const SizedBox(width: 5),
+            Flexible(child: Text(title, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textSecondary))),
+          ]),
+          const SizedBox(height: 4),
+          Text(hasAny ? _dayLabel(date) : 'To be confirmed', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          if ((time ?? '').trim().isNotEmpty)
+            Text(_clockLabel(time), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+        ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dur = _durationLabel(quote);
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Estimated work schedule', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.navy)),
+        const Text('Confirmed by your assigned technician', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        Row(children: [
+          _cell(Icons.play_circle_outline_rounded, 'WORK START', quote.workStartDate, quote.workStartTime),
+          const SizedBox(width: 8),
+          _cell(Icons.flag_outlined, 'COMPLETION', quote.workEndDate ?? quote.workStartDate, quote.workEndTime),
+        ]),
+        if (dur != null) ...[
+          const SizedBox(height: 6),
+          Text('Estimated duration: $dur', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+        ],
+      ]),
+    );
+  }
+}
+
+/// What this version added / changed / removed compared with the previous one.
+class _QuoteChanges extends StatelessWidget {
+  const _QuoteChanges({required this.current, required this.previous});
+  final QuoteSummary current;
+  final QuoteSummary previous;
+
+  static String _k(QuoteLineItem i) => i.description.trim().toLowerCase();
+
+  @override
+  Widget build(BuildContext context) {
+    final prev = {for (final i in previous.items) _k(i): i};
+    final cur = {for (final i in current.items) _k(i): i};
+    final lines = <({String sign, Color color, String text})>[];
+    for (final i in current.items) {
+      final p = prev[_k(i)];
+      if (p == null) {
+        lines.add((sign: '+', color: AppColors.success, text: '${i.description}${i.amount != null ? '  ₹${i.amount}' : ''}'));
+      } else if (p.amount != i.amount || p.quantity != i.quantity) {
+        lines.add((sign: '~', color: AppColors.warning, text: '${i.description}: ${p.amount != null ? '₹${p.amount}' : '-'} → ${i.amount != null ? '₹${i.amount}' : '-'}'));
+      }
+    }
+    for (final p in previous.items) {
+      if (!cur.containsKey(_k(p))) lines.add((sign: '−', color: AppColors.error, text: '${p.description} removed'));
+    }
+    if (lines.isEmpty) return const SizedBox.shrink();
+    final pv = previous.quoteVersion;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFFDE68A))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(pv != null ? 'Changes since v$pv' : 'Changes since the previous quotation',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF78350F))),
+        const SizedBox(height: 4),
+        for (final l in lines)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(width: 16, child: Text(l.sign, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: l.color))),
+              Expanded(child: Text(l.text, style: const TextStyle(fontSize: 12, color: AppColors.textPrimary))),
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
+/// The newest earlier version of [q] in [history] (history is newest first), or null.
+QuoteSummary? _previousVersion(QuoteSummary q, List<QuoteSummary> history) {
+  final v = q.quoteVersion;
+  for (final h in history) {
+    if (h.id != null && h.id == q.id) continue;
+    if (v == null || (h.quoteVersion != null && h.quoteVersion! < v)) return h;
+  }
+  return null;
 }

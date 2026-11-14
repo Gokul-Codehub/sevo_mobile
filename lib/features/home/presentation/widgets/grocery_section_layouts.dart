@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/navigation/storefront_routes.dart';
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
@@ -154,8 +156,7 @@ String _seeAllRoute(WidgetRef ref, MobileGrocerySection? section) {
   final resolved = _resolveSectionCategories(tree, ids);
   if (resolved.isEmpty) return general;
   final first = resolved.first;
-  final root = first.isVegetableRoot ? '/vegetables' : '/groceries';
-  return '$root/seller-hub?category=${first.category.slug}';
+  return StorefrontRoutes.groceryCategory(first.category.slug, vegetable: first.isVegetableRoot);
 }
 
 /// Blinkit-style "See all products" bar shown under a section's products when
@@ -394,6 +395,7 @@ class _ProductGridLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final crossAxisCount = AppResponsive.sectionColumns(context, this.crossAxisCount, max: 5);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -917,26 +919,6 @@ class _DealCardsLayout extends StatelessWidget {
                         showAddButton: section.showAddButton,
                       ),
                     ),
-                    if (service.discountPercent != null && section.showProductDiscount)
-                      Positioned(
-                        top: 6,
-                        left: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '${service.discountPercent}% OFF',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               );
@@ -1276,58 +1258,18 @@ List<_ResolvedCategory> _resolveSectionCategories(
 }
 
 void _openCategoryListing(BuildContext context, _ResolvedCategory resolved) {
-  final root = resolved.isVegetableRoot ? '/vegetables' : '/groceries';
-  context.push('$root/seller-hub?category=${resolved.category.slug}');
+  context.push(StorefrontRoutes.groceryCategory(resolved.category.slug, vegetable: resolved.isVegetableRoot));
 }
 
-/// Fixed 2026-10-05: tapping a Category Tile Grid / Circular Category Rail
-/// tile always opened that category's full product-LISTING screen, even
-/// when the category contains exactly one product -- which happens a lot
-/// in practice, since an admin will often pick narrow, single-item leaf
-/// categories here specifically to spotlight one product as if it were its
-/// own tile (e.g. "Yellakki Banana" as its own category with one product in
-/// it). For the customer, tapping what looks like a single product and
-/// landing on a listing screen showing that same one product is an extra,
-/// pointless tap. When the category's own [totalProductCount] says exactly
-/// one, this fetches that one product (via the same
-/// [marketplaceProductsByCategoryProvider] the listing screen itself uses,
-/// so the result is cached/shared rather than a second, parallel fetch) and
-/// deep-links straight to its product detail page instead -- falling back
-/// to the normal category listing for every other case (0 products never
-/// reaches here at all, since [_resolveSectionCategories] already filters
-/// those out; 2+ products keeps the listing, which is the right place to
-/// browse them; a fetch failure or count mismatch also falls back, same
-/// "fail open, never dead-end the tap" convention as the rest of this
-/// file).
+/// Tapping a Category Tile Grid / Circular Category Rail tile ALWAYS opens that category's page (sub-categories in the
+/// left rail, products on the right) - even when the category holds a single product. An earlier shortcut sent
+/// single-product categories straight to the product page, which made some tiles open a category and others a product.
+/// Only product tiles open a product directly.
 Future<void> _openCategory(
   BuildContext context,
   WidgetRef ref,
   _ResolvedCategory resolved,
 ) async {
-  if (resolved.category.totalProductCount != 1) {
-    _openCategoryListing(context, resolved);
-    return;
-  }
-  try {
-    final page = await ref.read(
-      marketplaceProductsByCategoryProvider(resolved.category.id).future,
-    );
-    if (!context.mounted) return;
-    if (page.products.length == 1) {
-      // Reuses [MarketplaceProduct.toServiceItem]'s own slug convention
-      // (`seller-hub-<id>`) rather than re-deriving it here, so this can
-      // never drift out of sync with the one place that actually defines
-      // it -- same single-source-of-truth reasoning as
-      // [ProductCard.groceryCardHeight] elsewhere in this file.
-      final serviceItem = page.products.first.toServiceItem();
-      context.push('/products/${serviceItem.slug}', extra: serviceItem);
-      return;
-    }
-  } catch (_) {
-    // Fall through to the listing screen below -- never leave the tap
-    // doing nothing just because this shortcut's lookup failed.
-  }
-  if (!context.mounted) return;
   _openCategoryListing(context, resolved);
 }
 
@@ -1370,6 +1312,24 @@ class _CategoryDiscoverySection extends ConsumerWidget {
 /// category" rather than individual products. Tapping deep-links into the
 /// same browse screens (SellerHubGroceriesScreen / SellerHubVegetablesScreen)
 /// the rest of the app already uses for this exact tree.
+/// Height of the tallest of [names] when each is wrapped to [width] (words that do not fit are broken), so a row
+/// can be sized to show every category name in full.
+double _tallestLabel(BuildContext context, Iterable<String> names, double width, double fontSize) {
+  final scaler = MediaQuery.textScalerOf(context);
+  var tallest = 0.0;
+  for (final n in names) {
+    final tp = TextPainter(
+      text: TextSpan(text: n, style: TextStyle(fontSize: fontSize, height: 1.15, fontWeight: FontWeight.w700)),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+      textScaler: scaler,
+    )..layout(maxWidth: width);
+    if (tp.height > tallest) tallest = tp.height;
+    tp.dispose();
+  }
+  return tallest + 2;
+}
+
 class _CategoryTileGridLayout extends ConsumerWidget {
   const _CategoryTileGridLayout({required this.section, required this.categories});
 
@@ -1385,7 +1345,14 @@ class _CategoryTileGridLayout extends ConsumerWidget {
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GridView.builder(
+          child: LayoutBuilder(builder: (context, constraints) {
+            // Row height = picture (square) + room for a two-line name (+ the item count), so the full category name
+            // always shows instead of being cut with "...".
+            final cols = AppResponsive.sectionColumns(context, section.categoryTileColumns);
+            final tileW = (constraints.maxWidth - (cols - 1) * 10) / cols;
+            final labelH = _tallestLabel(context, categories.map((c) => c.category.name), tileW, 11.5);
+            final rowH = (section.showCategoryImage ? tileW : 0) + 6 + labelH + (section.showCategoryProductCount ? 14 : 0);
+            return GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: categories.length,
@@ -1394,10 +1361,10 @@ class _CategoryTileGridLayout extends ConsumerWidget {
             // value) so a section saved before this existed renders an
             // identical grid.
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: section.categoryTileColumns,
+              crossAxisCount: cols,
               crossAxisSpacing: 10,
               mainAxisSpacing: 14,
-              childAspectRatio: 0.82,
+              mainAxisExtent: rowH,
             ),
             itemBuilder: (context, i) {
               final resolved = categories[i];
@@ -1408,24 +1375,26 @@ class _CategoryTileGridLayout extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // Every picture is the same square size, whatever the length of the name below it.
                     if (section.showCategoryImage)
-                      Expanded(
+                      SizedBox(
+                        width: tileW,
+                        height: tileW,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(14),
                           child: _CategoryCoverImage(
                             category: category,
-                            width: double.infinity,
-                            height: double.infinity,
+                            width: tileW,
+                            height: tileW,
                           ),
                         ),
                       ),
                     const SizedBox(height: 6),
+                    // The whole name, wrapped onto as many lines as it needs (never cut with "...").
                     Text(
                       category.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.navy),
+                      style: const TextStyle(fontSize: 11.5, height: 1.15, fontWeight: FontWeight.w700, color: AppColors.navy),
                     ),
                     if (section.showCategoryProductCount)
                       Text(
@@ -1436,7 +1405,8 @@ class _CategoryTileGridLayout extends ConsumerWidget {
                 ),
               );
             },
-          ),
+          );
+          }),
         ),
       ],
     );
@@ -1461,7 +1431,9 @@ class _CircularCategoryRailLayout extends ConsumerWidget {
         _SectionTitle(section.title, section: section),
         const SizedBox(height: 12),
         SizedBox(
-          height: 108,
+          height: (section.showCategoryImage ? 70 : 0) +
+              (section.showCategoryName ? _tallestLabel(context, categories.map((c) => c.category.name), 72, 11) : 0) +
+              4,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
@@ -1489,10 +1461,8 @@ class _CircularCategoryRailLayout extends ConsumerWidget {
                       if (section.showCategoryName)
                         Text(
                           category.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.navy),
+                          style: const TextStyle(fontSize: 11, height: 1.15, fontWeight: FontWeight.w700, color: AppColors.navy),
                         ),
                     ],
                   ),

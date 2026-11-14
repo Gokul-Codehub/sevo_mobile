@@ -92,9 +92,10 @@ class AuthInterceptor extends Interceptor {
     try {
       final refreshToken = await storage.getRefreshToken();
       if (refreshToken == null || refreshToken.isEmpty) {
-        debugPrint('[AUTH] No refresh token available in secure storage. Session expired.');
-        await storage.clearAll();
-        onAuthFailure?.call();
+        // A missing refresh token is far more likely a failed Keystore read than a real sign-out
+        // (storage.getRefreshToken already retried). Never wipe or log out on it; only an explicit
+        // server rejection (400/401 from /auth/refresh/ or SESSION_REVOKED) ends a session.
+        debugPrint('[AUTH] No refresh token readable right now. Session preserved, request fails only.');
         _refreshCompleter?.complete(null);
         _refreshCompleter = null;
         handler.next(err);
@@ -116,10 +117,12 @@ class AuthInterceptor extends Interceptor {
 
       if (newAccessToken != null && newAccessToken.isNotEmpty) {
         debugPrint('[AUTH] Token refresh successful. Storing new tokens.');
-        await storage.setAccessToken(newAccessToken);
+        // Refresh token first: if the app dies between the two writes, the rotated (now-valid)
+        // refresh token is already saved and the next start recovers by refreshing again.
         if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
           await storage.setRefreshToken(newRefreshToken);
         }
+        await storage.setAccessToken(newAccessToken);
 
         _refreshCompleter?.complete(newAccessToken);
         _refreshCompleter = null;
@@ -197,7 +200,8 @@ class AuthInterceptor extends Interceptor {
 
     return dio.request<dynamic>(
       requestOptions.path,
-      data: requestOptions.data,
+      // An upload body (FormData) can be sent only once: send a fresh copy on the retry.
+      data: requestOptions.data is FormData ? (requestOptions.data as FormData).clone() : requestOptions.data,
       queryParameters: requestOptions.queryParameters,
       options: options,
     );

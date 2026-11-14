@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../data/grocery_hub_repository.dart';
 import '../widgets/product_card.dart';
@@ -46,18 +47,23 @@ class GroceryHubCategoryScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-        itemCount: group.products.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.62,
-        ),
-        itemBuilder: (context, i) => ProductCard(
-          service: group.products[i].toServiceItem(),
-        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final cols = AppResponsive.productColumns(constraints.maxWidth);
+          return GridView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            itemCount: group.products.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cols,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.62,
+            ),
+            itemBuilder: (context, i) => ProductCard(
+              service: group.products[i].toServiceItem(),
+            ),
+          );
+        },
       ),
     );
   }

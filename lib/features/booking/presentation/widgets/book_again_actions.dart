@@ -1,3 +1,4 @@
+import 'package:calservices_customer/shared/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -52,8 +53,8 @@ class AgainButton extends StatelessWidget {
             : const Icon(Icons.replay_rounded, size: 15),
         label: Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF0B2337),
-          side: const BorderSide(color: Color(0xFFD5DCE8)),
+          foregroundColor: AppColors.swatch0B2337,
+          side: const BorderSide(color: AppColors.swatchD5DCE8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           minimumSize: const Size(0, 34),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

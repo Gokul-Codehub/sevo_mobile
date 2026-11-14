@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../theme/app_colors.dart';
+import '../widgets/motion.dart';
 
 /// Visual style for [AppToast.show] — picks the accent color and default
 /// icon for the popup.
@@ -49,6 +50,15 @@ class AppToast {
   }) {
     final overlay = overlayOverride ?? Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
+
+    switch (type) {
+      case AppToastType.success:
+        AppHaptics.success();
+      case AppToastType.error:
+        AppHaptics.light();
+      case AppToastType.info:
+        AppHaptics.selection();
+    }
 
     // Only one toast on screen at a time — a fast second call (e.g. rapid
     // tapping) replaces whatever's currently showing instead of stacking.
@@ -166,7 +176,14 @@ class _ToastBannerState extends State<_ToastBanner>
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
-    _controller.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (prefersReducedMotion(context)) {
+        _controller.value = 1;
+      } else {
+        _controller.forward();
+      }
+    });
     _dismissTimer = Timer(widget.holdFor, widget.onFinished);
   }
 

@@ -8,6 +8,8 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../data/marketplace_catalog_repository.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
+import '../../../../shared/widgets/state_widgets.dart';
 import '../widgets/product_card.dart';
 import '../widgets/service_card.dart';
 
@@ -174,7 +176,7 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
         title: Text(_title, style: const TextStyle(color: AppColors.navy, fontWeight: FontWeight.w900, fontSize: 17)),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingState(),
         error: (e, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -205,19 +207,27 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${items.length} ${items.length == 1 ? 'item' : 'items'} · live prices',
-                          style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                        FadeSlideIn(
+                          child: BounceOnChange(
+                            value: items.length,
+                            child: Text(
+                              '${items.length} ${items.length == 1 ? 'item' : 'items'} · live prices',
+                              style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 10),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _chip('Best deal', _Sort.bestDeal),
-                              _chip('Price: low to high', _Sort.priceLow),
-                              _chip('Price: high to low', _Sort.priceHigh),
-                            ],
+                        FadeSlideIn(
+                          index: 1,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _chip('Best deal', _Sort.bestDeal),
+                                _chip('Price: low to high', _Sort.priceLow),
+                                _chip('Price: high to low', _Sort.priceHigh),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -244,7 +254,10 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
                     sliver: SliverList.separated(
                       itemCount: items.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (_, i) => ServiceCard(service: items[i]),
+                      itemBuilder: (_, i) => FadeSlideIn(
+                        index: i,
+                        child: ServiceCard(service: items[i]),
+                      ),
                     ),
                   )
                 else
@@ -256,15 +269,18 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
                       itemBuilder: (_, row) {
                         final a = items[row * 2];
                         final hasB = row * 2 + 1 < items.length;
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: RepaintBoundary(child: ProductCard(service: a))),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: hasB ? RepaintBoundary(child: ProductCard(service: items[row * 2 + 1])) : const SizedBox.shrink(),
-                            ),
-                          ],
+                        return FadeSlideIn(
+                          index: row,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: RepaintBoundary(child: ProductCard(service: a))),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: hasB ? RepaintBoundary(child: ProductCard(service: items[row * 2 + 1])) : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -281,14 +297,17 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
     final on = _sort == sort;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? Colors.white : AppColors.navy)),
-        selected: on,
-        showCheckmark: false,
-        selectedColor: AppColors.navy,
-        backgroundColor: Colors.white,
-        side: BorderSide(color: on ? AppColors.navy : const Color(0xFFD1D5DB)),
-        onSelected: (_) => setState(() => _sort = sort),
+      child: PressScale(
+        scale: 0.94,
+        child: ChoiceChip(
+          label: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? Colors.white : AppColors.navy)),
+          selected: on,
+          showCheckmark: false,
+          selectedColor: AppColors.navy,
+          backgroundColor: Colors.white,
+          side: BorderSide(color: on ? AppColors.navy : const Color(0xFFD1D5DB)),
+          onSelected: (_) => setState(() => _sort = sort),
+        ),
       ),
     );
   }

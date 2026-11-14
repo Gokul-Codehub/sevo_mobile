@@ -32,12 +32,17 @@ class SecureStorage {
   // (returns null, logs it) instead of throwing, so a single bad read is
   // never treated as "this device was logged out."
   Future<String?> _readSafe(String key) async {
-    try {
-      return await _storage.read(key: key);
-    } catch (e) {
-      AppLogger.d('[P0-AUTH]', 'SECURE_STORAGE: read($key) failed transiently: $e');
-      return null;
+    // Retry a few times: a Keystore hiccup usually clears within milliseconds,
+    // and a single failed read must never look like "no session".
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await _storage.read(key: key);
+      } catch (e) {
+        AppLogger.d('[P0-AUTH]', 'SECURE_STORAGE: read($key) failed (attempt ${attempt + 1}): $e');
+        if (attempt < 3) await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
+      }
     }
+    return null;
   }
 
   // ── Access token ──────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../shared/theme/app_colors.dart';
 import '../../routing/app_router.dart' show appRouterProvider, rootNavigatorKey;
@@ -40,6 +41,8 @@ class _FoundationGateState extends ConsumerState<FoundationGate> with WidgetsBin
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(ref.read(foundationControllerProvider.notifier).start());
+      // Decode the maintenance animation in the background now so it is already cached if that screen is ever shown.
+      unawaited(AssetLottie('assets/animations/maintenance_update.json').load().then<void>((_) {}, onError: (Object _) {}));
       _watchRouteForInAppMessages();
     });
   }
@@ -201,13 +204,18 @@ class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: const BoxDecoration(color: Color(0xFFEAF0F6), shape: BoxShape.circle),
-                  child: const Icon(Icons.build_circle_outlined, size: 52, color: AppColors.navy),
+                SizedBox(
+                  width: 240,
+                  height: 235,
+                  child: Lottie.asset(
+                    'assets/animations/maintenance_update.json',
+                    fit: BoxFit.contain,
+                    repeat: true,
+                    // The animation is an image sequence: if it ever fails to load, fall back to the plain icon.
+                    errorBuilder: (_, __, ___) => const Icon(Icons.build_circle_outlined, size: 72, color: AppColors.navy),
+                  ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 Text(
                   info.title.isEmpty ? l.maintenanceTitleDefault : info.title,
                   textAlign: TextAlign.center,
@@ -264,7 +272,7 @@ class ServerUnreachableBanner extends StatelessWidget {
       ),
     );
     return Material(
-      color: const Color(0xFFB26A00),
+      color: AppColors.swatchB26A00,
       child: withSafeArea ? SafeArea(bottom: false, child: row) : row,
     );
   }

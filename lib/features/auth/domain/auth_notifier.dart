@@ -28,7 +28,13 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> _checkStoredSession() async {
     AppLogger.d('[P0-AUTH]', 'APP_START: checking stored session...');
     try {
-      final user = await _repo.restoreSession();
+      var user = await _repo.restoreSession();
+      // One more look before declaring "signed out": a transient storage miss on cold start
+      // must never flip a signed-in customer to the sign-in screen.
+      if (user == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        user = await _repo.restoreSession();
+      }
       if (user == null) {
         AppLogger.d('[P0-AUTH]', 'AUTH_STATE_AFTER: unauthenticated (no valid session in storage)');
         state = const AuthUnauthenticated();
@@ -106,6 +112,79 @@ class AuthNotifier extends Notifier<AuthState> {
       case Failure(:final error):
         return (error: error.message, isNewUser: false);
     }
+  }
+
+  // ── Email + password accounts ─────────────────────────────────────────────
+  int _resendSeconds(Object error) => error is ValidationError
+      ? (error.extra['resend_after_seconds'] as num?)?.toInt() ?? 60
+      : 60;
+
+  /// Step 1 of signup: sends the email code. Success gives the masked email + resend wait.
+  Future<({String? error, int resendAfterSeconds, String emailMasked})> signupRequest({
+    required String fullName,
+    required String email,
+    required String mobile,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    final result = await _repo.signupRequest(
+      fullName: fullName,
+      email: email,
+      mobile: mobile,
+      password: password,
+      confirmPassword: confirmPassword,
+    );
+    return switch (result) {
+      Success(:final data) => (
+          error: null,
+          resendAfterSeconds: (data['resend_after_seconds'] as num?)?.toInt() ?? 60,
+          emailMasked: (data['email_masked'] ?? '').toString(),
+        ),
+      Failure(:final error) => (error: error.message, resendAfterSeconds: _resendSeconds(error), emailMasked: ''),
+    };
+  }
+
+  /// Step 2 of signup: checks the code, creates the account and signs the customer in.
+  Future<({String? error, bool isNewUser})> verifySignup({required String email, required String otp}) async {
+    final result = await _repo.signupVerify(email: email, otp: otp);
+    switch (result) {
+      case Success(:final data):
+        await _repo.saveVerifyResult(data);
+        state = AuthAuthenticated(user: data.user);
+        return (error: null, isNewUser: true);
+      case Failure(:final error):
+        return (error: error.message, isNewUser: false);
+    }
+  }
+
+  Future<({String? error, int resendAfterSeconds})> resendSignup({required String email}) async {
+    final result = await _repo.signupResend(email: email);
+    return switch (result) {
+      Success(:final data) => (error: null, resendAfterSeconds: (data['resend_after_seconds'] as num?)?.toInt() ?? 60),
+      Failure(:final error) => (error: error.message, resendAfterSeconds: _resendSeconds(error)),
+    };
+  }
+
+  /// Email / mobile / username + password. Returns null on success, else the message to show.
+  Future<String?> passwordLogin({required String identifier, required String password}) async {
+    final result = await _repo.passwordLogin(identifier: identifier, password: password);
+    switch (result) {
+      case Success(:final data):
+        await _repo.saveVerifyResult(data);
+        state = AuthAuthenticated(user: data.user);
+        return null;
+      case Failure(:final error):
+        return error.message;
+    }
+  }
+
+  /// For customers who have no password yet (older accounts). Returns null on success.
+  Future<String?> setPassword({required String newPassword, required String confirmPassword}) async {
+    final result = await _repo.setPassword(newPassword: newPassword, confirmPassword: confirmPassword);
+    return switch (result) {
+      Success() => null,
+      Failure(:final error) => error.message,
+    };
   }
 
   // ── Profile Complete / Edit ───────────────────────────────────────────────

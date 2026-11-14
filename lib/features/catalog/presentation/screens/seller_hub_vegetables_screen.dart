@@ -6,6 +6,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../data/marketplace_catalog_repository.dart';
@@ -132,7 +133,7 @@ class _SellerHubVegetablesScreenState extends ConsumerState<SellerHubVegetablesS
                   return const Center(
                     child: EmptyStateWidget(
                       title: 'No Vegetables & Fruits Right Now',
-                      subtitle: 'Ask the admin to add a "Vegetables & Fruits" category in Seller Hub.',
+                      subtitle: 'Fresh vegetables and fruits are not available right now. Please check back soon.',
                       emoji: '🥦',
                     ),
                   );
@@ -289,28 +290,43 @@ class _DepartmentProductGrid extends ConsumerWidget {
         final rows = <Widget>[];
         for (var i = 0; i < items.length; i += 2) {
           final hasSecond = i + 1 < items.length;
+          final rowIndex = i ~/ 2;
           rows.add(
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: RepaintBoundary(child: ProductCard(service: items[i]))),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: hasSecond
-                        ? RepaintBoundary(child: ProductCard(service: items[i + 1]))
-                        : const SizedBox.shrink(),
-                  ),
-                ],
+            FadeSlideIn(
+              index: rowIndex,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: RepaintBoundary(child: ProductCard(service: items[i]))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: hasSecond
+                          ? RepaintBoundary(child: ProductCard(service: items[i + 1]))
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         }
 
-        return ListView(
-          padding: EdgeInsets.fromLTRB(12, 12, 12, 16 + MediaQuery.paddingOf(context).bottom),
-          children: rows,
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(marketplaceProductsByCategoryProvider(departmentId));
+            try {
+              await ref.read(marketplaceProductsByCategoryProvider(departmentId).future);
+            } on Object {
+              // The screen's own error state shows the failure; the spinner just stops.
+            }
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, 16 + MediaQuery.paddingOf(context).bottom),
+            children: rows,
+          ),
         );
       },
     );
@@ -334,30 +350,44 @@ class _DepartmentRailTile extends StatelessWidget {
   Widget build(BuildContext context) {
     // Selected: soft green-tinted rounded card + bold green label + accent bar
     // on the right edge. Unselected: just the round picture, no card.
-    return GestureDetector(
+    return PressScale(
+      scale: 0.96,
+      child: GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Stack(
           children: [
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
               width: double.infinity,
               margin: const EdgeInsets.only(left: 6, right: 8),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFFE3F1E8) : Colors.transparent,
+                color: selected ? AppColors.swatchE3F1E8 : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: selected ? const Color(0xFFCFE6D8) : AppColors.groceryGreenLight,
+                      color: selected ? AppColors.swatchCFE6D8 : AppColors.groceryGreenLight,
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(
+                                color: AppColors.groceryGreen.withValues(alpha: 0.22),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
                     ),
                     child: ClipOval(
                       child: (image != null && image!.trim().isNotEmpty)
@@ -401,6 +431,7 @@ class _DepartmentRailTile extends StatelessWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../../../../config/env.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/utils/input_validators.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../auth/domain/auth_models.dart';
 import '../../../auth/domain/auth_notifier.dart';
 
@@ -110,6 +111,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  /// Pages that need an account: a guest gets an in-app notice with a Log in action instead of entering the page.
+  void _openSignedIn(BuildContext context, String route, String what) {
+    if (ref.read(currentUserProvider) == null) {
+      AppToast.show(
+        context,
+        'Please log in or sign up to view $what.',
+        type: AppToastType.info,
+        actionLabel: 'Log in',
+        onAction: () => requireLogin(context, ref),
+      );
+      return;
+    }
+    context.push(route);
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
@@ -159,10 +175,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (user != null) _buildHeaderCard(user) else _buildGuestCard(),
+                    FadeSlideIn(
+                      child: user != null ? _buildHeaderCard(user) : _buildGuestCard(),
+                    ),
 
-                    const _SectionLabel('Account'),
-                    _MenuCard(children: [
+                    const FadeSlideIn(index: 1, child: _SectionLabel('Account')),
+                    FadeSlideIn(
+                      index: 2,
+                      child: _MenuCard(children: [
                       if (user != null)
                         _MenuRow(
                           icon: Icons.person_outline_rounded,
@@ -172,27 +192,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _MenuRow(
                         icon: Icons.calendar_month_outlined,
                         label: 'Bookings & Orders',
-                        onTap: () => context.push('/bookings'),
+                        onTap: () => _openSignedIn(context, '/bookings', 'your bookings and orders'),
                       ),
                       _MenuRow(
                         icon: Icons.receipt_long_outlined,
                         label: 'My Payments',
-                        onTap: () => context.push('/my-payments'),
+                        onTap: () => _openSignedIn(context, '/my-payments', 'your payments'),
                       ),
                       _MenuRow(
                         icon: Icons.undo_rounded,
                         label: 'My Refunds',
-                        onTap: () => context.push('/my-refunds'),
+                        onTap: () => _openSignedIn(context, '/my-refunds', 'your refunds'),
                       ),
                       _MenuRow(
                         icon: Icons.location_on_outlined,
                         label: 'Saved Addresses',
-                        onTap: () => context.push('/addresses'),
+                        onTap: () => _openSignedIn(context, '/addresses', 'your saved addresses'),
                       ),
                       _MenuRow(
                         icon: Icons.notifications_none_rounded,
                         label: 'Notifications',
-                        onTap: () => context.push('/notifications'),
+                        onTap: () => _openSignedIn(context, '/notifications', 'your notifications'),
                       ),
                       _MenuRow(
                         icon: Icons.tune_rounded,
@@ -202,12 +222,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _MenuRow(
                         icon: Icons.devices_rounded,
                         label: 'Your devices',
-                        onTap: () => context.push('/devices'),
+                        onTap: () => _openSignedIn(context, '/devices', 'your devices'),
                       ),
                     ]),
+                    ),
 
-                    const _SectionLabel('Preferences'),
-                    _MenuCard(children: [
+                    const FadeSlideIn(index: 3, child: _SectionLabel('Preferences')),
+                    FadeSlideIn(
+                      index: 4,
+                      child: _MenuCard(children: [
                       _MenuRow(
                         icon: Icons.language_rounded,
                         label: context.l10n.language,
@@ -228,9 +251,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         onTap: () => _showGuaranteeDialog(context),
                       ),
                     ]),
+                    ),
 
-                    const _SectionLabel('Support'),
-                    _MenuCard(children: [
+                    const FadeSlideIn(index: 5, child: _SectionLabel('Support')),
+                    FadeSlideIn(
+                      index: 6,
+                      child: _MenuCard(children: [
                       _MenuRow(
                         icon: Icons.help_outline_rounded,
                         label: 'Help Center',
@@ -258,17 +284,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           onTap: () => context.push('/delete-account'),
                         ),
                     ]),
+                    ),
 
                     if (user != null) ...[
                       const SizedBox(height: 14),
-                      _MenuCard(children: [
-                        _MenuRow(
-                          icon: Icons.logout_rounded,
-                          label: 'Log out',
-                          danger: true,
-                          onTap: () => _showLogoutDialog(context, ref),
-                        ),
-                      ]),
+                      FadeSlideIn(
+                        index: 7,
+                        child: _MenuCard(children: [
+                          _MenuRow(
+                            icon: Icons.logout_rounded,
+                            label: 'Log out',
+                            danger: true,
+                            onTap: () => _showLogoutDialog(context, ref),
+                          ),
+                        ]),
+                      ),
                     ],
 
                     const SizedBox(height: 18),
@@ -381,13 +411,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     user.email!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7788)),
+                    style: const TextStyle(fontSize: 12, color: AppColors.swatch6B7788),
                   ),
                 ],
                 const SizedBox(height: 2),
                 Text(
                   user.phone,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7788)),
+                  style: const TextStyle(fontSize: 12, color: AppColors.swatch6B7788),
                 ),
               ],
             ),
@@ -422,18 +452,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: ElevatedButton(
-              onPressed: () => requireLogin(context, ref),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.navy,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          PressScale(
+            child: SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                onPressed: () => requireLogin(context, ref),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.navy,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
+                child: const Text('Login / Sign Up'),
               ),
-              child: const Text('Login / Sign Up'),
             ),
           ),
         ],
@@ -711,7 +743,7 @@ BoxDecoration _cardDecoration() => BoxDecoration(
       borderRadius: BorderRadius.circular(16),
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF1E3A8A).withValues(alpha: 0.05),
+          color: AppColors.blue900.withValues(alpha: 0.05),
           blurRadius: 14,
           offset: const Offset(0, 4),
         ),
@@ -730,7 +762,7 @@ class _SectionLabel extends StatelessWidget {
           style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF6B7788),
+            color: AppColors.swatch6B7788,
           ),
         ),
       );
@@ -777,32 +809,35 @@ class _MenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = danger ? AppColors.error : AppColors.navy;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 21, color: color),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: color,
+    return PressScale(
+      scale: 0.985,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 21, color: color),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                  ),
                 ),
               ),
-            ),
-            if (value != null) ...[
-              Text(value!,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7788))),
-              const SizedBox(width: 4),
+              if (value != null) ...[
+                Text(value!,
+                    style: const TextStyle(fontSize: 12, color: AppColors.swatch6B7788)),
+                const SizedBox(width: 4),
+              ],
+              Icon(Icons.chevron_right_rounded,
+                  size: 20, color: danger ? AppColors.error : const Color(0xFF5B6678)),
             ],
-            Icon(Icons.chevron_right_rounded,
-                size: 20, color: danger ? AppColors.error : const Color(0xFF5B6678)),
-          ],
+          ),
         ),
       ),
     );

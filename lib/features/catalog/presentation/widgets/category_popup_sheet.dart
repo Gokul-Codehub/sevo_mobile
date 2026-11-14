@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../domain/catalog_models.dart';
 
 /// The category popup the admin configures (web: CategoryPopupModal): a grid
@@ -64,7 +65,10 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
                   itemCount: category.popupTiles.length,
                   itemBuilder: (context, i) {
                     final tile = category.popupTiles[i];
-                    return InkWell(
+                    return FadeSlideIn(
+                      index: i,
+                      child: PressScale(
+                        child: InkWell(
                       borderRadius: BorderRadius.circular(16),
                       onTap: () => Navigator.of(ctx).pop(tile),
                       child: Column(
@@ -111,6 +115,8 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
                             ),
                           ),
                         ],
+                      ),
+                        ),
                       ),
                     );
                   },

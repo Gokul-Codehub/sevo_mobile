@@ -139,7 +139,7 @@ class StatusIllustration extends StatelessWidget {
   final StatusKind kind;
   final double size;
 
-  static const _warm = Color(0xFFF9C93A);
+  static const _warm = AppColors.swatchF9C93A;
 
   @override
   Widget build(BuildContext context) {

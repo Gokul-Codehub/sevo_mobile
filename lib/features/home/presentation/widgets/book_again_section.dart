@@ -247,6 +247,12 @@ class BookAgainTile extends ConsumerWidget {
     final routeSlug =
         hasRealSlug ? displayService.slug : 'svc-${service.id}';
 
+    final price = displayService.effectivePrice;
+    final hasPrice = price > Decimal.zero;
+    final isReorder = caption.toLowerCase().contains('book') ||
+        caption.toLowerCase().contains('order again');
+    final discountPct = displayService.discountPercent;
+
     return GestureDetector(
       onTap: () => context.push(
         // Fixed 2026-10-06: this always pushed '/services/...' — the
@@ -259,85 +265,186 @@ class BookAgainTile extends ConsumerWidget {
       ),
       child: SizedBox(
         width: width,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.divider, width: 1.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0x080F172A),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE8ECF1)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AspectRatio(
+                aspectRatio: 1,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(
+                      color: isGrocery
+                          ? const Color(0xFFF0FDF4)
+                          : const Color(0xFFF8FAFC),
+                      child: AppRemoteImage(
+                        imageUrl: displayImageUrl,
+                        rawPath: displayImageUrl,
+                        title: displayService.title,
+                        // Fixed 2026-10-06: this used to pass the raw, vendor-
+                        // specific `categoryName` (e.g. "Organic Fruits",
+                        // "Fruits") into both of these — but
+                        // ImageUrlHelper.resolve()'s no-real-image fallback (the
+                        // food-photo/stock-photo guess tables) and
+                        // mapCategoryIcon()'s own default case both only
+                        // recognize a grocery item by literally finding
+                        // "veg"/"grocery" as a SUBSTRING, which a vendor category
+                        // name like "Organic Fruits" never contains. Whenever a
+                        // Book Again grocery tile had no real photo, that made
+                        // both fallbacks miss their grocery branch entirely and
+                        // land on the generic, unthemed default icon
+                        // (Icons.category_rounded — the plain shape glyph
+                        // reported). `categorySlug` is reliable here instead:
+                        // every grocery source (Vegetable Inventory, Seller Hub
+                        // Marketplace, Grocery Hub) already forces it to contain
+                        // "vegetable"/"grocery" specifically so
+                        // ServiceItem.flowType resolves correctly — the same
+                        // guarantee now used here to pick a real food photo (or
+                        // at worst the grocery basket icon) instead of a
+                        // meaningless generic glyph.
+                        categoryName: imageCategorySlug,
+                        slug: displayService.slug,
+                        semanticIcon: ImageUrlHelper.mapCategoryIcon(
+                            imageCategorySlug, imageCategorySlug),
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
                     ),
+                    if (discountPct != null && discountPct > 0)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE11D48),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '$discountPct% OFF',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: AppRemoteImage(
-                  imageUrl: displayImageUrl,
-                  rawPath: displayImageUrl,
-                  title: displayService.title,
-                  // Fixed 2026-10-06: this used to pass the raw, vendor-
-                  // specific `categoryName` (e.g. "Organic Fruits",
-                  // "Fruits") into both of these — but
-                  // ImageUrlHelper.resolve()'s no-real-image fallback (the
-                  // food-photo/stock-photo guess tables) and
-                  // mapCategoryIcon()'s own default case both only
-                  // recognize a grocery item by literally finding
-                  // "veg"/"grocery" as a SUBSTRING, which a vendor category
-                  // name like "Organic Fruits" never contains. Whenever a
-                  // Book Again grocery tile had no real photo, that made
-                  // both fallbacks miss their grocery branch entirely and
-                  // land on the generic, unthemed default icon
-                  // (Icons.category_rounded — the plain shape glyph
-                  // reported). `categorySlug` is reliable here instead:
-                  // every grocery source (Vegetable Inventory, Seller Hub
-                  // Marketplace, Grocery Hub) already forces it to contain
-                  // "vegetable"/"grocery" specifically so
-                  // ServiceItem.flowType resolves correctly — the same
-                  // guarantee now used here to pick a real food photo (or
-                  // at worst the grocery basket icon) instead of a
-                  // meaningless generic glyph.
-                  categoryName: imageCategorySlug,
-                  slug: displayService.slug,
-                  semanticIcon: ImageUrlHelper.mapCategoryIcon(
-                      imageCategorySlug, imageCategorySlug),
-                  width: double.infinity,
-                  height: double.infinity,
-                  fit: BoxFit.cover,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Always reserve 2 title lines so every card in the
+                    // horizontal rail shares the same height.
+                    SizedBox(
+                      height: 11.5 * 1.25 * 2,
+                      child: Text(
+                        displayService.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    if (isReorder)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: accent.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.refresh_rounded, size: 12, color: accent),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                isGrocery ? 'Order again' : 'Book again',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: accent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (hasPrice)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₹$price',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              color: accent,
+                              height: 1,
+                            ),
+                          ),
+                          if (displayService.hasDiscount) ...[
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                '₹${displayService.price}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF94A3B8),
+                                  decoration: TextDecoration.lineThrough,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      )
+                    else if (caption.isNotEmpty)
+                      Text(
+                        caption,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: accent,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              displayService.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.navy,
-                height: 1.2,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              caption,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: accent,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -396,7 +503,8 @@ class _PersonalRail extends StatelessWidget {
   }
 }
 
-double _tileWidth(BuildContext context) => (MediaQuery.of(context).size.width - 32 - 30) / 4;
+/// ~3 cards visible on a phone so titles and the CTA have room to breathe.
+double _tileWidth(BuildContext context) => (MediaQuery.of(context).size.width - 32 - 20) / 3.15;
 
 /// Home Studio "Book Again": the signed-in customer's own past bookings (Services page) or past grocery items
 /// (Grocery page). Nothing for guests, nothing until there is a history.
@@ -425,6 +533,47 @@ class StudioBookAgain extends ConsumerWidget {
   }
 }
 
+/// "Order again": the signed-in customer's own past grocery items (empty cart suggestions). Nothing for guests or
+/// until there is a history.
+class OrderAgainStrip extends ConsumerWidget {
+  const OrderAgainStrip({super.key, this.limit = 8});
+
+  final int limit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(isUserAuthenticatedProvider)) return const SizedBox.shrink();
+    final bookings = ref.watch(myBookingsProvider(null)).valueOrNull ?? const <Booking>[];
+    final items = recentBookAgainItems(bookings, flowFilter: CatalogFlowType.grocery, limit: limit);
+    if (items.isEmpty) return const SizedBox.shrink();
+    final w = _tileWidth(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text('Order again', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.navy)),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  BookAgainTile(key: ValueKey('order-again-${items[i].id}'), service: items[i], width: w),
+                  if (i != items.length - 1) const SizedBox(width: 10),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Recently viewed tiles outside Home (the empty search screen). Same data as the Home section; nothing is drawn
 /// until something has been viewed.
 class RecentlyViewedStrip extends ConsumerWidget {
@@ -440,7 +589,7 @@ class RecentlyViewedStrip extends ConsumerWidget {
         if (RecentlyViewedNotifier.isGrocery(s) == grocery) s,
     ].take(limit).toList();
     if (items.isEmpty) return const SizedBox.shrink();
-    final w = (MediaQuery.of(context).size.width - 32 - 30) / 4;
+    final w = _tileWidth(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(

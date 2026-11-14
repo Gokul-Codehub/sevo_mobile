@@ -755,13 +755,19 @@ class ServiceItem extends Equatable {
       (vegetableCategoryName?.isNotEmpty ?? false) ||
       id >= _groceryCartIdOffset;
 
-  /// Formatted weight/unit string for grocery items (defaults to '500 g' or '1 unit' if unspecified).
+  /// The pack size / unit exactly as the server sends it (what the website shows). QA GAVM07: this used to invent
+  /// "500 g" when a product had no unit, and to show a whole description as the unit, so the app disagreed with the
+  /// web. Now it is the real unit, or empty when there is none (cards then say "1 unit", the detail page hides it).
   String get displayUnit {
-    if (unit != null && unit!.isNotEmpty) return unit!;
-    if (shortDescription != null && shortDescription!.contains(RegExp(r'\d+\s*(g|kg|ml|L|pcs|pack|bunch)', caseSensitive: false))) {
-      return shortDescription!;
+    final u = unit?.trim() ?? '';
+    if (u.isNotEmpty) return u;
+    // Only a SHORT size-like text ("250 g", "1 kg", "6 pcs") may stand in for a missing unit - never a sentence.
+    final sd = shortDescription?.trim() ?? '';
+    if (sd.length <= 14 &&
+        RegExp(r'^\d+(\.\d+)?\s*(g|gm|kg|ml|l|ltr|pcs|pc|pack|bunch|dozen)\b', caseSensitive: false).hasMatch(sd)) {
+      return sd;
     }
-    return '500 g';
+    return '';
   }
 
   /// Extracts a flat list of display strings from one of this catalog's

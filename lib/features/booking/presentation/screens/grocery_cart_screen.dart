@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lottie/lottie.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -23,9 +24,13 @@ import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../addresses/domain/address_models.dart';
 import '../../../addresses/domain/address_notifier.dart';
+import '../../../addresses/presentation/widgets/location_sheet.dart' show showLocationSheet;
+import '../../../coverage/domain/coverage.dart';
+import '../../../logistics/domain/logistics_providers.dart' show customerLocationProvider, CustomerLocationState;
 import '../../../auth/domain/auth_notifier.dart';
 import '../../../logistics/domain/logistics_models.dart';
 import '../../../home/domain/home_flow_mode.dart';
+import '../../../home/presentation/widgets/book_again_section.dart' show OrderAgainStrip, RecentlyViewedStrip;
 import '../../domain/booking_models.dart';
 import '../../domain/cart_notifier.dart';
 import '../../../pricing/domain/pricing_providers.dart';
@@ -33,6 +38,7 @@ import '../../../catalog/data/marketplace_catalog_repository.dart';
 import '../widgets/coupon_bottom_sheet.dart';
 import '../../../../shared/utils/focus_first_error.dart';
 import '../../../../shared/utils/date_utils.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 
 /// Added 2026-10-06 per explicit request ("Before checkout ask the user
 /// to select the delivery option below [Quick delivery, Slot booking
@@ -44,7 +50,7 @@ import '../../../../shared/utils/date_utils.dart';
 ///
 /// Corrected 2026-10-07 ("the slots for grocery/vegetale of should from
 /// the seller hub-delivery slot as per the uploaded image"): both options
-/// used to resolve to ONE hardcoded fixed window (quick = a fake "10-15
+/// used to resolve to ONE hardcoded fixed window (quick = a fake "30-45
 /// Min Express Delivery", scheduled = a fixed daily "6:00 PM - 8:00 PM")
 /// with no connection to any real delivery capacity. Both now resolve to
 /// a real `workforce_api.DeliverySlot` from the Vendor Seller Hub's own
@@ -53,6 +59,9 @@ import '../../../../shared/utils/date_utils.dart';
 /// fetched live via [marketplaceDeliverySlotsForDateProvider] — see that
 /// provider's doc comment for the full proxy chain.
 enum _DeliveryOption { quick, scheduled, takeaway }
+
+/// Top-level cart fulfilment mode shown as the Instant / Schedule / Take Away chips.
+enum _DeliveryMode { instant, schedule, takeaway }
 
 /// The next 3 calendar dates (today + 2) a customer can pick a Scheduled
 /// delivery slot for — "List 3 dates with slots which is getting from the
@@ -91,8 +100,144 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   }
 
   Address? _selectedAddress;
+
+  /// Key of the live (GPS / typed) location the customer has confirmed as the delivery address. A customer with no saved
+  /// address is never shown (or charged for) a made-up address: they confirm their current location first.
+  String? _confirmedLiveKey;
+
+  String _liveKey(CustomerLocationState l) => '${l.latitude?.toStringAsFixed(5)},${l.longitude?.toStringAsFixed(5)}';
+
+  /// The confirmed live location as a delivery address (id 0 = not saved to the account), or null.
+  Address? _liveAddressFor(CustomerLocationState loc) {
+    if (!loc.hasLocation || _confirmedLiveKey != _liveKey(loc)) return null;
+    return Address(
+      id: 0,
+      addressLine1: loc.address.isNotEmpty ? loc.address : 'Current location',
+      city: '',
+      postalCode: loc.pincode,
+      addressType: 'current location',
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+    );
+  }
+
+  /// "Confirm your delivery location": shows the detected location, checks we deliver there, and only then lets the
+  /// customer use it as the delivery address.
+  Future<void> _openConfirmLocationSheet(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetCtx) => Consumer(
+        builder: (ctx, sheetRef, _) {
+          final loc = sheetRef.watch(customerLocationProvider);
+          final zone = sheetRef.watch(deliveryZoneProvider);
+          final cov = sheetRef.watch(areaCoverageProvider).groceries;
+          final checking = loc.hasLocation && zone.isLoading;
+          final blocked = cov == Coverage.no;
+          final IconData icon;
+          final Color color;
+          final String status;
+          if (!loc.hasLocation) {
+            icon = Icons.location_off_rounded;
+            color = Colors.red.shade700;
+            status = 'We could not find your location. Turn on location or choose a place.';
+          } else if (checking) {
+            icon = Icons.hourglass_top_rounded;
+            color = AppColors.textSecondary;
+            status = 'Checking delivery to this location...';
+          } else if (blocked) {
+            icon = Icons.cancel_rounded;
+            color = Colors.red.shade700;
+            status = sheetRef.watch(areaCoverageProvider).groceriesMessage ?? 'Sorry, we do not deliver here yet. Please choose another location.';
+          } else if (cov == Coverage.yes) {
+            icon = Icons.check_circle_rounded;
+            color = AppColors.groceryGreen;
+            status = 'Great news - we deliver to this location.';
+          } else {
+            icon = Icons.info_outline_rounded;
+            color = AppColors.textSecondary;
+            status = 'We could not verify delivery here right now. Your order will be checked when you place it.';
+          }
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Confirm delivery location',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                  const SizedBox(height: 6),
+                  const Text('You have no saved address, so we will deliver to your current location. Please confirm it.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35)),
+                  const SizedBox(height: 14),
+                  if (loc.hasLocation)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.location_on_rounded, size: 20, color: AppColors.groceryGreen),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            [if (loc.address.isNotEmpty) loc.address, if (loc.pincode.isNotEmpty && !loc.address.contains(loc.pincode)) loc.pincode].join(' - '),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(icon, size: 18, color: color),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(status, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600, height: 1.3))),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (loc.hasLocation)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton(
+                        onPressed: (checking || blocked)
+                            ? null
+                            : () {
+                                if (mounted) setState(() => _confirmedLiveKey = _liveKey(loc));
+                                Navigator.of(sheetCtx).pop();
+                              },
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.groceryGreen),
+                        child: const Text('Confirm & deliver here', style: TextStyle(fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(sheetCtx).pop();
+                        showLocationSheet(context);
+                      },
+                      child: Text(loc.hasLocation ? 'Change location' : 'Choose location',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.groceryGreen)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   bool _isSubmitting = false;
   String? _errorMessage;
+  /// Seller-product id → units left in stock (from revalidate / checkout).
+  /// When set, those cart lines show an on-card "reduce quantity" prompt.
+  Map<int, int> _stockCaps = const {};
   // Added 2026-10-07 ("the promp/coupons model is not showing up"): this
   // whole grocery checkout flow never had ANY coupon entry point at all —
   // [_handlePlaceOrder] below creates the booking directly from this
@@ -142,24 +287,39 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     if (_isTakeaway) return;
     final items = marketplaceLines(ref.read(cartProvider));
     if (items.isEmpty) return;
-    setState(() => _pickupLoading = true);
+    // Switch the UI to Take Away immediately and fetch the warehouse in the background; if the server says it is not
+    // possible, go back to what the customer had before.
+    final previousOption = _deliveryOption;
+    final previousSlot = _selectedSlot;
+    final previousSlotDate = _selectedSlotDate;
+    setState(() {
+      _pickupLoading = true;
+      _deliveryOption = _DeliveryOption.takeaway;
+      _selectedSlot = null;
+      _selectedSlotDate = null;
+      _takeawayConfirmed = false;
+    });
+    void revert() => setState(() {
+          _pickupLoading = false;
+          _deliveryOption = previousOption;
+          _selectedSlot = previousSlot;
+          _selectedSlotDate = previousSlotDate;
+        });
     final result = await ref.read(groceryOrdersRepositoryProvider).pickupLocation(items);
     if (!mounted) return;
-    setState(() => _pickupLoading = false);
     switch (result) {
       case Success(:final data):
         if (!data.available) {
+          revert();
           AppToast.show(context, 'Take Away needs all your items to come from one SEVONIQ warehouse. Please choose delivery.', type: AppToastType.error);
           return;
         }
         setState(() {
+          _pickupLoading = false;
           _pickup = data.location ?? const PickupLocation();
-          _deliveryOption = _DeliveryOption.takeaway;
-          _selectedSlot = null;
-          _selectedSlotDate = null;
-          _takeawayConfirmed = false;
         });
       case Failure(:final error):
+        revert();
         AppToast.show(context, ErrorManager.present(error).body, type: AppToastType.error);
     }
   }
@@ -178,7 +338,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: const Color(0xFF14532D).withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: AppColors.green900.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
@@ -270,6 +430,27 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       AppToast.show(context, 'Please add your mobile number in Profile so the delivery partner can reach you.', type: AppToastType.error);
       return;
     }
+    // Show the customer the server's price BEFORE anything is charged: if it differs from what the cart displays (a seller
+    // changed a price, an item sold out), refresh the cart and ask them to confirm instead of charging a different amount.
+    final quote = await ref.read(groceryOrdersRepositoryProvider).quote(items);
+    if (!context.mounted) return;
+    if (quote != null) {
+      final onlySingles = items.every((i) => i.comboKey == null);
+      final shown = ref.read(cartSummaryProvider).subtotal;
+      final priceChanged = onlySingles && (quote.total - shown).abs() >= Decimal.parse('0.5');
+      if (!quote.valid || priceChanged) {
+        await refreshMarketplaceCart(ref);
+        if (!context.mounted) return;
+        AppToast.show(
+          context,
+          !quote.valid
+              ? 'Some items in your cart changed or sold out. We have updated your cart - please review it and place the order again.'
+              : 'Prices changed. Your total is now ₹${quote.total}. Please review your cart and place the order again.',
+          type: AppToastType.error,
+        );
+        return;
+      }
+    }
     final instant = _deliveryOption == _DeliveryOption.quick;
     final slot = _selectedSlot;
     _orderKey ??= 'app-${DateTime.now().microsecondsSinceEpoch}';
@@ -310,17 +491,56 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         // A failed attempt may be retried with a different cart, so it must not reuse the key.
         if (error is! NetworkError) _orderKey = null;
         var msg = ErrorManager.present(error).body;
-        // The shelf moved under the cart (sold out, price changed): bring the cart in line with it, like the web does,
-        // so the customer can review and order again instead of hitting the same error.
+        Map<int, int> stockCaps = const {};
+        if (error is ValidationError) {
+          final raw = error.extra['stockCaps'];
+          if (raw is Map) {
+            stockCaps = {
+              for (final e in raw.entries)
+                if (int.tryParse(e.key.toString()) != null && int.tryParse(e.value.toString()) != null)
+                  int.parse(e.key.toString()): int.parse(e.value.toString()),
+            };
+          }
+        }
+        // Stock shortfall: keep quantities as the customer chose them and mark
+        // the affected cards so they can reduce — don't silently rewrite the cart.
+        if (error is ValidationError && (error.code ?? '').toUpperCase() == 'INSUFFICIENT_STOCK') {
+          if (mounted) {
+            setState(() {
+              _stockCaps = stockCaps;
+              _errorMessage = stockCaps.isEmpty
+                  ? msg
+                  : 'Reduce quantity on the highlighted items to match what is left in stock.';
+            });
+          }
+          AppToast.show(context, 'Please reduce quantity on items that exceed stock.', type: AppToastType.error);
+          return;
+        }
+        // Sold out / price changed / delisted: refresh the cart like the web does.
         if (isCartStaleError(error)) {
           final server = (error as ValidationError).message;
           await refreshMarketplaceCart(ref);
           msg = '${server.trim().isEmpty ? 'Some items in your cart changed.' : server.trim()} We have updated your cart - please review it and place the order again.';
           if (!context.mounted) return;
         }
-        if (mounted) setState(() => _errorMessage = msg);
+        if (mounted) {
+          setState(() {
+            _errorMessage = msg;
+            _stockCaps = stockCaps;
+          });
+        }
         AppToast.show(context, msg, type: AppToastType.error);
     }
+  }
+
+  /// In-stock cap for a single-product cart line, if we know one (revalidate
+  /// result or the product's own maxQuantity when the qty already exceeds it).
+  int? _stockCapFor(CartItem item) {
+    final pid = marketplaceProductIdOf(item);
+    if (pid != null && _stockCaps.containsKey(pid)) return _stockCaps[pid];
+    final max = item.service.maxQuantity;
+    if (max > 0 && max < 99 && item.quantity > max) return max;
+    return null;
   }
 
   /// Opens the real [CouponBottomSheet] (live coupons from the backend,
@@ -372,9 +592,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     final addressesAsync = ref.watch(addressListProvider);
 
     final addresses = addressesAsync.valueOrNull ?? const [];
-    final activeAddress = _selectedAddress ??
+    final savedAddress = _selectedAddress ??
         addresses.where((a) => a.isDefault).firstOrNull ??
         addresses.firstOrNull;
+    // No saved address: the customer's confirmed live location (never an invented one).
+    final liveLoc = ref.watch(customerLocationProvider);
+    final activeAddress = savedAddress ?? _liveAddressFor(liveLoc);
 
     if (cartItems.isEmpty) {
       // Fixed 2026-10-08 per explicit correction ("Grocery and services
@@ -397,64 +620,66 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
           title: const Text('My Cart'),
         ),
         body: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 90,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    color: AppColors.groceryGreen.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.shopping_basket_outlined,
-                    size: 48,
-                    color: AppColors.groceryGreen,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Your grocery cart is empty',
-                  style: TextStyle(
-                    fontSize: 17.5,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Add farm-fresh vegetables and daily essentials to get instant 10-15 min delivery.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                FilledButton.icon(
-                  onPressed: _goShopGroceries,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.groceryGreen,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 28,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+            child: FadeSlideIn(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 190,
+                    height: 190,
+                    child: Lottie.asset(
+                      'assets/animations/empty_cart_bag.json',
+                      fit: BoxFit.contain,
+                      repeat: true,
                     ),
                   ),
-                  icon: const Icon(Icons.eco_rounded, size: 18),
-                  label: const Text(
-                    'Explore Farm-Fresh Produce',
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Your grocery cart is empty',
                     style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.bold),
+                      fontSize: 17.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Add farm-fresh vegetables and daily essentials to get instant 30-45 min delivery.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  PressScale(
+                    child: FilledButton.icon(
+                      onPressed: _goShopGroceries,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.groceryGreen,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      icon: const Icon(Icons.shopping_bag_rounded, size: 18),
+                      label: const Text(
+                        'Shop Now',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),),
+                  ),
+                  const SizedBox(height: 28),
+                  // Suggestions instead of a dead end: what they bought before, then what they looked at lately.
+                  const Align(alignment: Alignment.centerLeft, child: OrderAgainStrip()),
+                  const Align(alignment: Alignment.centerLeft, child: RecentlyViewedStrip(grocery: true)),
+                ],
+              ),
             ),
           ),
         ),
@@ -477,9 +702,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         (cartSummary.subtotal / freeThreshold).toDecimal().toDouble().clamp(0.0, 1.0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4EF),
+      backgroundColor: AppColors.swatchF8F4EF,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF8F4EF),
+        backgroundColor: AppColors.swatchF8F4EF,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         leading: IconButton(
@@ -596,7 +821,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF14532D).withValues(alpha: 0.06),
+                    color: AppColors.green900.withValues(alpha: 0.06),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -608,7 +833,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     width: 44,
                     height: 44,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFE8EDF7),
+                      color: AppColors.swatchE8EDF7,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -623,7 +848,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Delivering to ${activeAddress != null ? activeAddress.addressType : "Home"}',
+                          activeAddress == null
+                              ? 'Confirm your delivery location'
+                              : activeAddress.id == 0
+                                  ? 'Delivering to your current location'
+                                  : 'Delivering to ${activeAddress.addressType}',
                           style: const TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w800,
@@ -632,7 +861,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          activeAddress?.formattedAddress ?? 'Hosur, Tamil Nadu',
+                          activeAddress?.formattedAddress ??
+                              (liveLoc.hasLocation && liveLoc.address.isNotEmpty
+                                  ? '${liveLoc.address} - not confirmed yet'
+                                  : 'No delivery location set'),
                           style: const TextStyle(
                             fontSize: 11.5,
                             color: AppColors.textSecondary,
@@ -646,10 +878,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton(
-                    onPressed: () => _openAddressSheet(context, addresses),
+                    onPressed: () => (savedAddress == null)
+                        ? _openConfirmLocationSheet(context)
+                        : _openAddressSheet(context, addresses),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.groceryGreen,
-                      backgroundColor: const Color(0xFFEEF1F7),
+                      backgroundColor: AppColors.swatchEEF1F7,
                       side: const BorderSide(color: Color(0xFFDDE3ED)),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                       minimumSize: const Size(0, 34),
@@ -657,9 +891,9 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
-                    child: const Text(
-                      'Change',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                    child: Text(
+                      activeAddress == null ? 'Confirm' : 'Change',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -677,7 +911,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF14532D).withValues(alpha: 0.06),
+                    color: AppColors.green900.withValues(alpha: 0.06),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -697,12 +931,30 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           ),
                           const SizedBox(width: 6),
                           if (cartSummary.subtotal >= freeThreshold)
-                            const Text(
-                              'You unlocked FREE delivery!',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.groceryGreen,
+                            BounceOnChange(
+                              value: cartSummary.subtotal >= freeThreshold,
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CelebrationBurst(
+                                    size: 22,
+                                    color: AppColors.groceryGreen,
+                                    child: Icon(
+                                      Icons.local_shipping_rounded,
+                                      size: 14,
+                                      color: AppColors.groceryGreen,
+                                    ),
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'You unlocked FREE delivery!',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.groceryGreen,
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           else
@@ -747,16 +999,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: LinearProgressIndicator(
-                      value: progressFraction,
-                      minHeight: 7,
-                      backgroundColor: AppColors.surfaceVariant,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.groceryGreen,
-                      ),
-                    ),
+                  SmoothProgressBar(
+                    value: progressFraction,
+                    minHeight: 7,
+                    backgroundColor: AppColors.surfaceVariant,
+                    color: AppColors.groceryGreen,
                   ),
                 ],
               ),
@@ -776,12 +1023,15 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                             size: 18, color: AppColors.groceryGreen),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            'Cart Items (${cartSummary.itemCount})',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.navy,
+                          child: BounceOnChange(
+                            value: cartSummary.itemCount,
+                            child: Text(
+                              'Cart Items (${cartSummary.itemCount})',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.navy,
+                              ),
                             ),
                           ),
                         ),
@@ -789,7 +1039,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           onPressed: _goShopGroceries,
                           style: TextButton.styleFrom(
                             foregroundColor: AppColors.groceryGreen,
-                            backgroundColor: const Color(0xFFEEF1F7),
+                            backgroundColor: AppColors.swatchEEF1F7,
                             minimumSize: const Size(0, 32),
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             shape: RoundedRectangleBorder(
@@ -811,29 +1061,56 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     itemCount: _cartEntries(cartItems).length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(height: 10),
-                    itemBuilder: (context, index) => Container(
+                    itemBuilder: (context, index) {
+                      final entry = _cartEntries(cartItems)[index];
+                      if (entry.comboKey != null) {
+                        return FadeSlideIn(
+                          index: index,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.green900.withValues(alpha: 0.05),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: _ComboCartGroup(
+                              members: cartItems
+                                  .where((c) => c.comboKey == entry.comboKey)
+                                  .toList(),
+                            ),
+                          ),
+                        );
+                      }
+                      final item = cartItems[entry.index!];
+                      final effectivePrice = item.service.effectivePrice;
+                      final mrp = item.service.mrp;
+                      final stockCap = _stockCapFor(item);
+                      final overStock = stockCap != null && item.quantity > stockCap;
+                      return FadeSlideIn(
+                     index: index,
+                     child: Container(
                      padding: const EdgeInsets.all(12),
                      decoration: BoxDecoration(
                        color: Colors.white,
                        borderRadius: BorderRadius.circular(16),
+                       border: overStock
+                           ? Border.all(color: const Color(0xFFFECACA), width: 1.2)
+                           : null,
                        boxShadow: [
                          BoxShadow(
-                           color: const Color(0xFF14532D).withValues(alpha: 0.05),
+                           color: AppColors.green900.withValues(alpha: 0.05),
                            blurRadius: 14,
                            offset: const Offset(0, 4),
                          ),
                        ],
                      ),
                      child: Builder(builder: (context) {
-                      final entry = _cartEntries(cartItems)[index];
-                      if (entry.comboKey != null) {
-                        return _ComboCartGroup(
-                          members: cartItems.where((c) => c.comboKey == entry.comboKey).toList(),
-                        );
-                      }
-                      final item = cartItems[entry.index!];
-                      final effectivePrice = item.service.effectivePrice;
-                      final mrp = item.service.mrp;
 
                       // Tapping the image or details opens that product's own
                       // page (same route the product cards use).
@@ -847,7 +1124,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         );
                       }
 
-                      return Row(
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                        Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Expanded(
@@ -935,15 +1215,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                     color: AppColors.textSecondary,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'Seller: SevoGrocery',
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
                                 const SizedBox(height: 4),
                                 // Line total for this quantity.
                                 Row(
@@ -981,10 +1252,14 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                           // Quantity Stepper matching Web
                           Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF3F5F9),
+                              color: overStock
+                                  ? const Color(0xFFFFF1F2)
+                                  : const Color(0xFFF3F5F9),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: const Color(0xFFE3E8F0),
+                                color: overStock
+                                    ? const Color(0xFFFECACA)
+                                    : AppColors.swatchE3E8F0,
                                 width: 1,
                               ),
                             ),
@@ -993,12 +1268,28 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                               children: [
                                 InkWell(
                                   onTap: () {
+                                    final next = item.quantity - 1;
                                     ref
                                         .read(cartProvider.notifier)
                                         .updateQuantity(
                                           item.service.id,
-                                          item.quantity - 1,
+                                          next,
                                         );
+                                    final pid = marketplaceProductIdOf(item);
+                                    if (pid != null &&
+                                        _stockCaps.containsKey(pid) &&
+                                        next <= (_stockCaps[pid] ?? 0)) {
+                                      setState(() {
+                                        final nextCaps = Map<int, int>.from(_stockCaps)
+                                          ..remove(pid);
+                                        _stockCaps = nextCaps;
+                                        if (_stockCaps.isEmpty &&
+                                            (_errorMessage ?? '')
+                                                .contains('highlighted')) {
+                                          _errorMessage = null;
+                                        }
+                                      });
+                                    }
                                   },
                                   borderRadius: const BorderRadius.horizontal(
                                     left: Radius.circular(20),
@@ -1019,17 +1310,44 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 6,
                                   ),
-                                  child: Text(
-                                    '${item.quantity}',
-                                    style: const TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 12.5,
+                                  child: BounceOnChange(
+                                    value: item.quantity,
+                                    child: Text(
+                                      '${item.quantity}',
+                                      style: TextStyle(
+                                        color: overStock
+                                            ? AppColors.red700
+                                            : AppColors.textPrimary,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12.5,
+                                      ),
                                     ),
                                   ),
                                 ),
                                 InkWell(
                                   onTap: () {
+                                    final cap = stockCap ??
+                                        (item.service.maxQuantity > 0 &&
+                                                item.service.maxQuantity < 99
+                                            ? item.service.maxQuantity
+                                            : null);
+                                    if (cap != null && item.quantity >= cap) {
+                                      AppToast.show(
+                                        context,
+                                        'Only $cap left in stock for ${item.service.title}.',
+                                        type: AppToastType.error,
+                                      );
+                                      setState(() {
+                                        final pid = marketplaceProductIdOf(item);
+                                        if (pid != null) {
+                                          _stockCaps = {
+                                            ..._stockCaps,
+                                            pid: cap,
+                                          };
+                                        }
+                                      });
+                                      return;
+                                    }
                                     ref.read(cartProvider.notifier).addService(
                                           item.service,
                                         );
@@ -1046,15 +1364,18 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                   borderRadius: const BorderRadius.horizontal(
                                     right: Radius.circular(20),
                                   ),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
                                       vertical: 6,
                                     ),
                                     child: Icon(
                                       Icons.add,
                                       size: 14,
-                                      color: AppColors.groceryGreen,
+                                      color: (stockCap != null &&
+                                              item.quantity >= stockCap)
+                                          ? AppColors.textHint
+                                          : AppColors.groceryGreen,
                                     ),
                                   ),
                                 ),
@@ -1062,9 +1383,82 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      if (overStock) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF1F2),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.inventory_2_outlined,
+                                  size: 16, color: AppColors.red700),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  stockCap <= 0
+                                      ? 'Out of stock — please remove this item.'
+                                      : 'Only $stockCap left in stock. Please reduce quantity to $stockCap or less.',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF9F1239),
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                              if (stockCap > 0)
+                                TextButton(
+                                  onPressed: () {
+                                    ref.read(cartProvider.notifier).updateQuantity(
+                                          item.service.id,
+                                          stockCap,
+                                        );
+                                    final pid = marketplaceProductIdOf(item);
+                                    if (pid != null) {
+                                      setState(() {
+                                        final nextCaps =
+                                            Map<int, int>.from(_stockCaps)
+                                              ..remove(pid);
+                                        _stockCaps = nextCaps;
+                                        if (_stockCaps.isEmpty) {
+                                          _errorMessage = null;
+                                        }
+                                      });
+                                    }
+                                  },
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.red700,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: Text(
+                                    'Set to $stockCap',
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                        ],
                       );
                     }),
                     ),
+                    );
+                    },
                   ),
                 ],
               ),
@@ -1086,7 +1480,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF14532D).withValues(alpha: 0.06),
+                    color: AppColors.green900.withValues(alpha: 0.06),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -1147,7 +1541,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF14532D).withValues(alpha: 0.06),
+                    color: AppColors.green900.withValues(alpha: 0.06),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -1191,7 +1585,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                 vertical: 1.5,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFEEF1F7),
+                                color: AppColors.swatchEEF1F7,
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
                                   color: const Color(0xFFDDE3ED),
@@ -1203,7 +1597,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                                 style: const TextStyle(
                                   fontSize: 9.5,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF14532D),
+                                  color: AppColors.green900,
                                 ),
                               ),
                             ),
@@ -1237,6 +1631,17 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   ),
                   const SizedBox(height: 10),
 
+                  if (mkt && _isTakeaway)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Delivery fee', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                          Text('Not applicable', style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
                   if (!mkt) ...[
                   // Delivery charge
                   Row(
@@ -1496,7 +1901,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF14532D).withValues(alpha: 0.12),
+              color: AppColors.green900.withValues(alpha: 0.12),
               blurRadius: 22,
               offset: const Offset(0, 6),
             ),
@@ -1508,7 +1913,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Big Green Proceed To Pay Button
-              SizedBox(
+              PressScale(
+                child: SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: FilledButton(
@@ -1531,13 +1937,16 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '₹${_effectiveGrandTotal(cartSummary)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              height: 1.1,
+                          BounceOnChange(
+                            value: _effectiveGrandTotal(cartSummary).toString(),
+                            child: Text(
+                              '₹${_effectiveGrandTotal(cartSummary)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                height: 1.1,
+                              ),
                             ),
                           ),
                           const Text(
@@ -1572,6 +1981,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                     ],
                   ),
                 ),
+              ),
               ),
               const SizedBox(height: 6),
               const Row(
@@ -1676,7 +2086,6 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     final dates = _nextThreeDeliveryDates();
     final pickedDate = _inlineSlotDate ?? dates.first;
     final pickedStr = _formatDateForBooking(pickedDate);
-    final todayStr = _formatDateForBooking(dates.first);
     // Slots of the warehouse the cart's products ship from (same rule as the web cart). Looked up from the
     // product when the cart line does not carry it (items saved before the app recorded it).
     final warehouseAsync = ref.watch(cartWarehouseIdProvider);
@@ -1714,20 +2123,74 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
           ],
         );
 
-    final todayAsync = ref.watch(marketplaceDeliverySlotsForDateProvider(slotQuery(todayStr)));
     final slotsAsync = ref.watch(marketplaceDeliverySlotsForDateProvider(slotQuery(pickedStr)));
 
-    // Earliest still-upcoming, available slot today -> "Instant" delivery.
-    DeliverySlotOption? instantSlot;
-    todayAsync.whenData((day) {
-      for (final s in day.slots) {
-        if (s.isAvailable && !_isSlotPast(dates.first, s)) {
-          instantSlot = s;
-          break;
-        }
-      }
-    });
-    final instant = instantSlot;
+    // Instant = "Fast Delivery" on the web: delivered now (~30-45 mins), no time slot involved.
+
+    final mode = _isTakeaway
+        ? _DeliveryMode.takeaway
+        : _deliveryOption == _DeliveryOption.quick
+            ? _DeliveryMode.instant
+            : _deliveryOption == _DeliveryOption.scheduled
+                ? _DeliveryMode.schedule
+                : null;
+
+    Widget modeChip({
+      required _DeliveryMode value,
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+    }) {
+      final selected = mode == value;
+      return Expanded(
+        child: Material(
+          color: selected ? AppColors.groceryGreen : const Color(0xFFF3F5F9),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected ? AppColors.groceryGreen : AppColors.swatchE3E8F0,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(icon, size: 18, color: selected ? Colors.white : AppColors.textSecondary),
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: selected ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      height: 1.25,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? Colors.white.withValues(alpha: 0.88) : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1735,132 +2198,229 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF14532D).withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4)),
+          BoxShadow(color: AppColors.green900.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
+          const Row(
+            children: [
               Icon(Icons.schedule_outlined, size: 18, color: AppColors.textPrimary),
               SizedBox(width: 8),
               Text(
-                'Delivery slot',
+                'How do you want it?',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _DeliveryOptionTile(
-            icon: Icons.bolt_outlined,
-            title: 'Instant Delivery',
-            subtitle: todayAsync.isLoading
-                ? 'Checking next available slot…'
-                : instant != null
-                    ? 'Today, ${_slotTimeRangeLabel(instant)}'
-                    : 'No slot left today — choose a scheduled slot',
-            isSelected: _deliveryOption == _DeliveryOption.quick,
-            onTap: () {
-              if (instant == null) {
-                AppToast.show(
-                  context,
-                  'No delivery slots are available today. Please pick a scheduled slot.',
-                  type: AppToastType.error,
-                );
-                return;
-              }
-              setState(() {
-                _deliveryOption = _DeliveryOption.quick;
-                _selectedSlot = instant;
-                _selectedSlotDate = todayStr;
-              });
-            },
-          ),
-          const SizedBox(height: 10),
-          _DeliveryOptionTile(
-            icon: Icons.storefront_outlined,
-            title: 'Take Away',
-            subtitle: _pickupLoading ? 'Checking the warehouse…' : 'Collect at the warehouse · no delivery fee',
-            isSelected: _isTakeaway,
-            onTap: () {
-              if (!_pickupLoading) _selectTakeaway();
-            },
+          Row(
+            children: [
+              modeChip(
+                value: _DeliveryMode.instant,
+                icon: Icons.bolt_rounded,
+                title: 'Instant',
+                subtitle: 'Deliver now (~30-45 mins)',
+                onTap: () => setState(() {
+                  _deliveryOption = _DeliveryOption.quick;
+                  _selectedSlot = null;
+                  _selectedSlotDate = null;
+                }),
+              ),
+              const SizedBox(width: 8),
+              modeChip(
+                value: _DeliveryMode.schedule,
+                icon: Icons.event_available_rounded,
+                title: 'Schedule',
+                subtitle: 'Pick a time slot',
+                onTap: () => setState(() {
+                  _deliveryOption = _DeliveryOption.scheduled;
+                  _inlineSlotDate ??= dates.first;
+                }),
+              ),
+              const SizedBox(width: 8),
+              modeChip(
+                value: _DeliveryMode.takeaway,
+                icon: Icons.storefront_rounded,
+                title: 'Take Away',
+                subtitle: 'Collect at warehouse',
+                onTap: () {
+                  _selectTakeaway();
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 14),
-          label('Or schedule — pick a date'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: dates.map((date) {
-              final isPicked = date.year == pickedDate.year &&
-                  date.month == pickedDate.month &&
-                  date.day == pickedDate.day;
-              return _SlotChip(
-                label: _describeSlotDate(date),
-                isSelected: isPicked,
-                onTap: () => setState(() => _inlineSlotDate = date),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-          label('Available slots'),
-          const SizedBox(height: 8),
-          slotsAsync.when(
-            data: (day) {
-              if (day.failed) return retry(pickedStr);
-              final visible = day.slots.where((s) => !_isSlotPast(pickedDate, s)).toList();
-              if (visible.isEmpty) {
-                return const Text(
-                  'No delivery slots available for this date.',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                );
-              }
-              Widget slotTile(DeliverySlotOption slot) {
-                final selected = _deliveryOption == _DeliveryOption.scheduled &&
-                    _selectedSlotDate == pickedStr &&
-                    _selectedSlot?.id == slot.id;
-                return _SlotTile(
-                  label: _slotTimeRangeLabel(slot),
-                  isSelected: selected,
-                  isDisabled: !slot.isAvailable,
-                  onTap: slot.isAvailable
-                      ? () => setState(() {
-                            _deliveryOption = _DeliveryOption.scheduled;
-                            _selectedSlot = slot;
-                            _selectedSlotDate = pickedStr;
-                          })
-                      : null,
-                );
-              }
-
-              // Two-column grid: each row holds two slots side by side.
-              return Column(
+          if (mode == _DeliveryMode.instant)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.groceryGreenLight,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.groceryGreen.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (var i = 0; i < visible.length; i += 2) ...[
-                    if (i > 0) const SizedBox(height: 10),
-                    Row(
+                  _ModeBadge(icon: Icons.bolt_rounded, color: AppColors.groceryGreen),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: slotTile(visible[i])),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: i + 1 < visible.length
-                              ? slotTile(visible[i + 1])
-                              : const SizedBox.shrink(),
+                        Text(
+                          'Fast delivery',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: AppColors.groceryGreenDark),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          'Delivered to your door in about 30-45 mins. No time slot to pick - we start packing as soon as you order.',
+                          style: TextStyle(fontSize: 11.5, height: 1.4, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ],
-              );
-            },
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+            )
+          else if (mode == _DeliveryMode.takeaway)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.swatchEDF0F5,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.swatchE3E8F0),
+              ),
+              child: _pickupLoading
+                  ? const Row(
+                      children: [
+                        SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(width: 12),
+                        Text('Checking the warehouse…', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ModeBadge(icon: Icons.storefront_rounded, color: AppColors.navy),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (_pickup?.name ?? '').isEmpty ? 'Collect at the warehouse' : 'Collect from ${_pickup!.name}',
+                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: AppColors.navy),
+                              ),
+                              if ((_pickup?.address ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  _pickup!.address,
+                                  style: const TextStyle(fontSize: 11.5, height: 1.4, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              const Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  _ModePill(icon: Icons.check_circle_outline_rounded, text: 'No delivery fee'),
+                                  _ModePill(icon: Icons.pin_outlined, text: 'Pickup code on order'),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+            )
+          else if (mode == _DeliveryMode.schedule) ...[
+            label('Pick a date'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (var i = 0; i < dates.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: _SlotChip(
+                      label: _describeSlotDate(dates[i]),
+                      isSelected: dates[i].year == pickedDate.year &&
+                          dates[i].month == pickedDate.month &&
+                          dates[i].day == pickedDate.day,
+                      onTap: () => setState(() {
+                        _inlineSlotDate = dates[i];
+                        _deliveryOption = _DeliveryOption.scheduled;
+                      }),
+                    ),
+                  ),
+                ],
+              ],
             ),
-            error: (_, __) => retry(pickedStr),
-          ),
+            const SizedBox(height: 12),
+            label('Available time slots'),
+            const SizedBox(height: 8),
+            slotsAsync.when(
+              data: (day) {
+                if (day.failed) return retry(pickedStr);
+                final visible = day.slots.where((s) => !_isSlotPast(pickedDate, s)).toList();
+                if (visible.isEmpty) {
+                  return const Text(
+                    'No delivery slots available for this date.',
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  );
+                }
+                Widget slotTile(DeliverySlotOption slot) {
+                  final selected = _deliveryOption == _DeliveryOption.scheduled &&
+                      _selectedSlotDate == pickedStr &&
+                      _selectedSlot?.id == slot.id;
+                  return _SlotTile(
+                    label: _slotTimeRangeLabel(slot),
+                    isSelected: selected,
+                    isDisabled: !slot.isAvailable,
+                    onTap: slot.isAvailable
+                        ? () => setState(() {
+                              _deliveryOption = _DeliveryOption.scheduled;
+                              _selectedSlot = slot;
+                              _selectedSlotDate = pickedStr;
+                            })
+                        : null,
+                  );
+                }
+
+                // Two-column grid of time slots.
+                return Column(
+                  children: [
+                    for (var i = 0; i < visible.length; i += 2) ...[
+                      if (i > 0) const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(child: slotTile(visible[i])),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: i + 1 < visible.length
+                                ? slotTile(visible[i + 1])
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+              error: (_, __) => retry(pickedStr),
+            ),
+          ] else
+            const Text(
+              'Choose Instant, Schedule, or Take Away to continue.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35),
+            ),
         ],
       ),
     );
@@ -1940,6 +2500,10 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   /// [_handlePlaceOrder] once one has.
   void _onProceedToPayTapped(BuildContext context, Address? activeAddress) {
     if (_isTakeaway) {
+      if (_pickupLoading) {
+        AppToast.show(context, 'Checking the warehouse - one moment.', type: AppToastType.info);
+        return;
+      }
       if (!_takeawayConfirmed) {
         AppToast.show(context, 'Please tick the box to confirm you will come to the warehouse and pick up your order.', type: AppToastType.error);
         return;
@@ -1947,7 +2511,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       _handlePlaceOrder(context, ref, activeAddress);
       return;
     }
-    if (_deliveryOption == null || _selectedSlot == null) {
+    if (activeAddress == null) {
+      AppToast.show(context, 'Please confirm your delivery location first.', type: AppToastType.error);
+      _openConfirmLocationSheet(context);
+      return;
+    }
+    if (_deliveryOption == null || (_deliveryOption == _DeliveryOption.scheduled && _selectedSlot == null)) {
       // The delivery slot card is on this page — point the customer at it
       // instead of opening a second picker.
       AppToast.show(
@@ -1984,7 +2553,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       return;
     }
 
-    if (activeAddress != null) {
+    if (activeAddress != null && activeAddress.id != 0) {
       ref.read(selectedAddressProvider.notifier).state = activeAddress;
     }
 
@@ -2011,94 +2580,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 }
 
 /// A single selectable row in [_GroceryCartScreenState._openDeliveryOptionSheet]
-/// — same selected/unselected visual language as
-/// the cart chips (navy fill when selected,
-/// light surface otherwise), just icon + title + subtitle instead of a
-/// label + amount, since each delivery option needs a one-line
-/// explanation of what it actually means.
-class _DeliveryOptionTile extends StatelessWidget {
-  const _DeliveryOptionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.textPrimary : AppColors.background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? AppColors.textPrimary : AppColors.border,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected ? Colors.white : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: isSelected ? Colors.white : AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected ? Colors.white70 : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A small selectable pill used for the 3-day date picker and the real
-/// delivery-slot list in
-/// [_GroceryCartScreenState._openDeliveryOptionSheet] — unlike
-/// [_DeliveryOptionTile] (a full-width row for the two top-level delivery
-/// options), dates and slots are shown as compact chips since there can
-/// be several of them side by side (one per real
-/// `workforce_api.DeliverySlot` the Seller Hub admin has configured, e.g.
-/// 09:00-11:00, 11:00-13:00, 14:00-16:00, 16:00-18:00). [isDisabled]
-/// renders a slot whose capacity/cutoff has made it unavailable today
-/// (per `PublicDeliverySlotsView`'s live `available` flag) as struck
-/// through and untappable, rather than hiding it — the customer can see
-/// it exists, just not right now.
+/// Date / mode chip used by the inline delivery picker.
 class _SlotChip extends StatelessWidget {
   const _SlotChip({
     required this.label,
@@ -2128,20 +2610,23 @@ class _SlotChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+        width: double.infinity,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
         decoration: BoxDecoration(
           color: background,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: isSelected && !isDisabled ? AppColors.textPrimary : AppColors.border,
-            width: 1,
+            color: isSelected && !isDisabled ? AppColors.groceryGreen : AppColors.border,
+            width: isSelected && !isDisabled ? 1.4 : 1,
           ),
         ),
         child: Text(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: foreground,
             decoration: isDisabled ? TextDecoration.lineThrough : null,
           ),
@@ -2202,7 +2687,7 @@ class _SlotTile extends StatelessWidget {
                     color: isDisabled
                         ? AppColors.textSecondary
                         : isSelected
-                            ? const Color(0xFF14532D)
+                            ? AppColors.green900
                             : AppColors.groceryGreen,
                     decoration: isDisabled ? TextDecoration.lineThrough : null,
                   ),
@@ -2485,4 +2970,44 @@ class _ComboCartGroup extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Round icon badge used by the Instant / Take Away explainer cards in the delivery picker.
+class _ModeBadge extends StatelessWidget {
+  const _ModeBadge({required this.icon, required this.color});
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+        child: Icon(icon, size: 20, color: color),
+      );
+}
+
+/// Small rounded "benefit" tag (e.g. "No delivery fee").
+class _ModePill extends StatelessWidget {
+  const _ModePill({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.swatchE3E8F0),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: AppColors.groceryGreen),
+            const SizedBox(width: 4),
+            Text(text, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          ],
+        ),
+      );
 }

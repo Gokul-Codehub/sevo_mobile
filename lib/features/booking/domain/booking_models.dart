@@ -272,7 +272,25 @@ class QuoteSummary extends Equatable {
     this.alreadyPaidAdvance,
     this.additionalAdvanceDue,
     this.advanceFullyCovered = false,
+    this.workStartDate,
+    this.workStartTime,
+    this.workEndDate,
+    this.workEndTime,
+    this.pendingAdminApproval = false,
   });
+
+  /// Quotations of Rs 5,000 or more (or with auto-approval switched off) must be approved by our team before the
+  /// customer can respond (`pending_admin_approval` / status PENDING_ADMIN_APPROVAL).
+  final bool pendingAdminApproval;
+
+  /// The technician's estimated work window (`estimated_work_start_date` ... or `estimation_schedule.*` / `schedule.*`,
+  /// the same keys the website reads). Plain strings as sent: "2026-11-12" and "09:30" / "09:30 AM".
+  final String? workStartDate;
+  final String? workStartTime;
+  final String? workEndDate;
+  final String? workEndTime;
+
+  bool get hasWorkSchedule => [workStartDate, workStartTime, workEndDate, workEndTime].any((s) => (s ?? '').trim().isNotEmpty);
 
   /// Scope-approval quotation (no prices yet): the customer approves the work
   /// and the priced quotation follows.
@@ -331,6 +349,16 @@ class QuoteSummary extends Equatable {
   bool get isConversionPending => status == 'CONVERSION_PENDING';
 
   factory QuoteSummary.fromJson(Map<String, dynamic> json) {
+    final es = json['estimation_schedule'] is Map ? Map<String, dynamic>.from(json['estimation_schedule'] as Map) : const <String, dynamic>{};
+    final sch = json['schedule'] is Map ? Map<String, dynamic>.from(json['schedule'] as Map) : const <String, dynamic>{};
+    String? pick(List<Object?> candidates) {
+      for (final c in candidates) {
+        final s = c?.toString().trim() ?? '';
+        if (s.isNotEmpty && s != 'null') return s;
+      }
+      return null;
+    }
+
     final rawItems = json['items'];
     final items = rawItems is List
         ? rawItems
@@ -366,6 +394,12 @@ class QuoteSummary extends Equatable {
       alreadyPaidAdvance: parseMoneyOrNull(_ps(json)['already_paid_advance'] ?? json['already_paid_advance']),
       additionalAdvanceDue: parseMoneyOrNull(_ps(json)['additional_advance_due'] ?? json['additional_advance_due']),
       advanceFullyCovered: _truthy(_ps(json)['advance_fully_covered'] ?? json['advance_fully_covered']),
+      pendingAdminApproval: _truthy(json['pending_admin_approval']) ||
+          (json['status'] ?? '').toString().trim().toUpperCase() == 'PENDING_ADMIN_APPROVAL',
+      workStartDate: pick([json['estimated_work_start_date'], es['estimated_work_start_date'], sch['start_date']]),
+      workStartTime: pick([json['estimated_work_start_time'], es['estimated_work_start_time'], sch['start_time']]),
+      workEndDate: pick([json['estimated_work_end_date'], es['estimated_work_end_date'], sch['end_date']]),
+      workEndTime: pick([json['estimated_work_end_time'], es['estimated_work_end_time'], sch['end_time']]),
       inspectionFee: parseMoneyOrNull(json['inspection_fee']),
       declineReason: json['decline_reason']?.toString(),
       customerNotes: json['customer_notes']?.toString(),
@@ -392,6 +426,11 @@ class QuoteSummary extends Equatable {
         requiresAdvance,
         additionalAdvanceDue,
         advanceFullyCovered,
+        workStartDate,
+        workStartTime,
+        workEndDate,
+        workEndTime,
+        pendingAdminApproval,
       ];
 }
 
@@ -408,6 +447,7 @@ class Booking extends Equatable {
     this.paymentOrderId,
     this.availableActions = const [],
     this.hasServerActions = false,
+    this.rescheduleStatus,
     this.items = const [],
     this.address,
     required this.scheduledDate,
@@ -601,6 +641,12 @@ class Booking extends Equatable {
   /// The server sent an `available_actions` block (even if every flag was
   /// false). When it did, it is the only authority for action buttons.
   final bool hasServerActions;
+
+  /// Status of the latest reschedule request (`latest_reschedule.status`), if one exists.
+  final String? rescheduleStatus;
+
+  /// A reschedule was asked for and staff have not decided yet.
+  bool get hasPendingReschedule => (rescheduleStatus ?? '').toLowerCase().startsWith('pending');
   final List<CartItem> items;
   final Address? address;
   final String scheduledDate;
@@ -822,6 +868,7 @@ class Booking extends Equatable {
       paymentOrderId: json['payment_order_id']?.toString() ?? json['razorpay_order_id']?.toString(),
       availableActions: rawActions.map((a) => a.toString().toLowerCase()).toList(),
       hasServerActions: actionsObj != null,
+      rescheduleStatus: json['latest_reschedule'] is Map ? (json['latest_reschedule'] as Map)['status']?.toString() : null,
       items: parsedItems,
       address: json['address'] is Map
           ? Address.fromJson(Map<String, dynamic>.from(json['address'] as Map))
@@ -841,7 +888,12 @@ class Booking extends Equatable {
       technician: json['technician'] is Map
           ? TechnicianInfo.fromJson(Map<String, dynamic>.from(json['technician'] as Map))
           : null,
-      cancellationReason: json['cancellation_reason']?.toString(),
+      // The server now sends a clean, customer-friendly label (cancellation_reason_display) - the same wording the
+      // website and the admin dashboards show - so prefer it over the raw code ("CHANGE_OF_PLANS", "[UNSERVICEABLE_SAFETY]...").
+      cancellationReason: ((json['cancellation_reason_display'] ?? '').toString().trim().isNotEmpty
+              ? json['cancellation_reason_display']
+              : json['cancellation_reason'])
+          ?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,

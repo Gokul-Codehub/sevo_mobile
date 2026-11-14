@@ -85,11 +85,11 @@ class HomeFlowTheme {
   static const groceries = HomeFlowTheme(
     mode: HomeFlowMode.groceries,
     accent: AppColors.groceryGreenDark,
-    accentDark: Color(0xFF14532D),
+    accentDark: AppColors.green900,
     // Warm golden yellow backdrop (2026-10-09, Blinkit-style Groceries
     // look). The accent stays green so "See all" links, ADD buttons and
     // cart CTAs keep their fresh-grocery green on top of the yellow.
-    gradientTop: Color(0xFFF9C93A),
+    gradientTop: AppColors.swatchF9C93A,
     searchPlaceholder: "Search for 'fresh vegetables'...",
     categoryGridTitle: 'Shop by Category',
     trustSectionTitle: 'Why Shop With SEVONIQ?',
@@ -127,7 +127,7 @@ class HomeFlowTheme {
     final groceries = mode == HomeFlowMode.groceries;
     return [
       admin.cardColorTop ??
-          (groceries ? const Color(0xFFF9C93A) : const Color(0xFF8EC3F2)),
+          (groceries ? AppColors.swatchF9C93A : const Color(0xFF8EC3F2)),
       admin.cardColorBottom ??
           (groceries ? const Color(0xFFFFE98A) : const Color(0xFFE4F1FE)),
     ];

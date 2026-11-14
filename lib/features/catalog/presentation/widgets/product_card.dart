@@ -491,10 +491,35 @@ class ProductCard extends ConsumerWidget {
                                 fit: BoxFit.cover,
                               ),
                             ),
+                            // "% OFF" corner badge: every grocery card shows the real discount (only when the MRP is
+                            // genuinely higher), so the home rails match the listing and deal cards.
+                            if (showDiscount && service.discountPercent != null)
+                              Positioned(
+                                left: 0,
+                                top: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.error,
+                                    borderRadius: BorderRadius.only(
+                                      topRight: Radius.circular(8),
+                                      bottomRight: Radius.circular(8),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${service.discountPercent}% OFF',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             if (service.isPopular)
                               Positioned(
                                 left: 6,
-                                top: 6,
+                                top: (showDiscount && service.discountPercent != null) ? 30 : 6,
                                 child: Container(
                                   padding: const EdgeInsets.fromLTRB(
                                     5,
@@ -588,7 +613,7 @@ class ProductCard extends ConsumerWidget {
                             style: const TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
+                              color: AppColors.textPrimary,
                               height: 1.2,
                             ),
                           ),
@@ -814,47 +839,52 @@ class QuickAddControl extends ConsumerWidget {
     // The app-wide Add button: dark-green gradient pill with a cart icon, and
     // the same-styled stepper once the item is in the cart.
     if (quantityInCart == 0) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          ref.read(cartProvider.notifier).addService(service);
-          AppToast.addedToCart(context, service.title);
-        },
-        child: Container(
-          height: 28,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            gradient: _addGradient,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33145F2F),
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.shopping_cart_outlined, size: 14, color: Colors.white),
-              SizedBox(width: 4),
-              Text(
-                'Add',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+      return PressScale(
+        scale: 0.92,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            ref.read(cartProvider.notifier).addService(service);
+            AppToast.addedToCart(context, service.title);
+          },
+          child: Container(
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              gradient: _addGradient,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33145F2F),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
                 ),
-              ),
-            ],
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.shopping_cart_outlined, size: 14, color: Colors.white),
+                SizedBox(width: 4),
+                Text(
+                  'Add',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
     final atMax = quantityInCart >= service.maxQuantity;
-    return Container(
+    return BounceOnChange(
+      value: quantityInCart,
+      child: Container(
       height: 28,
       decoration: BoxDecoration(
         gradient: _addGradient,
@@ -909,6 +939,7 @@ class QuickAddControl extends ConsumerWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -1014,37 +1045,40 @@ class _NotchAddButton extends ConsumerWidget {
     const gradient = _addGradient;
     Widget inner;
     if (qty == 0) {
-      inner = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          ref.read(cartProvider.notifier).addService(service);
-          AppToast.addedToCart(context, service.title);
-        },
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: const FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.shopping_cart_outlined,
-                  size: 13,
-                  color: Colors.white,
-                ),
-                SizedBox(width: 3),
-                Text(
-                  'Add',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+      inner = PressScale(
+        scale: 0.92,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            ref.read(cartProvider.notifier).addService(service);
+            AppToast.addedToCart(context, service.title);
+          },
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 13,
                     color: Colors.white,
                   ),
-                ),
-              ],
+                  SizedBox(width: 3),
+                  Text(
+                    'Add',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1106,22 +1140,25 @@ class _NotchAddButton extends ConsumerWidget {
         ),
       );
     }
-    return Container(
-      width: ProductCard._notchW - 4,
-      height: ProductCard._notchH - 2,
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x260F172A),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
+    return BounceOnChange(
+      value: qty,
+      child: Container(
+        width: ProductCard._notchW - 4,
+        height: ProductCard._notchH - 2,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x260F172A),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: inner,
       ),
-      child: inner,
     );
   }
 }

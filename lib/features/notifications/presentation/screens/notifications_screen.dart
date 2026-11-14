@@ -9,7 +9,7 @@ import '../../domain/notification_models.dart';
 import '../../domain/notification_providers.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../shared/utils/date_utils.dart';
-import '../../../../shared/widgets/motion.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 
 /// The customer's notification inbox (opened from the bell on Home).
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -172,13 +172,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     for (final g in [(null as String?, 'All'), ..._groups])
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          key: Key('filter_${g.$1 ?? 'all'}'),
-                          label: Text(g.$1 != null && unread(g.$1!) > 0 ? '${g.$2} (${unread(g.$1!)})' : g.$2),
-                          selected: _filter == g.$1,
-                          selectedColor: AppColors.navy,
-                          labelStyle: TextStyle(color: _filter == g.$1 ? Colors.white : AppColors.navy, fontWeight: FontWeight.w700, fontSize: 12.5),
-                          onSelected: (_) => setState(() => _filter = g.$1),
+                        child: PressScale(
+                          child: ChoiceChip(
+                            key: Key('filter_${g.$1 ?? 'all'}'),
+                            label: Text(g.$1 != null && unread(g.$1!) > 0 ? '${g.$2} (${unread(g.$1!)})' : g.$2),
+                            selected: _filter == g.$1,
+                            selectedColor: AppColors.navy,
+                            labelStyle: TextStyle(color: _filter == g.$1 ? Colors.white : AppColors.navy, fontWeight: FontWeight.w700, fontSize: 12.5),
+                            onSelected: (_) => setState(() => _filter = g.$1),
+                          ),
                         ),
                       ),
                   ]),
@@ -187,7 +189,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               if (shown.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.only(top: 60),
-                  child: Center(child: Text('Nothing here yet.', style: TextStyle(color: AppColors.textSecondary))),
+                  child: FadeSlideIn(
+                    child: Center(
+                      child: Text('Nothing here yet.', style: TextStyle(color: AppColors.textSecondary)),
+                    ),
+                  ),
                 );
               }
               final n = shown[i - 1];
@@ -238,13 +244,17 @@ class _NotificationTile extends StatelessWidget {
 
     return Opacity(
       opacity: expired ? 0.6 : 1,
-      child: Material(
+      child: PressScale(
+        scale: 0.985,
+        child: Material(
         color: n.isRead ? Colors.white : const Color(0xFFF1F7FF),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
@@ -282,14 +292,9 @@ class _NotificationTile extends StatelessWidget {
                             ),
                           ),
                           if (!n.isRead)
-                            Container(
-                              width: 9,
-                              height: 9,
-                              margin: const EdgeInsets.only(left: 8, top: 4),
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
+                            const Padding(
+                              padding: EdgeInsets.only(left: 8, top: 4),
+                              child: PulseDot(size: 8, color: AppColors.primary),
                             ),
                         ],
                       ),
@@ -339,6 +344,7 @@ class _NotificationTile extends StatelessWidget {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

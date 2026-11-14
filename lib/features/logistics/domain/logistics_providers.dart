@@ -330,13 +330,16 @@ final packersMoversInventoryProvider = FutureProvider<List<PmGoodsCategory>>((re
 /// `keepAlive()` while this resets per booking attempt.
 final pmSelectedQuantitiesProvider = StateProvider<Map<int, int>>((ref) => const {});
 
-final pmPackingTierProvider = StateProvider<String>((ref) => 'standard');
-final pmDismantlingRequiredProvider = StateProvider<bool>((ref) => true);
+/// Packing choice for Packers & Movers. Null until the customer picks one —
+/// no silent default so they must choose before continuing.
+final pmPackingTierProvider = StateProvider<String?>((ref) => null);
+final pmDismantlingRequiredProvider = StateProvider<bool>((ref) => false);
 final pmUnpackingRequiredProvider = StateProvider<bool>((ref) => false);
 final pmPickupFloorProvider = StateProvider<int>((ref) => 0);
-final pmPickupHasLiftProvider = StateProvider<bool>((ref) => true);
+/// Null until the customer answers Yes/No (not pre-toggled on).
+final pmPickupHasLiftProvider = StateProvider<bool?>((ref) => null);
 final pmDropFloorProvider = StateProvider<int>((ref) => 0);
-final pmDropHasLiftProvider = StateProvider<bool>((ref) => true);
+final pmDropHasLiftProvider = StateProvider<bool?>((ref) => null);
 
 /// How the customer wants to pay for a Goods Transport / Packers & Movers
 /// booking: `cod`, `online` or `wallet` (wallet bookings are created as
@@ -423,7 +426,8 @@ final tripCoverageProvider =
 /// booking, never enumerated/validated) — offered as a simple two-way choice
 /// here since that's the only distinction the booking screen can usefully
 /// offer without a full city-to-city route builder.
-final pmRelocationTypeProvider = StateProvider<String>((ref) => 'Within City');
+/// Null until the customer picks Within City or Intercity.
+final pmRelocationTypeProvider = StateProvider<String?>((ref) => null);
 
 /// Parameters that determine the current Packers & Movers quote. Inventory
 /// is folded into a stable string key for equality/hashing (a `List`/`Map`

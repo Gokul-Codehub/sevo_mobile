@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../../core/errors/api_error.dart';
 import '../../../shared/theme/app_colors.dart';
@@ -106,13 +107,23 @@ class _NotServedViewState extends ConsumerState<NotServedView> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: const BoxDecoration(color: Color(0xFFFFF4E5), shape: BoxShape.circle),
-                  child: const Icon(Icons.location_off_outlined, size: 46, color: Color(0xFFB45309)),
+                SizedBox(
+                  width: 240,
+                  height: 170,
+                  child: Lottie.asset(
+                    'assets/animations/not_served_storefront.json',
+                    fit: BoxFit.contain,
+                    repeat: true,
+                    // If the animation cannot load, fall back to the plain icon so the screen is never empty.
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 96,
+                      height: 96,
+                      decoration: const BoxDecoration(color: Color(0xFFFFF4E5), shape: BoxShape.circle),
+                      child: const Icon(Icons.location_off_outlined, size: 46, color: Color(0xFFB45309)),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 14),
                 Text(
                   "$_what aren't available here yet",
                   textAlign: TextAlign.center,

@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/errors/api_error.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../booking/presentation/screens/pdf_viewer_screen.dart';
 import '../data/grocery_orders_repository.dart';
 
 /// Download buttons for an order's invoices (one tax invoice per seller, plus any credit note). Shown only when the
@@ -25,13 +25,6 @@ class OrderInvoicesCard extends ConsumerStatefulWidget {
 class _OrderInvoicesCardState extends ConsumerState<OrderInvoicesCard> {
   String? _busy; // invoice number being downloaded
 
-  static Future<void> _defaultShare(List<int> bytes, String fileName) async {
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(bytes, flush: true);
-    await Share.shareXFiles([XFile(file.path, mimeType: 'application/pdf')], subject: fileName);
-  }
-
   Future<void> _download(OrderInvoice inv) async {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = inv.number);
@@ -41,7 +34,24 @@ class _OrderInvoicesCardState extends ConsumerState<OrderInvoicesCard> {
     switch (result) {
       case Success(:final data):
         try {
-          await (widget.saveAndShare ?? _defaultShare)(data, '${inv.isCreditNote ? 'CreditNote' : 'Invoice'}-${inv.number}.pdf');
+          final fileName = '${inv.isCreditNote ? 'CreditNote' : 'Invoice'}-${inv.number}.pdf'.replaceAll('/', '-');
+          if (widget.saveAndShare != null) {
+            await widget.saveAndShare!(data, fileName);
+          } else {
+            // Open it on screen in the app's own PDF viewer (Share / Save stay in its app bar) instead of
+            // depending on the Android share sheet, which failed on some phones.
+            final dir = await getTemporaryDirectory();
+            final file = File('${dir.path}/$fileName');
+            await file.writeAsBytes(data, flush: true);
+            if (!mounted) return;
+            await Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => PdfViewerScreen(
+                filePath: file.path,
+                title: '${inv.isCreditNote ? 'Credit note' : 'Tax invoice'} ${inv.number}',
+                shareSubject: fileName,
+              ),
+            ));
+          }
         } catch (_) {
           messenger.showSnackBar(const SnackBar(content: Text('Could not open the invoice. Please try again.'), backgroundColor: AppColors.error));
         }
@@ -77,7 +87,6 @@ class _OrderInvoicesCardState extends ConsumerState<OrderInvoicesCard> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('${inv.isCreditNote ? 'Credit note' : 'Tax invoice'} ${inv.number}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  if (inv.sellerName.isNotEmpty) Text(inv.sellerName, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
                 ]),
               ),
               OutlinedButton.icon(

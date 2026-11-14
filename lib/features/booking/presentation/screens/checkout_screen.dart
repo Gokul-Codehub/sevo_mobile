@@ -26,6 +26,8 @@ import '../../../logistics/presentation/widgets/slot_picker_widget.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
 import '../../domain/cart_notifier.dart';
+import '../../domain/mason_rules.dart';
+import '../../domain/consultation_rules_provider.dart';
 import '../../../pricing/domain/pricing_providers.dart';
 import '../../../pricing/domain/service_fare.dart';
 import '../../data/coupon_repository.dart';
@@ -72,6 +74,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
   final _phoneController = TextEditingController();
+
+  // Mason = site consultation (see mason_rules.dart): free within 15 km, no GST / platform fee, plus the work
+  // area (Minor Masonry) or bathroom size (Bathroom Tile Fixing) the quotation is based on.
+  final _masonAreaController = TextEditingController();
+  String _bathroomSize = 'Small';
+  bool get _isMason => _scheduledService != null && isMasonService(_scheduledService!);
+  Decimal _masonFee(Address? a) => masonConsultationFee(a?.latitude, a?.longitude);
+
   // Scroll targets for "you missed this" - see revealField().
   final _slotKey = GlobalKey(debugLabel: 'slot');
   final _addressKey = GlobalKey(debugLabel: 'address');
@@ -170,6 +180,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _notesController.dispose();
     _phoneController.dispose();
     _couponController.dispose();
+    _masonAreaController.dispose();
     // Not clearing selectedBookingServiceIdProvider/selectedTimeSlotProvider
     // here: modifying a provider inside dispose() throws Riverpod's "Tried
     // to modify a provider while the widget tree was building" (dispose
@@ -213,6 +224,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Future<void> _handlePlaceOrder() async {
+    AppHaptics.success();
     final selectedAddress = ref.read(selectedAddressProvider);
     final selectedDate = ref.read(selectedBookingDateProvider);
     final selectedSlot = ref.read(selectedTimeSlotProvider);
@@ -276,6 +288,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    // Mason site consultation: the work area / bathroom size the quotation is based on (same rules as the server).
+    int? masonArea;
+    if (_isMason && isMinorMasonry(_scheduledService!)) {
+      masonArea = int.tryParse(_masonAreaController.text.trim());
+      if (masonArea == null || masonArea < kMinorMasonryMinArea) {
+        setState(() => _step = 2);
+        AppToast.show(context, 'Minimum service area is $kMinorMasonryMinArea sq.ft for minor masonry works.', type: AppToastType.error);
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     final dateFormatted = DateFormat('yyyy-MM-dd').format(selectedDate);
@@ -313,8 +336,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final Decimal placeOrderDiscount = Decimal.fromInt(_couponDiscountAmount);
     final Decimal placeOrderRawTotal =
         placeOrderSubtotal + placeOrderServiceFee + placeOrderTaxes - placeOrderDiscount;
-    final Decimal placeOrderTotal =
-        placeOrderRawTotal > Decimal.zero ? placeOrderRawTotal : Decimal.zero;
+    final Decimal masonFee = _isMason ? _masonFee(selectedAddress) : Decimal.zero;
+    // A Mason consultation carries only its (often free) consultation fee: no GST, platform fee or coupon.
+    final Decimal placeOrderTotal = _isMason
+        ? masonFee
+        : (placeOrderRawTotal > Decimal.zero ? placeOrderRawTotal : Decimal.zero);
 
     final result = await ref
         .read(bookingActionControllerProvider.notifier)
@@ -327,9 +353,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ? null
               : _notesController.text.trim(),
           contactPhone: contactPhone,
-          paymentMethod: _paymentMethod,
+          paymentMethod: _isMason ? 'COD' : _paymentMethod,
           photoBytes: _photoBytes,
           photoFileName: _photoName,
+          cartDataOverride: _isMason
+              ? [
+                  masonCartLine(
+                    _scheduledService!,
+                    masonFee,
+                    areaSqFt: masonArea,
+                    bathroomSize: isBathroomTileFixing(_scheduledService!) ? _bathroomSize : null,
+                  ),
+                ]
+              : null,
         );
 
     if (!mounted) return;
@@ -339,7 +375,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       AppToast.show(context, result.error!, type: AppToastType.error);
     } else if (result.booking != null) {
       AnalyticsManager.instance.track(AnalyticsEvents.bookingSubmitted, {'payment_method': _paymentMethod});
-      if (_paymentMethod == 'ONLINE') {
+      if (_paymentMethod == 'ONLINE' && !_isMason) {
         // Pay Online: take the (test) payment now. The booking only shows
         // its success screen once the payment goes through.
         AppToast.show(context, 'Almost done - complete your payment to confirm.');
@@ -361,10 +397,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   //           price details → Confirm Booking.
   // All data / pricing / booking logic is unchanged.
   // ───────────────────────────────────────────────────────────────────────
-  static const Color _pageBg = Color(0xFFF8F4EF);
+  static const Color _pageBg = AppColors.swatchF8F4EF;
   static const Color _okGreen = AppColors.navy;
-  static const Color _mint = Color(0xFFEEF1F7);
-  static const Color _mintText = Color(0xFF1E3A8A);
+  static const Color _mint = AppColors.swatchEEF1F7;
+  static const Color _mintText = AppColors.blue900;
   static const Color _blue = Color(0xFF1D5EE8);
 
   Widget _card({required Widget child, EdgeInsets? padding}) {
@@ -376,7 +412,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.06),
+            color: AppColors.blue900.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -444,6 +480,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         return;
       }
     }
+    AppHaptics.selection();
     setState(() => _step = _step + 1);
   }
 
@@ -493,31 +530,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 30,
-            height: 30,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            width: active ? 34 : 30,
+            height: active ? 34 : 30,
             decoration: BoxDecoration(
               color: reached ? _okGreen : Colors.white,
               shape: BoxShape.circle,
               border: Border.all(
-                  color: reached ? _okGreen : const Color(0xFFCBD5E1), width: 1.5),
+                  color: reached ? _okGreen : AppColors.textMuted, width: 1.5),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: _okGreen.withValues(alpha: 0.28),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
             ),
             child: Center(
-              child: done
-                  ? const Icon(Icons.check_rounded, size: 18, color: Colors.white)
-                  : Text('${i + 1}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: reached ? Colors.white : AppColors.textHint)),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: done
+                    ? const Icon(Icons.check_rounded, key: ValueKey('check'), size: 18, color: Colors.white)
+                    : Text('${i + 1}',
+                        key: ValueKey('n$i'),
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: reached ? Colors.white : AppColors.textHint)),
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: reached ? FontWeight.w800 : FontWeight.w500,
-                  color: reached ? AppColors.navy : AppColors.textSecondary)),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 220),
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: reached ? FontWeight.w800 : FontWeight.w500,
+                color: reached ? AppColors.navy : AppColors.textSecondary),
+            child: Text(label),
+          ),
         ],
       );
     }
@@ -525,21 +580,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     Widget line(bool filled) => Expanded(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 18),
-            child: Container(
-                height: 2, color: filled ? _okGreen : const Color(0xFFE2E8F0)),
+            child: AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                height: 2,
+                color: filled ? _okGreen : AppColors.border),
           ),
         );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 6, 24, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          node(0, 'Date & Time'),
-          line(_step > 0),
-          node(1, 'Address'),
-          line(_step > 1),
-          node(2, 'Payment'),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              node(0, 'Date & Time'),
+              line(_step > 0),
+              node(1, 'Address'),
+              line(_step > 1),
+              node(2, 'Payment'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SmoothProgressBar(
+            value: (_step + 1) / 3,
+            minHeight: 4,
+            color: _okGreen,
+            backgroundColor: AppColors.border,
+            borderRadius: 8,
+          ),
         ],
       ),
     );
@@ -593,10 +663,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: selected?.id == a.id ? const Color(0xFFF3F6FC) : Colors.white,
+                    color: selected?.id == a.id ? AppColors.swatchF3F6FC : Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: selected?.id == a.id ? _okGreen : const Color(0xFFE2E8F0),
+                      color: selected?.id == a.id ? _okGreen : AppColors.border,
                       width: selected?.id == a.id ? 1.5 : 1,
                     ),
                   ),
@@ -876,10 +946,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFFF3F6FC) : Colors.white,
+            color: selected ? AppColors.swatchF3F6FC : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-                color: selected ? _okGreen : const Color(0xFFE2E8F0),
+                color: selected ? _okGreen : AppColors.border,
                 width: selected ? 1.5 : 1),
           ),
           child: Row(
@@ -888,7 +958,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                    color: selected ? Colors.white : const Color(0xFFF1F5F9),
+                    color: selected ? Colors.white : AppColors.surfaceVariant,
                     borderRadius: BorderRadius.circular(12)),
                 child: Icon(icon,
                     size: 22, color: selected ? _okGreen : AppColors.navy),
@@ -923,6 +993,99 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  /// Mason: the work area / bathroom size the site visit and quotation are based on.
+  Widget _buildMasonDetailsCard() {
+    final s = _scheduledService!;
+    final minor = isMinorMasonry(s);
+    final tile = isBathroomTileFixing(s);
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Icon(Icons.foundation_rounded, size: 18, color: AppColors.navy),
+            SizedBox(width: 8),
+            Text('Site Visit Details',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.navy)),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            isPaintingService(s)
+                ? 'Our expert visits first to inspect and measure, then sends you a quotation to accept. You pay for the work only after you approve it.${isWaterproofingService(s) ? ' A compulsory air-crack check is included in the inspection.' : ''}'
+                : 'Our mason visits your site first, measures the work and sends you a quotation to accept. You pay for the work only after you approve it.',
+            style: TextStyle(fontSize: 12, height: 1.4, color: AppColors.textSecondary),
+          ),
+          if (minor) ...[
+            const SizedBox(height: 14),
+            const Text('Service area (sq.ft)',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.navy)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _masonAreaController,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Minimum $kMinorMasonryMinArea sq.ft',
+                helperText: 'Minor masonry works start at $kMinorMasonryMinArea sq.ft.',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+          if (tile) ...[
+            const SizedBox(height: 14),
+            const Text('Bathroom size',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.navy)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (final size in kBathroomSizes) ...[
+                  Expanded(
+                    child: ChoiceChip(
+                      label: SizedBox(
+                        width: double.infinity,
+                        child: Text('$size\n₹${kBathroomTileSlabs[size]}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      ),
+                      selected: _bathroomSize == size,
+                      onSelected: (_) => setState(() => _bathroomSize = size),
+                    ),
+                  ),
+                  if (size != kBathroomSizes.last) const SizedBox(width: 8),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text('Indicative work price for the chosen size - confirmed in your quotation after the site visit.',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Mason: just the consultation fee - no GST, platform fee or coupon.
+  Widget _buildMasonPriceCard(Decimal fee) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Price Details',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.navy)),
+          const SizedBox(height: 8),
+          _kv('Site consultation', masonFeeLabel(fee)),
+          _kv('GST & platform fee', 'Not applicable'),
+          const Divider(height: 22, color: AppColors.border),
+          _kv('Total Amount', fee > Decimal.zero ? '₹$fee' : 'FREE', bold: true),
+          const SizedBox(height: 6),
+          const Text(
+            'The work itself is quoted after the site visit. Nothing is charged until you accept the quotation.',
+            style: TextStyle(fontSize: 11.5, height: 1.4, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPaymentStep({
     required bool hasScheduledService,
     required List<CartItem> cartItems,
@@ -945,6 +1108,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (_isMason) ...[
+          _buildMasonDetailsCard(),
+          const SizedBox(height: 12),
+        ],
         // ── Service Details ──
         _card(
           child: Column(
@@ -1002,7 +1169,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               ],
                             ),
                           ],
-                          if (s.hasDiscount && pct != null) ...[
+                          if (s.hasDiscount && pct != null && !_isMason) ...[
                             const SizedBox(height: 6),
                             _discountPill(pct),
                           ],
@@ -1013,12 +1180,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('₹${s.effectivePrice}',
+                        Text(_isMason ? 'Site visit' : '₹${s.effectivePrice}',
                             style: const TextStyle(
                                 fontSize: 16.5,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.navy)),
-                        if (s.hasDiscount)
+                        if (s.hasDiscount && !_isMason)
                           Text('₹${s.price}',
                               style: const TextStyle(
                                   fontSize: 12,
@@ -1039,7 +1206,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: Row(
                         children: [
@@ -1115,9 +1282,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               const SizedBox(height: 6),
               _detailRow(Icons.calendar_today_rounded, 'Date',
                   DateFormat('EEE, dd-MM-yyyy').format(selectedDate)),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              const Divider(height: 1, color: AppColors.surfaceVariant),
               _detailRow(Icons.schedule_rounded, 'Time', selectedSlot?.label ?? '—'),
-              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              const Divider(height: 1, color: AppColors.surfaceVariant),
               _detailRow(
                 Icons.location_on_outlined,
                 'Address',
@@ -1126,7 +1293,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 goTo: 1,
               ),
               if (_notesController.text.trim().isNotEmpty) ...[
-                const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                const Divider(height: 1, color: AppColors.surfaceVariant),
                 _detailRow(Icons.edit_note_rounded, 'Notes',
                     _notesController.text.trim(),
                     goTo: 1),
@@ -1136,7 +1303,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
         const SizedBox(height: 12),
 
-        // ── Coupon ──
+        // ── Coupon ──  (not offered on a Mason site consultation)
+        if (!_isMason) ...[
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1185,7 +1353,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             horizontal: 14, vertical: 14),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide: const BorderSide(color: AppColors.border),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -1236,7 +1404,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF3F6FC),
+                    color: AppColors.swatchF3F6FC,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFDDE3ED)),
                   ),
@@ -1279,8 +1447,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        ],
 
-        // ── Payment Method ──
+        // ── Payment Method ──  (a consultation is always paid on the visit, if at all)
+        if (!_isMason) ...[
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1307,8 +1477,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        ],
 
         // ── Price Details ──
+        if (_isMason)
+          _buildMasonPriceCard(subtotal)
+        else
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1335,7 +1509,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               _kv('Safety & Platform Fee', '₹$serviceFee'),
               _kv('Taxes (GST)', '₹$taxes'),
-              const Divider(height: 22, color: Color(0xFFE2E8F0)),
+              const Divider(height: 22, color: AppColors.border),
               _kv('Total Amount', '₹$grandTotal', bold: true),
             ],
           ),
@@ -1346,7 +1520,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F6FC),
+            color: AppColors.swatchF3F6FC,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
@@ -1371,6 +1545,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(consultationRulesProvider); // site-visit radius / fee from the server
     final cartItems = ref.watch(cartProvider);
     final fallbackSummary = ref.watch(cartSummaryProvider);
     final selectedAddress = ref.watch(selectedAddressProvider);
@@ -1378,13 +1553,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final bool hasScheduledService = _scheduledService != null;
     final bool hasItems = hasScheduledService || cartItems.isNotEmpty;
 
-    final Decimal subtotal;
+    final Decimal plainSubtotal;
     if (hasScheduledService) {
-      subtotal =
+      plainSubtotal =
           _scheduledService!.effectivePrice * Decimal.fromInt(_serviceQuantity);
     } else {
-      subtotal = fallbackSummary.subtotal;
+      plainSubtotal = fallbackSummary.subtotal;
     }
+    // Mason: the consultation fee replaces the package price everywhere on this screen.
+    final Decimal subtotal = _isMason ? _masonFee(selectedAddress) : plainSubtotal;
 
     // Services are priced exactly like the web app / backend — see ServiceFare.
     final displayFare = ServiceFare.fromLines(
@@ -1393,18 +1570,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               : cartItems)
           .map((i) => (service: i.service, lineTotal: i.totalPrice)),
     );
-    final Decimal serviceFee = displayFare.platformFee;
-    final Decimal taxes = displayFare.gst;
-    final Decimal discount = Decimal.fromInt(_couponDiscountAmount);
-    final Decimal rawGrandTotal = subtotal + serviceFee + taxes - discount;
+    final bool isMason = _isMason;
+    final Decimal masonFee = isMason ? _masonFee(selectedAddress) : Decimal.zero;
+    final Decimal serviceFee = isMason ? Decimal.zero : displayFare.platformFee;
+    final Decimal taxes = isMason ? Decimal.zero : displayFare.gst;
+    final Decimal discount = isMason ? Decimal.zero : Decimal.fromInt(_couponDiscountAmount);
+    final Decimal rawGrandTotal = (isMason ? masonFee : subtotal) + serviceFee + taxes - discount;
     final Decimal grandTotal =
         rawGrandTotal > Decimal.zero ? rawGrandTotal : Decimal.zero;
 
     final s = _scheduledService;
-    final bool showStrike = s != null && s.hasDiscount;
+    final bool showStrike = s != null && s.hasDiscount && !isMason;
     final Decimal listTotal =
-        showStrike ? s!.price * Decimal.fromInt(_serviceQuantity) : subtotal;
-    final int? discPct = showStrike ? s!.discountPercent : null;
+        showStrike ? s.price * Decimal.fromInt(_serviceQuantity) : subtotal;
+    final int? discPct = showStrike ? s.discountPercent : null;
 
     return PopScope(
       canPop: _step == 0,
@@ -1456,18 +1635,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
-                      child: _step == 0
-                          ? _buildDateTimeStep()
-                          : _step == 1
-                              ? _buildAddressStep(selectedAddress)
-                              : _buildPaymentStep(
-                              hasScheduledService: hasScheduledService,
-                              cartItems: cartItems,
-                              subtotal: subtotal,
-                              serviceFee: serviceFee,
-                              taxes: taxes,
-                              grandTotal: grandTotal,
-                            ),
+                      child: FadeThrough(
+                        child: KeyedSubtree(
+                          key: ValueKey(_step),
+                          child: FadeSlideIn(
+                            child: _step == 0
+                                ? _buildDateTimeStep()
+                                : _step == 1
+                                    ? _buildAddressStep(selectedAddress)
+                                    : _buildPaymentStep(
+                                        hasScheduledService: hasScheduledService,
+                                        cartItems: cartItems,
+                                        subtotal: subtotal,
+                                        serviceFee: serviceFee,
+                                        taxes: taxes,
+                                        grandTotal: grandTotal,
+                                      ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -1485,7 +1671,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+                        color: AppColors.blue900.withValues(alpha: 0.12),
                         blurRadius: 22,
                         offset: const Offset(0, 6),
                       ),
@@ -1505,33 +1691,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Item Total',
-                                    style: TextStyle(
+                                Text(isMason ? 'Consultation fee' : 'Item Total',
+                                    style: const TextStyle(
                                         fontSize: 11,
                                         color: AppColors.textSecondary,
                                         fontWeight: FontWeight.w500)),
                                 FittedBox(
                                   fit: BoxFit.scaleDown,
                                   alignment: Alignment.centerLeft,
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                                    textBaseline: TextBaseline.alphabetic,
-                                    children: [
-                                      Text('₹$subtotal',
-                                          style: const TextStyle(
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.w900,
-                                              color: AppColors.navy)),
-                                      if (showStrike) ...[
-                                        const SizedBox(width: 8),
-                                        Text('₹$listTotal',
+                                  child: BounceOnChange(
+                                    value: subtotal.toString(),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                                      textBaseline: TextBaseline.alphabetic,
+                                      children: [
+                                        Text('₹$subtotal',
                                             style: const TextStyle(
-                                                fontSize: 12,
-                                                color: AppColors.textHint,
-                                                decoration:
-                                                    TextDecoration.lineThrough)),
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.w900,
+                                                color: AppColors.navy)),
+                                        if (showStrike) ...[
+                                          const SizedBox(width: 8),
+                                          Text('₹$listTotal',
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.textHint,
+                                                  decoration:
+                                                      TextDecoration.lineThrough)),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
                                 ),
                                 if (discPct != null) ...[
@@ -1544,32 +1733,41 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           const SizedBox(width: 12),
                         ],
                         Expanded(
-                          child: SizedBox(
-                            height: 56,
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isLoading
-                                  ? null
-                                  : (_step < 2 ? _goNext : _handlePlaceOrder),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.navy,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)),
-                                elevation: 0,
+                          child: AttentionPulse(
+                            enabled: _step == 2 && !_isLoading,
+                            child: PressScale(
+                            child: SizedBox(
+                              height: 56,
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : (_step < 2 ? _goNext : _handlePlaceOrder),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.navy,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16)),
+                                  elevation: 0,
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 22,
+                                        width: 22,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 200),
+                                        child: Text(
+                                          _step < 2 ? 'Continue' : 'Confirm Booking',
+                                          key: ValueKey(_step < 2),
+                                          style: const TextStyle(
+                                              fontSize: 16, fontWeight: FontWeight.w800),
+                                        ),
+                                      ),
                               ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      height: 22,
-                                      width: 22,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Colors.white),
-                                    )
-                                  : Text(
-                                      _step < 2 ? 'Continue' : 'Confirm Booking',
-                                      style: const TextStyle(
-                                          fontSize: 16, fontWeight: FontWeight.w800),
-                                    ),
+                            ),
                             ),
                           ),
                         ),

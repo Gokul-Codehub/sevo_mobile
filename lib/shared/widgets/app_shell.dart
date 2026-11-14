@@ -1,14 +1,15 @@
 import '../../core/navigation/safe_back.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lottie/lottie.dart';
-
 import '../../features/ai_assistant/presentation/widgets/ai_chat_sheet.dart';
+import '../../core/services/customer_live_updates.dart';
 import '../../features/auth/domain/auth_notifier.dart';
 import '../../features/booking/domain/cart_notifier.dart';
 import '../../routing/app_router.dart';
+import '../layout/responsive.dart';
 import '../providers/bottom_nav_visibility_provider.dart';
 import '../theme/app_colors.dart';
 import 'motion.dart';
@@ -69,7 +70,7 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   /// Navigator colour (bar fill + outline).
-  static const _navy = Color(0xFF0B2337);
+  static const _navy = AppColors.swatch0B2337;
 
   /// Navigator palette. Light theme: white bar, navy active pill. Dark theme
   /// (kept for when dark mode ships): navy bar, white active pill.
@@ -84,7 +85,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         )
       : const _NavPalette(
           bar: Colors.white,
-          ring: Color(0xFFE3E8EE),
+          ring: AppColors.swatchE3E8EE,
           pill: _navy,
           onPill: Colors.white,
           idle: Color(0xFF8A97A6),
@@ -120,8 +121,18 @@ class _AppShellState extends ConsumerState<AppShell> {
       return AppShell._tabs.indexWhere((t) => t.route == AppRoutes.profile);
     }
 
-    return appShellTabIndexForLocation(location);
+    // Pages that are not a tab themselves (Notification settings, Your devices, saved addresses, payments, categories,
+    // product pages ...) keep the tab the customer came from highlighted instead of jumping to Home.
+    final strict = appShellStrictTabIndex(location);
+    if (strict != null) {
+      _lastTabIndex = strict;
+      return strict;
+    }
+    return _lastTabIndex;
   }
+
+  /// The tab that was active the last time the location was one of the tab roots.
+  int _lastTabIndex = 0;
 
   /// Returns true once the second back press lands inside the window,
   /// showing a "press back again to exit" prompt on the first press.
@@ -149,6 +160,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final currentIndex = _currentIndex(context);
     final isHomeTab = currentIndex == 0;
+    // Live order/booking updates over WebSocket while a customer is signed in (polling stays as fallback).
+    ref.watch(customerLiveUpdatesProvider);
     final cartItems = ref.watch(cartProvider);
     final totalCartCount = cartItems.fold<int>(
       0,
@@ -210,118 +223,142 @@ class _AppShellState extends ConsumerState<AppShell> {
         body: widget.child,
         bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0
             ? const SizedBox.shrink()
-            : AnimatedSize(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeInOut,
-                alignment: Alignment.bottomCenter,
-                child: !navVisible
-                    ? const SizedBox(width: double.infinity, height: 0)
-                    : AnimatedOpacity(
-                        duration: const Duration(milliseconds: 200),
-                        opacity: navVisible ? 1 : 0,
-                        child: SafeArea(
-                          top: false,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                            child: ValueListenableBuilder<bool>(
-                              valueListenable: aiChatOpen,
-                              builder: (context, aiOpen, _) {
-                                final aiIndex = AppShell._tabs
-                                    .indexWhere((t) => t.isAiTab);
-                                return _buildNavBar(
-                                  context,
-                                  aiOpen && aiIndex >= 0 ? aiIndex : currentIndex,
-                                  totalCartCount,
-                                );
-                              },
-                            ),
+            // heightFactor + opacity tuck the bar down in one motion (no
+            // hard size snap / desynced fade).
+            : TweenAnimationBuilder<double>(
+                tween: Tween<double>(end: navVisible ? 1.0 : 0.0),
+                duration: const Duration(milliseconds: 320),
+                curve: navVisible
+                    ? Curves.easeOutCubic
+                    : Curves.easeInCubic,
+                builder: (context, t, child) {
+                  final v = t.clamp(0.0, 1.0);
+                  return ClipRect(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: v,
+                      child: Opacity(
+                        opacity: v,
+                        child: Transform.translate(
+                          offset: Offset(0, (1 - v) * 18),
+                          child: IgnorePointer(
+                            ignoring: v < 0.05,
+                            child: child,
                           ),
                         ),
                       ),
+                    ),
+                  );
+                },
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: AdaptiveWidth(
+                      maxWidth: AppResponsive.navMaxWidth(context),
+                      alignment: Alignment.bottomCenter,
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: aiChatOpen,
+                        builder: (context, aiOpen, _) {
+                          final aiIndex =
+                              AppShell._tabs.indexWhere((t) => t.isAiTab);
+                          return _buildNavBar(
+                            context,
+                            aiOpen && aiIndex >= 0
+                                ? aiIndex
+                                : currentIndex,
+                            totalCartCount,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
               ),
       ),
     );
   }
 
-  /// Floating pill navigator: a white bar with a double golden ring, grey
-  /// outline icons, and a black pill that slides to the active tab and shows
-  /// its icon + label (the other tabs stay icon-only).
+  /// Floating nav: expanding active pill (icon + label) with smooth slide.
   Widget _buildNavBar(BuildContext context, int currentIndex, int cartCount) {
     const tabs = AppShell._tabs;
-    const barPad = 8.0;
-    const duration = Duration(milliseconds: 320);
+    const barPad = 6.0;
+    const duration = Duration(milliseconds: 300);
     const curve = Curves.easeOutCubic;
     final user = ref.watch(currentUserProvider);
 
     return Container(
-      padding: const EdgeInsets.all(3),
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: barPad),
       decoration: BoxDecoration(
         color: _pal.bar,
-        borderRadius: BorderRadius.circular(40),
-        border: Border.all(color: _pal.outline, width: 1.6),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 18,
-            offset: const Offset(0, 4),
+            color: AppColors.navy.withValues(alpha: 0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Container(
-        height: 54,
-        padding: const EdgeInsets.symmetric(horizontal: barPad),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(36),
-          border: Border.all(color: _pal.ring, width: 1),
-        ),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final w = c.maxWidth;
-            final activeW = (w * 0.35).clamp(96.0, 128.0);
-            final otherW = (w - activeW) / (tabs.length - 1);
-            double left(int i) => i <= currentIndex
-                ? i * otherW
-                : i * otherW + (activeW - otherW);
-            double widthOf(int i) => i == currentIndex ? activeW : otherW;
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth;
+          final activeW = (w * 0.32).clamp(92.0, 118.0);
+          final otherW = (w - activeW) / (tabs.length - 1);
+          double left(int i) =>
+              i <= currentIndex ? i * otherW : i * otherW + (activeW - otherW);
+          double widthOf(int i) => i == currentIndex ? activeW : otherW;
 
-            return Stack(
-              alignment: Alignment.centerLeft,
-              children: [
-                // The sliding black pill behind the active tab.
+          return Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              AnimatedPositioned(
+                duration: duration,
+                curve: curve,
+                left: left(currentIndex),
+                top: 7,
+                bottom: 7,
+                width: activeW,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _pal.pill,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _pal.pill.withValues(alpha: 0.28),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              for (int i = 0; i < tabs.length; i++)
                 AnimatedPositioned(
                   duration: duration,
                   curve: curve,
-                  left: left(currentIndex),
-                  top: 6,
-                  bottom: 6,
-                  width: activeW,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: _pal.pill,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
+                  left: left(i),
+                  top: 0,
+                  bottom: 0,
+                  width: widthOf(i),
+                  child: _navItem(
+                    context,
+                    tabs[i],
+                    i == currentIndex,
+                    cartCount,
+                    user?.profilePictureUrl,
                   ),
                 ),
-                for (int i = 0; i < tabs.length; i++)
-                  AnimatedPositioned(
-                    duration: duration,
-                    curve: curve,
-                    left: left(i),
-                    top: 0,
-                    bottom: 0,
-                    width: widthOf(i),
-                    child: _navItem(
-                      context,
-                      tabs[i],
-                      i == currentIndex,
-                      cartCount,
-                      user?.profilePictureUrl,
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -333,9 +370,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     int cartCount,
     String? avatarUrl,
   ) {
-    final grey = _pal.idle;
+    final idle = _pal.idle;
+    final on = selected ? _pal.onPill : idle;
+
     Widget icon;
     if (tab.isAiTab) {
+      // The AI Mitra robot animation instead of the sparkle glyph (falls back to the sparkle if it cannot load).
       icon = SizedBox(
         width: 30,
         height: 30,
@@ -345,6 +385,11 @@ class _AppShellState extends ConsumerState<AppShell> {
             child: Lottie.asset(
               'assets/animations/ai_mitra_robot.json',
               fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Icon(
+                selected ? Icons.auto_awesome_rounded : Icons.auto_awesome_outlined,
+                size: 22,
+                color: on,
+              ),
             ),
           ),
         ),
@@ -353,12 +398,14 @@ class _AppShellState extends ConsumerState<AppShell> {
         avatarUrl != null &&
         avatarUrl.isNotEmpty) {
       icon = Container(
-        width: 28,
-        height: 28,
-        padding: const EdgeInsets.all(1.5),
+        width: 24,
+        height: 24,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFFF2C14E), width: 1.6),
+          border: Border.all(
+            color: selected ? _pal.onPill.withValues(alpha: 0.85) : const Color(0xFFCBD5E1),
+            width: 1.4,
+          ),
         ),
         child: ClipOval(
           child: Image.network(
@@ -366,8 +413,8 @@ class _AppShellState extends ConsumerState<AppShell> {
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Icon(
               Icons.person_outline_rounded,
-              size: 18,
-              color: selected ? _pal.onPill : grey,
+              size: 16,
+              color: on,
             ),
           ),
         ),
@@ -376,7 +423,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       icon = Icon(
         selected ? tab.activeIcon : tab.icon,
         size: 22,
-        color: selected ? _pal.onPill : grey,
+        color: on,
       );
     }
 
@@ -386,33 +433,32 @@ class _AppShellState extends ConsumerState<AppShell> {
         children: [
           icon,
           Positioned(
-            top: -6,
-            right: -8,
+            top: -5,
+            right: -7,
             child: BounceOnChange(
               value: cartCount,
               child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-              constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
-              decoration: BoxDecoration(
-                color: AppColors.error,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected ? _pal.pill : _pal.bar,
-                  width: 1.4,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: selected ? _pal.pill : _pal.bar,
+                    width: 1.5,
+                  ),
                 ),
-              ),
-              child: Center(
                 child: Text(
-                  '$cartCount',
+                  cartCount > 99 ? '99+' : '$cartCount',
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
-                    height: 1.0,
+                    height: 1.1,
                   ),
                 ),
               ),
-            ),
             ),
           ),
         ],
@@ -427,13 +473,11 @@ class _AppShellState extends ConsumerState<AppShell> {
           showAiChatSheet(context);
           return;
         }
-        // Home tab tapped while already on Home: let Home scroll to top / reload.
         if (tab.route == AppRoutes.home &&
             GoRouterState.of(context).uri.path == AppRoutes.home) {
           ref.read(homeTabTapProvider.notifier).state++;
           return;
         }
-        // Keeps the history: from a deep page the tab opens on top of it, from a tab's own page it replaces it.
         context.openTab(tab.route);
       },
       child: Center(
@@ -442,22 +486,29 @@ class _AppShellState extends ConsumerState<AppShell> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              icon,
-              // The label only exists on the active tab; it fades in as the
-              // black pill arrives.
+              BounceOnChange(
+                value: selected,
+                child: AnimatedScale(
+                  scale: selected ? 1.05 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  child: icon,
+                ),
+              ),
               AnimatedSize(
-                duration: const Duration(milliseconds: 260),
+                duration: const Duration(milliseconds: 240),
                 curve: Curves.easeOutCubic,
                 child: selected
                     ? Padding(
-                        padding: const EdgeInsets.only(left: 7),
+                        padding: const EdgeInsets.only(left: 6),
                         child: Text(
                           tab.label,
                           maxLines: 1,
                           style: TextStyle(
                             color: _pal.onPill,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
                           ),
                         ),
                       )
@@ -507,7 +558,10 @@ class _NavPalette {
 /// Which bottom-bar tab a route belongs to. Pages that open from a tab without being a tab themselves count as part
 /// of it - a grocery order (and its return page) belongs to Bookings. Anything unknown falls back to Home.
 @visibleForTesting
-int appShellTabIndexForLocation(String location) {
+int appShellTabIndexForLocation(String location) => appShellStrictTabIndex(location) ?? 0;
+
+/// The tab a location belongs to, or null when it is a pushed page that is not part of any tab.
+int? appShellStrictTabIndex(String location) {
   if (location == AppRoutes.groceryOrders || location.startsWith('${AppRoutes.groceryOrders}/')) {
     return AppShell._tabs.indexWhere((t) => t.route == AppRoutes.myBookings);
   }
@@ -518,5 +572,5 @@ int appShellTabIndexForLocation(String location) {
       return i;
     }
   }
-  return 0;
+  return null;
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import '../../../../shared/widgets/common_widgets.dart';
@@ -59,16 +60,18 @@ class AllServicesScreen extends ConsumerWidget {
           // Must stay in sync with this GridView's own padding (20+20) and
           // crossAxisSpacing (14) below — this is what turns the
           // available width into the real on-screen width of one cell.
-          final cellWidth = (constraints.maxWidth - 40 - 14) / 2;
+          final cols = AppResponsive.categoryColumns(constraints.maxWidth);
+          final gaps = 14.0 * (cols - 1);
+          final cellWidth = (constraints.maxWidth - 40 - gaps) / cols;
           final cardAspectRatio =
               cellWidth / _ServiceCategoryTile.cardHeight(cellWidth);
 
           return categoriesAsync.when(
             loading: () => GridView.builder(
               padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + MediaQuery.paddingOf(context).bottom),
-              itemCount: 6,
+              itemCount: cols * 3,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+                crossAxisCount: cols,
                 crossAxisSpacing: 14,
                 mainAxisSpacing: 14,
                 childAspectRatio: cardAspectRatio,
@@ -109,7 +112,7 @@ class AllServicesScreen extends ConsumerWidget {
                 padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + MediaQuery.paddingOf(context).bottom),
                 itemCount: services.length + 1,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                  crossAxisCount: cols,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
                   childAspectRatio: cardAspectRatio,

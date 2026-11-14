@@ -90,8 +90,8 @@ class GtNoticeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (Color fg, Color bg, Color bd, IconData icon) = switch (tone) {
-      GtNoticeTone.warning => (const Color(0xFFB45309), const Color(0xFFFFFBEB), const Color(0xFFFCD34D), Icons.description_outlined),
-      GtNoticeTone.success => (const Color(0xFF15803D), const Color(0xFFF0FDF4), const Color(0xFFBBF7D0), Icons.check_circle_outline),
+      GtNoticeTone.warning => (AppColors.amber700, AppColors.amber50, const Color(0xFFFCD34D), Icons.description_outlined),
+      GtNoticeTone.success => (AppColors.groceryGreen, AppColors.groceryGreenLight, const Color(0xFFBBF7D0), Icons.check_circle_outline),
       GtNoticeTone.info => (const Color(0xFF1D4ED8), const Color(0xFFEFF6FF), const Color(0xFFBFDBFE), Icons.info_outline),
     };
     return Container(
@@ -126,8 +126,8 @@ InputDecoration _dec(String hint, {String? prefix}) => InputDecoration(
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.all(12),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE3E8F0))),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE3E8F0))),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.swatchE3E8F0)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.swatchE3E8F0)),
     );
 
 /// The typed declared-value box with quick amounts and a live amount line.
@@ -157,23 +157,71 @@ class GtDeclaredValueField extends StatelessWidget {
           Text('₹${formatInr(v)}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
         ],
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
+        // Equal-width pills in one row so amounts don't wrap unevenly.
+        Row(
           children: [
-            for (final q in _quick)
-              ChoiceChip(
-                label: Text('₹${formatInr(q)}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
-                selected: v == q,
-                visualDensity: VisualDensity.compact,
-                onSelected: (_) {
-                  controller.text = '$q';
-                  onChanged();
-                },
+            for (var i = 0; i < _quick.length; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(
+                child: _QuickValuePill(
+                  label: '₹${formatInr(_quick[i])}',
+                  selected: v == _quick[i],
+                  onTap: () {
+                    controller.text = '${_quick[i]}';
+                    onChanged();
+                  },
+                ),
               ),
+            ],
           ],
         ),
       ],
+    );
+  }
+}
+
+class _QuickValuePill extends StatelessWidget {
+  const _QuickValuePill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.navy.withValues(alpha: 0.12) : Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? AppColors.navy : AppColors.swatchE3E8F0,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: selected ? AppColors.navy : AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -190,10 +238,10 @@ class GtValueGuidance extends StatelessWidget {
     final eway = value >= kEwayBillThreshold;
     final high = value >= kHighValueThreshold;
     final (String label, Color c) = eway
-        ? ('E-way bill needed (₹50,000+)', const Color(0xFFB45309))
+        ? ('E-way bill needed (₹50,000+)', AppColors.amber700)
         : high
             ? ('High value (₹25,000+)', const Color(0xFF1D4ED8))
-            : ('Standard', const Color(0xFF15803D));
+            : ('Standard', AppColors.groceryGreen);
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Column(

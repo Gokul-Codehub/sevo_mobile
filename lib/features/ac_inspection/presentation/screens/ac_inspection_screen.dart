@@ -10,9 +10,12 @@ import '../../../../core/errors/api_error.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/utils/app_toast.dart';
 import '../../../../shared/utils/input_validators.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
+import '../../../../shared/widgets/state_widgets.dart';
 import '../../../addresses/domain/address_models.dart';
 import '../../../addresses/domain/address_notifier.dart';
 import '../../../auth/domain/auth_notifier.dart';
+import '../../../logistics/data/logistics_repository.dart';
 import '../../../logistics/domain/logistics_providers.dart';
 import '../../../logistics/presentation/widgets/slot_picker_widget.dart';
 import '../../data/ac_inspection_repository.dart';
@@ -33,6 +36,9 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
   /// The service the backend resolves for inspection slots
   /// (EstimationService uses resolve_service("ac-service-cleaning", "ac-appliance")).
   static const _slotService = 'ac-service-cleaning';
+
+  static const _border = Color(0xFFE6EAF2);
+  static const _softNavy = Color(0xFFE8EEF4);
 
   String _brand = 'Daikin';
   String _type = 'SPLIT';
@@ -95,6 +101,25 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
       AppToast.show(context, 'Please choose a date and time slot.', type: AppToastType.error);
       return;
     }
+    // Is this address inside a service zone? Tell the customer now, not after they have filled in the whole form.
+    // If the check can't be made it never blocks: the server still enforces the zone when the booking is created.
+    setState(() => _submitting = true);
+    final zone = await ref.read(logisticsRepositoryProvider).checkServiceability(
+          postalCode: address.postalCode,
+          latitude: address.latitude,
+          longitude: address.longitude,
+          serviceSlug: 'ac-service-cleaning',
+        );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (zone case Success(:final data) when !data.isUnknown && !data.isServiceable) {
+      AppToast.show(
+        context,
+        data.message.isNotEmpty ? data.message : 'Sorry, we do not serve this address yet. Please choose another one.',
+        type: AppToastType.error,
+      );
+      return;
+    }
     final notes = _notes.text.trim();
     final details = AcInspectionDetails(
       brand: _brand,
@@ -140,73 +165,74 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
   Widget build(BuildContext context) {
     final configAsync = ref.watch(acInspectionConfigProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
-      appBar: AppBar(title: const Text('AC Inspection')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('AC Inspection'),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+      ),
       body: configAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.textHint),
-                const SizedBox(height: 10),
-                const Text('Could not load the inspection details.',
-                    textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.navy)),
-                const SizedBox(height: 4),
-                const Text('Please check your connection and try again.',
-                    textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
-                const SizedBox(height: 14),
-                OutlinedButton(onPressed: () => ref.invalidate(acInspectionConfigProvider), child: const Text('Retry')),
-              ],
-            ),
-          ),
+        loading: () => const LoadingState(),
+        error: (e, _) => ErrorState.from(
+          e,
+          onRetry: () => ref.invalidate(acInspectionConfigProvider),
         ),
         data: (config) {
           if (!config.isActive) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.ac_unit_rounded, size: 44, color: AppColors.textHint),
-                    SizedBox(height: 10),
-                    Text('AC inspection is not available right now',
-                        textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy)),
-                    SizedBox(height: 4),
-                    Text('Please check back soon.', style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
+            return const EmptyState(
+              icon: Icons.ac_unit_rounded,
+              title: 'AC inspection is not available right now',
+              body: 'Please check back soon.',
             );
           }
-          return _body(config);
+          return FadeSlideIn(child: _body(config));
         },
       ),
-      // Confirm stays in reach however long the form is.
       bottomNavigationBar: configAsync.valueOrNull?.isActive == true
           ? SafeArea(
               child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                decoration: const BoxDecoration(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border(top: BorderSide(color: Color(0xFFE6EAF2))),
+                  border: const Border(top: BorderSide(color: _border)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.navy.withValues(alpha: 0.06),
+                      blurRadius: 12,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
                 ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF0B2337),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: PressScale(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.navy,
+                        disabledBackgroundColor: AppColors.navy.withValues(alpha: 0.45),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _submitting
+                          ? null
+                          : () {
+                              AppHaptics.light();
+                              _submit(configAsync.requireValue);
+                            },
+                      child: _submitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                            )
+                          : Text(
+                              'Confirm booking · ₹${configAsync.requireValue.fee}',
+                              style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800),
                             ),
-                            onPressed: _submitting ? null : () => _submit(configAsync.requireValue),
-                            child: _submitting
-                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : Text('Confirm booking - ₹${configAsync.requireValue.fee}', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
-                          ),
+                    ),
+                  ),
                 ),
               ),
             )
@@ -214,21 +240,69 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
     );
   }
 
-  Widget _card({required Widget child}) => Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE6EAF2)),
+  Widget _card({required Widget child, EdgeInsetsGeometry? padding}) => FadeSlideIn(
+        child: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: padding ?? const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navy.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: child,
         ),
-        child: child,
       );
 
-  Widget _h(String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(t, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
+  Widget _sectionTitle(String title, {IconData? icon, Widget? trailing}) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _softNavy,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 15, color: AppColors.navy),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.navy,
+                ),
+              ),
+            ),
+            if (trailing != null) trailing,
+          ],
+        ),
+      );
+
+  Widget _fieldLabel(String label) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textSecondary,
+            letterSpacing: 0.1,
+          ),
+        ),
       );
 
   Widget _bullets(List<String> items, IconData icon, Color color) => Column(
@@ -236,35 +310,143 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
         children: [
           for (final s in items)
             Padding(
-              padding: const EdgeInsets.only(bottom: 7),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(icon, size: 17, color: color),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(s, style: const TextStyle(fontSize: 12.5, height: 1.35, color: AppColors.textSecondary))),
+                  Expanded(
+                    child: Text(
+                      s,
+                      style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.textSecondary),
+                    ),
+                  ),
                 ],
               ),
             ),
         ],
       );
 
-  Widget _chips<T>(List<(String, T)> opts, T value, ValueChanged<T> on) => Wrap(
+  Widget _chips<T>(List<(String, T)> opts, T value, ValueChanged<T> onChanged) => Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
           for (final o in opts)
-            ChoiceChip(
-              label: Text(o.$1),
-              selected: o.$2 == value,
-              onSelected: (_) => on(o.$2),
-              selectedColor: const Color(0xFFE3EAF1),
-              labelStyle: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: o.$2 == value ? const Color(0xFF0B2337) : AppColors.textPrimary,
+            PressScale(
+              child: GestureDetector(
+                onTap: () {
+                  AppHaptics.selection();
+                  onChanged(o.$2);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOut,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: o.$2 == value ? AppColors.navy : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: o.$2 == value ? AppColors.navy : const Color(0xFFD7DEE8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (o.$2 == value) ...[
+                        const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        o.$1,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: o.$2 == value ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
         ],
+      );
+
+  Widget _qtyStepper() => Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _qtyBtn(
+              icon: Icons.remove_rounded,
+              enabled: _qty > 1,
+              onTap: () => setState(() => _qty--),
+            ),
+            SizedBox(
+              width: 36,
+              child: Text(
+                '$_qty',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.navy),
+              ),
+            ),
+            _qtyBtn(
+              icon: Icons.add_rounded,
+              enabled: _qty < 50,
+              onTap: () => setState(() => _qty++),
+            ),
+          ],
+        ),
+      );
+
+  Widget _qtyBtn({required IconData icon, required bool enabled, required VoidCallback onTap}) =>
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled
+              ? () {
+                  AppHaptics.selection();
+                  onTap();
+                }
+              : null,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Icon(
+              icon,
+              size: 18,
+              color: enabled ? AppColors.navy : AppColors.textMuted,
+            ),
+          ),
+        ),
+      );
+
+  InputDecoration _inputDecoration({String? label, String? hint}) => InputDecoration(
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: AppColors.surfaceVariant.withValues(alpha: 0.55),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.navy, width: 1.4),
+        ),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+        hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 13),
       );
 
   Widget _body(AcInspectionConfig config) {
@@ -274,87 +456,189 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
     if (selected != null && !list.any((a) => a.id == selected.id)) list.insert(0, selected);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       children: [
+        // ── Hero ──
         _card(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.ac_unit_rounded, color: const Color(0xFF0B2337)),
-                  const SizedBox(width: 10),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [AppColors.accent, AppColors.navy],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.ac_unit_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text(config.title,
-                        style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: AppColors.navy)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          config.title,
+                          style: const TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
+                            height: 1.25,
+                          ),
+                        ),
+                        if (config.subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            config.subtitle,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              height: 1.4,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: _softNavy,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Fee',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                        ),
+                        Text(
+                          '₹${config.fee}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.navy),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-              if (config.subtitle.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(config.subtitle, style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.textSecondary)),
+              if (config.badges.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final b in config.badges)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _border),
+                        ),
+                        child: Text(
+                          b,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final b in config.badges)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: const Color(0xFFE3EAF1), borderRadius: BorderRadius.circular(20)),
-                      child: Text(b, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: const Color(0xFF0B2337))),
-                    ),
-                ],
-              ),
             ],
           ),
         ),
+
         if (config.includes.isNotEmpty)
-          _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _h("What's included"),
-            _bullets(config.includes, Icons.check_circle_rounded, AppColors.success),
-          ])),
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle("What's included", icon: Icons.check_circle_outline_rounded),
+                _bullets(config.includes, Icons.check_circle_rounded, AppColors.success),
+              ],
+            ),
+          ),
+
         if (config.ready.isNotEmpty)
-          _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _h('What you need to keep ready'),
-            _bullets(config.ready, Icons.info_outline_rounded, const Color(0xFF0B2337)),
-          ])),
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle('Keep ready', icon: Icons.checklist_rounded),
+                _bullets(config.ready, Icons.info_outline_rounded, AppColors.navy),
+              ],
+            ),
+          ),
+
         if (config.rateCard.isNotEmpty)
           _card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _h('Spare parts & repair rate card'),
-                const Text('Quoted to you after the inspection - nothing is done without your approval.',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.textHint)),
-                const SizedBox(height: 6),
+                _sectionTitle('Spare parts rate card', icon: Icons.receipt_long_rounded),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.infoLight.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Quoted after inspection — nothing is done without your approval.',
+                    style: TextStyle(fontSize: 11.5, height: 1.35, color: AppColors.textSecondary),
+                  ),
+                ),
                 for (final c in config.rateCard)
-                  // Material between the decorated card and the tile: ListTile
-                  // asserts (debug red screen) without it.
                   Material(
                     type: MaterialType.transparency,
                     child: Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      childrenPadding: const EdgeInsets.only(bottom: 8),
-                      title: Text('${c.name} (${c.items.length})',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.navy)),
-                      children: [
-                        for (final i in c.items)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                Expanded(child: Text(i.name, style: const TextStyle(fontSize: 12.5))),
-                                Text(i.price, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.navy)),
-                              ],
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(bottom: 8),
+                        shape: const Border(),
+                        collapsedShape: const Border(),
+                        title: Text(
+                          '${c.name} (${c.items.length})',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.navy),
+                        ),
+                        children: [
+                          for (final i in c.items)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 5),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(i.name, style: const TextStyle(fontSize: 12.5, color: AppColors.textPrimary)),
+                                  ),
+                                  Text(
+                                    i.price,
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.navy,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  )),
+                  ),
               ],
             ),
           ),
@@ -364,79 +648,107 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _h('Your AC'),
+              _sectionTitle('Your AC', icon: Icons.devices_other_rounded),
               DropdownButtonFormField<String>(
                 initialValue: _brand,
-                decoration: const InputDecoration(labelText: 'Brand', border: OutlineInputBorder()),
+                decoration: _inputDecoration(label: 'Brand'),
+                borderRadius: BorderRadius.circular(12),
                 items: [for (final b in acBrands) DropdownMenuItem(value: b, child: Text(b))],
                 onChanged: (v) => setState(() => _brand = v ?? _brand),
               ),
-              const SizedBox(height: 14),
-              const Text('Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
-              const SizedBox(height: 6),
+              const SizedBox(height: 16),
+              _fieldLabel('Type'),
               _chips<String>(acTypes, _type, (v) => setState(() => _type = v)),
-              const SizedBox(height: 14),
-              const Text('Capacity', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
-              const SizedBox(height: 6),
+              const SizedBox(height: 16),
+              _fieldLabel('Capacity'),
               _chips<String>(acCapacities, _capacity, (v) => setState(() => _capacity = v)),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text('How many ACs?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.navy)),
-                  ),
-                  IconButton(
-                    tooltip: 'Remove one AC',
-                    onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
-                    icon: const Icon(Icons.remove_circle_outline_rounded),
-                  ),
-                  Text('$_qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-                  IconButton(
-                    tooltip: 'Add one more AC',
-                    onPressed: _qty < 50 ? () => setState(() => _qty++) : null,
-                    icon: const Icon(Icons.add_circle_outline_rounded),
-                  ),
-                ],
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _border),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'How many ACs?',
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.navy),
+                      ),
+                    ),
+                    _qtyStepper(),
+                  ],
+                ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 14),
               TextField(
                 controller: _notes,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Describe the issue (optional)',
-                  hintText: 'e.g. AC not cooling, strange noise, water leaking from indoor unit',
-                  border: OutlineInputBorder(),
+                style: const TextStyle(fontSize: 13.5, height: 1.4),
+                decoration: _inputDecoration(
+                  label: 'Describe the issue (optional)',
+                  hint: 'e.g. not cooling, strange noise, water leaking',
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              _fieldLabel('Photo (optional)'),
               if (_photo == null)
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                          onPressed: () => _pick(ImageSource.camera),
-                          icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                          label: const Text('Take photo')),
+                      child: _mediaButton(
+                        icon: Icons.photo_camera_outlined,
+                        label: 'Take photo',
+                        onTap: () => _pick(ImageSource.camera),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: OutlinedButton.icon(
-                          onPressed: () => _pick(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library_outlined, size: 18),
-                          label: const Text('Gallery')),
+                      child: _mediaButton(
+                        icon: Icons.photo_library_outlined,
+                        label: 'Gallery',
+                        onTap: () => _pick(ImageSource.gallery),
+                      ),
                     ),
                   ],
                 )
               else
-                Row(
-                  children: [
-                    ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(_photo!, width: 64, height: 64, fit: BoxFit.cover)),
-                    const SizedBox(width: 12),
-                    const Expanded(child: Text('Photo attached', style: TextStyle(fontWeight: FontWeight.w700))),
-                    IconButton(
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.successLight.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.memory(_photo!, width: 56, height: 56, fit: BoxFit.cover),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Photo attached', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy)),
+                            SizedBox(height: 2),
+                            Text('Tap × to remove', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      IconButton(
                         tooltip: 'Remove photo',
-                        onPressed: () => setState(() { _photo = null; _photoName = null; }), icon: const Icon(Icons.close_rounded)),
-                  ],
+                        onPressed: () => setState(() {
+                          _photo = null;
+                          _photoName = null;
+                        }),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -446,7 +758,10 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [_h('Date & time'), const SlotPickerWidget()],
+            children: [
+              _sectionTitle('Date & time', icon: Icons.schedule_rounded),
+              const SlotPickerWidget(),
+            ],
           ),
         ),
 
@@ -455,41 +770,84 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(child: _h('Service address')),
-                  TextButton(onPressed: () => context.push('/addresses/add'), child: const Text('Add new')),
-                ],
+              _sectionTitle(
+                'Service address',
+                icon: Icons.location_on_outlined,
+                trailing: TextButton(
+                  onPressed: () => context.push('/addresses/add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.navy,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('Add new', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
               ),
-              for (final a in list)
-                InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => ref.read(selectedAddressProvider.notifier).state = a,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: selected?.id == a.id ? const Color(0xFF0B2337) : const Color(0xFFE2E8F0),
-                        width: selected?.id == a.id ? 1.5 : 1,
+              if (list.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'No saved address yet — add one to continue.',
+                    style: TextStyle(color: AppColors.textHint, fontSize: 12.5),
+                  ),
+                )
+              else
+                for (final a in list)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          AppHaptics.selection();
+                          ref.read(selectedAddressProvider.notifier).state = a;
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: selected?.id == a.id ? _softNavy : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: selected?.id == a.id ? AppColors.navy : AppColors.border,
+                              width: selected?.id == a.id ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                selected?.id == a.id
+                                    ? Icons.radio_button_checked_rounded
+                                    : Icons.radio_button_off_rounded,
+                                color: selected?.id == a.id ? AppColors.navy : AppColors.textHint,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  a.formattedAddress,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    height: 1.35,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(a.formattedAddress,
-                              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, height: 1.35)),
-                        ),
-                        Icon(
-                          selected?.id == a.id ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                          color: selected?.id == a.id ? const Color(0xFF0B2337) : AppColors.textHint,
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-              if (list.isEmpty) const Text('No saved address yet - add one to continue.', style: TextStyle(color: AppColors.textHint)),
             ],
           ),
         ),
@@ -499,21 +857,60 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _h('Fee'),
-              Row(
-                children: [
-                  const Expanded(child: Text('Inspection & diagnosis fee')),
-                  Text('₹${config.fee}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.navy)),
-                ],
+              _sectionTitle('Fee summary', icon: Icons.payments_outlined),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Inspection & diagnosis',
+                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.navy),
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Pay after the visit · adjustable against repair',
+                            style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.3),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '₹${config.fee}',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.navy),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 4),
-              const Text('Pay via cash or UPI after the technician inspects. Adjustable against the repair if you go ahead.',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textHint)),
             ],
           ),
         ),
-
       ],
     );
   }
+
+  Widget _mediaButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.navy,
+          side: const BorderSide(color: Color(0xFFD0D7E2)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
 }

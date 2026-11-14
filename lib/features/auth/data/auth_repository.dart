@@ -98,6 +98,99 @@ class AuthRepository {
     }
   }
 
+  // ── Email + password accounts ────────────────────────────────────────────
+  static AuthVerifyResult _verifyFromJson(dynamic json) {
+    final map = json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{};
+    final access = (map['access'] ?? map['auth_token'] ?? '').toString();
+    final refresh = (map['refresh'] ?? map['refresh_token'] ?? '').toString();
+    final isNew = map['is_new_customer'] == true || map['is_new_user'] == true;
+    final userMap = map['user'] is Map ? Map<String, dynamic>.from(map['user'] as Map) : map;
+    return AuthVerifyResult(
+      access: access,
+      refresh: refresh,
+      user: UserProfile.fromJson(userMap),
+      isNewUser: isNew,
+    );
+  }
+
+  /// POST /auth/customer/signup/request/ - validates the form and emails a 6-digit code.
+  /// Success data: {resend_after_seconds, email_masked}.
+  Future<Result<Map<String, dynamic>>> signupRequest({
+    required String fullName,
+    required String email,
+    required String mobile,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    try {
+      final response = await api.post('/auth/customer/signup/request/', data: {
+        'full_name': fullName.trim(),
+        'email': email.trim(),
+        'mobile_number': mobile.trim(),
+        'password': password,
+        'confirm_password': confirmPassword,
+      });
+      return ResponseNormalizer.extract(
+        response,
+        (json) => json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{},
+      );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /auth/customer/signup/verify/ - creates the account and signs the customer in.
+  Future<Result<AuthVerifyResult>> signupVerify({required String email, required String otp}) async {
+    try {
+      final response = await api.post('/auth/customer/signup/verify/', data: {
+        'email': email.trim(),
+        'otp': otp.trim(),
+      });
+      return ResponseNormalizer.extract(response, _verifyFromJson);
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /auth/customer/signup/resend/
+  Future<Result<Map<String, dynamic>>> signupResend({required String email}) async {
+    try {
+      final response = await api.post('/auth/customer/signup/resend/', data: {'email': email.trim()});
+      return ResponseNormalizer.extract(
+        response,
+        (json) => json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{},
+      );
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /auth/customer/login/ - sign in with email / mobile / username + password.
+  Future<Result<AuthVerifyResult>> passwordLogin({required String identifier, required String password}) async {
+    try {
+      final response = await api.post('/auth/customer/login/', data: {
+        'identifier': identifier.trim(),
+        'password': password,
+      });
+      return ResponseNormalizer.extract(response, _verifyFromJson);
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
+  /// POST /auth/password/set/ - for a signed-in customer who has no password yet.
+  Future<Result<bool>> setPassword({required String newPassword, required String confirmPassword}) async {
+    try {
+      final response = await api.post('/auth/password/set/', data: {
+        'new_password': newPassword,
+        'confirm_password': confirmPassword,
+      });
+      return ResponseNormalizer.extract(response, (_) => true);
+    } on Exception catch (e) {
+      return Failure(_toError(e));
+    }
+  }
+
   // ── Profile Complete ─────────────────────────────────────────────────────
   /// POST /auth/customer/profile/complete/
   ///
@@ -310,37 +403,17 @@ class AuthRepository {
   /// Restores session from local storage. Returns null if no token found.
   /// NOTE: Call [validateSession] or [fetchProfile] to verify/sync the token with the server.
   Future<UserProfile?> restoreSession() async {
-    final hasToken = await storage.hasAccessToken();
+    final hasAccess = await storage.hasAccessToken();
     final refreshToken = await storage.getRefreshToken();
     final hasRefreshToken = refreshToken?.isNotEmpty == true;
-    AppLogger.d('[P0-AUTH]', 'TOKEN_LOAD: hasAccessToken=$hasToken, hasRefreshToken=$hasRefreshToken');
+    AppLogger.d('[P0-AUTH]', 'TOKEN_LOAD: hasAccessToken=$hasAccess, hasRefreshToken=$hasRefreshToken');
+    // A signed-in customer stays signed in as long as EITHER token is on the device: a missing access
+    // token is recovered by the silent refresh on the first request. Only when both are truly absent
+    // (never signed in, or explicitly signed out) is there no session. Storage is never purged here:
+    // a failed read must not destroy a good session; logout/revocation clear it explicitly elsewhere.
+    final hasToken = hasAccess || hasRefreshToken;
     if (!hasToken) {
-      // Fixed 2026-09-16 — this used to purge (storage.clearAll()) the
-      // instant the access token read came back empty, with NO regard for
-      // whether a refresh token was still sitting right there in the same
-      // storage. That converted every transient/false-negative access-token
-      // read (see SecureStorage._readSafe's own note — a documented
-      // encryptedSharedPreferences failure mode) into an irreversible
-      // logout: the refresh token and cached user JSON were destroyed
-      // before anything had a chance to use them, so the very next app
-      // open always needed a fresh OTP login even though the session was
-      // still perfectly recoverable a moment earlier.
-      //
-      // Only purge now when there is genuinely nothing left to recover —
-      // no refresh token either. That's the real "never logged in" /
-      // "fully logged out" case this branch was meant for. When a refresh
-      // token IS still present, leave storage untouched and just report
-      // "no session yet" for this cold start: the interceptor's own
-      // 401→refresh→retry path (or the next successful read of the access
-      // token) gets a chance to recover the session instead of it being
-      // permanently gone.
-      if (!hasRefreshToken) {
-        AppLogger.d('[P0-AUTH]', 'TOKEN_LOAD: No access or refresh token found. Purging stale keys.');
-        await storage.clearAll();
-      } else {
-        AppLogger.d('[P0-AUTH]', 'TOKEN_LOAD: Access token missing but a refresh token is still present — '
-            'NOT purging storage (likely a transient read miss, not a real logout).');
-      }
+      AppLogger.d('[P0-AUTH]', 'TOKEN_LOAD: No access or refresh token found — no session.');
       return null;
     }
     final userJson = await storage.getUserJson();

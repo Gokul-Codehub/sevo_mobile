@@ -1,3 +1,4 @@
+import 'package:calservices_customer/shared/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -108,7 +109,7 @@ class _TabbedShowcaseState extends ConsumerState<TabbedShowcase> {
               child: Row(
                 children: [
                   Flexible(
-                    child: Text(subtitle, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
+                    child: Text(subtitle, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.swatch1A1A1A)),
                   ),
                   const SizedBox(width: 10),
                   Expanded(child: Container(height: 1, color: accent.withOpacity(0.25))),
@@ -147,7 +148,7 @@ class _TabbedShowcaseState extends ConsumerState<TabbedShowcase> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: i == index ? FontWeight.w800 : FontWeight.w600,
-                            color: i == index ? accent : const Color(0xFF1A1A1A),
+                            color: i == index ? accent : AppColors.swatch1A1A1A,
                           ),
                         ),
                       ),
@@ -181,9 +182,9 @@ class _TabbedShowcaseState extends ConsumerState<TabbedShowcase> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(seeAllLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A))),
+                      Text(seeAllLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.swatch1A1A1A)),
                       const SizedBox(width: 4),
-                      const Icon(Icons.arrow_right, size: 22, color: Color(0xFF1A1A1A)),
+                      const Icon(Icons.arrow_right, size: 22, color: AppColors.swatch1A1A1A),
                     ],
                   ),
                 ),
@@ -215,7 +216,7 @@ class _TabRail extends ConsumerWidget {
       if (items.isEmpty) {
         return const SizedBox(
           height: 90,
-          child: Center(child: Text('Nothing here yet', style: TextStyle(fontSize: 12.5, color: Color(0xFF6B7280)))),
+          child: Center(child: Text('Nothing here yet', style: TextStyle(fontSize: 12.5, color: AppColors.swatch6B7280))),
         );
       }
       final shown = items.take(limit).toList();
@@ -336,7 +337,7 @@ class _ShowcaseCard extends StatelessWidget {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(18),
                         child: (item.imageUrl ?? '').isEmpty
-                            ? const Center(child: Icon(Icons.image_outlined, size: 40, color: Color(0xFF9CA3AF)))
+                            ? const Center(child: Icon(Icons.image_outlined, size: 40, color: AppColors.gray400))
                             : AppRemoteImage(imageUrl: item.imageUrl!, fit: BoxFit.cover),
                       ),
                     ),
@@ -347,7 +348,7 @@ class _ShowcaseCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: const BoxDecoration(
-                            color: Color(0xFFE11D48),
+                            color: AppColors.swatchE11D48,
                             borderRadius: BorderRadius.only(topLeft: Radius.circular(18), bottomRight: Radius.circular(12)),
                           ),
                           child: Text('$pct% OFF', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Colors.white)),
@@ -361,7 +362,7 @@ class _ShowcaseCard extends StatelessWidget {
                           constraints: const BoxConstraints(maxWidth: 54),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(10)),
-                          child: Text(pack, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+                          child: Text(pack, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.gray700)),
                         ),
                       ),
                   ],
@@ -377,7 +378,7 @@ class _ShowcaseCard extends StatelessWidget {
                     maxLines: 2,
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13.5, height: 1.25, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+                    style: const TextStyle(fontSize: 13.5, height: 1.25, fontWeight: FontWeight.w800, color: AppColors.gray900),
                   ),
                 ),
               ),
@@ -398,13 +399,13 @@ class _ShowcaseCard extends StatelessWidget {
                                 children: [
                                   Text(
                                     '₹${_money(item.effectivePrice.toDouble())}',
-                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.gray900),
                                   ),
                                   if (showDiscount && item.hasDiscount) ...[
                                     const SizedBox(width: 6),
                                     Text(
                                       '₹${_money(item.price.toDouble())}',
-                                      style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF), decoration: TextDecoration.lineThrough),
+                                      style: const TextStyle(fontSize: 12, color: AppColors.gray400, decoration: TextDecoration.lineThrough),
                                     ),
                                   ],
                                 ],
@@ -421,8 +422,8 @@ class _ShowcaseCard extends StatelessWidget {
                               height: 28,
                               padding: const EdgeInsets.symmetric(horizontal: 14),
                               alignment: Alignment.center,
-                              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(18)),
-                              child: const Text('View', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                              decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(18)),
+                              child: const Text('View', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.gray900)),
                             ),
                           )
                         : QuickAddControl(service: item),

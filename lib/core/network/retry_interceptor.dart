@@ -41,7 +41,12 @@ class RetryInterceptor extends Interceptor {
     final jitter = Duration(milliseconds: (base.inMilliseconds * 0.2 * _random.nextDouble()).round());
     await Future<void>.delayed(base + jitter);
     try {
-      final response = await dio.fetch<dynamic>(options.copyWith(extra: {...options.extra, _attemptKey: attempt + 1}));
+      // An upload body (FormData) can be sent only once: retry with a fresh copy.
+      final body = options.data;
+      final response = await dio.fetch<dynamic>(options.copyWith(
+        data: body is FormData ? body.clone() : body,
+        extra: {...options.extra, _attemptKey: attempt + 1},
+      ));
       handler.resolve(response);
     } on DioException catch (e) {
       // The nested call already ran the full interceptor chain (including further retries).

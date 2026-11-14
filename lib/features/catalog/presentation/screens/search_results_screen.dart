@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../routing/app_router.dart';
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/search_keywords.dart';
 import '../widgets/product_card.dart';
@@ -677,10 +679,13 @@ class _ServiceSearchResultsState extends ConsumerState<ServiceSearchResultsScree
               if (shown.isNotEmpty)
                 _resultsHeader(
                     shown.length, st.total > st.packages.length ? st.total : shown.length, q, 'service'),
-              for (final s in shown)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                  child: ServiceCard(service: s),
+              for (var i = 0; i < shown.length; i++)
+                FadeSlideIn(
+                  index: i,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    child: ServiceCard(service: shown[i]),
+                  ),
                 ),
               if (shown.isEmpty)
                 _noMatchAfterFilter(
@@ -743,11 +748,12 @@ class _GrocerySearchResultsState extends ConsumerState<GrocerySearchResultsScree
       appBar: _resultsAppBar(context, q),
       body: Builder(builder: (context) {
         if (st.loading) {
+          final cols = AppResponsive.productColumns(MediaQuery.sizeOf(context).width);
           return GridView.builder(
             padding: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.paddingOf(context).bottom),
-            itemCount: 6,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            itemCount: cols * 3,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cols,
               crossAxisSpacing: 10,
               mainAxisSpacing: 14,
               childAspectRatio: 0.62,
@@ -802,7 +808,9 @@ class _GrocerySearchResultsState extends ConsumerState<GrocerySearchResultsScree
               sliver: SliverLayoutBuilder(
                 builder: (context, constraints) {
                   const spacing = 10.0;
-                  final cellWidth = (constraints.crossAxisExtent - spacing) / 2;
+                  final cols = AppResponsive.productColumns(constraints.crossAxisExtent);
+                  final cellWidth =
+                      (constraints.crossAxisExtent - spacing * (cols - 1)) / cols;
                   final cellHeight = ProductCard.groceryCardHeight(
                     cardWidth: cellWidth,
                     showImage: true,
@@ -811,13 +819,16 @@ class _GrocerySearchResultsState extends ConsumerState<GrocerySearchResultsScree
                   );
                   return SliverGrid(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+                      crossAxisCount: cols,
                       crossAxisSpacing: spacing,
                       mainAxisSpacing: 14,
                       childAspectRatio: cellWidth / cellHeight,
                     ),
                     delegate: SliverChildBuilderDelegate(
-                      (context, i) => RepaintBoundary(child: ProductCard(service: items[i])),
+                      (context, i) => FadeSlideIn(
+                        index: i,
+                        child: RepaintBoundary(child: ProductCard(service: items[i])),
+                      ),
                       childCount: items.length,
                     ),
                   );

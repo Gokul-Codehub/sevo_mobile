@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -55,7 +56,16 @@ class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, Trackin
   /// safety net backs off (it only needs to run at full speed when the socket
   /// is quiet or down).
   DateTime? _lastWsFrame;
+
+  /// When a WebSocket frame last CHANGED the status. A REST answer that was requested before that moment is older
+  /// than the status already on screen, so it must not push the status back (a late reply used to flip
+  /// "on the way" back to "assigned" for a few seconds).
+  DateTime? _lastWsStatusChange;
   int _pollTick = 0;
+
+  /// Stops REST polling while the app is in the background (battery/data) and
+  /// refreshes once on resume.
+  late final _LifecycleHook _lifecycle;
 
   @override
   TrackingUpdate build(TrackingArgs arg) {
@@ -64,8 +74,25 @@ class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, Trackin
     _lastWsFrame = null;
     _pollTick = 0;
 
+    _lifecycle = _LifecycleHook(
+      onPause: () => _pollingTimer?.cancel(),
+      onResume: () {
+        if (_isDisposed || state.isTerminal) return;
+        _pollOnce(arg);
+        _startRestPolling(arg);
+        // After time in the background the socket is often dead without ever saying so: open a fresh one.
+        final last = _lastWsFrame;
+        if (last == null || DateTime.now().difference(last) > const Duration(seconds: 20)) {
+          _reconnectTimer?.cancel();
+          _connectWebSocket(arg);
+        }
+      },
+    );
+    WidgetsBinding.instance.addObserver(_lifecycle);
+
     ref.onDispose(() {
       _isDisposed = true;
+      WidgetsBinding.instance.removeObserver(_lifecycle);
       _cleanupAll();
     });
 
@@ -144,10 +171,9 @@ class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, Trackin
       if (data is Map) {
         // WS frames are often partial (no OTPs, no is_accepted) — merge,
         // never replace; the REST poll stays the authoritative snapshot.
-        state = state.mergedWith(
-          TrackingUpdate.fromJson(Map<String, dynamic>.from(data), isWs: true),
-          partial: true,
-        );
+        final update = TrackingUpdate.fromJson(Map<String, dynamic>.from(data), isWs: true);
+        if (update.status.isNotEmpty && update.status != state.status) _lastWsStatusChange = DateTime.now();
+        state = state.mergedWith(update, partial: true);
       }
     } catch (e) {
       debugPrint('[Tracking WS] Failed to parse message: $e');
@@ -204,7 +230,8 @@ class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, Trackin
       'en_route',
       'arrived',
     }.contains(state.status.toLowerCase());
-    if (wsHealthy) return Duration(milliseconds: activeTransit ? 3500 : 15000);
+    // Socket is carrying live positions; REST is only a safety net.
+    if (wsHealthy) return Duration(milliseconds: activeTransit ? 8000 : 20000);
     return Duration(milliseconds: activeTransit ? 2500 : 5000);
   }
 
@@ -224,6 +251,7 @@ class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, Trackin
 
   Future<void> _pollOnce(TrackingArgs arg) async {
     if (_isDisposed) return;
+    final requestedAt = DateTime.now();
     try {
       final token = (arg.trackingToken ?? '').trim();
       final response = await _api.get(
@@ -231,6 +259,9 @@ class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, Trackin
         queryParameters: token.isNotEmpty ? {'token': token} : null,
       );
       final data = response.data;
+      if (_isDisposed) return;
+      final wsChanged = _lastWsStatusChange;
+      if (wsChanged != null && wsChanged.isAfter(requestedAt)) return; // stale: the socket already moved on
       if (data is Map) {
         final map = Map<String, dynamic>.from(data);
         final inner = map['data'] is Map ? Map<String, dynamic>.from(map['data'] as Map) : map;
@@ -254,6 +285,21 @@ class TrackingNotifier extends AutoDisposeFamilyNotifier<TrackingUpdate, Trackin
     _cleanupWs();
     _pollingTimer?.cancel();
     _reconnectTimer?.cancel();
+  }
+}
+
+class _LifecycleHook with WidgetsBindingObserver {
+  _LifecycleHook({required this.onPause, required this.onResume});
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      onPause();
+    } else if (state == AppLifecycleState.resumed) {
+      onResume();
+    }
   }
 }
 

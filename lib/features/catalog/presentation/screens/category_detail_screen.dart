@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/utils/app_logger.dart';
 import '../../../../routing/app_router.dart';
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/cart_pill_bar.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
@@ -36,7 +37,7 @@ class _AcInspectionBanner extends ConsumerWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            gradient: const LinearGradient(colors: [Color(0xFF0B2337), Color(0xFF1E3A5F)]),
+            gradient: const LinearGradient(colors: [AppColors.swatch0B2337, AppColors.accent]),
           ),
           child: Row(
             children: [
@@ -617,7 +618,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 icon: Icons.grid_view_rounded,
                 modern: true,
                 accent: blue,
-                accentLight: Color(0xFFE8EDF7),
+                accentLight: AppColors.swatchE8EDF7,
                 accentDark: AppColors.navy,
                 selected: _selectedSubcategorySlug == null,
                 onTap: () => setState(() {
@@ -632,7 +633,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                   icon: Icons.home_repair_service_rounded,
                   modern: true,
                   accent: blue,
-                  accentLight: Color(0xFFE8EDF7),
+                  accentLight: AppColors.swatchE8EDF7,
                   accentDark: AppColors.navy,
                   selected: _selectedSubcategorySlug == sub.slug,
                   onTap: () => setState(() => _selectedSubcategorySlug =
@@ -959,35 +960,31 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                           selectedProductGroup.items)
                       : selectedProductGroup.items));
 
-          // Build the 2-per-row grocery grid as plain Rows rather than a
-          // GridView with a fixed childAspectRatio — a fixed aspect ratio
-          // is exactly what caused the "RenderFlex overflowed" errors
-          // before (content height varies slightly by title/price length,
-          // but the aspect ratio didn't). A Row's height instead adapts to
-          // its tallest child, so there's nothing to overflow.
+          // Build the grocery grid as plain Rows rather than a GridView with
+          // a fixed childAspectRatio — a fixed aspect ratio caused
+          // "RenderFlex overflowed" errors before (content height varies by
+          // title/price length). A Row's height adapts to its tallest child.
+          // Column count scales for tablets.
           final List<Widget> groceryRows = [];
           if (isGroceryCategory) {
-            for (var i = 0; i < gridItems.length; i += 2) {
-              final hasSecond = i + 1 < gridItems.length;
+            final cols = AppResponsive.productColumns(MediaQuery.sizeOf(context).width);
+            for (var i = 0; i < gridItems.length; i += cols) {
               groceryRows.add(
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: RepaintBoundary(
-                          child: ProductCard(service: gridItems[i]),
+                      for (var c = 0; c < cols; c++) ...[
+                        if (c > 0) const SizedBox(width: 12),
+                        Expanded(
+                          child: i + c < gridItems.length
+                              ? RepaintBoundary(
+                                  child: ProductCard(service: gridItems[i + c]),
+                                )
+                              : const SizedBox.shrink(),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: hasSecond
-                            ? RepaintBoundary(
-                                child: ProductCard(service: gridItems[i + 1]),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -1007,19 +1004,30 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           // exclusively; this row is for service-booking categories (AC &
           // Appliance, Electrician, ...) only.
           if (!isGroceryCategory) {
-            return ListView(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
-              children: [
-                // Air Conditioner: the web's "AC Inspection & Diagnostic Visit".
-                if (categorySlug.replaceAll('-', '_').toLowerCase() == 'ac_appliance')
-                  const _AcInspectionBanner(),
-                ...services.map(
-                  (service) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: ServiceCard(service: service),
+            return RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(categoryServicesProvider(servicesParam));
+                try {
+                  await ref.read(categoryServicesProvider(servicesParam).future);
+                } on Object {
+                  // The screen's own error state shows the failure; the spinner just stops.
+                }
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
+                children: [
+                  // Air Conditioner: the web's "AC Inspection & Diagnostic Visit".
+                  if (categorySlug.replaceAll('-', '_').toLowerCase() == 'ac_appliance')
+                    const _AcInspectionBanner(),
+                  ...services.map(
+                    (service) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: ServiceCard(service: service),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           }
 
@@ -1046,8 +1054,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                         icon: Icons.grid_view_rounded,
                         selected: _selectedDepartment == null,
                         modern: true,
-                        accentLight: const Color(0xFFE3F1E8),
-                        discSelected: const Color(0xFFCFE6D8),
+                        accentLight: AppColors.swatchE3F1E8,
+                        discSelected: AppColors.swatchCFE6D8,
                         discIdle: AppColors.groceryGreenLight,
                         onTap: () => _selectDepartment(null),
                       ),
@@ -1058,8 +1066,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                                 image: dept.image ?? findProductGroup(dept.name)?.image,
                                 selected: _selectedDepartment == dept.name,
                                 modern: true,
-                                accentLight: const Color(0xFFE3F1E8),
-                                discSelected: const Color(0xFFCFE6D8),
+                                accentLight: AppColors.swatchE3F1E8,
+                                discSelected: AppColors.swatchCFE6D8,
                                 discIdle: AppColors.groceryGreenLight,
                                 onTap: () => _selectDepartment(
                                   _selectedDepartment == dept.name ? null : dept.name,
@@ -1072,8 +1080,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                                 image: group.image,
                                 selected: _selectedDepartment == group.name,
                                 modern: true,
-                                accentLight: const Color(0xFFE3F1E8),
-                                discSelected: const Color(0xFFCFE6D8),
+                                accentLight: AppColors.swatchE3F1E8,
+                                discSelected: AppColors.swatchCFE6D8,
                                 discIdle: AppColors.groceryGreenLight,
                                 onTap: () => _selectDepartment(
                                   _selectedDepartment == group.name ? null : group.name,

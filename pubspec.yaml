@@ -73,6 +73,10 @@ dependencies:
 
   # --- PDF Viewing ---
   flutter_pdfview: ^1.3.2
+  # In-app PDF viewer for invoices / receipts (Android PdfRenderer / iOS PDFKit) - the invoice opens on screen.
+  pdfx: ^2.9.2
+  # "Download" on the invoice viewer: copies the real file to a place the customer picks (Downloads, Drive...).
+  flutter_file_dialog: ^3.0.2
 
   # --- Local temp-file storage ---
   # Added 2026-10-07 for the booking-detail "Download Invoice" action: the

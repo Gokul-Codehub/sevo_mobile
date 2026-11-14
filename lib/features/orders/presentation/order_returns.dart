@@ -10,16 +10,17 @@ import '../../../shared/theme/grocery_theme.dart';
 import '../../../shared/utils/app_toast.dart';
 import '../../../shared/utils/date_utils.dart';
 import '../../../shared/widgets/state_widgets.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../data/grocery_orders_repository.dart';
 import '../data/order_returns_repository.dart';
 
-const _green = Color(0xFF1B7F4B);
+const _green = AppColors.swatch1B7F4B;
 
 String _rupees(double v) => '₹${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2)}';
 
 Color _stageColor(ReturnStage s) => switch (s) {
       ReturnStage.refunded => _green,
-      ReturnStage.rejected || ReturnStage.cancelled => const Color(0xFFC62828),
+      ReturnStage.rejected || ReturnStage.cancelled => AppColors.red800,
       _ => const Color(0xFFE65100),
     };
 
@@ -33,39 +34,44 @@ class OrderReturnsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final returns = ref.watch(orderReturnsProvider(order.orderNumber)).valueOrNull ?? const <ReturnRequest>[];
     if (returns.isEmpty && !order.canReturn) return const SizedBox.shrink();
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, 3))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Returns & refunds', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: AppColors.navy)),
-        const SizedBox(height: 10),
-        for (final r in returns) _ReturnRow(r),
-        if (order.canReturn) ...[
-          if (returns.isNotEmpty) const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-              onPressed: () async {
-                await context.push('/grocery-orders/${order.orderNumber}/return');
-                ref.invalidate(orderReturnsProvider(order.orderNumber));
-              },
-              icon: const Icon(Icons.assignment_return_outlined, size: 18),
-              label: const Text('Return items'),
+    return FadeSlideIn(
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, 3))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Returns & refunds', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: AppColors.navy)),
+          const SizedBox(height: 10),
+          for (var i = 0; i < returns.length; i++)
+            FadeSlideIn(index: i, child: _ReturnRow(returns[i])),
+          if (order.canReturn) ...[
+            if (returns.isNotEmpty) const SizedBox(height: 6),
+            PressScale(
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                  onPressed: () async {
+                    await context.push('/grocery-orders/${order.orderNumber}/return');
+                    ref.invalidate(orderReturnsProvider(order.orderNumber));
+                  },
+                  icon: const Icon(Icons.assignment_return_outlined, size: 18),
+                  label: const Text('Return items'),
+                ),
+              ),
             ),
-          ),
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Text('Returns are accepted within 7 days of delivery.', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
-          ),
-        ],
-      ]),
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text('Returns are accepted within 7 days of delivery.', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+            ),
+          ],
+        ]),
+      ),
     );
   }
 }
@@ -88,7 +94,7 @@ class _PickupInfo extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: const [
           Icon(Icons.local_shipping_outlined, size: 16, color: AppColors.navy),
@@ -124,30 +130,58 @@ class _ReturnTimeline extends StatelessWidget {
       padding: const EdgeInsets.only(top: 10),
       child: Column(children: [
         for (var i = 0; i < steps.length; i++)
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Column(children: [
-              Icon(
-                steps[i].failed ? Icons.cancel_rounded : (steps[i].done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded),
-                size: 17,
-                color: steps[i].failed ? const Color(0xFFC62828) : (steps[i].done ? _green : const Color(0xFFB0B8C4)),
-              ),
-              if (i < steps.length - 1) Container(width: 2, height: 16, color: steps[i].done && !steps[i].current ? _green : const Color(0xFFE2E8F0)),
-            ]),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  steps[i].at != null && steps[i].done ? '${steps[i].label} · ${formatDmyTime(steps[i].at!)}' : steps[i].label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: steps[i].current ? FontWeight.w800 : FontWeight.w500,
-                    color: steps[i].done || steps[i].current ? AppColors.textPrimary : AppColors.textSecondary,
+          FadeSlideIn(
+            index: i,
+            offset: 8,
+            duration: const Duration(milliseconds: 320),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Column(children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: Icon(
+                    steps[i].failed
+                        ? Icons.cancel_rounded
+                        : (steps[i].done
+                            ? Icons.check_circle_rounded
+                            : (steps[i].current
+                                ? Icons.radio_button_checked_rounded
+                                : Icons.radio_button_unchecked_rounded)),
+                    key: ValueKey('${steps[i].label}-${steps[i].done}-${steps[i].current}-${steps[i].failed}'),
+                    size: 17,
+                    color: steps[i].failed
+                        ? AppColors.red800
+                        : (steps[i].done || steps[i].current ? _green : const Color(0xFFB0B8C4)),
+                  ),
+                ),
+                if (i < steps.length - 1)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 280),
+                    width: 2,
+                    height: 16,
+                    color: steps[i].done && !steps[i].current ? _green : AppColors.border,
+                  ),
+              ]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 220),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: steps[i].current ? FontWeight.w800 : FontWeight.w500,
+                      color: steps[i].done || steps[i].current ? AppColors.textPrimary : AppColors.textSecondary,
+                    ),
+                    child: Text(
+                      steps[i].at != null && steps[i].done
+                          ? '${steps[i].label} · ${formatDmyTime(steps[i].at!)}'
+                          : steps[i].label,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ]),
+            ]),
+          ),
       ]),
     );
   }
@@ -163,7 +197,7 @@ class _ReturnRow extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: const Color(0xFFF6F8FA), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: AppColors.swatchF6F8FA, borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(child: Text('Return #${r.returnNumber}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
@@ -176,9 +210,9 @@ class _ReturnRow extends StatelessWidget {
         ]),
         const SizedBox(height: 4),
         Text([r.reasonLabel, if (r.refundAmount > 0) _rupees(r.refundAmount)].where((s) => s.isNotEmpty).join(' · '), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        if (r.refundNote.isNotEmpty) Text(r.refundNote, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: r.refundStatus.toUpperCase() == 'REFUNDED' ? _green : const Color(0xFFB45309))),
+        if (r.refundNote.isNotEmpty) Text(r.refundNote, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: r.refundStatus.toUpperCase() == 'REFUNDED' ? _green : AppColors.amber700)),
         if (r.stage == ReturnStage.rejected && r.rejectionReason.isNotEmpty)
-          Padding(padding: const EdgeInsets.only(top: 4), child: Text('Reason: ${r.rejectionReason}', style: const TextStyle(fontSize: 12, color: Color(0xFFC62828)))),
+          Padding(padding: const EdgeInsets.only(top: 4), child: Text('Reason: ${r.rejectionReason}', style: const TextStyle(fontSize: 12, color: AppColors.red800))),
         if (r.pickup != null) _PickupInfo(r.pickup!),
         if (r.timeline.length > 1) _ReturnTimeline(r.timeline),
         if (r.createdAt != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Requested ${formatDmyTime(r.createdAt!)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
@@ -251,7 +285,7 @@ class _ReturnRequestScreenState extends ConsumerState<ReturnRequestScreen> {
     final async = ref.watch(groceryOrderProvider(widget.orderNumber));
     return GroceryTheme(
       child: Scaffold(
-        backgroundColor: const Color(0xFFF6F8FA),
+        backgroundColor: AppColors.swatchF6F8FA,
         appBar: AppBar(
           title: const Text('Return items', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy, fontSize: 18)),
           leading: BackButton(onPressed: context.goBack),
@@ -259,6 +293,8 @@ class _ReturnRequestScreenState extends ConsumerState<ReturnRequestScreen> {
           elevation: 0,
         ),
         body: async.when(
+          // A live refresh keeps the form as it is (no flash back to the skeleton).
+          skipLoadingOnReload: true,
           loading: () => const LoadingState(),
           error: (e, _) => ErrorState.from(e, onRetry: () => ref.invalidate(groceryOrderProvider(widget.orderNumber))),
           data: (o) {
@@ -266,24 +302,45 @@ class _ReturnRequestScreenState extends ConsumerState<ReturnRequestScreen> {
             return Column(children: [
               Expanded(
                 child: ListView(padding: const EdgeInsets.all(16), children: [
-                  Text('Order #${o.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                  const SizedBox(height: 4),
-                  const Text('Choose what you want to return.', style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                  FadeSlideIn(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Order #${o.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                      const SizedBox(height: 4),
+                      const Text('Choose what you want to return.', style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                    ]),
+                  ),
                   const SizedBox(height: 12),
-                  for (final i in o.items) if (i.id != null) _ItemPicker(line: i, qty: _qty[i.id] ?? 0, onChanged: (q) => setState(() => _qty[i.id!] = q)),
+                  for (var idx = 0; idx < o.items.length; idx++)
+                    if (o.items[idx].id != null)
+                      FadeSlideIn(
+                        index: idx,
+                        child: _ItemPicker(
+                          line: o.items[idx],
+                          qty: _qty[o.items[idx].id] ?? 0,
+                          onChanged: (q) => setState(() => _qty[o.items[idx].id!] = q),
+                        ),
+                      ),
                   const SizedBox(height: 12),
-                  const Text('Reason', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                  const FadeSlideIn(
+                    index: 1,
+                    child: Text('Reason', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                  ),
                   const SizedBox(height: 6),
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     for (final r in ReturnReason.values)
-                      ChoiceChip(label: Text(r.label), selected: _reason == r, onSelected: (_) => setState(() => _reason = r)),
+                      PressScale(
+                        child: ChoiceChip(label: Text(r.label), selected: _reason == r, onSelected: (_) => setState(() => _reason = r)),
+                      ),
                   ]),
                   const SizedBox(height: 14),
-                  TextField(
-                    controller: _notes,
-                    maxLines: 3,
-                    maxLength: 500,
-                    decoration: const InputDecoration(labelText: 'Anything else we should know? (optional)', border: OutlineInputBorder()),
+                  FadeSlideIn(
+                    index: 2,
+                    child: TextField(
+                      controller: _notes,
+                      maxLines: 3,
+                      maxLength: 500,
+                      decoration: const InputDecoration(labelText: 'Anything else we should know? (optional)', border: OutlineInputBorder()),
+                    ),
                   ),
                 ]),
               ),
@@ -295,13 +352,20 @@ class _ReturnRequestScreenState extends ConsumerState<ReturnRequestScreen> {
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                         const Text('Estimated refund', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
-                        Text(_rupees(refund), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.navy)),
+                        BounceOnChange(
+                          value: refund,
+                          child: Text(_rupees(refund), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.navy)),
+                        ),
                       ]),
                     ),
-                    FilledButton(
-                      style: FilledButton.styleFrom(minimumSize: const Size(0, 46), padding: const EdgeInsets.symmetric(horizontal: 22)),
-                      onPressed: _busy ? null : () => _submit(o),
-                      child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Submit return'),
+                    PressScale(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(minimumSize: const Size(0, 46), padding: const EdgeInsets.symmetric(horizontal: 22)),
+                        onPressed: _busy ? null : () => _submit(o),
+                        child: _busy
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Submit return'),
+                      ),
                     ),
                   ]),
                 ),
@@ -323,13 +387,18 @@ class _ItemPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = qty > 0;
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: selected ? _green : const Color(0xFFE2E8F0)),
+        border: Border.all(color: selected ? _green : AppColors.border, width: selected ? 1.5 : 1),
+        boxShadow: selected
+            ? [BoxShadow(color: _green.withValues(alpha: 0.12), blurRadius: 10, offset: const Offset(0, 3))]
+            : null,
       ),
       child: Row(children: [
         Checkbox(value: selected, onChanged: (v) => onChanged(v == true ? 1 : 0)),

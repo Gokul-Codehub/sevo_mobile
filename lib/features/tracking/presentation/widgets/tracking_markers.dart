@@ -169,7 +169,7 @@ class TrackingMarkers {
     const double scale = 3;
     const double w = logicalWidth * scale;
     const double h = logicalHeight * scale;
-    const accent = Color(0xFF10B981); // emerald — the destination accent
+    const accent = AppColors.success; // emerald — the destination accent
     // already used elsewhere in this app's tracking UI.
 
     final recorder = ui.PictureRecorder();

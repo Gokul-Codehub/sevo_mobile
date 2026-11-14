@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../shared/theme/app_colors.dart';
+import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../domain/gt_models.dart';
 import '../../domain/gt_providers.dart';
 import '../../domain/logistics_models.dart';
@@ -468,21 +469,21 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEB),
+                        color: AppColors.amber50,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(Icons.lightbulb_outline_rounded,
-                              size: 16, color: Color(0xFFB45309)),
+                              size: 16, color: AppColors.amber700),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               selected.infoBanner!,
                               style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Color(0xFF92400E),
+                                color: AppColors.amber800,
                                 height: 1.4,
                               ),
                             ),
@@ -631,6 +632,7 @@ class _CustomCargoForm extends StatefulWidget {
 
 class _CustomCargoFormState extends State<_CustomCargoForm> {
   final _name = TextEditingController();
+  final _nameFocus = FocusNode();
   final _qty = TextEditingController(text: '1');
   final _weight = TextEditingController();
   final _value = TextEditingController();
@@ -657,6 +659,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
 
   @override
   void dispose() {
+    _nameFocus.dispose();
     for (final c in [_name, _qty, _weight, _value, _l, _w, _h, _handling]) {
       c.dispose();
     }
@@ -843,7 +846,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFFECFDF5),
+            color: AppColors.swatchECFDF5,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFA7F3D0)),
           ),
@@ -863,37 +866,128 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
         ),
         const SizedBox(height: 10),
         _fieldLabel('What are you sending? *'),
-        TextField(
-          controller: _name,
-          maxLength: 120,
-          decoration: _decoration(widget.twoWheeler ? 'e.g. laptop bag, tiffin box' : 'e.g. clay pots, steel almirah')
-              .copyWith(counterText: ''),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            for (final g in widget.twoWheeler ? _kCommonGoodsBike : _kCommonGoodsTruck)
-              ActionChip(
-                label: Text(g, style: const TextStyle(fontSize: 11)),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => setState(() => _name.text = g),
+        // Quick picks open as a dropdown when the field is focused / typed into.
+        RawAutocomplete<String>(
+          textEditingController: _name,
+          focusNode: _nameFocus,
+          optionsBuilder: (TextEditingValue tev) {
+            final q = tev.text.trim().toLowerCase();
+            final all = widget.twoWheeler ? _kCommonGoodsBike : _kCommonGoodsTruck;
+            if (q.isEmpty) return all;
+            return all.where((g) => g.toLowerCase().contains(q));
+          },
+          onSelected: (g) => setState(() => _name.text = g),
+          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+            return TextField(
+              controller: controller,
+              focusNode: focusNode,
+              maxLength: 120,
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => onFieldSubmitted(),
+              decoration: _decoration(
+                widget.twoWheeler ? 'e.g. laptop bag, tiffin box' : 'Tap to choose or type…',
+              ).copyWith(
+                counterText: '',
+                suffixIcon: IconButton(
+                  tooltip: 'Suggestions',
+                  icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.textSecondary),
+                  onPressed: () {
+                    if (focusNode.hasFocus) {
+                      focusNode.unfocus();
+                    } else {
+                      focusNode.requestFocus();
+                    }
+                  },
+                ),
               ),
-          ],
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            final opts = options.toList(growable: false);
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: 220,
+                    maxWidth: MediaQuery.sizeOf(context).width - 64,
+                  ),
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: opts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final g = opts[i];
+                      return ListTile(
+                        dense: true,
+                        title: Text(g, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        onTap: () => onSelected(g),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 10),
         _fieldLabel(widget.twoWheeler ? 'How big is ONE parcel? * (max 20 kg)' : 'How big is ONE item? * (pick the closest)'),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+        // Equal-width stacked pills so every size option aligns cleanly.
+        Column(
           children: [
             for (final e in _presets.entries)
-              ChoiceChip(
-                label: Text(e.value.label, style: const TextStyle(fontSize: 11)),
-                selected: _size == e.key,
-                onSelected: (_) => _pickSize(e.key),
-                selectedColor: AppColors.navy.withValues(alpha: 0.15),
+              Padding(
+                padding: EdgeInsets.only(bottom: e.key == _presets.keys.last ? 0 : 6),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Material(
+                    color: _size == e.key
+                        ? AppColors.navy.withValues(alpha: 0.12)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    child: InkWell(
+                      onTap: () => _pickSize(e.key),
+                      borderRadius: BorderRadius.circular(22),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: _size == e.key ? AppColors.navy : AppColors.border,
+                            width: _size == e.key ? 1.4 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _size == e.key
+                                  ? Icons.check_circle_rounded
+                                  : Icons.circle_outlined,
+                              size: 16,
+                              color: _size == e.key ? AppColors.navy : AppColors.textHint,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                e.value.label,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: _size == e.key ? AppColors.navy : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
           ],
         ),
@@ -920,7 +1014,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
             padding: EdgeInsets.only(top: 4),
             child: Text(
               'One unit is 50 kg or more: it may need extra helpers. Use the loading-help option on this booking if it is offered.',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF92400E), height: 1.35),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.amber800, height: 1.35),
             ),
           ),
         const SizedBox(height: 10),
@@ -991,7 +1085,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text('Photo ready',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF047857))),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emerald700)),
                     ),
                     IconButton(
         tooltip: 'Delete',
@@ -999,7 +1093,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
                         _photo = null;
                         _photoData = null;
                       }),
-                      icon: const Icon(Icons.delete_outline, color: Color(0xFFE11D48), size: 20),
+                      icon: const Icon(Icons.delete_outline, color: AppColors.swatchE11D48, size: 20),
                     ),
                   ]),
                 )
@@ -1018,7 +1112,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.photo_camera_outlined, size: 18, color: Color(0xFF059669)),
+                        Icon(Icons.photo_camera_outlined, size: 18, color: AppColors.emerald600),
                         SizedBox(width: 8),
                         Text('Upload or snap photo of item', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                       ],
@@ -1065,7 +1159,7 @@ class _CustomCargoFormState extends State<_CustomCargoForm> {
           ),
         FilledButton(
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF059669),
+            backgroundColor: AppColors.emerald600,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           onPressed: _add,
@@ -1093,7 +1187,7 @@ class _CustomLineTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFECFDF5).withValues(alpha: 0.6),
+        color: AppColors.swatchECFDF5.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFF6EE7B7)),
       ),
@@ -1124,7 +1218,7 @@ class _CustomLineTile extends StatelessWidget {
         tooltip: 'Delete',
           onPressed: onRemove,
           visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFE11D48)),
+          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.swatchE11D48),
         ),
       ]),
     );
@@ -1420,9 +1514,19 @@ class GtPaymentMethodPicker extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(o.label,
-                              style: const TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w800)),
-                          Text(o.hint, style: _hintStyle),
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: value == o.id
+                                      ? AppColors.navy
+                                      : AppColors.textPrimary)),
+                          Text(
+                            o.hint,
+                            style: _hintStyle.copyWith(
+                              color: AppColors.textSecondary,
+                              fontSize: 11.5,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1460,13 +1564,13 @@ class _TotalWeightBar extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFECFDF5),
+        color: AppColors.swatchECFDF5,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFA7F3D0)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.scale_outlined, size: 16, color: Color(0xFF047857)),
+          const Icon(Icons.scale_outlined, size: 16, color: AppColors.emerald700),
           const SizedBox(width: 8),
           const Expanded(
             child: Text('Total weight', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF065F46))),
@@ -1497,12 +1601,9 @@ class _ItemList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(goodsItemsProvider(categoryId));
     return items.when(
-      loading: () => const Center(
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Center(child: PulseDot()),
       ),
       error: (e, _) => const Center(
         child: Padding(
@@ -1596,14 +1697,14 @@ class _ItemRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Icons.local_shipping_outlined,
-                    size: 13, color: Color(0xFFB91C1C)),
+                    size: 13, color: AppColors.red700),
                 const SizedBox(width: 4),
                 const Text(
                   'Requires truck',
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFFB91C1C),
+                    color: AppColors.red700,
                   ),
                 ),
               ],
@@ -1618,7 +1719,7 @@ class _ItemRow extends StatelessWidget {
               style: _hintStyle.copyWith(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF047857),
+                color: AppColors.emerald700,
               ),
             ),
           ],
@@ -1807,7 +1908,7 @@ class _FitmentBanner extends ConsumerWidget {
         : (ok ? AppColors.navy : AppColors.textSecondary);
     final bg = error
         ? const Color(0xFFFEF2F2)
-        : (ok ? Color(0xFFE8EDF7) : _kPanelBg);
+        : (ok ? AppColors.swatchE8EDF7 : _kPanelBg);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -1953,7 +2054,7 @@ class _GtGstEwaySectionState extends ConsumerState<GtGstEwaySection> {
 
     final ewayError = eway.isEmpty ? null : ewayBillError(eway, required: false);
     final ewayValid = eway.length == 12 && ewayError == null;
-    const amber = Color(0xFFB45309);
+    const amber = AppColors.amber700;
 
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2000,7 +2101,7 @@ class _GtGstEwaySectionState extends ConsumerState<GtGstEwaySection> {
           decoration: _decoration('1234 5678 9012').copyWith(
             errorText: ewayError,
             counterText: eway.isEmpty ? null : '${eway.length}/12',
-            suffixIcon: ewayValid ? const Icon(Icons.check_circle, size: 18, color: Color(0xFF15803D)) : null,
+            suffixIcon: ewayValid ? const Icon(Icons.check_circle, size: 18, color: AppColors.groceryGreen) : null,
           ),
           onChanged: (v) => ref.read(ewayBillNumberProvider.notifier).state = ewayDigits(v),
         ),
@@ -2016,7 +2117,7 @@ class _GtGstEwaySectionState extends ConsumerState<GtGstEwaySection> {
           decoration: _decoration('15-character GSTIN').copyWith(
             errorText: gstinError,
             counterText: gstin.isEmpty ? null : '${gstin.length}/15',
-            suffixIcon: gstinValid ? const Icon(Icons.check_circle, size: 18, color: Color(0xFF15803D)) : null,
+            suffixIcon: gstinValid ? const Icon(Icons.check_circle, size: 18, color: AppColors.groceryGreen) : null,
           ),
           onChanged: (v) => ref.read(customerGstinProvider.notifier).state = normalizeGstin(v),
         ),
@@ -2268,12 +2369,12 @@ class GtQuoteNotices extends ConsumerWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFB45309)),
+              const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.amber700),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   supplyMsg!,
-                  style: const TextStyle(fontSize: 11.5, color: Color(0xFFB45309), height: 1.4),
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.amber700, height: 1.4),
                 ),
               ),
             ],

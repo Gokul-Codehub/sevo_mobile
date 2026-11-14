@@ -116,4 +116,50 @@ abstract final class AppColors {
   /// Subtle card shadow color at 8% alpha — use with blurRadius 12–16.
   static const Color cardShadow = Color(0x14000000); // 8% black
   static const Color cardShadowStrong = Color(0x1F000000); // 12% black
+
+  // ── Exact colours that were repeated as literals across screens. Named here so there is one place to audit and
+  // change them. Values are unchanged; merge near-duplicates (for example the E3E8xx family) as a design decision. ──
+  static const Color amber200 = Color(0xFFFDE68A);
+  static const Color amber50 = Color(0xFFFFFBEB);
+  static const Color amber700 = Color(0xFFB45309);
+  static const Color amber800 = Color(0xFF92400E);
+  static const Color blue300 = Color(0xFF93C5FD);
+  static const Color blue900 = Color(0xFF1E3A8A);
+  static const Color emerald600 = Color(0xFF059669);
+  static const Color emerald700 = Color(0xFF047857);
+  static const Color gray400 = Color(0xFF9CA3AF);
+  static const Color gray700 = Color(0xFF374151);
+  static const Color gray800 = Color(0xFF1F2937);
+  static const Color gray900 = Color(0xFF111827);
+  static const Color green900 = Color(0xFF14532D);
+  static const Color red700 = Color(0xFFB91C1C);
+  static const Color red800 = Color(0xFFC62828);
+  static const Color slate600 = Color(0xFF475569);
+  static const Color swatch0B2337 = Color(0xFF0B2337);
+  static const Color swatch1A1A1A = Color(0xFF1A1A1A);
+  static const Color swatch1B7F4B = Color(0xFF1B7F4B);
+  static const Color swatch6B7280 = Color(0xFF6B7280);
+  static const Color swatch6B7788 = Color(0xFF6B7788);
+  static const Color swatch7C2D12 = Color(0xFF7C2D12);
+  static const Color swatchB26A00 = Color(0xFFB26A00);
+  static const Color swatchCFE6D8 = Color(0xFFCFE6D8);
+  static const Color swatchD5DAE1 = Color(0xFFD5DAE1);
+  static const Color swatchD5DCE8 = Color(0xFFD5DCE8);
+  static const Color swatchD6E3F0 = Color(0xFFD6E3F0);
+  static const Color swatchE11D48 = Color(0xFFE11D48);
+  static const Color swatchE3E8EE = Color(0xFFE3E8EE);
+  static const Color swatchE3E8F0 = Color(0xFFE3E8F0);
+  static const Color swatchE3F1E8 = Color(0xFFE3F1E8);
+  static const Color swatchE6ECF4 = Color(0xFFE6ECF4);
+  static const Color swatchE8ECF1 = Color(0xFFE8ECF1);
+  static const Color swatchE8EDF7 = Color(0xFFE8EDF7);
+  static const Color swatchECFDF5 = Color(0xFFECFDF5);
+  static const Color swatchEDF0F5 = Color(0xFFEDF0F5);
+  static const Color swatchEEF1F7 = Color(0xFFEEF1F7);
+  static const Color swatchF1F6FB = Color(0xFFF1F6FB);
+  static const Color swatchF3F6FC = Color(0xFFF3F6FC);
+  static const Color swatchF6F8FA = Color(0xFFF6F8FA);
+  static const Color swatchF7F9FC = Color(0xFFF7F9FC);
+  static const Color swatchF8F4EF = Color(0xFFF8F4EF);
+  static const Color swatchF9C93A = Color(0xFFF9C93A);
 }

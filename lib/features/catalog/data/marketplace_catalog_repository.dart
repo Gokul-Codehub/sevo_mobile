@@ -1,3 +1,4 @@
+import 'pack_label.dart';
 import 'package:decimal/decimal.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -354,7 +355,7 @@ class MarketplaceProduct {
       // `unit` ("g", "piece"), which on its own read as "1 g" on the cards.
       unit: (variantLabel != null && variantLabel!.isNotEmpty)
           ? variantLabel
-          : ((packSize != null && packSize!.isNotEmpty) ? packSize : unit),
+          : (groceryPackLabel(packSize, unit).isEmpty ? unit : groceryPackLabel(packSize, unit)),
       categoryName: categoryName,
       // Forced to contain "grocer" so ServiceItem.flowType always resolves
       // to CatalogFlowType.grocery regardless of this tree's own category

@@ -9,14 +9,18 @@ class OtpVerifyArgs extends Equatable {
     required this.identifier,
     required this.channel,
     this.resendAfterSeconds = 60,
+    this.signup = false,
   });
 
   final String identifier;
   final String channel;
   final int resendAfterSeconds;
 
+  /// True when the code being entered finishes a new-account signup (email + password), not a login.
+  final bool signup;
+
   @override
-  List<Object?> get props => [identifier, channel, resendAfterSeconds];
+  List<Object?> get props => [identifier, channel, resendAfterSeconds, signup];
 }
 
 /// Result returned by OTP verify — carries tokens + user + new-user flag.

@@ -339,9 +339,11 @@ class QuoteDecisionController extends Notifier<AsyncValue<void>> {
     required String decision,
     required int parentBookingId,
     String? reasonNotes,
+    bool termsAcknowledged = false,
+    String? reasonCode,
   }) async {
     state = const AsyncValue.loading();
-    final result = await _repo.decide(decisionToken, decision, reasonNotes: reasonNotes);
+    final result = await _repo.decide(decisionToken, decision, reasonNotes: reasonNotes, termsAcknowledged: termsAcknowledged, reasonCode: reasonCode);
     ref.invalidate(bookingDetailProvider(parentBookingId));
     ref.invalidate(myBookingsProvider);
     switch (result) {

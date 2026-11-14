@@ -1,3 +1,4 @@
+import '../../data/pack_label.dart';
 import 'dart:async';
 
 import 'package:decimal/decimal.dart';
@@ -22,8 +23,8 @@ const Color _cbHero = Color(0xFFF4F6F4);
 const Color _cbCream = Colors.white;
 /// Light page tint behind the whole screen (neutral light grey; cards stay white).
 const Color _cbPage = Color(0xFFF5F6F8);
-const Color _cbOfferYellow = Color(0xFFF9C93A);
-const Color _cbOfferOrange = Color(0xFFF59E0B);
+const Color _cbOfferYellow = AppColors.swatchF9C93A;
+const Color _cbOfferOrange = AppColors.warning;
 
 /// Full detail for one Seller Hub combo/bundle offer ("Basket"), laid out like
 /// the website's combo page: a photo gallery, a "Bundle deal" header, a fixed
@@ -169,10 +170,6 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
     final pct = basket.savingsPercentRounded;
     final itemCount = basket.slots.isNotEmpty ? basket.slots.length : basket.items.length;
     final meta = <({IconData icon, String text})>[
-      if (basket.sellerName.isNotEmpty)
-        (icon: Icons.storefront_outlined, text: 'Sold by ${basket.sellerName}'),
-      if (basket.warehouseName.isNotEmpty)
-        (icon: Icons.local_shipping_outlined, text: 'Ships from ${basket.warehouseName}'),
       if (itemCount > 0)
         (icon: Icons.layers_outlined, text: '$itemCount ${itemCount == 1 ? 'item' : 'items'} included'),
     ];
@@ -212,20 +209,20 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                           icon: Icons.local_offer_rounded,
                           label: 'BUNDLE DEAL',
                           fg: _cbGreen,
-                          bg: Color(0xFFE3F1E8),
+                          bg: AppColors.swatchE3F1E8,
                         ),
                         if (basket.isMultiOption)
                           const _Pill(
                             icon: Icons.tune_rounded,
                             label: 'Customizable',
-                            fg: Color(0xFFB45309),
+                            fg: AppColors.amber700,
                             bg: AppColors.warningLight,
                           ),
                         if (!basket.inStock)
                           const _Pill(
                             icon: Icons.remove_shopping_cart_outlined,
                             label: 'Out of stock',
-                            fg: Color(0xFFB91C1C),
+                            fg: AppColors.red700,
                             bg: AppColors.errorLight,
                           ),
                       ],
@@ -328,7 +325,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              "Combo items are added to your cart at their own regular prices — the combo total above is Seller Hub's reference price for this offer.",
+                              "Combo items are added to your cart at their own regular prices — the combo total above is our reference price for this offer.",
                               style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
                             ),
                           ),
@@ -393,7 +390,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
                       end: Alignment.bottomCenter,
                       colors: basket.inStock
                           ? const [Color(0xFF1E8A4C), Color(0xFF0B5A2C)]
-                          : const [Color(0xFF9CA3AF), Color(0xFF6B7280)],
+                          : const [AppColors.gray400, AppColors.swatch6B7280],
                     ),
                   ),
                   alignment: Alignment.center,
@@ -566,7 +563,7 @@ class _ComboGalleryState extends State<_ComboGallery> {
                         ),
                         child: Text(
                           'SAVE ${widget.savePercent}%',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.gray800),
                         ),
                       ),
                     ),
@@ -652,7 +649,7 @@ class _StatStrip extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < cells.length; i++) ...[
-            if (i > 0) Container(width: 1, height: 30, color: const Color(0xFFE3E8F0)),
+            if (i > 0) Container(width: 1, height: 30, color: AppColors.swatchE3E8F0),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -667,7 +664,7 @@ class _StatStrip extends StatelessWidget {
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _cbGreen),
                     ),
                     const SizedBox(height: 3),
-                    Text(cells[i].label, style: const TextStyle(fontSize: 11.5, color: Color(0xFF6B7788))),
+                    Text(cells[i].label, style: const TextStyle(fontSize: 11.5, color: AppColors.swatch6B7788)),
                   ],
                 ),
               ),
@@ -722,7 +719,7 @@ class _WhatsInside extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE3F1E8),
+                    color: AppColors.swatchE3F1E8,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
@@ -849,7 +846,7 @@ class _SlotCard extends StatelessWidget {
               if (multi)
                 _MiniChip(
                   text: 'Choose 1 of ${slot.options.length}',
-                  bg: const Color(0xFFE3F1E8),
+                  bg: AppColors.swatchE3F1E8,
                   fg: _cbGreen,
                 ),
               const SizedBox(width: 6),
@@ -914,7 +911,7 @@ class _OptionTile extends StatelessWidget {
     final out = !option.inStock;
     final sub = [
       if (option.brand.isNotEmpty) option.brand,
-      if (option.packSize.isNotEmpty) option.packSize else if (option.unit.isNotEmpty) option.unit,
+      if (groceryPackLabel(option.packSize, option.unit).isNotEmpty) groceryPackLabel(option.packSize, option.unit),
     ].join(' • ');
     final selling = option.sellingPrice;
     final mrp = option.mrp;
@@ -930,7 +927,7 @@ class _OptionTile extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: selectable && selected ? Color(0xFFE3F1E8) : Colors.white,
+            color: selectable && selected ? AppColors.swatchE3F1E8 : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selectable && selected ? _cbGreen : AppColors.border,
@@ -1043,7 +1040,7 @@ class _FixedItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sub = [
-      if (item.packSize.isNotEmpty) item.packSize else if (item.unit.isNotEmpty) item.unit,
+      if (groceryPackLabel(item.packSize, item.unit).isNotEmpty) groceryPackLabel(item.packSize, item.unit),
     ].join();
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
