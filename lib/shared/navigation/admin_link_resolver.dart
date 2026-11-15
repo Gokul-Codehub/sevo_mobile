@@ -51,9 +51,13 @@ String resolveAdminCategoryLinkRoute(String link, String slug) {
 /// file it understands the website's own paths (via [resolveWebLink]):
 /// `/vegetables`, `/marketplace/combo/<id>`, `/booking/services?category=…`,
 /// `/trucks/…`, `/bookings` and so on. `#`, empty and unknown values go to
-/// [fallbackPath].
+/// [fallbackPath]; `#none` / `#NA` / `none` do nothing.
 void handleAdminLinkTap(BuildContext context, String? rawLink, {required String fallbackPath}) {
   var link = rawLink?.trim() ?? '';
+  // "No link": a banner that is only a picture. Type #none (or #NA, none, na, no-link) in the admin link field
+  // and tapping it does nothing, instead of opening the fallback screen.
+  const noLink = {'#none', '#na', '#nolink', 'none', 'na', 'n/a', 'no-link', 'nolink'};
+  if (noLink.contains(link.toLowerCase())) return;
   if (link == '#') link = '';
   if (link.isNotEmpty) {
     final categoryMatch = RegExp(r'category=([\w-]+)').firstMatch(link);
