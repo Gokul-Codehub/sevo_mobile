@@ -2,7 +2,7 @@ name: calservices_customer
 description: "SevoNiq Customer - Professional home services booking app"
 publish_to: 'none'
 
-version: 1.1.0+13
+version: 1.1.1+14
 
 environment:
   sdk: ^3.13.1
