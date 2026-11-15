@@ -88,9 +88,42 @@ class PickupLocation {
 /// Whether the cart can be collected (needs every item from one Sevo warehouse) and where.
 /// What the server says these items cost, and whether every line is still available.
 class MarketplaceQuote {
-  const MarketplaceQuote({required this.total, required this.valid});
+  const MarketplaceQuote({
+    required this.total,
+    required this.valid,
+    this.discount,
+    this.couponCode = '',
+    this.couponsEnabled = false,
+    this.message = '',
+  });
+
+  /// What the customer pays (already reduced by [discount] when a coupon applies).
   final Decimal total;
   final bool valid;
+
+  /// Coupon discount worked out BY THE SERVER (`discount_amount`). The app never calculates one itself.
+  final Decimal? discount;
+  final String couponCode;
+
+  /// True only when the server supports coupons on grocery orders (`coupons_enabled`). Until then the cart hides
+  /// the Apply Coupon row.
+  final bool couponsEnabled;
+  final String message;
+
+  Decimal get discountOrZero => discount ?? Decimal.zero;
+
+  static MarketplaceQuote? fromData(Map data) {
+    final total = Decimal.tryParse((data['total'] ?? '').toString());
+    if (total == null) return null;
+    return MarketplaceQuote(
+      total: total,
+      valid: data['valid'] == true,
+      discount: Decimal.tryParse((data['discount_amount'] ?? '').toString()),
+      couponCode: (data['coupon_code'] ?? '').toString(),
+      couponsEnabled: data['coupons_enabled'] == true,
+      message: (data['coupon_message'] ?? data['message'] ?? '').toString(),
+    );
+  }
 }
 
 class PickupAvailability {
@@ -376,7 +409,11 @@ class MarketplaceCheckout {
     this.slotStart,
     this.slotEnd,
     this.takeaway = false,
+    this.couponCode,
   });
+
+  /// Coupon the customer applied. The server checks it again and works out the discount.
+  final String? couponCode;
 
   /// Take Away: the customer collects at the warehouse (no address, slot or rider).
   final bool takeaway;
@@ -414,6 +451,7 @@ class MarketplaceCheckout {
         'fulfilment_type': 'STORE_PICKUP',
         'delivery_type': 'TAKEAWAY',
         'delivery_slot': 'Take Away',
+        if ((couponCode ?? '').isNotEmpty) 'coupon_code': couponCode,
         if (_six(lat) != null) 'delivery_latitude': _six(lat),
         if (_six(lng) != null) 'delivery_longitude': _six(lng),
       };
@@ -428,6 +466,7 @@ class MarketplaceCheckout {
       'fulfilment_type': 'DELIVERY',
       'delivery_type': instant ? 'FAST' : 'SLOT',
       'delivery_slot': instant ? 'Immediate' : (slotLabel ?? ''),
+      if ((couponCode ?? '').isNotEmpty) 'coupon_code': couponCode,
       if (scheduled && slotId != null) 'delivery_slot_id': slotId,
       if (scheduled) 'delivery_date': slotDate,
       if (scheduled && slotStart != null) 'delivery_slot_start': _iso(slotDate!, slotStart!),
@@ -473,22 +512,46 @@ class GroceryOrdersRepository {
 
   /// The server's price for these items right now (`POST /api/carts/marketplace/quote/`). Does not touch the saved
   /// cart. Returns null when the quote could not be fetched, in which case the order simply goes ahead as before.
-  Future<MarketplaceQuote?> quote(List<CartItem> items) async {
+  Future<MarketplaceQuote?> quote(List<CartItem> items, {String? couponCode}) async {
     final entries = marketplaceCartEntries(items);
     if (entries.isEmpty) return null;
     try {
       final response = await api.post(
         '/carts/marketplace/quote/',
-        data: {'items': [for (final e in entries) e.toJson()]},
+        data: {
+          'items': [for (final e in entries) e.toJson()],
+          if ((couponCode ?? '').isNotEmpty) 'coupon_code': couponCode,
+        },
       );
       final body = response.data;
       final data = body is Map ? body['data'] : null;
       if (data is! Map) return null;
-      final total = Decimal.tryParse((data['total'] ?? '').toString());
-      if (total == null) return null;
-      return MarketplaceQuote(total: total, valid: data['valid'] == true);
+      return MarketplaceQuote.fromData(data);
     } on Exception {
       return null;
+    }
+  }
+
+  /// Asks the server to apply [code] to these items. The server decides whether the coupon is valid and how much it
+  /// takes off; a refusal comes back as a [Failure] carrying the server's own message.
+  Future<Result<MarketplaceQuote>> applyCoupon(List<CartItem> items, String code) async {
+    final entries = marketplaceCartEntries(items);
+    if (entries.isEmpty) return const Failure(ValidationError('Your cart has nothing that can be ordered.'));
+    try {
+      final response = await api.post(
+        '/carts/marketplace/quote/',
+        data: {
+          'items': [for (final e in entries) e.toJson()],
+          'coupon_code': code.trim(),
+        },
+      );
+      return ResponseNormalizer.extract(response, (data) {
+        final q = data is Map ? MarketplaceQuote.fromData(data) : null;
+        if (q == null) throw const ParseError();
+        return q;
+      });
+    } on Exception catch (e) {
+      return Failure(_err(e));
     }
   }
 

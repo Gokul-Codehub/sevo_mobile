@@ -40,6 +40,16 @@ import '../../../../shared/utils/focus_first_error.dart';
 import '../../../../shared/utils/date_utils.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
 
+/// True when the server supports coupons on grocery orders (its price quote says `coupons_enabled`). Until then the
+/// cart does not show the Apply Coupon row, so customers never meet a coupon box that cannot work.
+final _groceryCouponsEnabledProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final hasGroceries = ref.watch(cartProvider.select((s) => marketplaceLines(s).isNotEmpty));
+  if (!hasGroceries) return false;
+  final items = marketplaceLines(ref.read(cartProvider));
+  final q = await ref.read(groceryOrdersRepositoryProvider).quote(items);
+  return q?.couponsEnabled ?? false;
+});
+
 /// Added 2026-10-06 per explicit request ("Before checkout ask the user
 /// to select the delivery option below [Quick delivery, Slot booking
 /// (every day 6pm to 8pm)]"): the two delivery-timing choices a grocery
@@ -251,6 +261,11 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   // backend which coupon was used.
   String? _appliedCouponCode;
   int _couponDiscountAmount = 0;
+  // Grocery (Seller Hub) coupon: the code the customer typed and the discount THE SERVER worked out for it. The app
+  // only shows these; it never calculates a discount itself.
+  String? _mktCouponCode;
+  Decimal _mktDiscount = Decimal.zero;
+  String? _mktCouponSig; // cart subtotal when the coupon was applied; a changed cart drops the coupon
   // Null until the customer actually picks one — Proceed to Pay opens the
   // picker instead of placing the order whenever this is still null, so a
   // delivery option is always explicitly chosen before checkout, never
@@ -432,12 +447,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     }
     // Show the customer the server's price BEFORE anything is charged: if it differs from what the cart displays (a seller
     // changed a price, an item sold out), refresh the cart and ask them to confirm instead of charging a different amount.
-    final quote = await ref.read(groceryOrdersRepositoryProvider).quote(items);
+    final quote = await ref.read(groceryOrdersRepositoryProvider).quote(items, couponCode: _mktCouponCode);
     if (!context.mounted) return;
     if (quote != null) {
       final onlySingles = items.every((i) => i.comboKey == null);
       final shown = ref.read(cartSummaryProvider).subtotal;
-      final priceChanged = onlySingles && (quote.total - shown).abs() >= Decimal.parse('0.5');
+      // The server's total already has the coupon taken off, so add it back to compare with the cart's item total.
+      final priceChanged = onlySingles && (quote.total + quote.discountOrZero - shown).abs() >= Decimal.parse('0.5');
       if (!quote.valid || priceChanged) {
         await refreshMarketplaceCart(ref);
         if (!context.mounted) return;
@@ -449,6 +465,22 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
           type: AppToastType.error,
         );
         return;
+      }
+      if (_mktCouponCode != null) {
+        if (quote.discountOrZero <= Decimal.zero) {
+          setState(_clearGroceryCoupon);
+          AppToast.show(
+            context,
+            quote.message.isNotEmpty ? quote.message : 'Your coupon is no longer valid. Your total has been updated.',
+            type: AppToastType.error,
+          );
+          return;
+        }
+        if ((quote.discountOrZero - _mktDiscount).abs() >= Decimal.parse('0.5')) {
+          setState(() => _mktDiscount = quote.discountOrZero);
+          AppToast.show(context, 'Your discount changed to ₹${quote.discountOrZero}. Please check your total and place the order again.', type: AppToastType.error);
+          return;
+        }
       }
     }
     final instant = _deliveryOption == _DeliveryOption.quick;
@@ -471,6 +503,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             slotStart: slot?.startTime,
             slotEnd: slot?.endTime,
             idempotencyKey: _orderKey!,
+            couponCode: _mktCouponCode,
           );
     final repo = ref.read(groceryOrdersRepositoryProvider);
     final result = online
@@ -480,6 +513,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     switch (result) {
       case Success(:final data):
         _orderKey = null;
+        _clearGroceryCoupon();
         ref.read(cartProvider.notifier).removeMarketplaceLines();
         ref.invalidate(groceryOrdersProvider);
         AppToast.show(context, online ? 'Payment received. Order placed!' : (takeaway ? 'Order placed! Pay in cash when you pick it up.' : 'Order placed! Pay in cash on delivery.'), type: AppToastType.success);
@@ -576,8 +610,107 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   /// `createBooking` in [_handlePlaceOrder] derive the discounted figure
   /// from, so the two can never drift apart.
   Decimal _effectiveGrandTotal(CartSummary summary) {
-    final discount = Decimal.fromInt(_couponDiscountAmount);
+    final discount = Decimal.fromInt(_couponDiscountAmount) + _mktDiscount;
     return summary.total > discount ? summary.total - discount : Decimal.zero;
+  }
+
+  void _clearGroceryCoupon() {
+    _mktCouponCode = null;
+    _mktDiscount = Decimal.zero;
+    _mktCouponSig = null;
+  }
+
+  /// Asks for a code, lets the SERVER check it against the cart, and keeps the discount it returns.
+  Future<void> _openGroceryCouponSheet(List<CartItem> items) async {
+    final controller = TextEditingController(text: _mktCouponCode ?? '');
+    String? errorText;
+    var busy = false;
+    final applied = await showModalBottomSheet<MarketplaceQuote>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          Future<void> apply() async {
+            final code = controller.text.trim();
+            if (code.isEmpty) {
+              setSheet(() => errorText = 'Enter a coupon code');
+              return;
+            }
+            setSheet(() {
+              busy = true;
+              errorText = null;
+            });
+            final result = await ref.read(groceryOrdersRepositoryProvider).applyCoupon(items, code);
+            switch (result) {
+              case Success(:final data):
+                if (data.discountOrZero > Decimal.zero) {
+                  if (sheetCtx.mounted) Navigator.of(sheetCtx).pop(data);
+                  return;
+                }
+                setSheet(() {
+                  busy = false;
+                  errorText = data.message.isNotEmpty ? data.message : "This coupon can't be used on this cart.";
+                });
+              case Failure(:final error):
+                setSheet(() {
+                  busy = false;
+                  errorText = ErrorManager.present(error).body;
+                });
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 18, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Apply coupon', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => busy ? null : apply(),
+                  decoration: InputDecoration(
+                    hintText: 'Enter coupon code',
+                    errorText: errorText,
+                    prefixIcon: const Icon(Icons.local_offer_outlined),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: busy ? null : apply,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.groceryGreen,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: busy
+                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Apply', style: TextStyle(fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (applied == null || !mounted) return;
+    setState(() {
+      _mktCouponCode = applied.couponCode.isNotEmpty ? applied.couponCode : controller.text.trim().toUpperCase();
+      _mktDiscount = applied.discountOrZero;
+      _mktCouponSig = ref.read(cartSummaryProvider).subtotal.toString();
+    });
+    AppToast.show(context, 'Coupon applied! You save ₹${applied.discountOrZero}');
   }
 
   @override
@@ -586,6 +719,12 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     // is not part of a grocery order.
     final cartItems = marketplaceLines(ref.watch(cartProvider));
     final cartSummary = ref.watch(cartSummaryProvider);
+    // A changed cart invalidates a coupon the server priced for the old one.
+    if (_mktCouponCode != null && _mktCouponSig != cartSummary.subtotal.toString()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(_clearGroceryCoupon);
+      });
+    }
     // Seller Hub carts are charged exactly the items (no fees, no coupon), so those rows and the free-delivery
     // progress card are not shown.
     final mkt = cartItems.isNotEmpty;
@@ -1642,6 +1781,53 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         ],
                       ),
                     ),
+                  if (mkt && ((ref.watch(_groceryCouponsEnabledProvider).valueOrNull ?? false) || _mktCouponCode != null)) ...[
+                    InkWell(
+                      onTap: () => _openGroceryCouponSheet(cartItems),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.local_offer_outlined,
+                                size: 15, color: _mktCouponCode != null ? AppColors.groceryGreen : AppColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _mktCouponCode != null ? 'Coupon: $_mktCouponCode' : 'Apply Coupon / Promo Code',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: _mktCouponCode != null ? AppColors.groceryGreen : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            if (_mktCouponCode != null)
+                              GestureDetector(
+                                onTap: () => setState(_clearGroceryCoupon),
+                                child: const Text('Remove',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.error)),
+                              )
+                            else
+                              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textSecondary),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_mktDiscount > Decimal.zero) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Coupon Discount ($_mktCouponCode)',
+                              style: const TextStyle(fontSize: 12, color: AppColors.groceryGreen, fontWeight: FontWeight.w600)),
+                          Text('-₹$_mktDiscount',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.groceryGreen)),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                  ],
                   if (!mkt) ...[
                   // Delivery charge
                   Row(
