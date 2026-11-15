@@ -477,6 +477,91 @@ class MarketplaceCheckout {
   }
 }
 
+/// One coupon the customer can see in the cart's "Available coupons" list (`GET /orders/marketplace/coupons/available/`).
+/// [applicable] says whether the server accepts it on the cart right now; when not, [message] says why.
+class AvailableCoupon {
+  const AvailableCoupon({
+    required this.code,
+    this.description = '',
+    this.discountType = 'percent',
+    this.discountValue = '',
+    this.minOrderAmount = '',
+    this.maxDiscountAmount = '',
+    this.validUntil,
+    this.applicable = false,
+    this.discountAmount = '',
+    this.message = '',
+  });
+
+  final String code;
+  final String description;
+  final String discountType;
+  final String discountValue;
+  final String minOrderAmount;
+  final String maxDiscountAmount;
+  final DateTime? validUntil;
+  final bool applicable;
+  final String discountAmount;
+  final String message;
+
+  static String trimNumber(String v) {
+    final d = double.tryParse(v);
+    if (d == null) return v;
+    return d == d.roundToDouble() ? d.toInt().toString() : d.toStringAsFixed(2);
+  }
+
+  /// "10% OFF" or "₹50 OFF".
+  String get headline => discountType == 'percent' ? '${trimNumber(discountValue)}% OFF' : '₹${trimNumber(discountValue)} OFF';
+
+  static AvailableCoupon? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final code = (raw['code'] ?? '').toString().trim();
+    if (code.isEmpty) return null;
+    String s(String k) => (raw[k] ?? '').toString();
+    return AvailableCoupon(
+      code: code,
+      description: s('description'),
+      discountType: s('discount_type').isEmpty ? 'percent' : s('discount_type'),
+      discountValue: s('discount_value'),
+      minOrderAmount: s('min_order_amount'),
+      maxDiscountAmount: s('max_discount_amount'),
+      validUntil: DateTime.tryParse(s('valid_until'))?.toLocal(),
+      applicable: raw['applicable'] == true,
+      discountAmount: s('discount_amount'),
+      message: s('message'),
+    );
+  }
+}
+
+/// Fast Delivery / Take Away operating hours, set by the super admin in the Seller Hub Store Profile
+/// (`GET /orders/marketplace/operating-hours/`). Slot Delivery is never limited by these hours.
+class StoreHours {
+  const StoreHours({
+    this.configured = false,
+    this.openNow = true,
+    this.openingLabel = '',
+    this.closingLabel = '',
+  });
+
+  final bool configured;
+  final bool openNow;
+  final String openingLabel;
+  final String closingLabel;
+
+  /// True when Fast Delivery and Take Away must be switched off right now.
+  bool get closed => configured && !openNow;
+
+  static StoreHours? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    return StoreHours(
+      configured: raw['configured'] == true,
+      openNow: raw['open_now'] != false,
+      openingLabel: (raw['opening_label'] ?? '').toString(),
+      closingLabel: (raw['closing_label'] ?? '').toString(),
+    );
+  }
+}
+
 class GroceryOrdersRepository {
   GroceryOrdersRepository({required this.api});
   final ApiClient api;
@@ -529,6 +614,39 @@ class GroceryOrdersRepository {
       return MarketplaceQuote.fromData(data);
     } on Exception {
       return null;
+    }
+  }
+
+  /// The Fast Delivery / Take Away hours; null when they could not be fetched (then nothing is switched off).
+  Future<StoreHours?> operatingHours() async {
+    try {
+      final response = await api.get('/orders/marketplace/operating-hours/');
+      final result = ResponseNormalizer.extract(response, (data) {
+        final h = StoreHours.tryParse(data);
+        if (h == null) throw const ParseError();
+        return h;
+      });
+      return result is Success<StoreHours> ? result.data : null;
+    } on Exception {
+      return null;
+    }
+  }
+
+  /// The coupons to show in the cart's list, each marked with whether it works on these items. The cart is put on the
+  /// server first because the server judges the saved cart.
+  Future<Result<List<AvailableCoupon>>> availableCoupons(List<CartItem> items) async {
+    final entries = marketplaceCartEntries(items);
+    if (entries.isEmpty) return const Failure(ValidationError('Your cart has nothing that can be ordered.'));
+    try {
+      await _putCartOnServer(entries);
+      final response = await api.get('/orders/marketplace/coupons/available/');
+      return ResponseNormalizer.extract(response, (data) {
+        final m = data is Map ? data : const {};
+        final list = m['coupons'] is List ? m['coupons'] as List : const [];
+        return [for (final c in list) ?AvailableCoupon.tryParse(c)];
+      });
+    } on Exception catch (e) {
+      return Failure(_err(e));
     }
   }
 
@@ -791,6 +909,11 @@ class GroceryOrdersRepository {
 }
 
 final groceryOrdersRepositoryProvider = Provider<GroceryOrdersRepository>((ref) => GroceryOrdersRepository(api: ref.watch(apiClientProvider)));
+
+/// Fetched each time the cart opens; null (unknown) leaves every delivery mode available.
+final storeHoursProvider = FutureProvider.autoDispose<StoreHours?>(
+  (ref) => ref.read(groceryOrdersRepositoryProvider).operatingHours(),
+);
 
 final groceryOrdersProvider = FutureProvider.autoDispose<List<GroceryOrder>>((ref) async {
   final r = await ref.watch(groceryOrdersRepositoryProvider).myOrders();

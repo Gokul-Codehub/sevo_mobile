@@ -1963,6 +1963,10 @@ class GtOptionsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loadingHelp = ref.watch(loadingHelpProvider);
     final ptl = ref.watch(ptlModeProvider);
+    final helpRate = ref.watch(selectedLogisticsTierProvider)?.loadingUnloadingCharge ?? 0;
+    final helpPrice = helpRate > 0
+        ? ' (+₹${helpRate.toStringAsFixed(helpRate == helpRate.roundToDouble() ? 0 : 2)})'
+        : '';
 
     return _card(
       Column(
@@ -1972,7 +1976,7 @@ class GtOptionsSection extends ConsumerWidget {
             SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
               dense: true,
-              title: const Text('Loading help', style: _titleStyle),
+              title: Text('Loading help$helpPrice', style: _titleStyle),
               subtitle: const Text(
                 'The driver helps load and unload your goods. Turn off if you '
                 'will handle loading yourself.',

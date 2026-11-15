@@ -40,16 +40,6 @@ import '../../../../shared/utils/focus_first_error.dart';
 import '../../../../shared/utils/date_utils.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
 
-/// True when the server supports coupons on grocery orders (its price quote says `coupons_enabled`). Until then the
-/// cart does not show the Apply Coupon row, so customers never meet a coupon box that cannot work.
-final _groceryCouponsEnabledProvider = FutureProvider.autoDispose<bool>((ref) async {
-  final hasGroceries = ref.watch(cartProvider.select((s) => marketplaceLines(s).isNotEmpty));
-  if (!hasGroceries) return false;
-  final items = marketplaceLines(ref.read(cartProvider));
-  final q = await ref.read(groceryOrdersRepositoryProvider).quote(items);
-  return q?.couponsEnabled ?? false;
-});
-
 /// Added 2026-10-06 per explicit request ("Before checkout ask the user
 /// to select the delivery option below [Quick delivery, Slot booking
 /// (every day 6pm to 8pm)]"): the two delivery-timing choices a grocery
@@ -620,11 +610,93 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     _mktCouponSig = null;
   }
 
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  Widget _couponTile(AvailableCoupon c, {required bool busy, required VoidCallback onApply}) {
+    final details = <String>[
+      if ((double.tryParse(c.minOrderAmount) ?? 0) > 0) 'Minimum order ₹${AvailableCoupon.trimNumber(c.minOrderAmount)}',
+      if ((double.tryParse(c.maxDiscountAmount) ?? 0) > 0) 'Maximum discount ₹${AvailableCoupon.trimNumber(c.maxDiscountAmount)}',
+      if (c.validUntil != null) 'Valid until ${c.validUntil!.day} ${_months[c.validUntil!.month - 1]} ${c.validUntil!.year}',
+    ];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.applicable ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.applicable ? AppColors.groceryGreen.withValues(alpha: 0.4) : const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.groceryGreen),
+                      ),
+                      child: Text(c.code,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.groceryGreenDark)),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(c.headline, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                    if (c.description.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(c.description, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              TextButton(
+                onPressed: (c.applicable && !busy) ? onApply : null,
+                style: TextButton.styleFrom(
+                  backgroundColor: c.applicable ? AppColors.groceryGreen : const Color(0xFFE2E8F0),
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: const Color(0xFF94A3B8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
+            ],
+          ),
+          if (details.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            for (final d in details)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text('•  $d', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              ),
+          ],
+          const SizedBox(height: 4),
+          if (c.applicable && (double.tryParse(c.discountAmount) ?? 0) > 0)
+            Text('You save ₹${AvailableCoupon.trimNumber(c.discountAmount)} on this order',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.groceryGreenDark))
+          else if (!c.applicable && c.message.isNotEmpty)
+            Text(c.message, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFFB45309))),
+        ],
+      ),
+    );
+  }
+
   /// Asks for a code, lets the SERVER check it against the cart, and keeps the discount it returns.
   Future<void> _openGroceryCouponSheet(List<CartItem> items) async {
     final controller = TextEditingController(text: _mktCouponCode ?? '');
     String? errorText;
     var busy = false;
+    final couponsFuture = ref.read(groceryOrdersRepositoryProvider).availableCoupons(items);
     final applied = await showModalBottomSheet<MarketplaceQuote>(
       context: context,
       isScrollControlled: true,
@@ -632,7 +704,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (sheetCtx) => StatefulBuilder(
         builder: (ctx, setSheet) {
-          Future<void> apply() async {
+          Future<void> apply([String? codeArg]) async {
+            if (codeArg != null) controller.text = codeArg;
             final code = controller.text.trim();
             if (code.isEmpty) {
               setSheet(() => errorText = 'Enter a coupon code');
@@ -663,6 +736,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
           return Padding(
             padding: EdgeInsets.fromLTRB(20, 18, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+            child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -686,7 +760,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: busy ? null : apply,
+                    onPressed: busy ? null : () => apply(),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.groceryGreen,
                       foregroundColor: Colors.white,
@@ -698,7 +772,34 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         : const Text('Apply', style: TextStyle(fontWeight: FontWeight.w800)),
                   ),
                 ),
+                const SizedBox(height: 18),
+                const Text('Available coupons',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                const SizedBox(height: 10),
+                FutureBuilder<Result<List<AvailableCoupon>>>(
+                  future: couponsFuture,
+                  builder: (_, snap) {
+                    if (snap.connectionState != ConnectionState.done) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 18),
+                        child: Center(child: SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+                      );
+                    }
+                    final result = snap.data;
+                    final list = result is Success<List<AvailableCoupon>> ? result.data : const <AvailableCoupon>[];
+                    if (list.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text('No coupons are available right now.', style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                      );
+                    }
+                    return Column(
+                      children: [for (final c in list) _couponTile(c, busy: busy, onApply: () => apply(c.code))],
+                    );
+                  },
+                ),
               ],
+            ),
             ),
           );
         },
@@ -1781,7 +1882,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         ],
                       ),
                     ),
-                  if (mkt && ((ref.watch(_groceryCouponsEnabledProvider).valueOrNull ?? false) || _mktCouponCode != null)) ...[
+                  if (mkt) ...[
                     InkWell(
                       onTap: () => _openGroceryCouponSheet(cartItems),
                       borderRadius: BorderRadius.circular(6),
@@ -2321,20 +2422,39 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 ? _DeliveryMode.schedule
                 : null;
 
+    // Fast Delivery and Take Away only run inside the operating hours the super admin sets in the Store Profile.
+    // Outside them they are greyed out and the customer picks Slot Delivery.
+    final hours = ref.watch(storeHoursProvider).valueOrNull;
+    final hoursClosed = hours?.closed ?? false;
+    if (hoursClosed && (_deliveryOption == _DeliveryOption.quick || _isTakeaway)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _deliveryOption = _DeliveryOption.scheduled;
+          _selectedSlot = null;
+          _takeawayConfirmed = false;
+          _inlineSlotDate ??= dates.first;
+        });
+      });
+    }
+
     Widget modeChip({
       required _DeliveryMode value,
       required IconData icon,
       required String title,
       required String subtitle,
       required VoidCallback onTap,
+      bool enabled = true,
     }) {
       final selected = mode == value;
       return Expanded(
-        child: Material(
+        child: Opacity(
+          opacity: enabled ? 1 : 0.5,
+          child: Material(
           color: selected ? AppColors.groceryGreen : const Color(0xFFF3F5F9),
           borderRadius: BorderRadius.circular(14),
           child: InkWell(
-            onTap: onTap,
+            onTap: enabled ? onTap : null,
             borderRadius: BorderRadius.circular(14),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
@@ -2375,6 +2495,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             ),
           ),
         ),
+        ),
       );
     }
 
@@ -2407,7 +2528,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 value: _DeliveryMode.instant,
                 icon: Icons.bolt_rounded,
                 title: 'Instant',
-                subtitle: 'Deliver now (~30-45 mins)',
+                subtitle: hoursClosed ? 'Opens at ${hours!.openingLabel}' : 'Deliver now (~30-45 mins)',
+                enabled: !hoursClosed,
                 onTap: () => setState(() {
                   _deliveryOption = _DeliveryOption.quick;
                   _selectedSlot = null;
@@ -2430,13 +2552,31 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                 value: _DeliveryMode.takeaway,
                 icon: Icons.storefront_rounded,
                 title: 'Take Away',
-                subtitle: 'Collect at warehouse',
+                subtitle: hoursClosed ? 'Opens at ${hours!.openingLabel}' : 'Collect at warehouse',
+                enabled: !hoursClosed,
                 onTap: () {
                   _selectTakeaway();
                 },
               ),
             ],
           ),
+          if (hoursClosed) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Text(
+                'Instant delivery and Take Away are available ${hours!.openingLabel} - ${hours.closingLabel}. '
+                'You can schedule your order now with a time slot.',
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF92400E), height: 1.3),
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           if (mode == _DeliveryMode.instant)
             Container(

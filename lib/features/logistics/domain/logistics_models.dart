@@ -191,7 +191,11 @@ class LogisticsTier extends Equatable {
     this.extraHelperCharge = 0,
     this.maxExtraHelpers = 0,
     this.carryChargePerFloor = 0,
+    this.loadingUnloadingCharge = 0,
   });
+
+  /// Rs for the optional loading & unloading help on this vehicle (0 = not offered).
+  final double loadingUnloadingCharge;
 
   /// Mini Truck carrying assistance, priced by the server from rates the Admin sets on this vehicle:
   /// ₹ per extra helper (up to [maxExtraHelpers]) and ₹ per floor carried by stairs. 0 = not offered.
@@ -281,6 +285,7 @@ class LogisticsTier extends Equatable {
       extraHelperCharge: parseDoubleOrNull(json['extra_helper_charge']) ?? 0,
       maxExtraHelpers: parseInt(json['max_extra_helpers']),
       carryChargePerFloor: parseDoubleOrNull(json['carry_charge_per_floor']) ?? 0,
+      loadingUnloadingCharge: parseDoubleOrNull(json['loading_unloading_charge']) ?? 0,
     );
   }
 
@@ -311,6 +316,7 @@ class LogisticsTier extends Equatable {
         extraHelperCharge,
         maxExtraHelpers,
         carryChargePerFloor,
+        loadingUnloadingCharge,
       ];
 }
 
