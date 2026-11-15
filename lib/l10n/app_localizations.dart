@@ -121,7 +121,7 @@ abstract class AppLocalizations {
   /// No description provided for @maintenanceTitleDefault.
   ///
   /// In en, this message translates to:
-  /// **'We are upgrading SEVO'**
+  /// **'We are upgrading SevoNiq'**
   String get maintenanceTitleDefault;
 
   /// No description provided for @maintenanceMessageDefault.
@@ -169,7 +169,7 @@ abstract class AppLocalizations {
   /// No description provided for @serverUnreachable.
   ///
   /// In en, this message translates to:
-  /// **'We could not reach SEVO. Retrying...'**
+  /// **'We could not reach SevoNiq. Retrying...'**
   String get serverUnreachable;
 
   /// No description provided for @permContinue.
@@ -211,7 +211,7 @@ abstract class AppLocalizations {
   /// No description provided for @devicesIntro.
   ///
   /// In en, this message translates to:
-  /// **'These phones are signed in to your SEVO account.'**
+  /// **'These phones are signed in to your SevoNiq account.'**
   String get devicesIntro;
 
   /// No description provided for @thisDevice.
@@ -241,7 +241,7 @@ abstract class AppLocalizations {
   /// No description provided for @notifSettingsIntro.
   ///
   /// In en, this message translates to:
-  /// **'Choose what SEVO tells you about. Updates about an active booking are always saved in your notification list.'**
+  /// **'Choose what SevoNiq tells you about. Updates about an active booking are always saved in your notification list.'**
   String get notifSettingsIntro;
 
   /// No description provided for @feedbackTitle.

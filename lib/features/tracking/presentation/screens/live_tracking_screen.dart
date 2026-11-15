@@ -367,7 +367,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
               icon: const Icon(Icons.share_rounded, color: AppColors.navy, size: 20),
               onPressed: () {
                 final id = (widget.booking?.trackingIdentifier ?? '').isNotEmpty ? widget.booking!.trackingIdentifier! : widget.identifier;
-                Share.share(trackingShareText(id), subject: 'Track my SEVONIQ booking');
+                Share.share(trackingShareText(id), subject: 'Track my SevoNiq booking');
               },
             ),
           Container(

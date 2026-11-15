@@ -69,7 +69,7 @@ class RecipeDetailScreen extends ConsumerWidget {
               tooltip: 'Share',
               icon: const Icon(Icons.share_outlined, size: 20, color: AppColors.textPrimary),
               onPressed: () => Share.share(
-                'Check out this ${recipe.title} recipe on SEVO: https://sevo.co.in/marketplace/recipe/${recipe.slug.isNotEmpty ? recipe.slug : recipe.id}',
+                'Check out this ${recipe.title} recipe on SevoNiq: https://sevo.co.in/marketplace/recipe/${recipe.slug.isNotEmpty ? recipe.slug : recipe.id}',
               ),
             ),
           Padding(

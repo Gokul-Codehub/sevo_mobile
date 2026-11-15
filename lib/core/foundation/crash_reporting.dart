@@ -96,9 +96,9 @@ class CrashReporting {
     };
     final previousPlatform = PlatformDispatcher.instance.onError;
     PlatformDispatcher.instance.onError = (error, stack) {
-      final handled = previousPlatform?.call(error, stack) ?? false;
+      previousPlatform?.call(error, stack);
       if (active) _backend.recordError(error, stack, fatal: true).catchError((_) {});
-      return handled;
+      return true;
     };
   }
 

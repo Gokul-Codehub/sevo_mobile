@@ -167,7 +167,7 @@ class MandatoryUpdateScreen extends ConsumerWidget {
                 children: [
                   _UpdateHeader(
                     title: 'Update required',
-                    subtitle: 'Please update SEVO to keep using the app.\n'
+                    subtitle: 'Please update SevoNiq to keep using the app.\n'
                         'Installed ${_versionLabel(installed?.versionName ?? '', installed?.buildNumber ?? 0)}\n'
                         'Minimum supported ${_versionLabel(policy?.minimumVersionName ?? '', policy?.minimumBuild ?? 0)}',
                     icon: Icons.system_security_update_warning_rounded,

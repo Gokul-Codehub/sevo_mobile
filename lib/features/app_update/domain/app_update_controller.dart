@@ -200,7 +200,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       state = state.copyWith(
         playUnavailable: true,
         message: StoreInfo.isIos
-            ? 'Open the App Store to update SEVO.'
+            ? 'Open the App Store to update SevoNiq.'
             : 'The Google Play update service is not available on this device. Open the Play Store to update.',
       );
       return;
@@ -210,7 +210,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       state = state.copyWith(
         playUnavailable: true,
         message: 'The required version is not available for your device on ${StoreInfo.longName} yet. '
-            'Please try again later or contact SEVO support.',
+            'Please try again later or contact SevoNiq support.',
       );
       return;
     }
@@ -227,7 +227,7 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
         // Not "done" yet - confirm against the real installed build.
         await _recheckInstalled();
       case PlayUpdateOutcome.userDenied:
-        state = state.copyWith(message: 'This update is required to keep using SEVO. Please tap Update Now to continue.');
+        state = state.copyWith(message: 'This update is required to keep using SevoNiq. Please tap Update Now to continue.');
       case PlayUpdateOutcome.failed:
         state = state.copyWith(
           playUnavailable: true,
@@ -317,11 +317,11 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
         ? Uri.tryParse(configured)
         : (installed != null ? StoreInfo.fallbackUrl(installed.packageName) : null);
     if (uri == null) {
-      state = state.copyWith(message: 'The store link is not available. Please contact SEVO support.');
+      state = state.copyWith(message: 'The store link is not available. Please contact SevoNiq support.');
       return false;
     }
     final ok = await _openUrl(uri);
-    if (!ok) state = state.copyWith(message: 'Could not open the ${StoreInfo.shortName}. Please open it manually and update SEVO.');
+    if (!ok) state = state.copyWith(message: 'Could not open the ${StoreInfo.shortName}. Please open it manually and update SevoNiq.');
     return ok;
   }
 }

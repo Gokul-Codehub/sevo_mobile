@@ -326,13 +326,13 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
   String _takeawayAddressText() {
     final p = _pickup;
-    final name = (p?.name ?? '').isEmpty ? 'SEVONIQ warehouse' : p!.name;
+    final name = (p?.name ?? '').isEmpty ? 'SevoNiq warehouse' : p!.name;
     return 'Take Away - collect from $name${(p?.address ?? '').isEmpty ? '' : ', ${p!.address}'}';
   }
 
   Widget _buildTakeawayCard() {
     final p = _pickup;
-    final name = (p?.name ?? '').isEmpty ? 'SEVONIQ warehouse' : p!.name;
+    final name = (p?.name ?? '').isEmpty ? 'SevoNiq warehouse' : p!.name;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

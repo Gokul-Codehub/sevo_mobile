@@ -69,7 +69,7 @@ class _AppUpdateGateState extends ConsumerState<AppUpdateGate> with WidgetsBindi
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Update ready', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy)),
-        content: const Text('The new version has been downloaded. Restart SEVO to finish updating.'),
+        content: const Text('The new version has been downloaded. Restart SevoNiq to finish updating.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Later')),
           FilledButton(

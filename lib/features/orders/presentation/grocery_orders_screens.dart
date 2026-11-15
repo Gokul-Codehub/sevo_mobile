@@ -635,7 +635,7 @@ class _TakeawayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = order;
     final loc = o.pickupLocation;
-    final name = (loc?.name ?? '').isNotEmpty ? loc!.name : (o.warehouseName.isNotEmpty ? o.warehouseName : 'SEVONIQ warehouse');
+    final name = (loc?.name ?? '').isNotEmpty ? loc!.name : (o.warehouseName.isNotEmpty ? o.warehouseName : 'SevoNiq warehouse');
     final address = loc?.address ?? '';
     return _Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

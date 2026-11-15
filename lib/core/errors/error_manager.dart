@@ -26,7 +26,7 @@ abstract final class ErrorManager {
         case NetworkError():
           return const UserMessage(
             title: 'No connection',
-            body: 'We could not reach SEVO. Check your internet connection and try again.',
+            body: 'We could not reach SevoNiq. Check your internet connection and try again.',
             kind: UserMessageKind.offline,
           );
         case UnauthorizedError():
@@ -54,7 +54,7 @@ abstract final class ErrorManager {
           final code = error.code ?? '';
           if (code == 'MAINTENANCE') {
             return const UserMessage(
-              title: 'We are upgrading SEVO',
+              title: 'We are upgrading SevoNiq',
               body: 'This part of the app is under maintenance. $_tryAgain',
               kind: UserMessageKind.maintenance,
             );

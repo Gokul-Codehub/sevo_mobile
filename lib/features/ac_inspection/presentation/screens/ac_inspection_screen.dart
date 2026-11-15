@@ -164,6 +164,7 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
   @override
   Widget build(BuildContext context) {
     final configAsync = ref.watch(acInspectionConfigProvider);
+    final config = configAsync.valueOrNull;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -190,7 +191,8 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
           return FadeSlideIn(child: _body(config));
         },
       ),
-      bottomNavigationBar: configAsync.valueOrNull?.isActive == true
+      // Confirm stays in reach however long the form is.
+      bottomNavigationBar: (config != null && config.isActive)
           ? SafeArea(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
