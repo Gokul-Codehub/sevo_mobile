@@ -176,6 +176,14 @@ List<MarketplaceProduct> _collapseVariantGroups(List<MarketplaceProduct> product
         (p.inStock == cur.inStock && p.sellingPrice < cur.sellingPrice);
     if (better) best[g] = p;
   }
+  // The list rows carry no nested `variants`, so the collapsed card never knew
+  // its sibling sizes (no size selector on the card). Hand the representative
+  // every sibling that arrived in this same list, cheapest first.
+  final siblings = <int, List<MarketplaceProduct>>{};
+  for (final p in products) {
+    final g = p.variantGroupId;
+    if (g != null) (siblings[g] ??= <MarketplaceProduct>[]).add(p);
+  }
   final emitted = <int>{};
   final out = <MarketplaceProduct>[];
   for (final p in products) {
@@ -183,7 +191,14 @@ List<MarketplaceProduct> _collapseVariantGroups(List<MarketplaceProduct> product
     if (g == null) {
       out.add(p);
     } else if (emitted.add(g)) {
-      out.add(best[g]!);
+      final rep = best[g]!;
+      final group = siblings[g]!;
+      if (rep.variants.length > 1 || group.length < 2) {
+        out.add(rep);
+      } else {
+        final sorted = [...group]..sort((a, b) => a.sellingPrice.compareTo(b.sellingPrice));
+        out.add(rep.withVariants(sorted));
+      }
     }
   }
   return out;
@@ -287,6 +302,39 @@ class MarketplaceProduct {
   /// showing a picker for — a lone product technically "in its own group"
   /// (or with no group at all) has nothing to switch between.
   bool get hasSelectableVariants => variants.length > 1;
+
+  /// Copy of this product that knows its sibling sizes (used when the list
+  /// endpoint returned the siblings as separate rows).
+  MarketplaceProduct withVariants(List<MarketplaceProduct> v) => MarketplaceProduct(
+        id: id,
+        title: title,
+        sellingPrice: sellingPrice,
+        brand: brand,
+        unit: unit,
+        packSize: packSize,
+        mrp: mrp,
+        primaryImage: primaryImage,
+        images: images,
+        categoryId: categoryId,
+        categoryName: categoryName,
+        categorySlug: categorySlug,
+        sellerName: sellerName,
+        ratingAverage: ratingAverage,
+        ratingCount: ratingCount,
+        inStock: inStock,
+        availableStock: availableStock,
+        description: description,
+        storageInfo: storageInfo,
+        expiryInfo: expiryInfo,
+        specs: specs,
+        variantGroupId: variantGroupId,
+        variantAttributeName: variantAttributeName,
+        variantLabel: variantLabel,
+        variants: v,
+        showRecipes: showRecipes,
+        recipes: recipes,
+        warehouseId: warehouseId,
+      );
 
   /// Every distinct image to show in the detail carousel: the gallery, or
   /// just the primary image when no gallery was returned.

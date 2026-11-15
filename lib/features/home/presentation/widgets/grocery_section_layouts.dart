@@ -1496,18 +1496,17 @@ class _CategoryCoverImage extends ConsumerWidget {
     final url = (own != null && own.isNotEmpty)
         ? own
         : ref.watch(marketplaceCategoryCoverImagesProvider).valueOrNull?[category.id];
-    return ColoredBox(
-      color: Colors.white,
-      child: AppRemoteImage(
-        imageUrl: url,
-        rawPath: url,
-        title: category.name,
-        categoryName: category.name,
-        slug: category.slug,
-        width: width,
-        height: height,
-        fit: BoxFit.contain,
-      ),
+    // Category pictures are meant to be uploaded SQUARE (1:1), so cover fills
+    // the whole tile without bars. Wide photos would be cropped at the sides.
+    return AppRemoteImage(
+      imageUrl: url,
+      rawPath: url,
+      title: category.name,
+      categoryName: category.name,
+      slug: category.slug,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
     );
   }
 }

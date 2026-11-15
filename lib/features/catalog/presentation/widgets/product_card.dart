@@ -703,15 +703,13 @@ class ProductCard extends ConsumerWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     color: service.hasVariantOptions
-                                        ? (compact
-                                            ? Colors.transparent
-                                            : AppColors.groceryGreenLight)
+                                        ? const Color(0xFFFFF4E0)
                                         : AppColors.surfaceVariant,
                                     borderRadius: BorderRadius.circular(10),
                                     border: service.hasVariantOptions
                                         ? Border.all(
-                                            color: AppColors.groceryGreen
-                                                .withValues(alpha: 0.45),
+                                            color: const Color(0xFFF59E0B),
+                                            width: 1.2,
                                           )
                                         : null,
                                   ),
@@ -722,9 +720,11 @@ class ProductCard extends ConsumerWidget {
                                           (compact
                                               ? _packLabel(service).replaceAll(' ', '')
                                               : _packLabel(service)) +
-                                              (!compact && lowStock
-                                                  ? ' · ${service.maxQuantity} left'
-                                                  : ''),
+                                              (!compact && service.hasVariantOptions
+                                                  ? ' · ${service.variantOptions.length} sizes'
+                                                  : (!compact && lowStock
+                                                      ? ' · ${service.maxQuantity} left'
+                                                      : '')),
                                           maxLines: 1,
                                           overflow: TextOverflow.clip,
                                           softWrap: false,
@@ -732,7 +732,7 @@ class ProductCard extends ConsumerWidget {
                                             fontSize: compact ? 9.5 : 10.5,
                                             fontWeight: FontWeight.w700,
                                             color: service.hasVariantOptions
-                                                ? AppColors.groceryGreenDark
+                                                ? const Color(0xFFB45309)
                                                 : const Color(0xFF334155),
                                           ),
                                         ),
@@ -740,8 +740,8 @@ class ProductCard extends ConsumerWidget {
                                       if (service.hasVariantOptions)
                                         Icon(
                                           Icons.keyboard_arrow_down_rounded,
-                                          size: compact ? 11 : 16,
-                                          color: AppColors.groceryGreenDark,
+                                          size: compact ? 12 : 18,
+                                          color: const Color(0xFFD97706),
                                         ),
                                     ],
                                   ),
