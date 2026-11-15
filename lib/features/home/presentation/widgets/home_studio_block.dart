@@ -1127,11 +1127,15 @@ class _BestsellerTileCard extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(8),
                                   child: ColoredBox(
                                     color: Colors.white,
-                                    child: SizedBox.expand(
-                                      child: AppRemoteImage(
-                                        imageUrl: thumbs[i % thumbs.length],
-                                        title: title,
-                                        fit: BoxFit.cover,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(3),
+                                      child: SizedBox.expand(
+                                        // contain: show the whole pack, never a zoomed crop.
+                                        child: AppRemoteImage(
+                                          imageUrl: thumbs[i % thumbs.length],
+                                          title: title,
+                                          fit: BoxFit.contain,
+                                        ),
                                       ),
                                     ),
                                   ),

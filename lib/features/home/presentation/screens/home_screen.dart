@@ -3505,10 +3505,13 @@ class _GroceryHubBestsellerTile extends StatelessWidget {
                             color: Colors.white,
                             child: product == null
                                 ? null
-                                : AppRemoteImage(
-                                    imageUrl: product.image,
-                                    title: product.name,
-                                    fit: BoxFit.cover,
+                                : Padding(
+                                    padding: const EdgeInsets.all(3),
+                                    child: AppRemoteImage(
+                                      imageUrl: product.image,
+                                      title: product.name,
+                                      fit: BoxFit.contain,
+                                    ),
                                   ),
                           ),
                         );
