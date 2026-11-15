@@ -292,7 +292,9 @@ class BookAgainTile extends ConsumerWidget {
                       color: isGrocery
                           ? const Color(0xFFF0FDF4)
                           : const Color(0xFFF8FAFC),
-                      child: AppRemoteImage(
+                      child: Padding(
+                       padding: EdgeInsets.all(isGrocery ? 6 : 0),
+                       child: AppRemoteImage(
                         imageUrl: displayImageUrl,
                         rawPath: displayImageUrl,
                         title: displayService.title,
@@ -323,7 +325,8 @@ class BookAgainTile extends ConsumerWidget {
                             imageCategorySlug, imageCategorySlug),
                         width: double.infinity,
                         height: double.infinity,
-                        fit: BoxFit.cover,
+                        fit: isGrocery ? BoxFit.contain : BoxFit.cover,
+                       ),
                       ),
                     ),
                     if (discountPct != null && discountPct > 0)

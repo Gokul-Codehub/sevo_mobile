@@ -209,10 +209,11 @@ class ProductCard extends ConsumerWidget {
               fit: StackFit.expand,
               children: [
                 Container(
-                  color: AppColors.surfaceVariant,
+                  color: Colors.white,
+                  padding: const EdgeInsets.all(6),
                   child: ProductImageSlider(
                     service: service,
-                    fit: BoxFit.cover,
+                    fit: BoxFit.contain,
                   ),
                 ),
                 if (service.rating > 0)

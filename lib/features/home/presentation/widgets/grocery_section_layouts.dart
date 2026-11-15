@@ -1496,15 +1496,18 @@ class _CategoryCoverImage extends ConsumerWidget {
     final url = (own != null && own.isNotEmpty)
         ? own
         : ref.watch(marketplaceCategoryCoverImagesProvider).valueOrNull?[category.id];
-    return AppRemoteImage(
-      imageUrl: url,
-      rawPath: url,
-      title: category.name,
-      categoryName: category.name,
-      slug: category.slug,
-      width: width,
-      height: height,
-      fit: BoxFit.cover,
+    return ColoredBox(
+      color: Colors.white,
+      child: AppRemoteImage(
+        imageUrl: url,
+        rawPath: url,
+        title: category.name,
+        categoryName: category.name,
+        slug: category.slug,
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+      ),
     );
   }
 }
