@@ -311,7 +311,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       case Success(:final data):
         if (!data.available) {
           revert();
-          AppToast.show(context, 'Take Away needs all your items to come from one SEVONIQ warehouse. Please choose delivery.', type: AppToastType.error);
+          AppToast.show(context, 'Take Away needs all your items to come from one SevoNiq warehouse. Please choose delivery.', type: AppToastType.error);
           return;
         }
         setState(() {
