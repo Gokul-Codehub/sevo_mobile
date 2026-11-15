@@ -257,6 +257,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                     child: AdaptiveWidth(
                       maxWidth: AppResponsive.navMaxWidth(context),
                       alignment: Alignment.bottomCenter,
+                      // The nav sits in Scaffold.bottomNavigationBar, which allows
+                      // the full screen height; keep the bar's own 60px height.
+                      fillHeight: false,
                       child: ValueListenableBuilder<bool>(
                         valueListenable: aiChatOpen,
                         builder: (context, aiOpen, _) {

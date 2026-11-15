@@ -116,14 +116,23 @@ void main() {
     AppLogger.d('[P0-CRASH]', 'InAppMessaging init error: $e');
   }));
 
-  // Portrait on phones; landscape allowed too so tablets / foldables can use
-  // the full screen. Layouts adapt via [AppResponsive] / [AdaptiveWidth].
-  SystemChrome.setPreferredOrientations(const [
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  // Phones stay portrait; tablets / foldables (shortest side >= 600dp) may
+  // rotate. Layouts adapt via [AppResponsive] / [AdaptiveWidth].
+  final firstView = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+  final isTabletDevice = firstView != null &&
+      (firstView.physicalSize.shortestSide / firstView.devicePixelRatio) >=
+          AppResponsive.tabletShortestSide;
+  SystemChrome.setPreferredOrientations(isTabletDevice
+      ? const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]
+      : const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ]);
 
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(
