@@ -253,31 +253,6 @@ class Category extends Equatable {
       ];
 }
 
-/// One customer review of a package (web: `pkg.reviews`, shown under
-/// "Customer Reviews" in the package details).
-class ServiceReview extends Equatable {
-  const ServiceReview({required this.name, required this.text, this.rating});
-
-  final String name;
-  final String text;
-  final double? rating;
-
-  static ServiceReview? tryParse(dynamic raw) {
-    if (raw is! Map) return null;
-    final m = Map<String, dynamic>.from(raw);
-    if (m['enabled'] == false) return null;
-    final name = (m['name'] ?? m['author'] ?? '').toString().trim();
-    final text = (m['text'] ?? m['comment'] ?? '').toString().trim();
-    if (name.isEmpty && text.isEmpty) return null;
-    return ServiceReview(name: name, text: text, rating: double.tryParse('${m['rating'] ?? ''}'));
-  }
-
-  Map<String, dynamic> toJson() => {'name': name, 'text': text, if (rating != null) 'rating': rating};
-
-  @override
-  List<Object?> get props => [name, text, rating];
-}
-
 /// FAQ item for a service.
 class ServiceFaq extends Equatable {
   const ServiceFaq({
@@ -404,18 +379,12 @@ class ServiceItem extends Equatable {
     this.tag,
     this.packageOptions = const [],
     this.selectedOption,
-    this.reviews = const [],
-    this.warehouseId,
   });
 
   final int id;
   final String title;
   final String slug;
   final Decimal price;
-
-  /// Seller Hub fulfilment warehouse this product ships from (null for services). The grocery cart asks for
-  /// delivery slots of THIS warehouse - same as the web cart - instead of relying on a server default.
-  final int? warehouseId;
   final Decimal? discountedPrice;
   final String? unit;
   final String? shortDescription;
@@ -533,11 +502,6 @@ class ServiceItem extends Equatable {
 
   bool get hasVariantOptions => variantOptions.length > 1;
 
-  /// Real customer reviews (empty when there are none - then no rating is shown).
-  final List<ServiceReview> reviews;
-
-  bool get hasReviews => reviews.isNotEmpty;
-
   /// Admin tag shown as a badge on the package (e.g. "Popular", "Best seller").
   final String? tag;
 
@@ -608,8 +572,6 @@ class ServiceItem extends Equatable {
       tag: tag,
       packageOptions: packageOptions,
       selectedOption: option,
-      reviews: reviews,
-      warehouseId: warehouseId,
     );
   }
 
@@ -755,19 +717,13 @@ class ServiceItem extends Equatable {
       (vegetableCategoryName?.isNotEmpty ?? false) ||
       id >= _groceryCartIdOffset;
 
-  /// The pack size / unit exactly as the server sends it (what the website shows). QA GAVM07: this used to invent
-  /// "500 g" when a product had no unit, and to show a whole description as the unit, so the app disagreed with the
-  /// web. Now it is the real unit, or empty when there is none (cards then say "1 unit", the detail page hides it).
+  /// Formatted weight/unit string for grocery items (defaults to '500 g' or '1 unit' if unspecified).
   String get displayUnit {
-    final u = unit?.trim() ?? '';
-    if (u.isNotEmpty) return u;
-    // Only a SHORT size-like text ("250 g", "1 kg", "6 pcs") may stand in for a missing unit - never a sentence.
-    final sd = shortDescription?.trim() ?? '';
-    if (sd.length <= 14 &&
-        RegExp(r'^\d+(\.\d+)?\s*(g|gm|kg|ml|l|ltr|pcs|pc|pack|bunch|dozen)\b', caseSensitive: false).hasMatch(sd)) {
-      return sd;
+    if (unit != null && unit!.isNotEmpty) return unit!;
+    if (shortDescription != null && shortDescription!.contains(RegExp(r'\d+\s*(g|kg|ml|L|pcs|pack|bunch)', caseSensitive: false))) {
+      return shortDescription!;
     }
-    return '';
+    return '500 g';
   }
 
   /// Extracts a flat list of display strings from one of this catalog's
@@ -804,17 +760,7 @@ class ServiceItem extends Equatable {
     return out;
   }
 
-  static double? _avgRating(List<ServiceReview> r) {
-    final rated = r.where((e) => e.rating != null).map((e) => e.rating!).toList();
-    if (rated.isEmpty) return null;
-    return rated.reduce((a, b) => a + b) / rated.length;
-  }
-
   factory ServiceItem.fromJson(Map<String, dynamic> json) {
-    final parsedReviews = (json['reviews'] as List? ?? const [])
-        .map(ServiceReview.tryParse)
-        .whereType<ServiceReview>()
-        .toList();
     final incList = _extractLabeledList(json['inclusions'] ?? json['includes']);
     final excList = _extractLabeledList(json['exclusions'] ?? json['excludes']);
 
@@ -871,11 +817,8 @@ class ServiceItem extends Equatable {
         json['duration']?.toString(),
         json['duration_minutes'],
       ),
-      // Rating/review count come from the real reviews (like the web app);
-      // with no reviews nothing is shown (UI checks [hasReviews]).
-      rating: _avgRating(parsedReviews) ?? parseDoubleOrNull(json['rating']) ?? 4.8,
-      reviewCount: parsedReviews.isNotEmpty ? parsedReviews.length : parseInt(json['review_count']),
-      reviews: parsedReviews,
+      rating: parseDoubleOrNull(json['rating']) ?? 4.8,
+      reviewCount: parseInt(json['review_count']),
       categoryId: categoryId,
       categoryName: json['category_name']?.toString() ??
           (json['category'] is Map ? json['category']['name']?.toString() : null),
@@ -912,7 +855,6 @@ class ServiceItem extends Equatable {
       gstRate: parseDoubleOrNull(json['gst_rate']),
       platformFee: parseMoneyOrNull(json['platform_fee']),
       status: json['status']?.toString(),
-      warehouseId: int.tryParse(json['warehouse_id']?.toString() ?? ''),
       tag: _nonEmpty(json['tag']),
       packageOptions: (json['options'] as List? ?? const [])
           .whereType<Map>()
@@ -928,7 +870,6 @@ class ServiceItem extends Equatable {
 
   Map<String, dynamic> toJson() => {
         if (tag != null) 'tag': tag,
-        'reviews': reviews.map((r) => r.toJson()).toList(),
         'options': packageOptions.map((o) => o.toJson()).toList(),
         if (selectedOption != null) 'selected_option': selectedOption!.toJson(),
         'id': id,
@@ -967,7 +908,6 @@ class ServiceItem extends Equatable {
         if (gstRate != null) 'gst_rate': gstRate,
         if (platformFee != null) 'platform_fee': platformFee.toString(),
         if (status != null) 'status': status,
-        if (warehouseId != null) 'warehouse_id': warehouseId,
       };
 
   @override
@@ -976,7 +916,6 @@ class ServiceItem extends Equatable {
         title,
         slug,
         price,
-        warehouseId,
         discountedPrice,
         shortDescription,
         description,
@@ -1010,7 +949,6 @@ class ServiceItem extends Equatable {
         tag,
         packageOptions,
         selectedOption,
-        reviews,
       ];
 }
 
@@ -1217,25 +1155,6 @@ class VegetableCategorySummary extends Equatable {
 /// (with the vehicle category pre-selected when it can be told from the name).
 extension GoodsTransportRoute on ServiceItem {
   bool get isGoodsTransport => flowType == CatalogFlowType.logistics;
-
-  /// Vehicle-type name shown on home cards instead of the package title.
-  String get goodsTransportLabel {
-    final path = goodsTransportPath;
-    if (path.endsWith('packers_movers')) return 'Packers & Movers';
-    if (path.endsWith('two_wheeler')) return '2-Wheeler';
-    if (path.endsWith('truck')) return 'Mini Truck';
-    return title;
-  }
-
-  /// Vehicle-type artwork (same images the web uses for these tiles).
-  String? get goodsTransportImageUrl {
-    final path = goodsTransportPath;
-    const base = 'https://sevo.co.in';
-    if (path.endsWith('packers_movers')) return '$base/hero_packers_bg.png';
-    if (path.endsWith('two_wheeler')) return '$base/hero_twowheeler_bg.png';
-    if (path.endsWith('truck')) return '$base/hero_minitruck_bg.png';
-    return null;
-  }
 
   String get goodsTransportPath {
     final t = '$slug $title'.toLowerCase();

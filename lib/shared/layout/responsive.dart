@@ -121,14 +121,28 @@ class AdaptiveWidth extends StatelessWidget {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth.clamp(0.0, cap).toDouble()
             : cap;
+        final media = MediaQuery.of(context);
+        final inner = SizedBox(
+          width: width,
+          height: (fillHeight && constraints.hasBoundedHeight)
+              ? constraints.maxHeight
+              : null,
+          child: child,
+        );
         return Align(
           alignment: alignment,
-          child: SizedBox(
-            width: width,
-            height: (fillHeight && constraints.hasBoundedHeight)
-                ? constraints.maxHeight
-                : null,
-            child: child,
+          // Without a heightFactor, Align grows to the full bounded height. For bars in a loose-but-tall slot
+          // (Scaffold.bottomNavigationBar) that pushed the page body off screen on tablets.
+          heightFactor: fillHeight ? null : 1.0,
+          // Descendants see the capped width so grids pick columns for the visible column.
+          child: MediaQuery(
+            data: media.copyWith(
+              size: Size(
+                width,
+                constraints.hasBoundedHeight ? constraints.maxHeight : media.size.height,
+              ),
+            ),
+            child: inner,
           ),
         );
       },
