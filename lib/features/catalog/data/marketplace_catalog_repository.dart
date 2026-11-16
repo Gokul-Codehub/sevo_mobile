@@ -1195,6 +1195,47 @@ final marketplaceProductDetailProvider =
   }
 });
 
+/// Resolves the key a Home Studio tap carries ("Product" destination) to a real product. The admin stores either the
+/// product's numeric id, "seller-hub-<id>", or the product's slug; a tap passes no product object, so the product page
+/// has to look it up. Returns null when nothing matches (the page then says "Product Not Found").
+final marketplaceProductByKeyProvider =
+    FutureProvider.autoDispose.family<MarketplaceProduct?, String>((ref, key) async {
+  final repo = ref.watch(marketplaceCatalogRepositoryProvider);
+  final k = key.trim();
+  if (k.isEmpty) return null;
+
+  final idText = k.startsWith('seller-hub-') ? k.substring('seller-hub-'.length) : k;
+  final id = int.tryParse(idText);
+  if (id != null) {
+    final r = await repo.getProductDetail(id);
+    return r is Success<MarketplaceProduct> ? r.data : null;
+  }
+
+  // A slug: search by its words, then pick the exact slug (a size variant counts too), else the same title.
+  final words = k.replaceAll(RegExp(r'[-_]+'), ' ').trim();
+  final page = await repo.getProducts(search: words, pageSize: 30);
+  if (page is! Success<MarketplaceProductPage>) return null;
+  final found = page.data.products;
+  MarketplaceProduct? hit;
+  for (final p in found) {
+    if (p.slug == k) {
+      hit = p;
+      break;
+    }
+    final sibling = p.variants.where((v) => v.slug == k).firstOrNull;
+    if (sibling != null) {
+      hit = sibling;
+      break;
+    }
+  }
+  hit ??= found.where((p) => p.title.toLowerCase().trim() == words.toLowerCase()).firstOrNull;
+  hit ??= found.isNotEmpty ? found.first : null;
+  if (hit == null) return null;
+  // Full detail (variants, gallery, specs) for the page; the list row is enough if that call fails.
+  final full = await repo.getProductDetail(hit.id);
+  return full is Success<MarketplaceProduct> ? full.data : hit;
+});
+
 /// Active Seller Hub fulfillment warehouses — fetched once and kept alive
 /// for [GroceryCartScreen]'s delivery-option picker's lifetime. Never
 /// throws to its watcher; an unreachable vendor just means an empty list

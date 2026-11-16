@@ -123,7 +123,7 @@ class _RefineBar extends ConsumerWidget {
         );
 
     return SizedBox(
-      height: 46,
+      height: AppResponsive.scaledHeight(context, 46),
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(16, 6, 8, 4),
@@ -666,7 +666,7 @@ class _ServiceSearchResultsState extends ConsumerState<ServiceSearchResultsScree
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy)),
               ),
               SizedBox(
-                height: 42,
+                height: AppResponsive.scaledHeight(context, 42),
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),

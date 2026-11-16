@@ -1036,7 +1036,7 @@ class _BestsellerTiles extends ConsumerWidget {
               crossAxisCount: cols,
               crossAxisSpacing: 10,
               mainAxisSpacing: 14,
-              childAspectRatio: cols == 2 ? 0.86 : (cols >= 4 ? 0.66 : 0.78),
+              childAspectRatio: AppResponsive.scaledAspect(context, cols == 2 ? 0.86 : (cols >= 4 ? 0.66 : 0.78)),
             ),
             itemBuilder: (context, i) => _BestsellerTileCard(
               key: ValueKey('studio-bestseller-${tiles[i]['id'] ?? i}'),
@@ -1250,7 +1250,7 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                 ),
               if (circular)
                 SizedBox(
-                  height: 104,
+                  height: AppResponsive.scaledHeight(context, 104),
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: list.length,
@@ -1292,7 +1292,7 @@ class _ServiceCategoryGrid extends ConsumerWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
-                childAspectRatio: 0.9,
+                childAspectRatio: AppResponsive.scaledAspect(context, 0.9),
                 children: [
                   for (final c in list)
                     InkWell(
@@ -1406,7 +1406,7 @@ class _ServiceDriven extends ConsumerWidget {
               ),
             ),
           SizedBox(
-            height: 196,
+            height: AppResponsive.scaledHeight(context, 196),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1669,7 +1669,7 @@ class _StudioPageSkeleton extends StatelessWidget {
         ),
         _title(),
         SizedBox(
-          height: 84,
+          height: AppResponsive.scaledHeight(context, 84),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const NeverScrollableScrollPhysics(),

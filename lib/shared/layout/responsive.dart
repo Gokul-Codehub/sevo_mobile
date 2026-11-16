@@ -68,6 +68,23 @@ abstract final class AppResponsive {
   static double bannerAspect(BuildContext context, double phoneAspect) =>
       isTablet(context) ? phoneAspect * 1.4 : phoneAspect;
 
+  /// User's text scale (1.0 = default), from the system font-size setting.
+  static double textScale(BuildContext context) {
+    final s = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return s < 1 ? 1.0 : s;
+  }
+
+  /// A fixed rail / strip height that still fits its text when the user has
+  /// raised the system font size. [textShare] is roughly how much of the
+  /// height is text (the rest, e.g. images, does not grow).
+  static double scaledHeight(BuildContext context, double h, {double textShare = 0.5}) =>
+      h * (1 + (textScale(context) - 1) * textShare);
+
+  /// Grid childAspectRatio that gets taller (smaller ratio) as the system
+  /// font grows, so text tiles keep room instead of overflowing.
+  static double scaledAspect(BuildContext context, double ratio, {double textShare = 0.4}) =>
+      ratio / (1 + (textScale(context) - 1) * textShare);
+
   static int columnsFor(
     BuildContext context, {
     required int Function(double width) picker,

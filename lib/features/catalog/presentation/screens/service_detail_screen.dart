@@ -1,4 +1,5 @@
 import '../../domain/recently_viewed.dart';
+import '../../../../shared/layout/responsive.dart';
 import '../../../../core/analytics/analytics_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -2123,7 +2124,7 @@ class _RelatedItemsStrip extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 178,
+          height: AppResponsive.scaledHeight(context, 178),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,

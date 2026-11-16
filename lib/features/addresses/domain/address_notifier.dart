@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -69,9 +70,10 @@ Address? startingAddress(List<Address> all, LastDeliveryChoice last) {
 /// in use instead) and remembers the choice for the next launch.
 Future<void> chooseDeliveryAddress(WidgetRef ref, Address? address) async {
   ref.read(selectedAddressProvider.notifier).state = address;
-  try {
-    await ref.read(secureStorageProvider).setSelectedAddressJson(jsonEncode({'id': address?.id}));
-  } catch (_) {}
+  // Remember the choice in the background: secure storage can take a few hundred ms on some phones, and the
+  // customer must not wait for it before the sheet closes and Home updates.
+  final storage = ref.read(secureStorageProvider);
+  unawaited(storage.setSelectedAddressJson(jsonEncode({'id': address?.id})).catchError((_) {}));
 }
 
 /// State notifier for customer addresses list.
@@ -143,7 +145,8 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
 
   // ── Refresh list ──────────────────────────────────────────────────────────
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
+    // Keep the saved addresses on screen while reloading (a bare loading state would blank the list).
+    state = const AsyncLoading<List<Address>>().copyWithPrevious(state);
     state = await AsyncValue.guard(_fetchAddresses);
   }
 

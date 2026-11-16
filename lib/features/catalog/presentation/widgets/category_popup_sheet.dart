@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/layout/responsive.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_remote_image.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
@@ -16,6 +17,8 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
       useRootNavigator: true,
     context: context,
     isScrollControlled: true,
+    // Keep the sheet a comfortable width on tablets instead of edge to edge.
+    constraints: const BoxConstraints(maxWidth: 640),
     backgroundColor: Colors.transparent,
     builder: (ctx) {
       final title = (category.popupTitle ?? category.name).trim();
@@ -56,11 +59,11 @@ Future<CategoryPopupTile?> showCategoryPopupSheet(
                 child: GridView.builder(
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     mainAxisSpacing: 14,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.82,
+                    childAspectRatio: AppResponsive.scaledAspect(ctx, 0.82),
                   ),
                   itemCount: category.popupTiles.length,
                   itemBuilder: (context, i) {

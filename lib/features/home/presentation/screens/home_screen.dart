@@ -1330,7 +1330,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     crossAxisCount: cols,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 14,
-                    childAspectRatio: 0.78,
+                    childAspectRatio: AppResponsive.scaledAspect(context, 0.78),
                   ),
                   itemBuilder: (context, i) => _AdminBestsellerTile(
                     key: ValueKey('admin-bestseller-${adminBestsellers[i].id}'),
@@ -1380,7 +1380,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     crossAxisCount: cols,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 14,
-                    childAspectRatio: 0.78,
+                    childAspectRatio: AppResponsive.scaledAspect(context, 0.78),
                   ),
                   itemBuilder: (context, i) => _GroceryHubBestsellerTile(
                     key: ValueKey('grocery-hub-bestseller-${groceryHubCategories[i].name}'),
@@ -2319,7 +2319,7 @@ class _UnifiedActiveModeBody extends StatelessWidget {
                     // ── Category Tiles Strip (in Services mode) ──
                     if (topCategoryTiles.isNotEmpty)
                       SizedBox(
-                        height: 108,
+                        height: AppResponsive.scaledHeight(context, 108),
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2577,7 +2577,7 @@ class _StickyHomeHeader extends StatelessWidget {
             if (topCategoryTiles.isNotEmpty) ...[
               const SizedBox(height: 8),
               SizedBox(
-                height: 34,
+                height: AppResponsive.scaledHeight(context, 34),
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 12),

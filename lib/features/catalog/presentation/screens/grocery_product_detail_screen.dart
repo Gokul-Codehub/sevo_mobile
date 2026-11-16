@@ -1,4 +1,5 @@
 import '../../domain/recently_viewed.dart';
+import '../../../../shared/layout/responsive.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -57,6 +58,26 @@ class GroceryProductDetailScreen extends ConsumerWidget {
   final String productSlug;
   final ServiceItem? initialProduct;
 
+  Widget _notFound() {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          AppBar(backgroundColor: Colors.white, foregroundColor: AppColors.textPrimary, elevation: 0.5),
+          Expanded(
+            child: Center(
+              child: EmptyStateWidget(
+                title: 'Product Not Found',
+                subtitle: 'This product could not be loaded. Please go back and try again.',
+                emoji: '❓',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Every grocery/vegetable/fruit product this app shows anywhere is
@@ -68,36 +89,24 @@ class GroceryProductDetailScreen extends ConsumerWidget {
     // authoritative once present.
     final product = initialProduct;
     if (product == null) {
-      // Fixed 2026-09-28: this used to be a bare `Center(child: Text(...))`
-      // with no diagnostic — visually indistinguishable from a genuinely
-      // blank/broken page, which is exactly what was reported ("returns
-      // empty screen"). Logged so a live repro's debug console can confirm
-      // whether THIS is actually the path being hit (extra never arrived —
-      // a routing/navigation defect) as opposed to
-      // [_GroceryProductDetailBody] rendering with real but incomplete data
-      // (see that widget's own incomplete-data guard below).
-      AppLogger.d('[GROCERY-DETAIL]', 'initialProduct was NULL for slug=$productSlug — extra was not a ServiceItem');
-      // Deliberately NOT a Scaffold — see _GroceryProductDetailBody's build()
-      // for the full explanation: this screen sits inside AppShell's own
-      // Scaffold via the ShellRoute, and a second nested Scaffold here is
-      // the confirmed "RenderBox was not laid out" / FAB-slot crash already
-      // fixed the same way on CategoryDetailScreen.
-      return Container(
-        color: Colors.white,
-        child: Column(
-          children: [
-            AppBar(backgroundColor: Colors.white, foregroundColor: AppColors.textPrimary, elevation: 0.5),
-            Expanded(
-              child: Center(
-                child: EmptyStateWidget(
-                  title: 'Product Not Found',
-                  subtitle: 'This product could not be loaded. Please go back and try again.',
-                  emoji: '❓',
-                ),
-              ),
-            ),
-          ],
+      // A Home Studio / banner tap carries only the product's key (id or slug), not the product itself: look it up.
+      final looked = ref.watch(marketplaceProductByKeyProvider(productSlug));
+      return looked.when(
+        loading: () => Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              AppBar(backgroundColor: Colors.white, foregroundColor: AppColors.textPrimary, elevation: 0.5),
+              const Expanded(child: Center(child: CircularProgressIndicator())),
+            ],
+          ),
         ),
+        error: (_, __) => _notFound(),
+        data: (p) {
+          if (p == null) return _notFound();
+          final item = p.toServiceItem();
+          return RecordRecentView(item: item, child: _GroceryProductDetailBody(product: item));
+        },
       );
     }
     // Counts as "viewed" for Home's Recently Viewed section.
@@ -876,7 +885,7 @@ class _UnitSelector extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 74,
+          height: AppResponsive.scaledHeight(context, 74),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: variants.length,
@@ -1523,7 +1532,7 @@ class _RecipesRail extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 218,
+          height: AppResponsive.scaledHeight(context, 218),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.none,

@@ -11,6 +11,7 @@ import '../../../../core/utils/location_gate.dart';
 import '../../../../core/errors/api_error.dart';
 import '../../../../routing/app_router.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/common_widgets.dart';
 import '../../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../../../coverage/data/coverage_repository.dart';
 import '../../../logistics/domain/logistics_providers.dart';
@@ -189,7 +190,10 @@ class _LocationSheetState extends ConsumerState<LocationSheet> {
   Widget build(BuildContext context) {
     final signedIn = ref.watch(isUserAuthenticatedProvider);
     final selected = ref.watch(selectedAddressProvider);
-    final addresses = signedIn ? ref.watch(addressListProvider).valueOrNull ?? const <Address>[] : const <Address>[];
+    final addressState = signedIn ? ref.watch(addressListProvider) : null;
+    final addresses = addressState?.valueOrNull ?? const <Address>[];
+    final addressesLoading = addressState != null && addressState.isLoading && !addressState.hasValue;
+    final addressesFailed = addressState != null && addressState.hasError && !addressState.hasValue;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return ConstrainedBox(
@@ -263,6 +267,20 @@ class _LocationSheetState extends ConsumerState<LocationSheet> {
               )
             else ...[
               const Text('Saved addresses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.4)),
+              if (addressesLoading)
+                for (var i = 0; i < 3; i++)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: ShimmerBox(height: 52, borderRadius: 12),
+                  ),
+              if (addressesFailed)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.refresh_rounded, color: AppColors.navy),
+                  title: const Text("Couldn't load your saved addresses. Tap to retry.",
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  onTap: () => ref.read(addressListProvider.notifier).refresh(),
+                ),
               for (final a in addresses)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
