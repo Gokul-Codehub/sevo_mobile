@@ -104,11 +104,13 @@ class AdaptiveWidth extends StatelessWidget {
     required this.child,
     this.maxWidth,
     this.alignment = Alignment.center,
+    this.fillHeight = true,
   });
 
   final Widget child;
   final double? maxWidth;
   final AlignmentGeometry alignment;
+  final bool fillHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +125,9 @@ class AdaptiveWidth extends StatelessWidget {
           alignment: alignment,
           child: SizedBox(
             width: width,
-            height: constraints.hasBoundedHeight ? constraints.maxHeight : null,
+            height: (fillHeight && constraints.hasBoundedHeight)
+                ? constraints.maxHeight
+                : null,
             child: child,
           ),
         );
