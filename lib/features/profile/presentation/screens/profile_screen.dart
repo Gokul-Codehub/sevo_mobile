@@ -88,12 +88,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not open ${source == ImageSource.camera ? "camera" : "gallery"}: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      AppToast.show(context, 'Could not open ${source == ImageSource.camera ? "camera" : "gallery"}: $e', type: AppToastType.error);
       return;
     }
     if (picked == null) return;
@@ -103,12 +98,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (!context.mounted) return;
     setState(() => _uploadingAvatar = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error ?? 'Profile photo updated!'),
-        backgroundColor: error != null ? AppColors.error : AppColors.navy,
-      ),
-    );
+    AppToast.show(context, error ?? 'Profile photo updated!', type: error != null ? AppToastType.error : AppToastType.success);
   }
 
   /// Pages that need an account: a guest gets an in-app notice with a Log in action instead of entering the page.
@@ -544,19 +534,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       );
                   if (!context.mounted) return;
                   if (error != null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(error),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
+                    AppToast.show(context, error, type: AppToastType.error);
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Profile updated successfully!'),
-                        backgroundColor: AppColors.navy,
-                      ),
-                    );
+                    AppToast.show(context, 'Profile updated successfully!', type: AppToastType.success);
                   }
                 },
                 style: ElevatedButton.styleFrom(

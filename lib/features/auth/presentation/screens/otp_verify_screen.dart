@@ -12,6 +12,7 @@ import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_notifier.dart';
 import '../../domain/otp_autofill.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Screen 5: OTP Verification
 /// 6 individual rounded digit boxes with countdown timer and navy Verify CTA matching reference screen 5.
@@ -203,12 +204,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
     final otp = _getOtpCode();
     if (otp.length != 6) {
       AppHaptics.light();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the 6-digit code we sent you.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+      AppToast.show(context, 'Please enter the 6-digit code we sent you.', type: AppToastType.info);
       return;
     }
 
@@ -227,12 +223,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
     setState(() => _isLoading = false);
 
     if (result.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.error!),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      AppToast.show(context, result.error!, type: AppToastType.error);
     } else {
       final user = ref.read(currentUserProvider);
       // Email sign-ins must also give a mobile number (QA CME07 - same rule as
@@ -332,18 +323,10 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
     setState(() => _isLoading = false);
 
     if (result.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(result.error!), backgroundColor: AppColors.error),
-      );
+      AppToast.show(context, result.error!, type: AppToastType.error);
     } else {
       _startCountdown();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('A new code is on its way.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      AppToast.show(context, 'A new code is on its way.', type: AppToastType.success);
     }
   }
 

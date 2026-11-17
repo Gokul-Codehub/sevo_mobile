@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/booking_models.dart';
 import '../../domain/booking_providers.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// The "Active Quote" card on a booking detail screen — shown when a
 /// Painting / Masonry / AC-Inspection booking (an ESTIMATION/inspection
@@ -399,12 +400,7 @@ class ActiveQuoteCard extends ConsumerWidget {
           reasonCode: reasonCode,
         );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error ?? 'Done.'),
-        backgroundColor: error != null ? AppColors.error : AppColors.success,
-      ),
-    );
+    AppToast.show(context, error ?? 'Done.', type: error != null ? AppToastType.error : AppToastType.success);
   }
 }
 

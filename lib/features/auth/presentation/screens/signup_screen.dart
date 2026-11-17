@@ -8,6 +8,7 @@ import '../../../../shared/utils/focus_first_error.dart';
 import '../../../../shared/utils/input_validators.dart';
 import '../../domain/auth_models.dart';
 import '../../domain/auth_notifier.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// New customer signup: name, mobile number, email and password. A 6-digit code is emailed to confirm the
 /// address; the account is created when the code is entered (see OtpVerifyScreen in signup mode).
@@ -59,9 +60,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (!mounted) return;
     setState(() => _loading = false);
     if (result.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.error!), backgroundColor: AppColors.error),
-      );
+      AppToast.show(context, result.error!, type: AppToastType.error);
       return;
     }
     final args = OtpVerifyArgs(

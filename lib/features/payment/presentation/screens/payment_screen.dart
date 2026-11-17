@@ -11,6 +11,7 @@ import '../../../notifications/domain/notification_providers.dart';
 import '../../domain/payment_controller.dart';
 import '../../domain/payment_models.dart';
 import '../../../../core/navigation/safe_back.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Screen 16: Payment Options Screen
 /// Matches reference screen 16 with amount payable banner, selectable payment methods,
@@ -97,9 +98,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         .read(bookingActionControllerProvider.notifier)
         .cancelBooking(widget.bookingId, kOnlinePaymentWithdrawnReason);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Payment cancelled. Your booking was not placed.')),
-    );
+    AppToast.show(context, 'Payment cancelled. Your booking was not placed.', type: AppToastType.info);
     context.go('/');
   }
 
@@ -191,12 +190,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           ),
         );
       } else if (next is PaymentFailed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.errorMessage),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.show(context, next.errorMessage, type: AppToastType.error);
       }
     });
 

@@ -8,6 +8,7 @@ import '../../domain/gt_models.dart';
 import '../../domain/gt_providers.dart';
 import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Goods & Transport date + slot picker driven entirely by
 /// `GET /api/logistics/slots/`. The server owns the cut-off, lead time,
@@ -249,10 +250,7 @@ class _GtSlotPickerState extends ConsumerState<GtSlotPicker> {
                           if (!slot.isAvailable) {
                             final reason = slot.reason;
                             if (reason != null && reason.isNotEmpty) {
-                              ScaffoldMessenger.of(context)
-                                ..hideCurrentSnackBar()
-                                ..showSnackBar(
-                                    SnackBar(content: Text(reason)));
+                              AppToast.show(context, reason, type: AppToastType.info);
                             }
                             return;
                           }

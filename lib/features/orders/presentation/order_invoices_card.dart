@@ -8,6 +8,7 @@ import '../../../core/errors/api_error.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../booking/presentation/screens/pdf_viewer_screen.dart';
 import '../data/grocery_orders_repository.dart';
+import '../../shared/utils/app_toast.dart';
 
 /// Download buttons for an order's invoices (one tax invoice per seller, plus any credit note). Shown only when the
 /// server has issued something, which for a normal order means after delivery.
@@ -53,10 +54,10 @@ class _OrderInvoicesCardState extends ConsumerState<OrderInvoicesCard> {
             ));
           }
         } catch (_) {
-          messenger.showSnackBar(const SnackBar(content: Text('Could not open the invoice. Please try again.'), backgroundColor: AppColors.error));
+          AppToast.show(messenger.context, 'Could not open the invoice. Please try again.', type: AppToastType.error);
         }
       case Failure(:final error):
-        messenger.showSnackBar(SnackBar(content: Text(error.message), backgroundColor: AppColors.error));
+        AppToast.show(messenger.context, error.message, type: AppToastType.error);
     }
   }
 

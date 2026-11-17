@@ -18,6 +18,7 @@ import '../../../../shared/utils/focus_first_error.dart';
 import '../../../../shared/maps/sevo_map_style.dart';
 import '../../../../shared/widgets/map_lollipop_pin.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Screen to create or edit a customer address with live map pin & service zone check.
 class AddEditAddressScreen extends ConsumerStatefulWidget {
@@ -161,12 +162,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
 
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location detected. Please confirm the details below.'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        AppToast.show(context, 'Location detected. Please confirm the details below.', type: AppToastType.success);
       }
     } catch (e) {
       _showLocationError('Could not detect your location. Please try again.');
@@ -237,9 +233,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
 
   void _showLocationError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.error),
-    );
+    AppToast.show(context, message, type: AppToastType.error);
   }
 
   Future<void> _handleSave() async {
@@ -289,19 +283,12 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         }
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.error),
-      );
+      AppToast.show(context, error, type: AppToastType.error);
     } else {
       if (_isDefault || ref.read(selectedAddressProvider) == null) {
         ref.read(selectedAddressProvider.notifier).state = newAddress;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Address saved successfully!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      AppToast.show(context, 'Address saved successfully!', type: AppToastType.success);
       context.goBack();
     }
   }

@@ -15,6 +15,7 @@ import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
 import 'gt_compliance.dart';
 import 'gt_insurance_section.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 // Goods & Transport sections wired to the updated backend:
 //   GtCargoSection     goods catalogue + /evaluate-cargo/ vehicle fitment
@@ -226,11 +227,7 @@ class _GtCargoSectionState extends ConsumerState<GtCargoSection> {
         items: [CargoLine(itemId: item.id, quantity: 1)],
         declaredWeightKg: weight,
       );
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Switched to Truck. Please pick a vehicle.')),
-        );
+      AppToast.show(context, 'Switched to Truck. Please pick a vehicle.', type: AppToastType.info);
     });
   }
 

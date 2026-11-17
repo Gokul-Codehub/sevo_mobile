@@ -10,6 +10,7 @@ import '../../domain/notification_providers.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../shared/utils/date_utils.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// The customer's notification inbox (opened from the bell on Home).
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -43,9 +44,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     if (target == null || n.isExpired) return;
     final opened = await openNotificationLink(ref, context, target, claimExpiresAt: n.expiresAt);
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("There's nothing to open for this notification.")),
-      );
+      AppToast.show(context, "There's nothing to open for this notification.", type: AppToastType.info);
     }
   }
 

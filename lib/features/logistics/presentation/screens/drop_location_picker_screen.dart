@@ -15,6 +15,7 @@ import '../../domain/logistics_models.dart';
 import '../../domain/logistics_providers.dart';
 import '../widgets/gt_coverage_map.dart';
 import '../../../../shared/maps/sevo_map_style.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Drop-off location picker for Goods & Transport.
 ///
@@ -369,9 +370,7 @@ class _DropLocationPickerScreenState extends ConsumerState<DropLocationPickerScr
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.error),
-    );
+    AppToast.show(context, message, type: AppToastType.error);
   }
 
   void _confirm() {

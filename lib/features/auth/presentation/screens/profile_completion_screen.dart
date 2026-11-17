@@ -10,6 +10,7 @@ import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_notifier.dart';
 import '../../../../shared/utils/focus_first_error.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Screen allowing newly registered customers to set their display name & optional email.
 class ProfileCompletionScreen extends ConsumerStatefulWidget {
@@ -80,19 +81,9 @@ class _ProfileCompletionScreenState
     setState(() => _isLoading = false);
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      AppToast.show(context, error, type: AppToastType.error);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('All set! Welcome to SEVO.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      AppToast.show(context, 'All set! Welcome to SEVO.', type: AppToastType.success);
 
       final pendingAction = ref.read(pendingActionProvider);
       if (pendingAction != null) {

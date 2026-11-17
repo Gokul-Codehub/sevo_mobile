@@ -13,6 +13,7 @@ import '../../domain/address_notifier.dart';
 import 'guest_location_picker_screen.dart';
 import '../../../../core/navigation/safe_back.dart';
 import '../../../../core/refresh/refresh_runner.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Screen listing customer addresses with options to add, select, edit, or delete.
 class AddressListScreen extends ConsumerWidget {
@@ -182,11 +183,7 @@ class AddressListScreen extends ConsumerWidget {
                             .read(addressListProvider.notifier)
                             .setDefault(addresses[i].id);
                         if (error != null && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text(error),
-                                backgroundColor: AppColors.error),
-                          );
+                          AppToast.show(context, error, type: AppToastType.error);
                         }
                       },
                       onDelete: () => _confirmDelete(context, ref, addresses[i]),

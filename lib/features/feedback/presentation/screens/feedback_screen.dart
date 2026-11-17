@@ -96,12 +96,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
           enabled: ref.read(featureFlagProvider('rating_prompt')),
         );
       case Failure(:final error):
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("We couldn't send your feedback. ${error.message}"),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.show(context, "We couldn't send your feedback. ${error.message}", type: AppToastType.error);
     }
   }
 

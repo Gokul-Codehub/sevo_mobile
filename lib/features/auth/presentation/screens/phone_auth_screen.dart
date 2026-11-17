@@ -13,6 +13,7 @@ import '../../../booking/domain/cart_notifier.dart';
 import '../../domain/auth_models.dart';
 import '../../domain/auth_notifier.dart';
 import '../../domain/auth_return.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Log in: email / mobile number / username + password, or "email me a code" when the password is forgotten.
 /// (Class name kept so the existing '/login' route and imports keep working.)
@@ -37,8 +38,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     super.dispose();
   }
 
-  void _toast(String msg) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.error));
+  void _toast(String msg) => AppToast.show(context, msg, type: AppToastType.error);
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;

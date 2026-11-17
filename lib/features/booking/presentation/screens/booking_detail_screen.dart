@@ -39,6 +39,7 @@ import '../widgets/grocery_order_status_view.dart';
 import '../../domain/grocery_fee_split.dart';
 import '../../../pricing/domain/pricing_providers.dart';
 import '../../../../shared/utils/date_utils.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Comprehensive booking detail screen with timeline, actions, and technician info.
 class BookingDetailScreen extends ConsumerWidget {
@@ -696,7 +697,7 @@ class BookingDetailScreen extends ConsumerWidget {
   Future<void> _downloadInvoice(
       BuildContext context, WidgetRef ref, Booking booking) async {
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(const SnackBar(content: Text('Preparing invoice…')));
+    AppToast.show(messenger.context, 'Preparing invoice…', type: AppToastType.info);
 
     final result =
         await ref.read(bookingRepositoryProvider).downloadInvoice(booking.id);
@@ -721,24 +722,18 @@ class BookingDetailScreen extends ConsumerWidget {
           ));
         } catch (_) {
           if (context.mounted) {
-            messenger.showSnackBar(const SnackBar(
-              content: Text('Could not open the invoice. Please try again.'),
-              backgroundColor: AppColors.error,
-            ));
+            AppToast.show(messenger.context, 'Could not open the invoice. Please try again.', type: AppToastType.error);
           }
         }
       case Failure(:final error):
-        messenger.showSnackBar(SnackBar(
-          content: Text(error.message),
-          backgroundColor: AppColors.error,
-        ));
+        AppToast.show(messenger.context, error.message, type: AppToastType.error);
     }
   }
 
   Future<void> _downloadReceipt(
       BuildContext context, WidgetRef ref, Booking booking) async {
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(const SnackBar(content: Text('Preparing receipt…')));
+    AppToast.show(messenger.context, 'Preparing receipt…', type: AppToastType.info);
     final result = await ref.read(bookingRepositoryProvider).downloadAdvanceReceipt(booking.id);
     if (!context.mounted) return;
     switch (result) {
@@ -758,17 +753,11 @@ class BookingDetailScreen extends ConsumerWidget {
           ));
         } catch (_) {
           if (context.mounted) {
-            messenger.showSnackBar(const SnackBar(
-              content: Text('Could not open the receipt. Please try again.'),
-              backgroundColor: AppColors.error,
-            ));
+            AppToast.show(messenger.context, 'Could not open the receipt. Please try again.', type: AppToastType.error);
           }
         }
       case Failure(:final error):
-        messenger.showSnackBar(SnackBar(
-          content: Text(error.message),
-          backgroundColor: AppColors.error,
-        ));
+        AppToast.show(messenger.context, error.message, type: AppToastType.error);
     }
   }
 
@@ -944,9 +933,7 @@ class BookingDetailScreen extends ConsumerWidget {
                             .read(bookingActionControllerProvider.notifier)
                             .cancelBooking(booking.id, finalReason);
                         if (error != null && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(error), backgroundColor: AppColors.error),
-                          );
+                          AppToast.show(context, error, type: AppToastType.error);
                         }
                       },
                 child: const Text('Confirm Cancel'),
@@ -1049,15 +1036,8 @@ class BookingDetailScreen extends ConsumerWidget {
                                     slot: isGt ? 'Flexible (Anytime)' : slot!.label,
                                   );
                               if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    error ??
-                                        'Reschedule request submitted. We will confirm your new time shortly.',
-                                  ),
-                                  backgroundColor: error != null ? AppColors.error : AppColors.navy,
-                                ),
-                              );
+                              AppToast.show(context, error ??
+                                        'Reschedule request submitted. We will confirm your new time shortly.', type: error != null ? AppToastType.error : AppToastType.success);
                             },
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.navy,
@@ -1654,13 +1634,9 @@ class _PayAfterServiceCardState extends ConsumerState<_PayAfterServiceCard> {
       case Success():
         ref.invalidate(bookingDetailProvider(widget.booking.id));
         ref.invalidate(myBookingsProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment successful. Thank you!')),
-        );
+        AppToast.show(context, 'Payment successful. Thank you!', type: AppToastType.info);
       case Failure(:final error):
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message), backgroundColor: AppColors.error),
-        );
+        AppToast.show(context, error.message, type: AppToastType.error);
     }
   }
 

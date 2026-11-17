@@ -134,8 +134,8 @@ const acCapacities = [
 /// fee/text on the backend (`?service_category=`).
 enum InspectionCategory {
   ac('ac', 'ac_appliance', 'AC', 'Air Conditioner', 'ac-service-cleaning'),
-  plumbing('plumbing', 'plumbing', 'Plumbing', 'Plumbing', 'plumbing'),
-  electrical('electrical', 'electrical', 'Electrical', 'Electrical', 'electrical');
+  plumbing('plumbing', 'plumbing', 'Plumbing', 'Plumbing', 'water-leakage-repair'),
+  electrical('electrical', 'electrical', 'Electrical', 'Electrical', 'switch-socket');
 
   const InspectionCategory(this.configKey, this.bookingCategory, this.label, this.categoryName, this.slotService);
 

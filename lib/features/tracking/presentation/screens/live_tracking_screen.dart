@@ -24,6 +24,7 @@ import '../widgets/tracking_markers.dart';
 import '../../../../core/navigation/safe_back.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../../../shared/maps/sevo_map_style.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Route line color — changed 2026-09-16 from AppColors.primary (the app's
 /// brand green, 0xFF05A357) to a dedicated blue per explicit request, and
@@ -1235,13 +1236,9 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         : 'Customer requested cancellation',
                   );
               if (error != null && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(error), backgroundColor: AppColors.error),
-                );
+                AppToast.show(context, error, type: AppToastType.error);
               } else if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Booking cancelled.')),
-                );
+                AppToast.show(context, 'Booking cancelled.', type: AppToastType.info);
                 context.goBack();
               }
             },

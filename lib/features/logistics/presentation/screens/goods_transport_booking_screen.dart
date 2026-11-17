@@ -1014,12 +1014,7 @@ class _GoodsTransportBookingScreenState
     setState(() => _isLoading = false);
 
     if (result.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.error!),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      AppToast.show(context, result.error!, type: AppToastType.error);
       // Server rule (2026-10-26): a GT booking needs an OTP-verified phone
       // (403 PHONE_VERIFICATION_REQUIRED). Send the customer to sign in;
       // the form keeps everything they entered.
@@ -1388,12 +1383,7 @@ class _GoodsTransportBookingScreenState
     setState(() => _isLoading = false);
 
     if (result.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.error!),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      AppToast.show(context, result.error!, type: AppToastType.error);
       // Server rule (2026-10-26): a GT booking needs an OTP-verified phone
       // (403 PHONE_VERIFICATION_REQUIRED). Send the customer to sign in;
       // the form keeps everything they entered.
@@ -1406,9 +1396,7 @@ class _GoodsTransportBookingScreenState
   }
 
   void _warn(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.warning),
-    );
+    AppToast.show(context, message, type: AppToastType.info);
     _revealFor(message);
   }
 

@@ -9,6 +9,7 @@ import '../../../../shared/theme/app_colors.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
 import '../../data/support_repository.dart';
 import '../../domain/support_models.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Comprehensive Customer Support, Help Desk, and FAQs screen.
 class SupportScreen extends ConsumerStatefulWidget {
@@ -460,16 +461,9 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                           case Success(:final data):
                             Navigator.pop(ctx);
                             if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  data != null && data.isNotEmpty
+                            AppToast.show(context, data != null && data.isNotEmpty
                                       ? 'Support ticket submitted! Reference: $data. We will reach out shortly.'
-                                      : 'Support ticket submitted! We will reach out shortly.',
-                                ),
-                                backgroundColor: AppColors.success,
-                              ),
-                            );
+                                      : 'Support ticket submitted! We will reach out shortly.', type: AppToastType.success);
                           case Failure(:final error):
                             setModalState(() {
                               isSubmitting = false;

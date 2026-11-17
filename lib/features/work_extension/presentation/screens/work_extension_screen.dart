@@ -6,6 +6,7 @@ import '../../../../core/errors/api_error.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../data/work_extension_repository.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 /// Screen for reviewing and approving/declining on-site work extensions requested by technician.
 class WorkExtensionScreen extends ConsumerStatefulWidget {
@@ -39,12 +40,7 @@ class _WorkExtensionScreenState extends ConsumerState<WorkExtensionScreen> {
       case Success():
         setState(() => _finalDecision = approve ? 'approved' : 'rejected');
       case Failure(:final error):
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Action failed: ${error.message}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        AppToast.show(context, 'Action failed: ${error.message}', type: AppToastType.error);
     }
   }
 

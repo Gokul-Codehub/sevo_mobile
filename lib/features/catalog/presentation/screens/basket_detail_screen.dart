@@ -103,9 +103,7 @@ class _BasketDetailScreenState extends ConsumerState<BasketDetailScreen> {
     if (addedCount > 0) {
       AppToast.addedToCart(context, basket.title);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("This combo's items aren't available right now")),
-      );
+      AppToast.show(context, "This combo's items aren't available right now", type: AppToastType.info);
     }
   }
 
