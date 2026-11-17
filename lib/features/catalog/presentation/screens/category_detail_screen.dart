@@ -14,6 +14,7 @@ import '../../../../shared/widgets/listing_skeleton.dart';
 import '../../../booking/domain/booking_models.dart';
 import '../../../booking/domain/cart_notifier.dart';
 import '../../../ac_inspection/data/ac_inspection_repository.dart';
+import '../../../ac_inspection/domain/ac_inspection_models.dart';
 import '../../domain/catalog_models.dart';
 import '../../domain/catalog_providers.dart';
 import '../widgets/category_popup_sheet.dart';
@@ -22,17 +23,19 @@ import '../widgets/service_card.dart';
 
 /// Entry card for the AC Inspection & Diagnostic Visit (admin-driven fee/text).
 class _AcInspectionBanner extends ConsumerWidget {
-  const _AcInspectionBanner();
+  const _AcInspectionBanner(this.category);
+
+  final InspectionCategory category;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cfg = ref.watch(acInspectionConfigProvider).valueOrNull;
+    final cfg = ref.watch(acInspectionConfigProvider(category)).valueOrNull;
     if (cfg == null || !cfg.isActive) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => context.push(AppRoutes.acInspection),
+        onTap: () => context.push('${AppRoutes.acInspection}?category=${category.configKey}'),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -45,7 +48,14 @@ class _AcInspectionBanner extends ConsumerWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), shape: BoxShape.circle),
-                child: const Icon(Icons.ac_unit_rounded, color: Colors.white),
+                child: Icon(
+                  switch (category) {
+                    InspectionCategory.ac => Icons.ac_unit_rounded,
+                    InspectionCategory.plumbing => Icons.plumbing_rounded,
+                    InspectionCategory.electrical => Icons.electrical_services_rounded,
+                  },
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1017,9 +1027,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
                 children: [
-                  // Air Conditioner: the web's "AC Inspection & Diagnostic Visit".
-                  if (categorySlug.replaceAll('-', '_').toLowerCase() == 'ac_appliance')
-                    const _AcInspectionBanner(),
+                  // AC / Plumbing / Electrical: the web's "Inspection & Diagnostic Visit".
+                  if (InspectionCategory.fromCategorySlug(categorySlug) case final inspectionCategory?)
+                    _AcInspectionBanner(inspectionCategory),
                   ...services.map(
                     (service) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),

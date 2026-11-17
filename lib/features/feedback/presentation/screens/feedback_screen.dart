@@ -98,7 +98,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       case Failure(:final error):
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not submit feedback: ${error.message}'),
+            content: Text("We couldn't send your feedback. ${error.message}"),
             backgroundColor: AppColors.error,
           ),
         );
@@ -115,7 +115,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       if (result is Failure) failed++;
     }
     if (failed > 0 && mounted) {
-      AppToast.show(context, 'Your rating was saved, but $failed photo(s) could not be uploaded.', type: AppToastType.error);
+      AppToast.show(context, failed == 1 ? 'Your rating was saved, but one photo could not be uploaded.' : 'Your rating was saved, but $failed photos could not be uploaded.', type: AppToastType.error);
     }
   }
 

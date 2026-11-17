@@ -86,7 +86,7 @@ class GatewayPaymentLauncher implements PaymentLauncher {
       });
       return await done.future;
     } catch (e) {
-      return PaymentCompletion(askServer: false, message: 'Unable to open the payment screen: $e');
+      return PaymentCompletion(askServer: false, message: "We couldn't open the payment screen. Please try again in a moment.");
     } finally {
       rp.clear();
     }

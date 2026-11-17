@@ -72,7 +72,7 @@ class AcInspectionConfig extends Equatable {
     }
     return AcInspectionConfig(
       fee: Decimal.tryParse(feeRaw.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? Decimal.fromInt(199),
-      title: (json['title'] ?? 'AC Inspection & Diagnostic Visit').toString(),
+      title: (json['title'] ?? 'Inspection & Diagnostic Visit').toString(),
       subtitle: (json['subtitle'] ?? '').toString(),
       isActive: json['is_active'] != false,
       badges: _strings(json['badges']),
@@ -129,3 +129,44 @@ const acCapacities = [
   ('2 Ton', '2_TON'),
   ('Other', 'OTHER'),
 ];
+
+/// Which trade an inspection visit is for. Each has its own admin-driven
+/// fee/text on the backend (`?service_category=`).
+enum InspectionCategory {
+  ac('ac', 'ac_appliance', 'AC', 'Air Conditioner', 'ac-service-cleaning'),
+  plumbing('plumbing', 'plumbing', 'Plumbing', 'Plumbing', 'plumbing'),
+  electrical('electrical', 'electrical', 'Electrical', 'Electrical', 'electrical');
+
+  const InspectionCategory(this.configKey, this.bookingCategory, this.label, this.categoryName, this.slotService);
+
+  /// Value for `GET /settings/ac-inspection/config/?service_category=`.
+  final String configKey;
+
+  /// Value sent as `service_category` when booking.
+  final String bookingCategory;
+  final String label;
+  final String categoryName;
+
+  /// Service the backend resolves for inspection slots.
+  final String slotService;
+
+  String get issueTitle => '$label Inspection & Diagnostic Visit';
+  bool get isAc => this == InspectionCategory.ac;
+
+  static InspectionCategory fromKey(String? key) {
+    final k = (key ?? '').toLowerCase();
+    for (final c in values) {
+      if (c.configKey == k) return c;
+    }
+    return InspectionCategory.ac;
+  }
+
+  /// Maps a catalog category slug/name to an inspection trade, or null.
+  static InspectionCategory? fromCategorySlug(String slugOrName) {
+    final s = slugOrName.replaceAll('-', '_').toLowerCase();
+    if (s == 'ac_appliance') return InspectionCategory.ac;
+    if (s.contains('plumb')) return InspectionCategory.plumbing;
+    if (s.contains('electric')) return InspectionCategory.electrical;
+    return null;
+  }
+}

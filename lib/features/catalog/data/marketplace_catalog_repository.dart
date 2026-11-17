@@ -208,6 +208,7 @@ class MarketplaceProduct {
   const MarketplaceProduct({
     required this.id,
     required this.title,
+    this.slug = '',
     required this.sellingPrice,
     this.brand,
     this.unit,
@@ -245,6 +246,9 @@ class MarketplaceProduct {
   final String? brand;
   final String? unit;
   final String? packSize;
+
+  /// The product's own URL slug from the seller hub (empty when the server did not send one).
+  final String slug;
   final Decimal? mrp;
   final String? primaryImage;
 
@@ -308,6 +312,7 @@ class MarketplaceProduct {
   MarketplaceProduct withVariants(List<MarketplaceProduct> v) => MarketplaceProduct(
         id: id,
         title: title,
+        slug: slug,
         sellingPrice: sellingPrice,
         brand: brand,
         unit: unit,
@@ -447,6 +452,7 @@ class MarketplaceProduct {
     return MarketplaceProduct(
       id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
       title: (json['title'] ?? '').toString(),
+      slug: (json['slug'] ?? '').toString().trim(),
       sellingPrice: parseDecimal(json['selling_price']) ?? Decimal.zero,
       brand: rawBrand.isNotEmpty ? rawBrand : null,
       unit: rawUnit.isNotEmpty ? rawUnit : null,

@@ -26,7 +26,9 @@ import '../../domain/ac_inspection_models.dart';
 /// AC and sends an itemised quotation before any repair work (approved later
 /// from the booking's quotation card).
 class AcInspectionScreen extends ConsumerStatefulWidget {
-  const AcInspectionScreen({super.key});
+  const AcInspectionScreen({super.key, this.category = InspectionCategory.ac});
+
+  final InspectionCategory category;
 
   @override
   ConsumerState<AcInspectionScreen> createState() => _AcInspectionScreenState();
@@ -35,7 +37,6 @@ class AcInspectionScreen extends ConsumerStatefulWidget {
 class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
   /// The service the backend resolves for inspection slots
   /// (EstimationService uses resolve_service("ac-service-cleaning", "ac-appliance")).
-  static const _slotService = 'ac-service-cleaning';
 
   static const _border = Color(0xFFE6EAF2);
   static const _softNavy = Color(0xFFE8EEF4);
@@ -55,7 +56,7 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
     super.initState();
     _container = ProviderScope.containerOf(context, listen: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _container.read(selectedBookingServiceIdProvider.notifier).state = _slotService;
+      _container.read(selectedBookingServiceIdProvider.notifier).state = widget.category.slotService;
       _container.read(selectedTimeSlotProvider.notifier).state = null;
     });
   }
@@ -127,7 +128,7 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
       capacity: _capacity,
       quantity: _qty,
       // The backend requires a symptom; the web fills this default too.
-      symptom: notes.isEmpty ? 'AC Inspection & Diagnostic requested' : notes,
+      symptom: notes.isEmpty ? '${widget.category.label} Inspection & Diagnostic requested' : notes,
       notes: notes.isEmpty ? null : notes,
     );
     final phone = user.hasMobileNumber ? user.phone : '';
@@ -139,6 +140,7 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
     final date = DateFormat('yyyy-MM-dd').format(ref.read(selectedBookingDateProvider));
     final result = await ref.read(acInspectionRepositoryProvider).book(
           config: config,
+          category: widget.category,
           details: details,
           address: address,
           date: date,
@@ -163,12 +165,12 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final configAsync = ref.watch(acInspectionConfigProvider);
+    final configAsync = ref.watch(acInspectionConfigProvider(widget.category));
     final config = configAsync.valueOrNull;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('AC Inspection'),
+        title: Text('${widget.category.label} Inspection'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.white,
@@ -178,13 +180,13 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
         loading: () => const LoadingState(),
         error: (e, _) => ErrorState.from(
           e,
-          onRetry: () => ref.invalidate(acInspectionConfigProvider),
+          onRetry: () => ref.invalidate(acInspectionConfigProvider(widget.category)),
         ),
         data: (config) {
           if (!config.isActive) {
-            return const EmptyState(
+            return EmptyState(
               icon: Icons.ac_unit_rounded,
-              title: 'AC inspection is not available right now',
+              title: '${widget.category.label} inspection is not available right now',
               body: 'Please check back soon.',
             );
           }
@@ -645,12 +647,13 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
             ),
           ),
 
-        // ── AC details ──
+        // ── AC details (AC only) / issue details ──
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _sectionTitle('Your AC', icon: Icons.devices_other_rounded),
+              _sectionTitle(widget.category.isAc ? 'Your AC' : 'Your issue', icon: Icons.devices_other_rounded),
+              if (widget.category.isAc) ...[
               DropdownButtonFormField<String>(
                 initialValue: _brand,
                 decoration: _inputDecoration(label: 'Brand'),
@@ -685,13 +688,18 @@ class _AcInspectionScreenState extends ConsumerState<AcInspectionScreen> {
                 ),
               ),
               const SizedBox(height: 14),
+              ],
               TextField(
                 controller: _notes,
                 maxLines: 3,
                 style: const TextStyle(fontSize: 13.5, height: 1.4),
                 decoration: _inputDecoration(
                   label: 'Describe the issue (optional)',
-                  hint: 'e.g. not cooling, strange noise, water leaking',
+                  hint: widget.category.isAc
+                      ? 'e.g. not cooling, strange noise, water leaking'
+                      : widget.category == InspectionCategory.plumbing
+                          ? 'e.g. leaking tap, blocked drain, low water pressure'
+                          : 'e.g. power tripping, switch sparking, fan not working',
                 ),
               ),
               const SizedBox(height: 14),

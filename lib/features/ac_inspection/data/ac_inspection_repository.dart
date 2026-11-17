@@ -25,9 +25,12 @@ class AcInspectionRepository {
   final ApiClient api;
   final BookingRepository bookings;
 
-  Future<Result<AcInspectionConfig>> getConfig() async {
+  Future<Result<AcInspectionConfig>> getConfig([InspectionCategory category = InspectionCategory.ac]) async {
     try {
-      final response = await api.get('/settings/ac-inspection/config/');
+      final response = await api.get(
+        '/settings/ac-inspection/config/',
+        queryParameters: {'service_category': category.configKey},
+      );
       return ResponseNormalizer.extract(response, (data) {
         final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
         return AcInspectionConfig.fromJson(map);
@@ -39,6 +42,7 @@ class AcInspectionRepository {
 
   Future<Result<Booking>> book({
     required AcInspectionConfig config,
+    InspectionCategory category = InspectionCategory.ac,
     required AcInspectionDetails details,
     required Address address,
     required String date,
@@ -56,8 +60,8 @@ class AcInspectionRepository {
         'customer_name': customerName,
         'phone': phone,
         if (email != null && email.contains('@')) 'email': email,
-        'service_category': 'ac_appliance',
-        'issue_title': 'AC Inspection & Diagnostic Visit',
+        'service_category': category.bookingCategory,
+        'issue_title': category.issueTitle,
         'description': details.symptom,
         'address': address.formattedAddress,
         'saved_address_id': address.id.toString(),
@@ -69,23 +73,27 @@ class AcInspectionRepository {
         'payment_method': 'COD',
         'job_type': 'ESTIMATION',
         'estimation_fee': fee,
-        'ac_type': details.acType,
-        'ac_brand': details.brand,
-        'ac_quantity': details.quantity.toString(),
-        'ac_capacity': details.capacity,
+        if (category.isAc) ...{
+          'ac_type': details.acType,
+          'ac_brand': details.brand,
+          'ac_quantity': details.quantity.toString(),
+          'ac_capacity': details.capacity,
+        },
         'customer_symptom': details.symptom,
         if (details.notes != null && details.notes!.trim().isNotEmpty) 'customer_notes': details.notes!.trim(),
         'cart_data': jsonEncode([
           {
-            'id': 'hvac-ac-inspection',
-            'name': 'AC Inspection',
+            'id': category.isAc ? 'hvac-ac-inspection' : '${category.configKey}-inspection',
+            'name': '${category.label} Inspection',
             'price': config.fee.toDouble(),
             'quantity': 1,
             'jobType': 'ESTIMATION',
-            'ac_brand': details.brand,
-            'ac_type': details.acType,
-            'ac_quantity': details.quantity,
-            'categoryName': 'Air Conditioner',
+            if (category.isAc) ...{
+              'ac_brand': details.brand,
+              'ac_type': details.acType,
+              'ac_quantity': details.quantity,
+            },
+            'categoryName': category.categoryName,
           }
         ]),
         if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
@@ -128,8 +136,9 @@ final acInspectionRepositoryProvider = Provider<AcInspectionRepository>((ref) {
   );
 });
 
-final acInspectionConfigProvider = FutureProvider.autoDispose<AcInspectionConfig>((ref) async {
-  final result = await ref.watch(acInspectionRepositoryProvider).getConfig();
+final acInspectionConfigProvider =
+    FutureProvider.autoDispose.family<AcInspectionConfig, InspectionCategory>((ref, category) async {
+  final result = await ref.watch(acInspectionRepositoryProvider).getConfig(category);
   return switch (result) {
     Success(:final data) => data,
     Failure(:final error) => throw error,

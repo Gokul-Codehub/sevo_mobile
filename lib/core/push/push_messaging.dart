@@ -15,7 +15,14 @@ class PushMessage {
   final Map<String, String> data;
 
   String get type => data['type'] ?? '';
-  String? get route => data['route'];
+  /// `route` wins. Otherwise a product campaign can send just `product_slug` (optionally `type=product`).
+  String? get route {
+    final r = data['route'];
+    if (r != null && r.trim().isNotEmpty) return r;
+    final slug = (data['product_slug'] ?? '').trim();
+    if (slug.isNotEmpty && RegExp(r'^[A-Za-z0-9_.~%-]+$').hasMatch(slug)) return '/products/$slug';
+    return null;
+  }
 }
 
 /// Seam over Firebase Cloud Messaging.

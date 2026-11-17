@@ -41,6 +41,7 @@ import '../features/feedback/presentation/screens/feedback_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 import '../features/logistics/presentation/screens/drop_location_picker_screen.dart';
 import '../features/ac_inspection/presentation/screens/ac_inspection_screen.dart';
+import '../features/ac_inspection/domain/ac_inspection_models.dart';
 import '../core/analytics/analytics_manager.dart';
 import '../core/foundation/feature_guard.dart';
 import '../features/account_settings/presentation/account_settings_screens.dart';
@@ -531,7 +532,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.acInspection,
         name: 'ac-inspection',
-        builder: (context, state) => const AcInspectionScreen(),
+        builder: (context, state) => AcInspectionScreen(
+          category: InspectionCategory.fromKey(state.uri.queryParameters['category']),
+        ),
       ),
       GoRoute(
         path: AppRoutes.goodsTransportBooking,

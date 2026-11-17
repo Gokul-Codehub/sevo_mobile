@@ -205,7 +205,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       AppHaptics.light();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter all 6 digits of the OTP code'),
+          content: Text('Please enter the 6-digit code we sent you.'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -290,7 +290,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
                     child: Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
                   ),
                   SizedBox(width: 10),
-                  Text('Logged in successfully!'),
+                  Text('Welcome back! You are signed in.'),
                 ],
               ),
               backgroundColor: AppColors.success,
@@ -340,7 +340,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       _startCountdown();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('New OTP sent successfully'),
+          content: Text('A new code is on its way.'),
           backgroundColor: AppColors.success,
         ),
       );

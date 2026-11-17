@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/errors/friendly_message.dart';
 import '../theme/app_colors.dart';
 import '../widgets/motion.dart';
 
@@ -50,6 +51,8 @@ class AppToast {
   }) {
     final overlay = overlayOverride ?? Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
+    // Never show developer text: server sentences stay, technical ones become plain language.
+    if (type == AppToastType.error) message = FriendlyMessage.polish(message);
 
     switch (type) {
       case AppToastType.success:

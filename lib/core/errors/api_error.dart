@@ -1,34 +1,40 @@
 import 'package:equatable/equatable.dart';
 
+import 'friendly_message.dart';
+
 /// Typed API error hierarchy for CalServices.
 ///
 /// Every network failure is converted to one of these subtypes
 /// by the ResponseNormalizer — screens never see raw DioExceptions.
 sealed class ApiError extends Equatable implements Exception {
-  const ApiError(this.message);
+  const ApiError(String message) : _message = message;
 
-  final String message;
+  final String _message;
+
+  /// Customer-safe text: server-written sentences pass through, technical text is replaced
+  /// (see [FriendlyMessage.polish]). The untouched original stays in [toString] for logs.
+  String get message => FriendlyMessage.polish(_message);
 
   @override
   List<Object?> get props => [message];
 
   @override
-  String toString() => '$runtimeType: $message';
+  String toString() => '$runtimeType: $_message';
 }
 
 /// HTTP 401 — access token expired or missing.
 final class UnauthorizedError extends ApiError {
-  const UnauthorizedError([super.message = 'Session expired. Please log in again.']);
+  const UnauthorizedError([super.message = 'Your session has ended. Please sign in again.']);
 }
 
 /// HTTP 403 — authenticated but not permitted.
 final class ForbiddenError extends ApiError {
-  const ForbiddenError([super.message = 'You do not have permission to do this.']);
+  const ForbiddenError([super.message = "This account can't do that. Please contact support if you think this is a mistake."]);
 }
 
 /// HTTP 404 — resource not found.
 final class NotFoundError extends ApiError {
-  const NotFoundError([super.message = 'The requested resource was not found.']);
+  const NotFoundError([super.message = "We couldn't find that. It may have been removed or is no longer available."]);
 }
 
 /// HTTP 422 / 400 / 429 — validation and rate-limit errors from DRF.
@@ -57,17 +63,17 @@ final class ValidationError extends ApiError {
 
 /// HTTP 5xx — server-side error.
 final class ServerError extends ApiError {
-  const ServerError([super.message = 'Something went wrong. Please try again.']);
+  const ServerError([super.message = 'Something went wrong on our side. Please try again in a moment.']);
 }
 
 /// Network timeout or no internet connection.
 final class NetworkError extends ApiError {
-  const NetworkError([super.message = 'No internet connection. Please check your network.']);
+  const NetworkError([super.message = "We couldn't reach SEVO. Please check your internet connection and try again."]);
 }
 
 /// Response was received but could not be parsed.
 final class ParseError extends ApiError {
-  const ParseError([super.message = 'Unexpected response from server.']);
+  const ParseError([super.message = "We couldn't read the response. Please try again."]);
 }
 
 /// Specific contract violation error when response structure violates expected endpoint schema.
@@ -88,7 +94,7 @@ final class ApiContractError extends ApiError {
 
 /// Unknown / catch-all error.
 final class UnknownError extends ApiError {
-  const UnknownError([super.message = 'An unexpected error occurred.']);
+  const UnknownError([super.message = "We couldn't complete that. Please try again."]);
 }
 
 /// Result type — either a success value or an [ApiError].

@@ -356,7 +356,7 @@ class BookingRepository {
       // 1. Check for envelope error response
       if (body is Map) {
         if (body.containsKey('success') && body['success'] == false) {
-          final msg = body['message']?.toString() ?? 'Failed to load bookings.';
+          final msg = body['message']?.toString() ?? "We couldn't load your bookings. Please try again.";
           return Failure(ValidationError(msg));
         }
       }
@@ -608,7 +608,7 @@ class BookingRepository {
           final decoded = jsonDecode(utf8.decode(data));
           if (decoded is Map) msg = (decoded['message'] ?? decoded['error'] ?? decoded['detail'])?.toString();
         } catch (_) {}
-        return Failure(ValidationError(msg ?? 'The server did not return a valid PDF (${data.length} bytes). Please try again.'));
+        return Failure(ValidationError(msg ?? "We couldn't prepare that document. Please try again in a moment."));
       }
       return Success(Uint8List.fromList(data));
     } on DioException catch (e) {

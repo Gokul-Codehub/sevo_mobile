@@ -379,6 +379,8 @@ class ServiceItem extends Equatable {
     this.tag,
     this.packageOptions = const [],
     this.selectedOption,
+    this.warehouseId,
+    this.reviews = const [],
   });
 
   final int id;
@@ -398,6 +400,15 @@ class ServiceItem extends Equatable {
   final String? subcategoryName;
   final String? subcategorySlug;
   final String? imageUrl;
+
+  /// Fulfilment warehouse a marketplace product ships from (null = the server's default warehouse).
+  final int? warehouseId;
+
+  /// Customer reviews for the detail page; empty when there are none.
+  final List<ServiceReview> reviews;
+
+  /// True only when real customers have rated this item (0 reviews means "none yet": hide the stars).
+  bool get hasReviews => reviewCount > 0;
   final bool isPopular;
   final bool isEssential;
   final List<String> inclusions;
@@ -865,6 +876,12 @@ class ServiceItem extends Equatable {
       selectedOption: json['selected_option'] is Map
           ? PackageOption.fromJson(Map<String, dynamic>.from(json['selected_option'] as Map))
           : null,
+      warehouseId: int.tryParse((json['warehouse_id'] ?? '').toString()),
+      reviews: (json['reviews'] as List? ?? const [])
+          .whereType<Map>()
+          .map((m) => ServiceReview.fromJson(Map<String, dynamic>.from(m)))
+          .where((r) => r.text.isNotEmpty || r.rating != null)
+          .toList(),
     );
   }
 
@@ -908,6 +925,7 @@ class ServiceItem extends Equatable {
         if (gstRate != null) 'gst_rate': gstRate,
         if (platformFee != null) 'platform_fee': platformFee.toString(),
         if (status != null) 'status': status,
+        if (warehouseId != null) 'warehouse_id': warehouseId,
       };
 
   @override
@@ -949,7 +967,27 @@ class ServiceItem extends Equatable {
         tag,
         packageOptions,
         selectedOption,
+        warehouseId,
+        reviews,
       ];
+}
+
+/// One customer review shown on a service's detail page.
+class ServiceReview extends Equatable {
+  const ServiceReview({this.name = '', this.rating, this.text = ''});
+
+  final String name;
+  final double? rating;
+  final String text;
+
+  factory ServiceReview.fromJson(Map<String, dynamic> json) => ServiceReview(
+        name: (json['name'] ?? json['customer_name'] ?? json['user_name'] ?? '').toString().trim(),
+        rating: parseDoubleOrNull(json['rating']),
+        text: (json['text'] ?? json['comment'] ?? json['review'] ?? '').toString().trim(),
+      );
+
+  @override
+  List<Object?> get props => [name, rating, text];
 }
 
 /// Returns [value] unless it's non-positive (backend sends 0/absent offer
@@ -1156,22 +1194,42 @@ class VegetableCategorySummary extends Equatable {
 extension GoodsTransportRoute on ServiceItem {
   bool get isGoodsTransport => flowType == CatalogFlowType.logistics;
 
+  /// Booking route. The vehicle type comes from the catalog subcategory first (a "Mini Truck" card must open the
+  /// truck flow, never the 2-wheeler one), then from the item's own slug and title.
   String get goodsTransportPath {
-    final t = '$slug $title'.toLowerCase();
-    String? cat;
-    if (t.contains('packers') ||
-        t.contains('shifting') ||
-        t.contains('bhk') ||
-        t.contains('household') ||
-        t.contains('movers')) {
-      cat = 'packers_movers';
-    } else if (t.contains('wheeler') || t.contains('bike') || t.contains('scooter')) {
-      cat = 'two_wheeler';
-    } else if (t.contains('truck') || t.contains('tempo') || t.contains('pickup') || t.contains(' ton')) {
-      cat = 'truck';
-    }
+    final cat = _goodsTransportCategoryOf('${subcategorySlug ?? ''} ${subcategoryName ?? ''}') ??
+        _goodsTransportCategoryOf('$slug $title');
     return cat == null
         ? '/goods-transport/booking'
         : '/goods-transport/booking?category=$cat';
   }
+
+  /// Card title for a Goods & Transport item: its own vehicle name ("Mini Truck", "3 Wheeler").
+  String get goodsTransportLabel {
+    final sub = subcategoryName?.trim();
+    return (sub != null && sub.isNotEmpty) ? sub : title;
+  }
+
+  /// A vehicle-specific photo when the catalog has one; null means "use the item's own image".
+  String? get goodsTransportImageUrl => null;
+}
+
+String? _goodsTransportCategoryOf(String raw) {
+  final t = raw.toLowerCase();
+  if (t.contains('packers') ||
+      t.contains('shifting') ||
+      t.contains('bhk') ||
+      t.contains('household') ||
+      t.contains('movers')) {
+    return 'packers_movers';
+  }
+  if (t.contains('truck') ||
+      t.contains('tempo') ||
+      t.contains('pickup') ||
+      t.contains(' ton') ||
+      RegExp(r'(3|three)[\s-]*wheeler').hasMatch(t)) {
+    return 'truck';
+  }
+  if (t.contains('wheeler') || t.contains('bike') || t.contains('scooter')) return 'two_wheeler';
+  return null;
 }

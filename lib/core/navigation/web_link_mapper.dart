@@ -95,6 +95,8 @@ AppLink resolveWebLink(String rawUrl, {Set<String>? knownCategorySlugs}) {
     final id = combo.group(1);
     return AppLink(route: id == null ? '/baskets' : '/baskets/$id');
   }
+  // A product page (the product's slug): the app has the same /products/<slug> screen.
+  if (RegExp(r'^/products/[A-Za-z0-9_.~%-]+$').hasMatch(path)) return AppLink(route: path);
   if (path == '/cart') return const AppLink(route: '/cart');
   if (path == '/profile') return const AppLink(route: '/profile');
   if (path == '/support') return const AppLink(route: '/support');

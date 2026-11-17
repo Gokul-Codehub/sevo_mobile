@@ -27,7 +27,7 @@ class ErrorInterceptor extends Interceptor {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.sendTimeout:
-        return const NetworkError('Request timed out. Please try again.');
+        return const NetworkError('This is taking longer than usual. Please check your connection and try again.');
 
       case DioExceptionType.connectionError:
         return const NetworkError();
@@ -36,7 +36,7 @@ class ErrorInterceptor extends Interceptor {
         return _fromStatusCode(statusCode, err.response?.data);
 
       case DioExceptionType.cancel:
-        return const UnknownError('Request was cancelled.');
+        return const UnknownError("We couldn't complete that. Please try again.");
 
       default:
         return const UnknownError();
@@ -107,7 +107,7 @@ class ErrorInterceptor extends Interceptor {
   }
 
   ValidationError _parseValidationErrorRaw(dynamic data) {
-    if (data == null) return const ValidationError('Bad request.');
+    if (data == null) return const ValidationError('Some details need your attention. Please check and try again.');
 
     if (data is Map) {
       final map = Map<String, dynamic>.from(data);
@@ -205,7 +205,7 @@ class ErrorInterceptor extends Interceptor {
 
       // Shape D-a
       if (map.containsKey('detail')) {
-        return ValidationError(map['detail']?.toString() ?? 'Bad request.');
+        return ValidationError(map['detail']?.toString() ?? 'Some details need your attention. Please check and try again.');
       }
 
       // Shape D-b — field errors
@@ -235,7 +235,7 @@ class ErrorInterceptor extends Interceptor {
       return ValidationError(firstMessage, fieldErrors: fieldErrors);
     }
 
-    return const ValidationError('Bad request.');
+    return const ValidationError('Some details need your attention. Please check and try again.');
   }
 }
 

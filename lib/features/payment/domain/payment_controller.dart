@@ -73,7 +73,7 @@ class PaymentController extends Notifier<PaymentState> {
         order = data;
       case Failure(:final error):
         state = PaymentFailed(
-          errorMessage: 'Could not start payment: ${error.message}',
+          errorMessage: "We couldn't start the payment. ${error.message}",
         );
         return;
     }
@@ -252,7 +252,7 @@ class PaymentController extends Notifier<PaymentState> {
       case Failure(:final error):
         state = PaymentFailed(
           errorMessage: notPaidMessage ??
-              'Payment received but verification failed: ${error.message}',
+              "We received your payment but are still confirming it. If your booking doesn't update shortly, please contact support - your money is safe.",
         );
     }
     if (bookingId > 0) ref.invalidate(bookingDetailProvider(bookingId));

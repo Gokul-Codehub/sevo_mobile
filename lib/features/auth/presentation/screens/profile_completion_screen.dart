@@ -89,7 +89,7 @@ class _ProfileCompletionScreenState
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Profile setup complete! Welcome to CalServices.'),
+          content: Text('All set! Welcome to SEVO.'),
           backgroundColor: AppColors.success,
         ),
       );

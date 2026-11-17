@@ -12,6 +12,7 @@ import '../../../core/errors/api_error.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/response_normalizer.dart';
 import '../../booking/domain/booking_models.dart' show CartItem;
+import '../../booking/domain/cart_notifier.dart' show cartProvider;
 import '../../booking/domain/marketplace_cart.dart';
 import '../../payment/domain/payment_models.dart' show PaymentOrder;
 import 'marketplace_online_payment.dart';
@@ -95,9 +96,31 @@ class MarketplaceQuote {
     this.couponCode = '',
     this.couponsEnabled = false,
     this.message = '',
+    this.subtotal,
+    this.deliveryFee,
+    this.freeDeliveryQualified = false,
+    this.freeDeliveryThreshold,
+    this.tierLabel = '',
+    this.pricingError = '',
+    this.distanceKm,
   });
 
-  /// What the customer pays (already reduced by [discount] when a coupon applies).
+  /// The items' total before delivery and coupon (`subtotal`). Null on an older server.
+  final Decimal? subtotal;
+
+  /// The delivery charge THE SERVER worked out from the road distance (`delivery_fee`). Null on an older server.
+  final Decimal? deliveryFee;
+  final bool freeDeliveryQualified;
+  final Decimal? freeDeliveryThreshold;
+  final String tierLabel;
+
+  /// Why the delivery charge could not be worked out (for example no exact delivery location). Empty when it could.
+  final String pricingError;
+
+  /// Road distance from the store to the delivery address, in km (`delivery_distance_km`).
+  final double? distanceKm;
+
+  /// What the customer pays (items + delivery, already reduced by [discount] when a coupon applies).
   final Decimal total;
   final bool valid;
 
@@ -122,8 +145,40 @@ class MarketplaceQuote {
       couponCode: (data['coupon_code'] ?? '').toString(),
       couponsEnabled: data['coupons_enabled'] == true,
       message: (data['coupon_message'] ?? data['message'] ?? '').toString(),
+      subtotal: Decimal.tryParse((data['subtotal'] ?? '').toString()),
+      deliveryFee: Decimal.tryParse((data['delivery_fee'] ?? '').toString()),
+      freeDeliveryQualified: data['free_delivery_qualified'] == true,
+      freeDeliveryThreshold: Decimal.tryParse((data['free_delivery_threshold'] ?? '').toString()),
+      tierLabel: (data['tier_label'] ?? '').toString(),
+      pricingError: (data['pricing_error'] ?? '').toString(),
+      distanceKm: double.tryParse((data['delivery_distance_km'] ?? '').toString()),
     );
   }
+}
+
+/// Where the order is going, so the server can price the delivery from the road distance. Sent with every quote.
+class QuoteDestination {
+  const QuoteDestination({required this.type, this.lat, this.lng, this.address = ''});
+
+  /// FAST, SLOT or TAKEAWAY.
+  final String type;
+  final double? lat;
+  final double? lng;
+  final String address;
+
+  Map<String, Object?> toJson() => {
+        'delivery_type': type,
+        if (lat != null) 'delivery_latitude': double.parse(lat!.toStringAsFixed(6)),
+        if (lng != null) 'delivery_longitude': double.parse(lng!.toStringAsFixed(6)),
+        if (address.isNotEmpty) 'delivery_address': address,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is QuoteDestination && other.type == type && other.lat == lat && other.lng == lng && other.address == address;
+
+  @override
+  int get hashCode => Object.hash(type, lat, lng, address);
 }
 
 class PickupAvailability {
@@ -597,7 +652,7 @@ class GroceryOrdersRepository {
 
   /// The server's price for these items right now (`POST /api/carts/marketplace/quote/`). Does not touch the saved
   /// cart. Returns null when the quote could not be fetched, in which case the order simply goes ahead as before.
-  Future<MarketplaceQuote?> quote(List<CartItem> items, {String? couponCode}) async {
+  Future<MarketplaceQuote?> quote(List<CartItem> items, {String? couponCode, QuoteDestination? destination}) async {
     final entries = marketplaceCartEntries(items);
     if (entries.isEmpty) return null;
     try {
@@ -606,6 +661,7 @@ class GroceryOrdersRepository {
         data: {
           'items': [for (final e in entries) e.toJson()],
           if ((couponCode ?? '').isNotEmpty) 'coupon_code': couponCode,
+          if (destination != null) ...destination.toJson(),
         },
       );
       final body = response.data;
@@ -652,7 +708,7 @@ class GroceryOrdersRepository {
 
   /// Asks the server to apply [code] to these items. The server decides whether the coupon is valid and how much it
   /// takes off; a refusal comes back as a [Failure] carrying the server's own message.
-  Future<Result<MarketplaceQuote>> applyCoupon(List<CartItem> items, String code) async {
+  Future<Result<MarketplaceQuote>> applyCoupon(List<CartItem> items, String code, {QuoteDestination? destination}) async {
     final entries = marketplaceCartEntries(items);
     if (entries.isEmpty) return const Failure(ValidationError('Your cart has nothing that can be ordered.'));
     try {
@@ -661,6 +717,7 @@ class GroceryOrdersRepository {
         data: {
           'items': [for (final e in entries) e.toJson()],
           'coupon_code': code.trim(),
+          if (destination != null) ...destination.toJson(),
         },
       );
       return ResponseNormalizer.extract(response, (data) {
@@ -909,6 +966,19 @@ class GroceryOrdersRepository {
 }
 
 final groceryOrdersRepositoryProvider = Provider<GroceryOrdersRepository>((ref) => GroceryOrdersRepository(api: ref.watch(apiClientProvider)));
+
+/// The server's price for the grocery cart to one destination, delivery charge included. Re-fetches when the cart,
+/// address, delivery mode or coupon changes. Null when there is nothing to quote or the quote could not be fetched.
+final marketplaceDeliveryQuoteProvider =
+    FutureProvider.autoDispose.family<MarketplaceQuote?, ({QuoteDestination destination, String coupon})>((ref, key) async {
+  final items = marketplaceLines(ref.watch(cartProvider));
+  if (items.isEmpty) return null;
+  return ref.read(groceryOrdersRepositoryProvider).quote(
+        items,
+        couponCode: key.coupon.isEmpty ? null : key.coupon,
+        destination: key.destination,
+      );
+});
 
 /// Fetched each time the cart opens; null (unknown) leaves every delivery mode available.
 final storeHoursProvider = FutureProvider.autoDispose<StoreHours?>(

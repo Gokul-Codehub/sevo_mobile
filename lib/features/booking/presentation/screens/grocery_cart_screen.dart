@@ -255,6 +255,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   // only shows these; it never calculates a discount itself.
   String? _mktCouponCode;
   Decimal _mktDiscount = Decimal.zero;
+  // The delivery charge the SERVER quoted for the chosen address and mode (zero for Take Away or until quoted).
+  Decimal _mktDeliveryFee = Decimal.zero;
   String? _mktCouponSig; // cart subtotal when the coupon was applied; a changed cart drops the coupon
   // Null until the customer actually picks one — Proceed to Pay opens the
   // picker instead of placing the order whenever this is still null, so a
@@ -423,6 +425,18 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
 
   /// Places the order through the marketplace checkout, exactly like the web store: the order goes to the seller to
   /// pack, Seller Hub stock is reserved, and it is tracked on its own order page (also listed in My Bookings).
+  /// Where this order is going (and how), for the server's road-distance delivery pricing.
+  QuoteDestination _quoteDestination() {
+    final takeaway = _isTakeaway;
+    final addr = ref.read(selectedAddressProvider);
+    return QuoteDestination(
+      type: takeaway ? 'TAKEAWAY' : (_deliveryOption == _DeliveryOption.scheduled ? 'SLOT' : 'FAST'),
+      lat: takeaway ? _pickup?.latitude : addr?.latitude,
+      lng: takeaway ? _pickup?.longitude : addr?.longitude,
+      address: takeaway ? '' : (addr?.formattedAddress ?? ''),
+    );
+  }
+
   Future<void> _placeMarketplaceOrder(BuildContext context, List<CartItem> items, Address? address) async {
     final takeaway = _isTakeaway;
     final addr = address ?? ref.read(selectedAddressProvider);
@@ -437,13 +451,22 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     }
     // Show the customer the server's price BEFORE anything is charged: if it differs from what the cart displays (a seller
     // changed a price, an item sold out), refresh the cart and ask them to confirm instead of charging a different amount.
-    final quote = await ref.read(groceryOrdersRepositoryProvider).quote(items, couponCode: _mktCouponCode);
+    final quote = await ref
+        .read(groceryOrdersRepositoryProvider)
+        .quote(items, couponCode: _mktCouponCode, destination: _quoteDestination());
     if (!context.mounted) return;
     if (quote != null) {
       final onlySingles = items.every((i) => i.comboKey == null);
       final shown = ref.read(cartSummaryProvider).subtotal;
-      // The server's total already has the coupon taken off, so add it back to compare with the cart's item total.
-      final priceChanged = onlySingles && (quote.total + quote.discountOrZero - shown).abs() >= Decimal.parse('0.5');
+      // Compare the ITEMS only: the server's total also holds the delivery charge and has the coupon taken off.
+      final serverItems = quote.subtotal ?? (quote.total + quote.discountOrZero - (quote.deliveryFee ?? Decimal.zero));
+      final priceChanged = onlySingles && (serverItems - shown).abs() >= Decimal.parse('0.5');
+      // The delivery charge could not be worked out (for example no exact delivery location): say so, instead of
+      // blaming the items.
+      if (quote.pricingError.isNotEmpty) {
+        AppToast.show(context, quote.pricingError, type: AppToastType.error);
+        return;
+      }
       if (!quote.valid || priceChanged) {
         await refreshMarketplaceCart(ref);
         if (!context.mounted) return;
@@ -601,7 +624,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
   /// from, so the two can never drift apart.
   Decimal _effectiveGrandTotal(CartSummary summary) {
     final discount = Decimal.fromInt(_couponDiscountAmount) + _mktDiscount;
-    return summary.total > discount ? summary.total - discount : Decimal.zero;
+    final payable = summary.total + _mktDeliveryFee;
+    return payable > discount ? payable - discount : Decimal.zero;
   }
 
   void _clearGroceryCoupon() {
@@ -715,7 +739,7 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
               busy = true;
               errorText = null;
             });
-            final result = await ref.read(groceryOrdersRepositoryProvider).applyCoupon(items, code);
+            final result = await ref.read(groceryOrdersRepositoryProvider).applyCoupon(items, code, destination: _quoteDestination());
             switch (result) {
               case Success(:final data):
                 if (data.discountOrZero > Decimal.zero) {
@@ -829,6 +853,38 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     // Seller Hub carts are charged exactly the items (no fees, no coupon), so those rows and the free-delivery
     // progress card are not shown.
     final mkt = cartItems.isNotEmpty;
+    // Seller Hub grocery delivery is priced by the server from the road distance to the chosen address.
+    final deliveryAddress = mkt && !_isTakeaway ? ref.watch(selectedAddressProvider) : null;
+    final deliveryQuoteAsync = (deliveryAddress?.latitude != null && deliveryAddress?.longitude != null)
+        ? ref.watch(marketplaceDeliveryQuoteProvider((destination: _quoteDestination(), coupon: _mktCouponCode ?? '')))
+        : null;
+    final deliveryQuote = deliveryQuoteAsync?.valueOrNull;
+    _mktDeliveryFee = (mkt && !_isTakeaway) ? (deliveryQuote?.deliveryFee ?? Decimal.zero) : Decimal.zero;
+    final String mktDeliveryLabel;
+    if (deliveryAddress == null || deliveryAddress.latitude == null || deliveryAddress.longitude == null) {
+      mktDeliveryLabel = 'Choose a location';
+    } else if (deliveryQuoteAsync == null || deliveryQuoteAsync.isLoading) {
+      mktDeliveryLabel = 'Calculating...';
+    } else if (deliveryQuote == null || deliveryQuote.pricingError.isNotEmpty) {
+      mktDeliveryLabel = 'Pick exact location';
+    } else {
+      mktDeliveryLabel = (deliveryQuote.deliveryFee ?? Decimal.zero) == Decimal.zero ? 'FREE' : '₹${deliveryQuote.deliveryFee}';
+    }
+    // The line under "Delivery fee": how far the order travels, or how close the customer is to free delivery.
+    String? mktDeliveryNote;
+    var mktDeliveryNoteIsOffer = false;
+    if (deliveryQuote != null && deliveryQuote.pricingError.isEmpty) {
+      final fee = deliveryQuote.deliveryFee ?? Decimal.zero;
+      final threshold = deliveryQuote.freeDeliveryThreshold;
+      if (fee == Decimal.zero) {
+        mktDeliveryNote = deliveryQuote.freeDeliveryQualified ? 'Free delivery on this order' : null;
+      } else if (threshold != null && cartSummary.subtotal < threshold) {
+        mktDeliveryNote = 'Add ₹${threshold - cartSummary.subtotal} more for free delivery';
+        mktDeliveryNoteIsOffer = true;
+      } else if (deliveryQuote.distanceKm != null) {
+        mktDeliveryNote = '${deliveryQuote.distanceKm!.toStringAsFixed(1)} km from the store';
+      }
+    }
     final addressesAsync = ref.watch(addressListProvider);
 
     final addresses = addressesAsync.valueOrNull ?? const [];
@@ -1879,6 +1935,48 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
                         children: [
                           Text('Delivery fee', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                           Text('Not applicable', style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  if (mkt && !_isTakeaway)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Delivery fee',
+                                  style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                                ),
+                                // One short line of context, never the raw pricing tier text.
+                                if (mktDeliveryNote != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      mktDeliveryNote,
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        height: 1.3,
+                                        fontWeight: mktDeliveryNoteIsOffer ? FontWeight.w700 : FontWeight.w500,
+                                        color: mktDeliveryNoteIsOffer ? AppColors.groceryGreen : AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            mktDeliveryLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: mktDeliveryLabel == 'FREE' ? AppColors.groceryGreen : AppColors.textPrimary,
+                            ),
+                          ),
                         ],
                       ),
                     ),
