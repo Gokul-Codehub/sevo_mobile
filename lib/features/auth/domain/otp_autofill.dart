@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'sms_consent_autofill.dart';
+
 /// Where the sign-in code can come from without the customer typing it.
 ///
 /// There is no SMS service yet, so today this is a no-op and the code is typed or pasted (the keyboard's "From
@@ -46,4 +48,8 @@ String? extractOtp(String? sms, {int length = 6}) {
 }
 
 /// Swap in the real implementation here once SMS is connected.
-final otpAutofillProvider = Provider<OtpAutofill>((ref) => const NoopOtpAutofill());
+final otpAutofillProvider = Provider<OtpAutofill>((ref) {
+  final reader = SmsUserConsentAutofill();
+  ref.onDispose(reader.stop);
+  return reader;
+});

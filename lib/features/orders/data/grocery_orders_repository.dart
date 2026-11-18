@@ -912,7 +912,7 @@ class GroceryOrdersRepository {
       final err = _err(e);
       // The customer may have paid: the gateway also tells the server directly, so the order can still appear.
       return Failure(err is NetworkError
-          ? const ValidationError('We could not confirm your payment yet. If money was deducted, your order will appear in My Bookings shortly.')
+          ? const ValidationError('We could not confirm your payment yet. If money was deducted, your order will appear in My Bookings shortly.', code: 'PAYMENT_UNCONFIRMED')
           : err);
     }
   }

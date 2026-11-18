@@ -16,13 +16,13 @@ class FaqItem extends Equatable {
   List<Object?> get props => [question, answer, category];
 }
 
-/// Comprehensive list of standard CalServices home services FAQs.
+/// Comprehensive list of standard SevoNiq home services FAQs.
 abstract final class CalServicesFaqs {
   static const List<FaqItem> all = [
     // Booking & Scheduling
     FaqItem(
       category: 'Booking & Scheduling',
-      question: 'How do I book a home service on CalServices?',
+      question: 'How do I book a home service on SevoNiq?',
       answer:
           'Simply browse through our service categories on the home screen, select the service you need, choose your preferred date and 2-hour time slot, enter your address, and place the booking with an advance deposit.',
     ),
@@ -76,15 +76,15 @@ abstract final class CalServicesFaqs {
     // Safety & Warranty
     FaqItem(
       category: 'Safety & Warranty',
-      question: 'Are CalServices technicians verified?',
+      question: 'Are SevoNiq technicians verified?',
       answer:
-          'Yes! Every CalServices professional undergoes thorough background checks, identity verification, criminal record screening, and rigorous hands-on skill evaluations.',
+          'Yes! Every SevoNiq professional undergoes thorough background checks, identity verification, criminal record screening, and rigorous hands-on skill evaluations.',
     ),
     FaqItem(
       category: 'Safety & Warranty',
-      question: 'Does CalServices provide a service warranty?',
+      question: 'Does SevoNiq provide a service warranty?',
       answer:
-          'All completed repairs come with our 30-Day CalServices Service Assurance Guarantee. If any issue re-occurs within 30 days, we provide a free re-visit.',
+          'All completed repairs come with our 30-Day SevoNiq Service Assurance Guarantee. If any issue re-occurs within 30 days, we provide a free re-visit.',
     ),
   ];
 }

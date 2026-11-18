@@ -137,6 +137,10 @@ void main() {
 
       expect(find.text('HOME: Trinity Home Decors'), findsOneWidget);
       expect(find.text('DELIVERING TO'), findsOneWidget);
+
+      // Tear the screen down and let any one-shot timers (banners, retries) fire, so none is left pending.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 2));
     });
 
     testWidgets('ADDR-05: HomeScreen displays fallback text when no address is selected', (tester) async {
@@ -159,6 +163,10 @@ void main() {
 
       expect(find.text('Select delivery address'), findsOneWidget);
       expect(find.text('DELIVERING TO'), findsOneWidget);
+
+      // Tear the screen down and let any one-shot timers (banners, retries) fire, so none is left pending.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 2));
     });
   });
 }

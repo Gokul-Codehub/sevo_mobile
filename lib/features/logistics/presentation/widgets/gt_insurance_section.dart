@@ -77,15 +77,19 @@ class GtInsuranceSection extends ConsumerWidget {
 
         return _shell(
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: const Text('Add transit insurance for your goods', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy)),
-              value: enabled,
-              onChanged: (v) {
-                ref.read(insuranceOptInProvider.notifier).state = v;
-                if (!v) ref.read(insuranceConsentProvider.notifier).state = false;
-              },
+            // Its own Material: the card around it has a background colour, which would hide the tap highlight.
+            Material(
+              type: MaterialType.transparency,
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Add transit insurance for your goods', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                value: enabled,
+                onChanged: (v) {
+                  ref.read(insuranceOptInProvider.notifier).state = v;
+                  if (!v) ref.read(insuranceConsentProvider.notifier).state = false;
+                },
+              ),
             ),
             if (!enabled)
               const Text(

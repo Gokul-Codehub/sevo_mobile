@@ -36,7 +36,14 @@ Future<void> pump(WidgetTester tester, String status, {String? otp}) async {
     overrides: [groceryOrdersRepositoryProvider.overrideWithValue(_Repo(order))],
     child: MaterialApp.router(routerConfig: GoRouter(routes: [GoRoute(path: '/', builder: (_, __) => const GroceryOrderDetailScreen(orderNumber: 'MKT00164'))])),
   ));
-  await tester.pumpAndSettle();
+  await settle(tester);
+}
+
+/// Some screens pulse or animate forever, so pumpAndSettle would never finish: advance a fixed time instead.
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 150));
+  }
 }
 
 void main() {

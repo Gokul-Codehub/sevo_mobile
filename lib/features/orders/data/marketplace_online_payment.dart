@@ -77,7 +77,7 @@ class GatewayPaymentLauncher implements PaymentLauncher {
       rp.open({
         'key': key,
         'amount': order.amountInPaise,
-        'name': 'Sevo Mart',
+        'name': 'SevoNiq',
         'description': 'Grocery order',
         'order_id': order.orderId,
         'prefill': {if (phone.isNotEmpty) 'contact': phone, if (email.isNotEmpty) 'email': email, if (name.isNotEmpty) 'name': name},

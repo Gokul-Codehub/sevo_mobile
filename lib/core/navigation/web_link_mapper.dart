@@ -97,6 +97,18 @@ AppLink resolveWebLink(String rawUrl, {Set<String>? knownCategorySlugs}) {
   }
   // A product page (the product's slug): the app has the same /products/<slug> screen.
   if (RegExp(r'^/products/[A-Za-z0-9_.~%-]+$').hasMatch(path)) return AppLink(route: path);
+  // The website's store page /marketplace?category=<slug> -> the app's Seller Hub store, opened on that department.
+  if (path == '/marketplace') {
+    final cat = (q['category'] ?? '').trim();
+    if (cat.isEmpty) return const AppLink(groceriesHome: true);
+    final isProduce = cat.contains('vegetable') || cat.contains('fruit');
+    return AppLink(
+      route: '${isProduce ? '/vegetables/seller-hub' : '/groceries/seller-hub'}?category=${Uri.encodeQueryComponent(cat)}',
+    );
+  }
+  // The website's product page /marketplace/product/<id> -> the app's /products/<id> screen (it looks the product up by id).
+  final webProduct = RegExp(r'^/marketplace/product/(\d+)$').firstMatch(path);
+  if (webProduct != null) return AppLink(route: '/products/${webProduct.group(1)}');
   if (path == '/cart') return const AppLink(route: '/cart');
   if (path == '/profile') return const AppLink(route: '/profile');
   if (path == '/support') return const AppLink(route: '/support');

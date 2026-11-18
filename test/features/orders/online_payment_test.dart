@@ -70,8 +70,8 @@ void main() {
     final r = await repoFor(a).payOnline([item()], checkout(), launcher: l);
     expect((r as Success<List<GroceryOrder>>).data.single.orderNumber, 'MKT00170');
     expect(a.calls.map((c) => c.path), [
-      '/api/carts/marketplace/clear/',
-      '/api/carts/marketplace/items/',
+      '/api/carts/marketplace/replace/',
+      '/api/carts/marketplace/revalidate/',
       '/api/orders/marketplace/checkout/initiate-payment/',
       '/api/orders/marketplace/checkout/verify-payment/',
     ]);

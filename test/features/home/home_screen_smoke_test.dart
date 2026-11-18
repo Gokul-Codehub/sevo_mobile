@@ -17,5 +17,6 @@ void main() {
     // with nothing loaded the full-screen loader is what shows
     expect(find.text('Everything you need, delivered at your doorstep'), findsWidgets);
     await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 2));
   });
 }

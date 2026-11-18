@@ -73,7 +73,7 @@ void main() {
   group('share tracking', () {
     test('the link carries the tracking id (escaped) and no phone numbers or personal details', () {
       final t = trackingShareText('abc-123');
-      expect(t, 'Follow my SEVO booking live: https://sevo.co.in/tracking/abc-123');
+      expect(t, 'Follow my SevoNiq booking live: https://sevo.co.in/tracking/abc-123');
       expect(trackingShareText('a b/c'), contains('tracking/a%20b%2Fc'));
       expect(trackingShareText('x', serviceName: 'AC Service'), contains('(AC Service)'));
     });

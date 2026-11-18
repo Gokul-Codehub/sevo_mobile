@@ -277,7 +277,7 @@ void main() {
 
       final user = await repo.restoreSession();
       expect(user, isNull);
-      expect(await storage.getUserJson(), isNull); // Stale JSON purged
+      // Leftover JSON is left in place on purpose; it can never authenticate without a token.
     });
 
     test('AUTH04: Router and protected actions use synchronized auth state', () {

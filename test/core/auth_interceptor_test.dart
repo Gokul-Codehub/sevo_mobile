@@ -50,7 +50,7 @@ void main() {
       expect(options.headers.containsKey('Authorization'), isFalse);
     });
 
-    test('onError calls onAuthFailure when no refresh token exists', () async {
+    test('onError keeps the session (no sign-out) when no refresh token can be read', () async {
       await storage.clearAll();
       final err = DioException(
         requestOptions: RequestOptions(path: '/auth/customer/addresses/'),
@@ -63,7 +63,9 @@ void main() {
 
       await interceptor.onError(err, handler);
 
-      expect(onAuthFailureCalled, isTrue);
+      // Deliberate: an unreadable/missing refresh token only fails this request; the session ends only when the
+      // refresh endpoint itself answers 401/400.
+      expect(onAuthFailureCalled, isFalse);
       expect(handler.nextCalled, isTrue);
     });
   });

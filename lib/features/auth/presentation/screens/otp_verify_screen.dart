@@ -67,6 +67,17 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
     _startCountdown();
     // Fills the boxes by itself when an SMS code reader is connected (see otp_autofill.dart). Until then the
     // stream is empty and the code is typed, pasted, or taken from the keyboard's suggestion.
+    _startAutofill();
+  }
+
+  bool get _isSmsChannel => widget.channel == 'phone' || widget.channel == 'sms';
+
+  /// Starts reading the SMS code (mobile-number sign-in only; an emailed code never arrives by SMS). Called again after
+  /// "Resend", because each reading catches one message.
+  void _startAutofill() {
+    _autofillSub?.cancel();
+    _autofillSub = null;
+    if (!_isSmsChannel || widget.signup) return;
     _autofillSub = ref.read(otpAutofillProvider).listen().listen((code) {
       if (!mounted || _isLoading || code.length != 6) return;
       _distributePastedDigits(code, 0);
@@ -191,6 +202,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
   void dispose() {
     _timer?.cancel();
     _autofillSub?.cancel();
+    ref.read(otpAutofillProvider).stop();
     for (final c in _digitControllers) {
       c.dispose();
     }
@@ -326,6 +338,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
       AppToast.show(context, result.error!, type: AppToastType.error);
     } else {
       _startCountdown();
+      _startAutofill();
       AppToast.show(context, 'A new code is on its way.', type: AppToastType.success);
     }
   }

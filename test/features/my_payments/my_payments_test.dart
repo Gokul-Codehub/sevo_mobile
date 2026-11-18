@@ -45,6 +45,13 @@ RefundRecord refund(String status, {double requested = 500, double? approved}) =
       'status_display': status, 'created_at': '2026-10-30T10:00:00Z',
     })!;
 
+/// Some screens pulse or animate forever, so pumpAndSettle would never finish: advance a fixed time instead.
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 150));
+  }
+}
+
 void main() {
   group('parsing', () {
     test('refund statuses map to the customer journey', () {
@@ -77,7 +84,7 @@ void main() {
   group('PaymentHistoryScreen', () {
     testWidgets('shows totals and every payment with its outcome', (tester) async {
       await tester.pumpWidget(app(_Repo(), const PaymentHistoryScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('Total paid'), findsOneWidget);
       expect(find.text('₹499'), findsNWidgets(2)); // total + the AC payment
       expect(find.text('AC Service'), findsOneWidget);
@@ -86,32 +93,32 @@ void main() {
 
     testWidgets('filter chips narrow the list', (tester) async {
       await tester.pumpWidget(app(_Repo(), const PaymentHistoryScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       await tester.tap(find.widgetWithText(ChoiceChip, 'Refunded'));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('Plumbing'), findsOneWidget);
       expect(find.text('AC Service'), findsNothing);
     });
 
     testWidgets('tapping a service payment opens its booking', (tester) async {
       await tester.pumpWidget(app(_Repo(), const PaymentHistoryScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       await tester.tap(find.text('AC Service'));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('BOOKING 12'), findsOneWidget);
     });
 
     testWidgets('empty history explains itself', (tester) async {
       final repo = _Repo()..historyResult = const Success(PaymentHistory(records: [], totalPaid: 0, totalRefunded: 0));
       await tester.pumpWidget(app(repo, const PaymentHistoryScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('No payments here yet'), findsOneWidget);
     });
 
     testWidgets('a load failure shows a retry, not a blank page', (tester) async {
       final repo = _Repo()..historyResult = const Failure(NetworkError());
       await tester.pumpWidget(app(repo, const PaymentHistoryScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('Try again'), findsOneWidget);
     });
   });
@@ -119,27 +126,27 @@ void main() {
   group('RefundsScreen', () {
     testWidgets('empty state', (tester) async {
       await tester.pumpWidget(app(_Repo(), const RefundsScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('No refunds'), findsOneWidget);
     });
 
     testWidgets('shows the steps, the status message and links to the booking', (tester) async {
       final repo = _Repo()..refundResult = Success([refund('SENT_TO_FINANCE', approved: 500)]);
       await tester.pumpWidget(app(repo, const RefundsScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       for (final step in ['Requested', 'Under review', 'Approved', 'Processing', 'Refunded']) {
         expect(find.text(step), findsOneWidget);
       }
       expect(find.textContaining('being processed by our finance team'), findsOneWidget);
       await tester.tap(find.text('View booking'));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('BOOKING 12'), findsOneWidget);
     });
 
     testWidgets('a rejected refund is explained, and a partial approval states both amounts', (tester) async {
       final repo = _Repo()..refundResult = Success([refund('REJECTED'), refund('APPROVED_PARTIAL', requested: 500, approved: 350)]);
       await tester.pumpWidget(app(repo, const RefundsScreen()));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.textContaining('not approved'), findsOneWidget);
       expect(find.textContaining('You asked for ₹500; approved ₹350.'), findsOneWidget);
     });

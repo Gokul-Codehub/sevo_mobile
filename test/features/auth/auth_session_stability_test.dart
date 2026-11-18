@@ -71,8 +71,8 @@ void main() {
       );
       await tester.pump();
 
-      // Tap Email chip
-      await tester.tap(find.text('Email Address'));
+      // The screen opens on the mobile number; "Use email instead" switches to the email code form.
+      await tester.tap(find.text('Use email instead'));
       await tester.pump();
 
       final emailFieldFinder = find.byKey(const ValueKey('email_input_field'));
@@ -103,7 +103,7 @@ void main() {
         find.descendant(of: phoneFieldFinder, matching: find.byType(TextField)),
       );
       expect(textField.keyboardType, equals(TextInputType.phone));
-      expect(textField.autofillHints, contains(AutofillHints.telephoneNumber));
+      expect(textField.autofillHints, contains(AutofillHints.telephoneNumberNational));
     });
 
     // ── AUTH-03 & AUTH-04: OTP Verification & Auth State ─────────────────────

@@ -722,7 +722,9 @@ class _FestivalShowcase extends StatelessWidget {
     final badge = (st['badge_text'] ?? '').toString();
     final dest = StudioDestination.fromJson(st['see_all_destination']);
     final showSeeAll = section.flag('see_all', fallback: true) && dest.type != 'none';
-    final hero = section.slides.isNotEmpty ? section.slides.first : null;
+    // The same picture uploaded as both the title image and the hero would show twice: draw it once, as the title.
+    final hero0 = section.slides.isNotEmpty ? section.slides.first : null;
+    final hero = (hero0 != null && section.titleImage.trim().isNotEmpty && hero0.imageUrl.trim() == section.titleImage.trim()) ? null : hero0;
     final extras = section.slides.skip(1).take(2).toList();
 
     final text = Column(
@@ -799,12 +801,49 @@ class _FestivalShowcase extends StatelessWidget {
       id: section.id,
       template: section.template,
       name: section.name,
-      settings: {...st, 'title': '', 'see_all': false},
+      // The panel already drew the title (text or uploaded image); blank it here or the list draws it a second time.
+      settings: {...st, 'title': '', 'title_image': '', 'see_all': false},
       slides: const [],
       content: section.content,
     );
     final type = (section.content['type'] ?? '').toString();
     final isService = type == 'manual_services' || type == 'service_category';
+
+    // "Horizontal product rows": the hand-picked products are split into N separate horizontal rails (each scrolls on
+    // its own) instead of one long rail. Only for hand-picked products in the rail layout.
+    final railRows = (int.tryParse(st['rail_rows']?.toString() ?? '') ?? 1).clamp(1, 5).toInt();
+    final pickedIds = _ints(section.content['ids']);
+    final cap = int.tryParse((section.content['limit'] ?? '').toString()) ?? pickedIds.length;
+    final ids = pickedIds.length > cap && cap > 0 ? pickedIds.sublist(0, cap) : pickedIds;
+    final Widget products;
+    if (!isService && type == 'manual' && railRows > 1 && ids.length > 1 && st['product_layout'] != 'grid') {
+      final per = (ids.length / railRows.clamp(1, ids.length)).ceil();
+      products = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < ids.length; i += per)
+            Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+              child: _GroceryDriven(
+                section: StudioSection(
+                  id: '${section.id}-row$i',
+                  template: section.template,
+                  name: section.name,
+                  settings: inner.settings,
+                  slides: const [],
+                  content: {
+                    ...section.content,
+                    'ids': ids.sublist(i, i + per > ids.length ? ids.length : i + per),
+                    'limit': per,
+                  },
+                ),
+              ),
+            ),
+        ],
+      );
+    } else {
+      products = isService ? _ServiceDriven(section: inner) : _GroceryDriven(section: inner);
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -818,7 +857,7 @@ class _FestivalShowcase extends StatelessWidget {
         children: [
           Padding(padding: const EdgeInsets.only(right: 14), child: header),
           const SizedBox(height: 14),
-          isService ? _ServiceDriven(section: inner) : _GroceryDriven(section: inner),
+          products,
         ],
       ),
     );
@@ -880,8 +919,9 @@ class _CutoutPanel extends ConsumerWidget {
     final showDiscount = section.flag('show_discount', fallback: true);
     final showAdd = section.flag('show_add_button', fallback: true);
 
-    final hero = section.slides.isNotEmpty ? section.slides.first : null;
-    final title = section.title.isNotEmpty ? section.title : (hero?.title ?? '');
+    final hero0 = section.slides.isNotEmpty ? section.slides.first : null;
+    final hero = (hero0 != null && section.titleImage.trim().isNotEmpty && hero0.imageUrl.trim() == section.titleImage.trim()) ? null : hero0;
+    final title = section.title.isNotEmpty ? section.title : (hero0?.title ?? '');
 
     Widget card(ServiceItem it) => RepaintBoundary(
           child: ProductCard(

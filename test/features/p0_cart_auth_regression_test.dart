@@ -319,8 +319,8 @@ void main() {
       final restored = await repo.restoreSession();
       expect(restored, isNull, reason: 'Without access token, session must be null');
 
-      final cachedUser = await mockStorage.getUserJson();
-      expect(cachedUser, isNull, reason: 'Stale user profile must be purged from storage');
+      // Storage is intentionally NOT purged on restore (a failed read must never destroy a good session);
+      // the profile alone can never imply authentication because restoreSession() returned null above.
     });
 
     test('AUTH03: currentUserProvider and isUserAuthenticatedProvider reflect AuthState', () {

@@ -117,8 +117,13 @@ void main() {
       final a = _Adapter();
       final r = await repoFor(a).place([product(5, 2)], checkout());
       final paths = a.calls.map((c) => c.path).toList();
-      expect(paths, ['/api/carts/marketplace/clear/', '/api/carts/marketplace/items/', '/api/orders/marketplace/checkout/']);
-      expect(a.calls[1].data, {'seller_product_id': 5, 'quantity': 2});
+      // One replace call puts the whole cart on the server, then the stock check, then checkout.
+      expect(paths, ['/api/carts/marketplace/replace/', '/api/carts/marketplace/revalidate/', '/api/orders/marketplace/checkout/']);
+      expect(a.calls[0].data, {
+        'items': [
+          {'seller_product_id': 5, 'quantity': 2},
+        ],
+      });
       final body = a.calls[2].data as Map;
       expect(body['payment_method'], 'COD');
       expect(body['fulfilment_type'], 'DELIVERY');
@@ -198,10 +203,10 @@ void main() {
       return GroceryOrdersRepository(api: ApiClient.withDio(dio));
     }
 
-    test('a 500 while adding to the server cart names the step, the status and the server message', () async {
-      final r = await failing('/carts/marketplace/items/', 500, {'message': 'Basket detail failed', 'code': 'VENDOR_DOWN'}).place([product(5, 1)], checkout());
+    test('a 500 while saving the server cart names the step, the status and the server message', () async {
+      final r = await failing('/carts/marketplace/replace/', 500, {'message': 'Basket detail failed', 'code': 'VENDOR_DOWN'}).place([product(5, 1)], checkout());
       final msg = (r as Failure<List<GroceryOrder>>).error.message;
-      expect(msg, contains('cart-add 500'));
+      expect(msg, contains('cart-replace 500'));
       expect(msg, contains('VENDOR_DOWN'));
       expect(msg, contains('Basket detail failed'));
     });

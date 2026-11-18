@@ -3,6 +3,7 @@ import 'package:calservices_customer/core/network/api_client.dart';
 import 'package:calservices_customer/features/account_settings/data/account_settings_repository.dart';
 import 'package:calservices_customer/features/account_settings/presentation/account_settings_screens.dart';
 import 'package:calservices_customer/features/account_settings/presentation/feedback_screen.dart';
+import 'package:calservices_customer/features/booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,15 +40,20 @@ class FakeRepo implements AccountSettingsRepository {
   }
 
   @override
+  Future<bool> signOutPhone(DeviceSession d) => signOutDevice(d.deviceId);
+
+  @override
   Future<bool> signOutOthers() async {
     signedOutOthers++;
     return true;
   }
 
   @override
-  Future<Result<Map<String, bool>>> preferences() async => fail ? const Failure(NetworkError()) : Success(prefs);
+  Future<Map<String, bool>> localPreferences() async => prefs;
   @override
-  Future<bool> setPreference(String field, bool value) async {
+  Future<Result<Map<String, bool>>> preferences({bool signedIn = false}) async => fail ? const Failure(NetworkError()) : Success(prefs);
+  @override
+  Future<bool> setPreference(String field, bool value, {bool signedIn = false}) async {
     saved[field] = value;
     prefs = {...prefs, field: value};
     return true;
@@ -55,7 +61,8 @@ class FakeRepo implements AccountSettingsRepository {
 }
 
 Widget app(FakeRepo repo, Widget screen) => ProviderScope(
-      overrides: [accountSettingsRepositoryProvider.overrideWithValue(repo)],
+      // Notification switches are saved on the account, so a guest sees a login prompt instead: these tests are signed in.
+      overrides: [accountSettingsRepositoryProvider.overrideWithValue(repo), isUserAuthenticatedProvider.overrideWithValue(true)],
       child: MaterialApp.router(
         routerConfig: GoRouter(routes: [GoRoute(path: '/', builder: (_, __) => screen)]),
       ),
@@ -145,7 +152,9 @@ void main() {
 
     testWidgets('load failure shows a retry', (tester) async {
       await tester.pumpWidget(app(FakeRepo()..fail = true, const NotificationSettingsScreen()));
-      await tester.pumpAndSettle();
+      // The error state pulses forever, so pumpAndSettle would never finish: let the load finish, then look.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
       expect(find.text('Try again'), findsOneWidget);
     });
   });

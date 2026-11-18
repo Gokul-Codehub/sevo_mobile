@@ -18,7 +18,11 @@ class DeviceSession {
     required this.osVersion,
     required this.lastSeen,
     required this.current,
+    this.allIds = const [],
   });
+
+  /// Every session id that is this same phone (older logins / reinstalls). Signing the phone out revokes them all.
+  final List<String> allIds;
   final String deviceId;
   final String model;
   final String osVersion;
@@ -89,7 +93,7 @@ class AccountSettingsRepository {
       switch (payload) {
         case Success(:final data):
           final list = data is Map && data['results'] is List ? data['results'] as List : const [];
-          return Success([for (final r in list) ?DeviceSession.tryParse(r)]);
+          return Success(_distinct([for (final r in list) ?DeviceSession.tryParse(r)]));
         case Failure(:final error):
           return Failure(error);
       }
@@ -100,7 +104,50 @@ class AccountSettingsRepository {
     }
   }
 
+  /// One row per phone: the same phone shows up again after a re-login or reinstall (new session id), so sessions with the
+  /// same id, or the same model and OS version, are merged. The current phone wins, then the most recently seen.
+  static List<DeviceSession> _distinct(List<DeviceSession> all) {
+    final groups = <String, List<DeviceSession>>{};
+    for (final d in all) {
+      final unknown = d.model == 'Unknown device';
+      final key = unknown ? 'id:${d.deviceId}' : '${d.model.trim().toLowerCase()}|${d.osVersion.trim().toLowerCase()}';
+      groups.putIfAbsent(key, () => []).add(d);
+    }
+    final out = <DeviceSession>[];
+    for (final g in groups.values) {
+      g.sort((a, b) {
+        if (a.current != b.current) return a.current ? -1 : 1;
+        final x = a.lastSeen?.millisecondsSinceEpoch ?? 0;
+        final y = b.lastSeen?.millisecondsSinceEpoch ?? 0;
+        return y.compareTo(x);
+      });
+      final top = g.first;
+      out.add(DeviceSession(
+        deviceId: top.deviceId,
+        model: top.model,
+        osVersion: top.osVersion,
+        lastSeen: top.lastSeen,
+        current: g.any((d) => d.current),
+        allIds: {for (final d in g) d.deviceId}.toList(),
+      ));
+    }
+    out.sort((a, b) {
+      if (a.current != b.current) return a.current ? -1 : 1;
+      return (b.lastSeen?.millisecondsSinceEpoch ?? 0).compareTo(a.lastSeen?.millisecondsSinceEpoch ?? 0);
+    });
+    return out;
+  }
+
   Future<bool> signOutDevice(String deviceId) => _post('/app/sessions/$deviceId/revoke/');
+
+  /// Signs out a phone, including every older session of the same phone.
+  Future<bool> signOutPhone(DeviceSession d) async {
+    var ok = true;
+    for (final id in (d.allIds.isEmpty ? [d.deviceId] : d.allIds)) {
+      ok = await signOutDevice(id) && ok;
+    }
+    return ok;
+  }
   Future<bool> signOutOthers() => _post('/app/sessions/revoke-all/');
 
   Future<bool> _post(String path) async {

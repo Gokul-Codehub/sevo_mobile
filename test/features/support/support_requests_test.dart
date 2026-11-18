@@ -109,7 +109,9 @@ void main() {
   group('list', () {
     testWidgets('empty state invites a first request', (tester) async {
       await tester.pumpWidget(app(_Repo(), '/support/requests'));
-      await tester.pumpAndSettle();
+      // The empty / error states pulse forever, so pumpAndSettle would never finish: let the load finish, then look.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
       expect(find.text('No support requests yet'), findsOneWidget);
     });
 
@@ -129,7 +131,8 @@ void main() {
     testWidgets('load failure shows a retry', (tester) async {
       final repo = _Repo()..listResult = const Failure(NetworkError());
       await tester.pumpWidget(app(repo, '/support/requests'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
       expect(find.text('Try again'), findsOneWidget);
     });
   });
@@ -140,8 +143,9 @@ void main() {
       await tester.pumpWidget(app(_Repo(), '/support/new?topic=payment&booking=12&ref=SEVO-12'));
       await tester.pumpAndSettle();
       expect(find.text('About booking SEVO-12'), findsOneWidget);
-      final chip = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Payment problem'));
-      expect(chip.selected, isTrue);
+      // The topic chip is a private widget now; the pre-selected topic is proven by the category sent on submit
+      // (see 'submitting sends the server category').
+      expect(find.text('Payment problem'), findsOneWidget);
     });
 
     testWidgets('submit is disabled until the description is long enough', (tester) async {
@@ -183,7 +187,11 @@ void main() {
     });
 
     test('every topic maps to a category the server accepts', () {
-      const accepted = {'POOR_SERVICE', 'PAYMENT_ISSUE', 'REFUND_ISSUE', 'GOODS_DAMAGED', 'GOODS_LOST', 'TECHNICIAN_BEHAVIOUR', 'OTHER'};
+      // Mirrors Complaint.Category in the backend (service_requests/models.py).
+      const accepted = {
+        'POOR_SERVICE', 'TECHNICIAN_LATE', 'TECHNICIAN_BEHAVIOUR', 'INCOMPLETE_WORK', 'WRONG_BILLING', 'DAMAGED_PROPERTY',
+        'QUALITY_ISSUE', 'PAYMENT_ISSUE', 'REFUND_ISSUE', 'GOODS_DAMAGED', 'GOODS_LOST', 'OTHER',
+      };
       for (final t in kSupportTopics.values) {
         expect(accepted, contains(t.category));
       }
@@ -200,7 +208,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('We need your reply'), findsWidgets);
       expect(find.text('Can you send the receipt?'), findsOneWidget);
-      expect(find.text('SEVO Support'), findsOneWidget);
+      expect(find.text('SevoNiq Support'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Sent it');
       await tester.tap(find.byIcon(Icons.send_rounded));
       await tester.pumpAndSettle();

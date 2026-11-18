@@ -256,8 +256,10 @@ void main() {
       expect(res, isA<Failure<List<Booking>>>());
       final err = (res as Failure<List<Booking>>).error;
       expect(err, isA<ApiContractError>());
-      expect(err.message, contains('API Contract Violation'));
-      expect(err.message, contains('GET /api/booking/my-bookings/'));
+      // The technical detail stays in toString() for logs; the customer-facing message is deliberately plain.
+      expect(err.toString(), contains('API Contract Violation'));
+      expect(err.toString(), contains('GET /api/booking/my-bookings/'));
+      expect(err.message, isNot(contains('API Contract Violation')));
     });
 
     test('BOOK-11: 401 response propagates UnauthorizedError', () async {

@@ -44,24 +44,32 @@ Future<void> pump(WidgetTester tester, List<GroceryOrder> orders) async {
       ]),
     ),
   ));
-  await tester.pumpAndSettle();
+  await settle(tester);
+}
+
+/// Some screens pulse or animate forever, so pumpAndSettle would never finish: advance a fixed time instead.
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 150));
+  }
 }
 
 void main() {
   testWidgets('grocery orders are listed in My Bookings with their product, status and total', (tester) async {
     await pump(tester, [order('MKT00164', 'PACKING')]);
-    expect(find.text('#MKT00164'), findsOneWidget);
+    // The card shows the order number twice (header and the "Order" column).
+    expect(find.text('#MKT00164'), findsWidgets);
     expect(find.text('GROCERY'), findsWidgets);
     expect(find.text('2-Minute Masala Instant Noodles'), findsOneWidget);
-    expect(find.text('Seller is packing'), findsOneWidget);
+    expect(find.text('Being packed'), findsWidgets);
     expect(find.text('₹88'), findsOneWidget);
     expect(find.text('Active (1)'), findsOneWidget);
   });
 
   testWidgets('tapping an order opens its tracking page', (tester) async {
     await pump(tester, [order('MKT00164', 'PACKING')]);
-    await tester.tap(find.text('#MKT00164'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.text('#MKT00164').first);
+    await settle(tester);
     expect(find.text('detail MKT00164'), findsOneWidget);
   });
 
@@ -70,27 +78,27 @@ void main() {
     expect(find.text('Active (1)'), findsOneWidget);
     expect(find.text('History (2)'), findsOneWidget);
     await tester.tap(find.textContaining('History'));
-    await tester.pumpAndSettle();
-    expect(find.text('#MKT1'), findsOneWidget);
-    expect(find.text('#MKT2'), findsOneWidget);
+    await settle(tester);
+    expect(find.text('#MKT1'), findsWidgets);
+    expect(find.text('#MKT2'), findsWidgets);
     expect(find.text('#MKT3'), findsNothing);
   });
 
   testWidgets('the Services filter hides grocery orders; Groceries shows them', (tester) async {
     await pump(tester, [order('MKT00164', 'PACKING')]);
     await tester.tap(find.text('Services'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('#MKT00164'), findsNothing);
     await tester.tap(find.text('Groceries'));
-    await tester.pumpAndSettle();
-    expect(find.text('#MKT00164'), findsOneWidget);
+    await settle(tester);
+    expect(find.text('#MKT00164'), findsWidgets);
   });
 
   testWidgets('search finds an order by its number or product', (tester) async {
     await pump(tester, [order('MKT00164', 'PACKING'), order('MKT00200', 'PACKING', title: 'Iodized Salt')]);
     await tester.enterText(find.byType(TextField), 'salt');
-    await tester.pumpAndSettle();
-    expect(find.text('#MKT00200'), findsOneWidget);
+    await settle(tester);
+    expect(find.text('#MKT00200'), findsWidgets);
     expect(find.text('#MKT00164'), findsNothing);
   });
 }

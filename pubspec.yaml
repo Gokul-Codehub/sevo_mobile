@@ -107,6 +107,8 @@ dependencies:
   # what this can and can't do without a real push server. ---
   flutter_local_notifications: ^18.0.1
   speech_to_text: ^7.0.0
+  # Reads the SMS sign-in code (Android SMS User Consent API; asks the customer to allow each message).
+  smart_auth: ^3.0.0
 
   # --- Connectivity ---
   connectivity_plus: ^6.1.1
@@ -136,6 +138,8 @@ dependencies:
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   riverpod_generator: ^2.6.1

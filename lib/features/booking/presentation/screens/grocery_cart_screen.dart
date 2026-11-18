@@ -39,7 +39,7 @@ import '../widgets/coupon_bottom_sheet.dart';
 import '../../../../shared/utils/focus_first_error.dart';
 import '../../../../shared/utils/date_utils.dart';
 import 'package:calservices_customer/shared/widgets/motion.dart';
-
+  
 /// Added 2026-10-06 per explicit request ("Before checkout ask the user
 /// to select the delivery option below [Quick delivery, Slot booking
 /// (every day 6pm to 8pm)]"): the two delivery-timing choices a grocery
@@ -519,21 +519,33 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
             couponCode: _mktCouponCode,
           );
     final repo = ref.read(groceryOrdersRepositoryProvider);
+    // Held BEFORE the gateway opens: Razorpay is a separate screen, and the cart must still be emptied if this screen
+    // was rebuilt or closed while the customer was paying. Money has moved, so the lines must not stay behind.
+    final cartNotifier = ref.read(cartProvider.notifier);
     final result = online
         ? await repo.payOnline(items, checkout, launcher: ref.read(paymentLauncherProvider))
         : await repo.place(items, checkout);
+    final paidButUnconfirmed = result is Failure && result.error is ValidationError && (result.error as ValidationError).code == 'PAYMENT_UNCONFIRMED';
+    if (result is Success || paidButUnconfirmed) {
+      _orderKey = null;
+      _clearGroceryCoupon();
+      cartNotifier.removeMarketplaceLines();
+    }
     if (!context.mounted) return;
     switch (result) {
       case Success(:final data):
-        _orderKey = null;
-        _clearGroceryCoupon();
-        ref.read(cartProvider.notifier).removeMarketplaceLines();
         ref.invalidate(groceryOrdersProvider);
         AppToast.show(context, online ? 'Payment received. Order placed!' : (takeaway ? 'Order placed! Pay in cash when you pick it up.' : 'Order placed! Pay in cash on delivery.'), type: AppToastType.success);
         // Land on Bookings (where grocery orders are listed) and open the order on top of it, so the Bookings tab is the
         // active one and Back returns to the list instead of leaving the customer somewhere unrelated.
         context.go('/bookings');
         if (data.length == 1) context.push('/grocery-orders/${data.first.orderNumber}');
+      case Failure(:final error) when paidButUnconfirmed:
+        // Paid, but the confirmation did not reach us: the gateway tells the server directly, so the order will appear.
+        // The cart is already empty (paying again would charge twice); take the customer to their bookings.
+        ref.invalidate(groceryOrdersProvider);
+        AppToast.show(context, error.message, type: AppToastType.info);
+        context.go('/bookings');
       case Failure(:final error):
         // A failed attempt may be retried with a different cart, so it must not reuse the key.
         if (error is! NetworkError) _orderKey = null;

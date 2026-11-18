@@ -195,6 +195,7 @@ class PushManager {
   static const _nativePrefixes = [
     '/bookings', '/track', '/support', '/notifications', '/my-payments', '/my-refunds', '/send-feedback', '/feedback',
     '/cart', '/grocery-orders', '/profile', '/devices', '/notification-settings', '/offers', '/categories', '/search',
+    '/groceries/seller-hub', '/vegetables/seller-hub', '/products', '/baskets',
   ];
 
   /// The app route to open for a push `route`: an app screen as-is, a website path mapped to its app screen,

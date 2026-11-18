@@ -138,7 +138,7 @@ void main() {
       expect(options.headers['Authorization'], equals('Bearer session_jwt_123'));
     });
 
-    test('TEST A09: 401 handling triggers onAuthFailure callback when token cannot be refreshed', () async {
+    test('TEST A09: 401 with no readable refresh token fails only that request and keeps the session', () async {
       final storage = SecureStorage();
       await storage.clearAll();
       bool authFailed = false;
@@ -162,7 +162,8 @@ void main() {
       final handler = _MockErrorInterceptorHandler();
       await interceptor.onError(err, handler);
 
-      expect(authFailed, isTrue);
+      // By design the session is preserved (the token may just be unreadable right now); only this request fails.
+      expect(authFailed, isFalse);
       expect(handler.nextCalled, isTrue);
     });
 

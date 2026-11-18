@@ -62,7 +62,7 @@ class DevicesScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
-    final done = await ref.read(accountSettingsRepositoryProvider).signOutDevice(d.deviceId);
+    final done = await ref.read(accountSettingsRepositoryProvider).signOutPhone(d);
     if (!context.mounted) return;
     AppToast.show(context, done ? 'Device signed out.' : 'Could not sign out that device. Try again.',
         type: done ? AppToastType.success : AppToastType.error);

@@ -637,6 +637,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
 
+      // A shared website product link (https://sevo.co.in/marketplace/product/<id>) opened by Android's app-link
+      // handling arrives as that exact path: send it to the app's own product page.
+      GoRoute(
+        path: '/marketplace/product/:id',
+        name: 'web-product-link',
+        redirect: (context, state) => '/products/${state.pathParameters['id'] ?? ''}',
+        builder: (context, state) => const SizedBox.shrink(),
+      ),
       // ── Deep links (tokenized, no auth wall, no bottom nav) ───────────────
       GoRoute(
         path: AppRoutes.liveTracking,

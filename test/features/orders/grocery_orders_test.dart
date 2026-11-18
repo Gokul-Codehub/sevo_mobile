@@ -58,8 +58,15 @@ Future<_Repo> pump(WidgetTester tester, Map<String, dynamic> json, {Widget? scre
       routerConfig: GoRouter(routes: [GoRoute(path: '/', builder: (_, __) => screen ?? const GroceryOrderDetailScreen(orderNumber: 'MKT00164'))]),
     ),
   ));
-  await tester.pumpAndSettle();
+  await settle(tester);
   return repo;
+}
+
+/// Some screens pulse or animate forever, so pumpAndSettle would never finish: advance a fixed time instead.
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 150));
+  }
 }
 
 void main() {
@@ -108,7 +115,7 @@ void main() {
     testWidgets('shows the five steps, items and the Cancel button for a confirmed order', (tester) async {
       await pump(tester, orderJson('CONFIRMED'));
       expect(find.text('Order #MKT00164'), findsWidgets);
-      for (final t in ['Confirmed', 'Seller is packing', 'Ready for pickup', 'On the way', 'Delivered']) {
+      for (final t in ['Confirmed', 'Being packed', 'Ready for pickup', 'On the way', 'Delivered']) {
         expect(find.text(t), findsWidgets, reason: t);
       }
       expect(find.text('100% Whole Wheat Bread Loaf'), findsOneWidget);
@@ -120,15 +127,15 @@ void main() {
     testWidgets('cancelling asks first, then calls the server', (tester) async {
       final repo = await pump(tester, orderJson('PACKING'));
       await tester.tap(find.text('Cancel order'));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(find.text('Cancel this order?'), findsOneWidget);
       await tester.tap(find.text('Keep order'));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(repo.cancels, isEmpty);
       await tester.tap(find.text('Cancel order'));
-      await tester.pumpAndSettle();
+      await settle(tester);
       await tester.tap(find.widgetWithText(FilledButton, 'Cancel order'));
-      await tester.pumpAndSettle();
+      await settle(tester);
       expect(repo.cancels, ['MKT00164']);
     });
 
@@ -150,14 +157,14 @@ void main() {
     testWidgets('a cancelled order shows the cancelled note and no steps', (tester) async {
       await pump(tester, orderJson('CANCELLED'));
       expect(find.textContaining('was cancelled'), findsOneWidget);
-      expect(find.text('Seller is packing'), findsNothing);
+      expect(find.text('Being packed'), findsNothing);
     });
   });
 
   group('orders list', () {
     testWidgets('an active order is under Active with its progress and total', (tester) async {
       await pump(tester, orderJson('PACKING'), screen: const GroceryOrdersScreen());
-      expect(find.text('#MKT00164'), findsOneWidget);
+      expect(find.text('#MKT00164'), findsWidgets); // header + the "Order" column
       expect(find.text('₹45'), findsOneWidget);
       expect(find.text('Delivery slot: Immediate'), findsOneWidget);
     });
@@ -166,8 +173,8 @@ void main() {
       await pump(tester, orderJson('DELIVERED'), screen: const GroceryOrdersScreen());
       expect(find.text('No active orders'), findsOneWidget);
       await tester.tap(find.text('Delivered'));
-      await tester.pumpAndSettle();
-      expect(find.text('#MKT00164'), findsOneWidget);
+      await settle(tester);
+      expect(find.text('#MKT00164'), findsWidgets);
     });
   });
 }

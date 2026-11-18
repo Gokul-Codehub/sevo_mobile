@@ -89,7 +89,7 @@ void main() {
     await tester.pump();
     expect(find.text('Try again'), findsNothing);
     await tester.pump(const Duration(seconds: 6));
-    expect(find.textContaining('Still trying to reach SEVO'), findsOneWidget);
+    expect(find.textContaining('Still trying to reach SevoNiq'), findsOneWidget);
     final before = h.categoryCalls;
     await tester.tap(find.text('Try again'));
     await tester.pump();
