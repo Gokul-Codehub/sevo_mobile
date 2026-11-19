@@ -16,13 +16,17 @@ import '../widgets/service_card.dart';
 /// Which products an offer page lists. Set by the admin (Home Studio ->
 /// destination "Offers page"):
 ///   percent - at least [value]% off
+///   upto    - any discounted item, with at most [value]% off ("Up to 60% off")
 ///   amount  - saves at least ₹[value]
 ///   under   - priced at or under ₹[value]
-enum OfferMode { percent, amount, under }
+enum OfferMode { percent, upto, amount, under }
 
-/// The pool of items to filter (scope + optional category). The rule itself
+/// The pool of items to filter (scope + optional categories). [cats] is a comma-separated list of category ids so the
+/// record compares by value (a List would never be equal and the provider would refetch forever). The rule itself
 /// (mode / value) is applied on screen, so changing sort never refetches.
-typedef OfferPool = ({String scope, int? cat, String slug});
+typedef OfferPool = ({String scope, String cats, String slug});
+
+List<int> _catIds(String cats) => [for (final p in cats.split(',')) if (int.tryParse(p.trim()) != null) int.parse(p.trim())];
 
 /// Every product / service in the pool, live. Prices and stock are never
 /// copied anywhere; they come straight from the catalogue each time.
@@ -44,8 +48,14 @@ final offerPoolProvider = FutureProvider.autoDispose.family<List<ServiceItem>, O
       }
     }
 
-    if (pool.slug.isNotEmpty || pool.cat != null) {
-      add(await forCategory(pool.cat, pool.slug));
+    final svcIds = _catIds(pool.cats);
+    if (svcIds.isNotEmpty) {
+      final lists = await Future.wait([for (final id in svcIds) forCategory(id, '')]);
+      for (final l in lists) {
+        add(l);
+      }
+    } else if (pool.slug.isNotEmpty) {
+      add(await forCategory(null, pool.slug));
     } else {
       final cats = await ref.watch(categoriesProvider.future);
       final lists = await Future.wait([for (final c in cats.take(20)) forCategory(c.id, c.slug)]);
@@ -57,20 +67,30 @@ final offerPoolProvider = FutureProvider.autoDispose.family<List<ServiceItem>, O
   }
 
   final repo = ref.watch(marketplaceCatalogRepositoryProvider);
-  var page = 1;
-  var totalPages = 1;
-  do {
-    final result = await repo.getProducts(
-      categoryId: pool.cat,
-      categorySlug: pool.cat == null ? pool.slug : null,
-      page: page,
-      pageSize: 100,
-    );
-    if (result is! Success<MarketplaceProductPage>) break;
-    totalPages = result.data.totalPages;
-    add(result.data.products.map((p) => p.toServiceItem()));
-    page++;
-  } while (page <= totalPages && page <= 8);
+  // Every chosen category (each already includes everything inside it); none chosen = the whole catalogue.
+  Future<void> load(int? cat, String slug) async {
+    var page = 1;
+    var totalPages = 1;
+    do {
+      final result = await repo.getProducts(
+        categoryId: cat,
+        categorySlug: cat == null ? slug : null,
+        page: page,
+        pageSize: 100,
+      );
+      if (result is! Success<MarketplaceProductPage>) break;
+      totalPages = result.data.totalPages;
+      add(result.data.products.map((p) => p.toServiceItem()));
+      page++;
+    } while (page <= totalPages && page <= 8);
+  }
+
+  final ids = _catIds(pool.cats);
+  if (ids.isEmpty) {
+    await load(null, pool.slug);
+  } else {
+    await Future.wait([for (final id in ids) load(id, '')]);
+  }
   return out;
 });
 
@@ -93,6 +113,8 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
 
   OfferMode get _mode {
     switch (widget.params['mode']) {
+      case 'upto':
+        return OfferMode.upto;
       case 'amount':
         return OfferMode.amount;
       case 'under':
@@ -111,6 +133,8 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
     switch (_mode) {
       case OfferMode.percent:
         return '${_money(_value)}% off & more';
+      case OfferMode.upto:
+        return 'Up to ${_money(_value)}% off';
       case OfferMode.amount:
         return 'Save ₹${_money(_value)} or more';
       case OfferMode.under:
@@ -122,6 +146,9 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
     switch (_mode) {
       case OfferMode.percent:
         return (s.discountPercent ?? 0) >= _value;
+      case OfferMode.upto:
+        final d = s.discountPercent ?? 0;
+        return d > 0 && d <= _value;
       case OfferMode.amount:
         if (!s.hasDiscount) return false;
         return (s.price - s.discountedPrice!) >= Decimal.parse(_value.toString());
@@ -157,7 +184,8 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
   Widget build(BuildContext context) {
     final pool = (
       scope: _scope,
-      cat: int.tryParse(widget.params['cat'] ?? ''),
+      // `cats=12,14` (several categories); older links carry a single `cat`.
+      cats: (widget.params['cats'] ?? widget.params['cat'] ?? '').trim(),
       slug: widget.params['slug'] ?? '',
     );
     final async = ref.watch(offerPoolProvider(pool));
@@ -235,15 +263,17 @@ class _OfferListingScreenState extends ConsumerState<OfferListingScreen> {
                   ),
                 ),
                 if (items.isEmpty)
-                  const SliverFillRemaining(
+                  SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
                       child: Padding(
-                        padding: EdgeInsets.all(28),
+                        padding: const EdgeInsets.all(28),
                         child: Text(
-                          'No items match this offer right now. Check back soon.',
+                          all.isEmpty
+                              ? 'No products are available here right now. Check back soon.'
+                              : 'No items match this offer right now. ${all.length} products were checked. Check back soon.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.textSecondary, height: 1.4),
+                          style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
                         ),
                       ),
                     ),
