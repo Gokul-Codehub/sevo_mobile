@@ -13,6 +13,7 @@ import '../layout/responsive.dart';
 import '../providers/bottom_nav_visibility_provider.dart';
 import '../theme/app_colors.dart';
 import 'motion.dart';
+import '../../features/coverage/presentation/app_access_gate.dart';
 
 /// Main app shell with bottom navigation bar.
 /// Wraps all primary tab destinations including dynamic Cart counter.
@@ -157,7 +158,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AppAccessGate(child: _buildShell(context));
+
+  Widget _buildShell(BuildContext context) {
     final currentIndex = _currentIndex(context);
     final isHomeTab = currentIndex == 0;
     // Live order/booking updates over WebSocket while a customer is signed in (polling stays as fallback).

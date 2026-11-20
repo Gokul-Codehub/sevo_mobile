@@ -2407,8 +2407,8 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
     context.go(AppRoutes.home);
   }
 
-  void _openAddressSheet(BuildContext context, List<Address> addresses) {
-    showModalBottomSheet(
+  Future<void> _openAddressSheet(BuildContext context, List<Address> addresses) {
+    return showModalBottomSheet<void>(
       useRootNavigator: true,
       context: context,
       shape: const RoundedRectangleBorder(
@@ -2963,7 +2963,107 @@ class _GroceryCartScreenState extends ConsumerState<GroceryCartScreen> {
       revealField(_slotCardKey);
       return;
     }
-    _handlePlaceOrder(context, ref, activeAddress);
+    _confirmAddressThenPlace(context, activeAddress);
+  }
+
+  /// The last step before an order is placed: shows the delivery address in a pop-up with a Confirm button and a way to
+  /// change it. Confirming places the order; "Change address" opens the saved-address list (or the location picker for a
+  /// live location) and, for a saved address, comes straight back here with the newly chosen one.
+  Future<void> _confirmAddressThenPlace(BuildContext context, Address address) async {
+    var current = address;
+    while (true) {
+      if (!context.mounted) return;
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (sheetCtx) {
+          final isLive = current.id == 0;
+          final label = isLive ? 'Current location' : current.addressType.toUpperCase();
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Confirm delivery address',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                  const SizedBox(height: 6),
+                  const Text('Please check where your order will be delivered.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35)),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6F8FA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.location_on_rounded, size: 20, color: AppColors.groceryGreen),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(label,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.groceryGreen)),
+                              const SizedBox(height: 3),
+                              Text(current.formattedAddress,
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary, height: 1.35)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(sheetCtx).pop('confirm'),
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.groceryGreen),
+                      child: const Text('Confirm & place order', style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(sheetCtx).pop('change'),
+                      child: const Text('Change address',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.groceryGreen)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+      if (!mounted || !context.mounted) return;
+      if (choice == 'confirm') {
+        _handlePlaceOrder(context, ref, current);
+        return;
+      }
+      if (choice != 'change') return; // dismissed: nothing is placed
+      if (current.id == 0) {
+        // A live location is changed on the location picker; the cart then asks to confirm the new one.
+        showLocationSheet(context);
+        return;
+      }
+      final addresses = ref.read(addressListProvider).valueOrNull ?? const <Address>[];
+      await _openAddressSheet(context, addresses);
+      if (!mounted) return;
+      final picked = _selectedAddress ?? ref.read(selectedAddressProvider);
+      if (picked != null) current = picked;
+    }
   }
 
   Future<void> _handlePlaceOrder(

@@ -799,7 +799,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        service.displayUnit,
+                        service.displayUnit.isEmpty ? 'Standard Pack' : service.displayUnit,
                         style: const TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,

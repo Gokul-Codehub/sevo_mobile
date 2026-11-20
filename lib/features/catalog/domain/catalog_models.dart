@@ -728,13 +728,14 @@ class ServiceItem extends Equatable {
       (vegetableCategoryName?.isNotEmpty ?? false) ||
       id >= _groceryCartIdOffset;
 
-  /// Formatted weight/unit string for grocery items (defaults to '500 g' or '1 unit' if unspecified).
+  /// Size text for a grocery item: the seller's own unit / pack label, else a size found in the short description.
+  /// Empty when neither exists - a weight is never invented (the card then reads "Standard Pack").
   String get displayUnit {
     if (unit != null && unit!.isNotEmpty) return unit!;
     if (shortDescription != null && shortDescription!.contains(RegExp(r'\d+\s*(g|kg|ml|L|pcs|pack|bunch)', caseSensitive: false))) {
       return shortDescription!;
     }
-    return '500 g';
+    return '';
   }
 
   /// Extracts a flat list of display strings from one of this catalog's

@@ -173,6 +173,10 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
     final switched = selectedVariant != null && selectedVariant.id != enrichedProduct!.id;
     final ServiceItem product = switched ? _variantItem(selectedVariant!, base) : base;
     final MarketplaceProduct? activeSource = switched ? selectedVariant : enrichedProduct;
+    // The size shown under the name and in the "Pack" cell. The page first paints from the list item (a search card
+    // carries no unit), so once the seller's full product has loaded ITS unit / pack size / variant label wins.
+    final sourceUnit = (activeSource?.toServiceItem().unit ?? '').trim();
+    final packText = sourceUnit.isNotEmpty ? sourceUnit : product.displayUnit;
     // Reviews belong to the real Seller Hub product; any size in the family resolves to the same reviews.
     final int? reviewProductId = activeSource?.id ?? (product.id > 800000000 && product.id <= 899999999 ? product.id - 800000000 : null);
     var galleryUrls = activeSource?.galleryImages ?? const <String>[];
@@ -310,7 +314,7 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
 
     // Stat strip cells — only real fields the backend actually sent.
     final statCells = <({String value, String label})>[
-      if (product.displayUnit.isNotEmpty) (value: product.displayUnit, label: 'Pack'),
+      (value: packText.isEmpty ? 'Standard Pack' : packText, label: 'Pack'),
       if (showTag) (value: '${product.discountPercent}%', label: 'Discount'),
       (value: product.inStock ? 'In stock' : 'Sold out', label: 'Availability'),
     ];
@@ -407,10 +411,10 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
                             ],
                           ],
                         ),
-                        if (product.displayUnit.isNotEmpty) ...[
+                        if (packText.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
-                            product.displayUnit,
+                            packText,
                             style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                           ),
                         ],

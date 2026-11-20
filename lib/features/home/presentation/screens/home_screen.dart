@@ -657,6 +657,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
 
+            // No delivery location yet (skipped, denied, or still unknown): a gentle, non-blocking nudge. Everything stays
+            // browsable; the customer sets a place by name / pincode or the current location, and availability follows.
+            if (displayLocation.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Material(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => showLocationSheet(context),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        child: Row(
+                          children: [
+                            Icon(Icons.location_searching_rounded, size: 18, color: flowTheme.headerIcon),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                'Set your delivery location to see what is available near you.',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1F2937), height: 1.3),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text('Set', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: flowTheme.headerIcon)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
             // ── 2. Top Cards: Groceries / Services quick-access ──
             // Moved 2026-10-06 to sit right under the location pill, ABOVE
             // the search bar — per explicit follow-up ("make it match

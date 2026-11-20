@@ -23,6 +23,7 @@ import '../storage/secure_storage.dart' show secureStorageProvider;
 import '../services/notification_service.dart';
 import '../navigation/pending_link.dart';
 import '../utils/app_logger.dart';
+import '../../shared/utils/app_toast.dart';
 import 'device_facts.dart';
 import 'push_messaging.dart';
 
@@ -91,6 +92,7 @@ class PushManager {
     required this.onNavigate,
     required this.showLocal,
     this.onInboxChanged,
+    this.onInAppBanner,
     this.onForceLogout,
     DeviceFactsReader? deviceFacts,
   })  : _messaging = messaging,
@@ -108,6 +110,11 @@ class PushManager {
 
   /// A push arrived while the app is open: refresh the notification list / bookings so they are up to date.
   final void Function()? onInboxChanged;
+
+  /// A push with no server event key (for example one sent by hand from the Firebase console) arrived while the app is
+  /// open: show it as a banner inside the app too. Pushes the server itself sends already get an in-app banner from the
+  /// notification inbox, so they are not repeated here.
+  final void Function(String title, String body, String? route)? onInAppBanner;
 
   /// The server signed this phone out (admin or another device): clear the session and go to login.
   final void Function()? onForceLogout;
@@ -175,6 +182,8 @@ class PushManager {
     // On iOS the system already presented it (see FirebasePushMessaging); only Android needs a local notification.
     if (StoreInfo.isIos) return;
     onInboxChanged?.call();
+    final eventKey = (m.data['event_key'] ?? '').toString();
+    if (title != null && title.isNotEmpty && eventKey.isEmpty) onInAppBanner?.call(title, body ?? '', safeRoute(m.route));
     if (title != null && title.isNotEmpty) unawaited(showLocal(title, body ?? '', safeRoute(m.route), m.data['event_key']));
   }
 
@@ -251,6 +260,31 @@ final pushManagerProvider = Provider<PushManager>((ref) {
     },
     showLocal: (title, body, route, eventKey) =>
         NotificationService.instance.show(title: title, body: body, routePayload: route, dedupeKey: eventKey),
+    onInAppBanner: (title, body, route) {
+      final overlay = rootNavigatorKey.currentState?.overlay;
+      if (overlay == null) return;
+      AppToast.show(
+        overlay.context,
+        body.isEmpty ? title : '$title - $body',
+        type: AppToastType.info,
+        overlayOverride: overlay,
+        duration: const Duration(seconds: 6),
+        actionLabel: route == null ? null : 'View',
+        onAction: route == null
+            ? null
+            : () {
+                final target = PushManager.appRouteFor(route);
+                final ctx = rootNavigatorKey.currentContext;
+                if (target == null || ctx == null) return;
+                if (PendingLink.needsSignIn(target) && !ref.read(isUserAuthenticatedProvider)) {
+                  PendingLink.set(target);
+                  GoRouter.of(ctx).push('/login');
+                  return;
+                }
+                GoRouter.of(ctx).push(target);
+              },
+      );
+    },
     onInboxChanged: () {
       try {
         unawaited(ref.read(notificationsControllerProvider.notifier).refresh(silent: true));

@@ -135,6 +135,7 @@ dependencies:
   firebase_performance: ^0.12.1
   # firebase_in_app_messaging: ^0.10.1  # disabled: Android build can't resolve firebase-inappmessaging (no version). Re-enable after fixing Firebase versions.
   in_app_review: ^2.0.12
+  firebase_in_app_messaging: ^0.10.2
 
 dev_dependencies:
   flutter_test:

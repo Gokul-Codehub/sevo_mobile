@@ -82,10 +82,10 @@ class ProductCard extends ConsumerWidget {
   /// Whether the pack selector fits on the Add-notch row (needs ~84px of pill).
   static bool _packInline(double cardWidth) => cardWidth - 16 - (_notchW - 4) >= 84;
 
-  /// Pack text for the selector row; a bare unit ("kg") reads as "1 kg".
+  /// Pack text for the selector row; a bare unit ("kg") reads as "1 kg"; no size entered reads "Standard Pack".
   static String _packLabel(ServiceItem s) {
     final u = s.displayUnit.trim();
-    if (u.isEmpty) return '1 unit';
+    if (u.isEmpty || u.toLowerCase() == 'standard pack') return 'Standard Pack';
     return RegExp(r'\d').hasMatch(u) ? u : '1 $u';
   }
 
