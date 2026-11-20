@@ -4,12 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import '../../../core/services/notification_service.dart';
 import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
-
-import 'package:permission_handler/permission_handler.dart' as ph;
-
 import '../../../core/navigation/safe_back.dart';
 import '../../auth/domain/auth_return.dart';
-import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
 import '../../../shared/widgets/login_required_view.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/app_toast.dart';
