@@ -79,7 +79,7 @@ class Env {
 
   // ── App metadata ──
   static const String appName = 'SevoNiq';
-  static const String appVersion = '1.1.3';
+  static const String appVersion = '1.1.4';
 
   // ── Payment Gateway ──
   static const String defaultRazorpayKeyId = 'rzp_live_caldimservices';
