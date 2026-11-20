@@ -161,9 +161,11 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
     final sellerHubId = base.slug.startsWith('seller-hub-')
         ? int.tryParse(base.slug.substring('seller-hub-'.length))
         : null;
-    final enrichedProduct = sellerHubId != null
-        ? ref.watch(marketplaceProductDetailProvider(sellerHubId)).valueOrNull
-        : null;
+    final detailAsync = sellerHubId != null ? ref.watch(marketplaceProductDetailProvider(sellerHubId)) : null;
+    final enrichedProduct = detailAsync?.valueOrNull;
+    // True only while the seller's full record is still on its way: the pack size is not known yet, so the page shows
+    // a dash instead of flashing "Standard Pack" and then switching to the real size.
+    final detailPending = detailAsync != null && detailAsync.isLoading && enrichedProduct == null;
     final hasUnits = enrichedProduct != null && enrichedProduct.hasSelectableVariants;
     MarketplaceProduct? selectedVariant;
     if (hasUnits) {
@@ -314,7 +316,7 @@ class _GroceryProductDetailBodyState extends ConsumerState<_GroceryProductDetail
 
     // Stat strip cells — only real fields the backend actually sent.
     final statCells = <({String value, String label})>[
-      (value: packText.isEmpty ? 'Standard Pack' : packText, label: 'Pack'),
+      (value: packText.isEmpty ? (detailPending ? '—' : 'Standard Pack') : packText, label: 'Pack'),
       if (showTag) (value: '${product.discountPercent}%', label: 'Discount'),
       (value: product.inStock ? 'In stock' : 'Sold out', label: 'Availability'),
     ];
