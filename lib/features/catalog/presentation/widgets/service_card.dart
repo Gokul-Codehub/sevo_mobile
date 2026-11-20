@@ -231,7 +231,7 @@ class ServiceCard extends ConsumerWidget {
                         // Rating & Duration Row
                         if (isGrocery) ...[
                           Text(
-                            service.displayUnit,
+                            service.displayUnit.isEmpty ? 'Standard Pack' : service.displayUnit,
                             style: const TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,

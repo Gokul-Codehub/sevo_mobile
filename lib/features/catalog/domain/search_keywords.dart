@@ -310,6 +310,7 @@ class SearchEntity {
     this.price,
     this.mrp,
     this.stockQty,
+    this.packLabel,
     this.isAvailable = true,
     this.route = const {},
     this.categoryId,
@@ -325,6 +326,9 @@ class SearchEntity {
   final double? price;
   final double? mrp;
   final double? stockQty;
+
+  /// The product's size text ("500 g", "1 pack", "Pack of 6") from the seller's own record; null when none was entered.
+  final String? packLabel;
   final bool isAvailable;
   final Map<String, dynamic> route;
   final int? categoryId;
@@ -356,6 +360,7 @@ class SearchEntity {
       price: double.tryParse((price['price'] ?? '').toString()),
       mrp: double.tryParse((price['mrp'] ?? '').toString()),
       stockQty: double.tryParse((price['stock_qty'] ?? '').toString()),
+      packLabel: _s(price['pack_label']),
       isAvailable: j['is_available'] != false,
       route: j['route'] is Map ? Map<String, dynamic>.from(j['route'] as Map) : const {},
       categoryId: int.tryParse((j['category_id'] ?? '').toString()),
@@ -497,6 +502,7 @@ ServiceItem _productFromEntity(SearchEntity e) {
     categoryName: _splitSubtitle(e.subtitle).category,
     categorySlug: 'seller_hub_groceries',
     imageUrl: e.imageUrl,
+    unit: e.packLabel,
     inStock: e.isAvailable,
     maxQuantity: e.isAvailable ? (stock > 0 ? stock.floor().clamp(1, 99) : 99) : 0,
   );

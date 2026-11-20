@@ -60,6 +60,11 @@ void handleAdminLinkTap(BuildContext context, String? rawLink, {required String 
   if (noLink.contains(link.toLowerCase())) return;
   if (link == '#') link = '';
   if (link.isNotEmpty) {
+    // An Offers-page rule keeps its whole query (a title could even contain the word "category="): open it as is.
+    if (link == '/offers' || link.startsWith('/offers?')) {
+      context.push(link);
+      return;
+    }
     final categoryMatch = RegExp(r'category=([\w-]+)').firstMatch(link);
     if (categoryMatch != null) {
       context.push(resolveAdminCategoryLinkRoute(link, categoryMatch.group(1)!));

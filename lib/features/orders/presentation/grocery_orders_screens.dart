@@ -481,7 +481,6 @@ class _GroceryOrderDetailScreenState extends ConsumerState<GroceryOrderDetailScr
                     _RiderCard(order: o),
                   if (o.stage != OrderStage.cancelled) _ProgressCard(order: o) else _CancelledCard(order: o),
                   if (o.sellerLines.length > 1) _SellerLinesCard(lines: o.sellerLines),
-                  if (o.events.isNotEmpty) _ActivityCard(events: o.events),
                   _ItemsCard(order: o),
                   if (o.stage == OrderStage.delivered) OrderInvoicesCard(orderNumber: o.orderNumber),
                   OrderReturnsCard(order: o),
@@ -974,31 +973,6 @@ class _SellerLinesCard extends StatelessWidget {
             ),
         ]),
       );
-}
-
-class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({required this.events});
-  final List<OrderEvent> events;
-
-  @override
-  Widget build(BuildContext context) {
-    final sorted = [...events]..sort((a, b) => (b.at ?? DateTime(0)).compareTo(a.at ?? DateTime(0)));
-    return _Card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const _SectionTitle('Activity updates'),
-        for (final e in sorted)
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(color: AppColors.swatchF6F8FA, borderRadius: BorderRadius.circular(10)),
-            child: Row(children: [
-              Expanded(child: Text(e.label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-              if (e.at != null) Text(formatDmyTime(e.at!), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            ]),
-          ),
-      ]),
-    );
-  }
 }
 
 class _ItemsCard extends StatelessWidget {

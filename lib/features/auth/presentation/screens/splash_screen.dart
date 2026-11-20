@@ -125,12 +125,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // Hold the splash until the data Home needs has arrived, so the
       // customer lands on a filled-in page instead of a wall of skeletons.
       // Errors/timeouts are ignored here — Home handles those itself.
+      // Only what the page Home opens on (Groceries) needs is awaited. The Services page keeps loading in the
+      // background (it was started above), so a slow Services response no longer delays the app opening.
       try {
         await Future.wait<Object?>([
           ref.read(homepageConfigProvider.future),
           ref.read(categoriesProvider.future),
           ref.read(homeStudioPageProvider('grocery_home').future),
-          ref.read(homeStudioPageProvider('services_home').future),
         ]).timeout(_maxWait - _minDisplay);
       } catch (_) {}
       if (!mounted) return;
@@ -147,7 +148,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (heroG != null && heroG.mediaType == 'video') {
         try {
           await BannerMedia.warmUp(heroG.imageUrl)
-              .timeout(const Duration(seconds: 2));
+              .timeout(const Duration(milliseconds: 800));
         } catch (_) {}
       }
       if (!mounted || _navigated) return;

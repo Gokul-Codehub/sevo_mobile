@@ -51,6 +51,7 @@ Future<int> refreshMarketplaceCart(WidgetRef ref) async {
       changed++;
     } else if (next.service.price != line.service.price ||
         next.service.discountedPrice != line.service.discountedPrice ||
+        next.service.unit != line.service.unit ||
         next.quantity != line.quantity) {
       notifier.replaceLine(line.service.id, next.service, next.quantity);
       changed++;

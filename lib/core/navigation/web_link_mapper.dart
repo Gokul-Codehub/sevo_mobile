@@ -109,9 +109,17 @@ AppLink resolveWebLink(String rawUrl, {Set<String>? knownCategorySlugs}) {
   // The website's product page /marketplace/product/<id> -> the app's /products/<id> screen (it looks the product up by id).
   final webProduct = RegExp(r'^/marketplace/product/(\d+)$').firstMatch(path);
   if (webProduct != null) return AppLink(route: '/products/${webProduct.group(1)}');
+  // An admin "Offers page" rule (/offers?mode=upto&v=60&cats=12,14&scope=grocery) is an app screen of its own. Without this
+  // it fell through to the website and opened a browser instead of the offers page.
+  if (path == '/offers') return AppLink(route: uri.hasQuery ? '/offers?${uri.query}' : '/offers');
   if (path == '/cart') return const AppLink(route: '/cart');
   if (path == '/profile') return const AppLink(route: '/profile');
   if (path == '/support') return const AppLink(route: '/support');
+  // A support reply opens its ticket (/support/tickets/<id>) and the other support screens inside the app. Only the bare
+  // /support was mapped, so tapping a "Support replied" notification in the notification list opened the website.
+  if (path.startsWith('/support/') && RegExp(r'^/support/(tickets/\d+|requests|new)$').hasMatch(path)) {
+    return AppLink(route: uri.hasQuery ? '$path?${uri.query}' : path);
+  }
 
   return AppLink(external: Uri.https('sevo.co.in', path, q.isEmpty ? null : q));
 }
