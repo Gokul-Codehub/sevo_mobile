@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/api_error.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../booking/domain/cart_notifier.dart' show isUserAuthenticatedProvider;
+import '../../logistics/domain/logistics_providers.dart' show customerLocationProvider;
 import '../data/address_repository.dart';
 import 'address_models.dart';
 
@@ -113,11 +114,27 @@ class AddressListNotifier extends AsyncNotifier<List<Address>> {
     // Remember every change of the selected address (address pickers elsewhere set the provider directly).
     ref.listen<Address?>(selectedAddressProvider, (prev, next) {
       ref.read(secureStorageProvider).setSelectedAddressJson(jsonEncode({'id': next?.id})).catchError((_) {});
+      _rememberPlace(next);
     });
     return _fetchAddresses();
   }
 
   AddressRepository get _repo => ref.read(addressRepositoryProvider);
+
+  /// Remembers where the last used saved address is ON THE PHONE (label + coordinates), like Blinkit / Swiggy do, so
+  /// the next launch knows the delivery location at once from local storage instead of waiting for the address list
+  /// to come back from the server. The saved address itself still wins as soon as it loads.
+  void _rememberPlace(Address? a) {
+    if (a == null || a.latitude == null || a.longitude == null) return;
+    final label = a.addressLine1.isNotEmpty ? a.addressLine1 : a.city;
+    if (label.isEmpty) return;
+    ref.read(customerLocationProvider.notifier).setManualLocation(
+          label,
+          a.postalCode,
+          latitude: a.latitude!,
+          longitude: a.longitude!,
+        );
+  }
 
   Future<List<Address>> _fetchAddresses() async {
     final result = await _repo.getAddresses();

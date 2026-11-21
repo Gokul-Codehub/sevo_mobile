@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../../core/errors/api_error.dart';
+import '../../../core/utils/location_gate.dart' show useCurrentLocationWithHelp;
+import '../../addresses/domain/address_notifier.dart' show chooseDeliveryAddress;
 import '../../../shared/theme/app_colors.dart';
 import '../../addresses/presentation/widgets/location_sheet.dart';
 import '../../auth/domain/auth_notifier.dart';
@@ -31,9 +33,13 @@ class CoverageGate extends ConsumerWidget {
 }
 
 class NotServedView extends ConsumerStatefulWidget {
-  const NotServedView({super.key, required this.info});
+  const NotServedView({super.key, required this.info, this.noLocation = false});
 
   final NotServed info;
+
+  /// True when there is no delivery location at all (nothing remembered, GPS unavailable): the same page, asking for
+  /// a location instead of saying we do not reach it.
+  final bool noLocation;
 
   @override
   ConsumerState<NotServedView> createState() => _NotServedViewState();
@@ -90,8 +96,91 @@ class _NotServedViewState extends ConsumerState<NotServedView> {
     });
   }
 
+  bool _locating = false;
+
+  Future<void> _useCurrent() async {
+    setState(() => _locating = true);
+    final ok = await useCurrentLocationWithHelp(context, ref);
+    if (ok) await chooseDeliveryAddress(ref, null);
+    if (mounted) setState(() => _locating = false);
+  }
+
+  Widget _buildNoLocation(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 240,
+                  height: 170,
+                  child: Lottie.asset(
+                    'assets/animations/not_served_storefront.json',
+                    fit: BoxFit.contain,
+                    repeat: true,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 96,
+                      height: 96,
+                      decoration: const BoxDecoration(color: Color(0xFFFFF4E5), shape: BoxShape.circle),
+                      child: const Icon(Icons.location_off_outlined, size: 46, color: Color(0xFFB45309)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Where should we deliver?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.navy, height: 1.25),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'We could not find your location. Share it or search for your area to see what is available near you.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13.5, color: AppColors.textSecondary, height: 1.45),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.navy, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                    onPressed: _locating ? null : _useCurrent,
+                    icon: _locating
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.my_location_rounded, size: 20),
+                    label: const Text('Use current location', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.navy,
+                      side: const BorderSide(color: AppColors.navy),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _locating ? null : () => showLocationSheet(context),
+                    icon: const Icon(Icons.edit_location_alt_outlined, size: 20),
+                    label: const Text('Enter location manually', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.noLocation) return _buildNoLocation(context);
     final point = ref.watch(deliveryPointProvider);
     final user = ref.watch(currentUserProvider);
     final knowsPhone = (user?.phone ?? '').replaceAll(RegExp(r'\D'), '').length >= 10;

@@ -632,6 +632,9 @@ class CustomerLocationNotifier extends StateNotifier<CustomerLocationState> {
   final SecureStorage _storage;
   late final Future<void> _ready;
 
+  /// Completes once the remembered place (if any) has been read from storage.
+  Future<void> get ready => _ready;
+
   /// Set once something was chosen / detected, so a slow restore can never overwrite it.
   bool _touched = false;
 

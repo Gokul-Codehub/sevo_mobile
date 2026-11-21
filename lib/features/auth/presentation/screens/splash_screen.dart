@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../routing/app_router.dart';
 import '../../../addresses/domain/address_notifier.dart';
+import '../../../coverage/domain/location_settle.dart';
 import '../../../catalog/domain/catalog_providers.dart';
 import '../../../../shared/widgets/banner_media.dart';
 import '../../../home/data/home_studio_repository.dart';
@@ -119,6 +120,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // every cold start, so the account's saved address is back in
       // `selectedAddressProvider` by the time Home/Checkout need it.
       ref.read(addressListProvider);
+      // Work out the delivery location while the splash plays, so Home opens with it already known.
+      ref.read(appLocationSettledProvider);
     });
     _navTimer = Timer(_minDisplay, () async {
       if (!mounted || _navigated) return;
@@ -133,6 +136,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           ref.read(categoriesProvider.future),
           ref.read(homeStudioPageProvider('grocery_home').future),
         ]).timeout(_maxWait - _minDisplay);
+      } catch (_) {}
+      // Hold the splash (the only one: it never replays) until the delivery location is known, bounded so a slow
+      // GPS or network cannot keep the customer here for long. Usually already done by now.
+      try {
+        await ref.read(appLocationSettledProvider.future).timeout(const Duration(seconds: 8));
       } catch (_) {}
       if (!mounted) return;
       // Warm the Home hero video(s) while the splash is still up: Groceries
